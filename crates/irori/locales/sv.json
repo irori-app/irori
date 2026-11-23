@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "Moddarna för {title} ligger kvar i dess mapp",
   "shell.palette.set_up_emulation": "Konfigurera emulering",
   "shell.palette.set_up_emulation_keywords": "emulator ROM konsol retro BIOS RetroArch",
+  "shell.palette.getting_started": "Kom igång",
+  "shell.palette.getting_started_keywords": "checklista inställning tips välkommen rundtur hjälp första steg",
   "shell.palette.find_roms": "Hitta ROM-filer på den här datorn",
   "shell.palette.find_roms_keywords": "emulering EmuDeck RetroDECK rom mapp emulator sök",
   "shell.palette.add_emulator": "Lägg till en emulator",

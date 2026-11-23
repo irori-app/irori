@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "De mods van {title} staan nog in de map",
   "shell.palette.set_up_emulation": "Emulatie instellen",
   "shell.palette.set_up_emulation_keywords": "emulator ROM console retro BIOS RetroArch",
+  "shell.palette.getting_started": "Aan de slag",
+  "shell.palette.getting_started_keywords": "checklist instellen tips welkom rondleiding hulp eerste stappen",
   "shell.palette.find_roms": "ROM’s op deze computer zoeken",
   "shell.palette.find_roms_keywords": "emulatie EmuDeck RetroDECK roms map emulator zoeken",
   "shell.palette.add_emulator": "Een emulator toevoegen",

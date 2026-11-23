@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "Моди {title} досі в теці гри",
   "shell.palette.set_up_emulation": "Налаштувати емуляцію",
   "shell.palette.set_up_emulation_keywords": "емулятор ROM консоль ретро BIOS RetroArch",
+  "shell.palette.getting_started": "Початок роботи",
+  "shell.palette.getting_started_keywords": "список налаштування поради ласкаво просимо огляд допомога перші кроки",
   "shell.palette.find_roms": "Знайти ROM на цьому комп’ютері",
   "shell.palette.find_roms_keywords": "емуляція EmuDeck RetroDECK rom папка емулятор пошук",
   "shell.palette.add_emulator": "Додати емулятор",

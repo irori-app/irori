@@ -1225,7 +1225,11 @@ dragging its edge or with the arrow keys on it.
 
 **Onboarding** (`irori-manage` `onboarding/`): the import step lists Heroic and the other
 launchers found off the UI thread (Lutris, Bottles, Faugus Launcher, Playnite;
-`onboarding::launchers`), each imported with its summary.
+`onboarding::launchers`), each imported with its summary. Getting started
+(`onboarding::hub`, `irori_manage::open_getting_started`: onboarding's last page, the
+palette, the empty library) is a checklist of three steps that tick themselves from the
+library and settings (a game; a look other than the defaults; a switch for playing on),
+or that the user marks as fine as they are (`<state>/getting-started.json`), then tips.
 
 ### 4.5 Shell (`crates/irori`)
 

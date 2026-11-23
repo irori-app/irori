@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "{title} 的模組仍在其資料夾中",
   "shell.palette.set_up_emulation": "設定模擬遊戲",
   "shell.palette.set_up_emulation_keywords": "模擬器 ROM 主機 復古 BIOS RetroArch",
+  "shell.palette.getting_started": "入門",
+  "shell.palette.getting_started_keywords": "清單 設定 提示 歡迎 導覽 說明 第一步",
   "shell.palette.find_roms": "尋找此電腦上的 ROM",
   "shell.palette.find_roms_keywords": "模擬 EmuDeck RetroDECK ROM 資料夾 模擬器 掃描",
   "shell.palette.add_emulator": "新增模擬器",

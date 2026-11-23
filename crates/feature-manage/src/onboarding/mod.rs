@@ -1,7 +1,9 @@
 //! First-run onboarding: welcome (with the interface language), import from
 //! Heroic and the other launchers found here ([`launchers`]), connect
-//! stores, choose the install folder.
+//! stores, choose the install folder. Getting started ([`hub`]) picks up
+//! from its last page.
 
+pub(crate) mod hub;
 pub(crate) mod launchers;
 
 use std::path::PathBuf;
@@ -570,7 +572,7 @@ impl OnboardingView {
             .into_any_element()
     }
 
-    fn render_done(&self, cx: &App) -> AnyElement {
+    fn render_done(&self, cx: &mut Context<Self>) -> AnyElement {
         let signed_in: Vec<&str> = self
             .stores
             .iter()
@@ -594,6 +596,17 @@ impl OnboardingView {
                     .child(t("manage.onboarding.done.title")),
             )
             .child(div().text_color(cx.theme().muted_foreground).child(text))
+            .child(
+                div().child(
+                    Button::new("onboarding-getting-started")
+                        .icon(IconName::Sparkles)
+                        .label(t("manage.onboarding.done.getting_started"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.finish(cx);
+                            hub::open_getting_started(window, cx);
+                        })),
+                ),
+            )
             .into_any_element()
     }
 }

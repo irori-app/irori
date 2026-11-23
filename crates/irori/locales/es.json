@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "Los mods de {title} siguen en su carpeta",
   "shell.palette.set_up_emulation": "Configurar la emulación",
   "shell.palette.set_up_emulation_keywords": "emulador ROM consola retro BIOS RetroArch",
+  "shell.palette.getting_started": "Primeros pasos",
+  "shell.palette.getting_started_keywords": "lista configuración consejos bienvenida recorrido ayuda primeros pasos",
   "shell.palette.find_roms": "Buscar ROM en este equipo",
   "shell.palette.find_roms_keywords": "emulación EmuDeck RetroDECK roms carpeta emulador buscar",
   "shell.palette.add_emulator": "Añadir un emulador",

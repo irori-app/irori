@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "{title} modları hâlâ oyunun klasöründe",
   "shell.palette.set_up_emulation": "Emülasyonu kur",
   "shell.palette.set_up_emulation_keywords": "emülatör ROM konsol retro BIOS RetroArch",
+  "shell.palette.getting_started": "Başlarken",
+  "shell.palette.getting_started_keywords": "kontrol listesi kurulum ipuçları hoş geldiniz tur yardım ilk adımlar",
   "shell.palette.find_roms": "Bu bilgisayarda ROM bul",
   "shell.palette.find_roms_keywords": "emülasyon EmuDeck RetroDECK rom klasör emülatör tara",
   "shell.palette.add_emulator": "Emülatör ekle",

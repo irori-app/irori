@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "Módy hry {title} jsou stále v její složce",
   "shell.palette.set_up_emulation": "Nastavit emulaci",
   "shell.palette.set_up_emulation_keywords": "emulátor ROM konzole retro BIOS RetroArch",
+  "shell.palette.getting_started": "Začínáme",
+  "shell.palette.getting_started_keywords": "kontrolní seznam nastavení tipy vítejte prohlídka nápověda první kroky",
   "shell.palette.find_roms": "Najít ROM na tomto počítači",
   "shell.palette.find_roms_keywords": "emulace EmuDeck RetroDECK rom složka emulátor hledat",
   "shell.palette.add_emulator": "Přidat emulátor",

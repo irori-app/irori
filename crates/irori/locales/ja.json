@@ -106,6 +106,8 @@
   "shell.notice.mods_not_restored": "{title} の Mod がまだゲームフォルダーに残っています",
   "shell.palette.set_up_emulation": "エミュレーションを設定",
   "shell.palette.set_up_emulation_keywords": "エミュレーター ROM ゲーム機 コンソール レトロ BIOS RetroArch",
+  "shell.palette.getting_started": "はじめに",
+  "shell.palette.getting_started_keywords": "チェックリスト 設定 ヒント ようこそ ツアー ヘルプ 最初",
   "shell.palette.find_roms": "このコンピューターの ROM を探す",
   "shell.palette.find_roms_keywords": "エミュレーション EmuDeck RetroDECK ROM フォルダー エミュレーター 検索",
   "shell.palette.add_emulator": "エミュレーターを追加",

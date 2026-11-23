@@ -5557,6 +5557,7 @@ dependencies = [
  "irori-xbox",
  "qrcode",
  "regex",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
