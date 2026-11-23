@@ -18,7 +18,7 @@ use gpui_kit::{
 };
 use irori_core::Runner;
 use irori_core::settings::{
-    CoverCaption, CoverCorners, CoverHover, LibraryBackground, LibraryLayout, UiPrefs,
+    CoverCaption, CoverCorners, CoverFit, CoverHover, LibraryBackground, LibraryLayout, UiPrefs,
 };
 use irori_services::StoreFilter;
 use irori_ui::i18n::{t, t_args};
@@ -530,6 +530,18 @@ fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
     ];
     for (value, key, f) in captions {
         menu = menu.item(set(t(key), ui.cover_caption == value, f));
+    }
+    menu = menu.separator().label(t("library.look.fit"));
+    let fits: [LookRow<CoverFit>; 2] = [
+        (CoverFit::Crop, "library.look.fit_crop", |u| {
+            u.cover_fit = CoverFit::Crop
+        }),
+        (CoverFit::Whole, "library.look.fit_whole", |u| {
+            u.cover_fit = CoverFit::Whole
+        }),
+    ];
+    for (value, key, f) in fits {
+        menu = menu.item(set(t(key), ui.cover_fit == value, f));
     }
     menu = menu.separator().label(t("library.look.corners"));
     let corners: [LookRow<CoverCorners>; 3] = [

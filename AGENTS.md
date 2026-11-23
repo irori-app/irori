@@ -1059,6 +1059,12 @@ cx.spawn_in(window, async move |this, cx| {
 - `ArtStore::get(url, width, keep_alpha)` returns `Ready`, `Loading` or `Missing`.
 - Wrap art-heavy regions in `div().image_cache(LruImageCache::new(n, cx))`. Use the
   components (`GameCover`, `art_img`) instead of loading images yourself.
+- `art::aspect(url)` gives a picture's height over width once a thumbnail of it is
+  ready (its header read once, off the UI thread). With `iroriUi.coverFit` `whole` the
+  library's grid draws each cover uncut in its own shape, standing on its 2:3 cell's
+  foot, and the tall boxes of a row share one height (`grid::whole_sizes`, pure and
+  tested); rows keep their fixed height, so the virtual list and keyboard moves don't
+  change.
 - The disk cache is capped (`iroriArtCacheLimit`, MiB, 2 GiB by default, 0 = none) by
   `irori_services::art_cache` on the periodic tick, every six hours: whole images (an
   original with its thumbnails) go least recently used first. Art the store hands out

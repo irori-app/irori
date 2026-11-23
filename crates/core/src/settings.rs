@@ -1163,6 +1163,18 @@ pub enum CoverCaption {
     None,
 }
 
+/// How the library draws box art (`coverFit`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverFit {
+    /// Every cover filled to 2:3, cut where its shape differs.
+    #[default]
+    Crop,
+    /// Each picture whole in its own shape (tall, square, wide), standing
+    /// on its row; tall boxes of one row share a height.
+    Whole,
+}
+
 /// How a cover answers the pointer and the keyboard focus (`coverHover`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1562,6 +1574,7 @@ pub struct UiPrefs {
     pub cover_corners: CoverCorners,
     pub cover_caption: CoverCaption,
     pub cover_hover: CoverHover,
+    pub cover_fit: CoverFit,
     /// The star on favourites' covers (`coverFavourite`, on unless turned
     /// off).
     pub cover_favourite: bool,
@@ -1772,6 +1785,7 @@ impl Default for UiPrefs {
             cover_corners: CoverCorners::Rounded,
             cover_caption: CoverCaption::Full,
             cover_hover: CoverHover::Lift,
+            cover_fit: CoverFit::Crop,
             cover_favourite: true,
             library_focus_columns: 0,
             store_badges_always: false,
@@ -1986,6 +2000,13 @@ mod tests {
         assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
         let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
         assert!(!ui.big_picture_fullscreen);
+    }
+
+    #[test]
+    fn covers_are_cropped_unless_drawn_whole() {
+        assert_eq!(UiPrefs::default().cover_fit, CoverFit::Crop);
+        let ui: UiPrefs = serde_json::from_str(r#"{"coverFit":"whole"}"#).unwrap();
+        assert_eq!(ui.cover_fit, CoverFit::Whole);
     }
 
     #[test]

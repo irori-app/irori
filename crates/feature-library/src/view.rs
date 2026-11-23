@@ -35,7 +35,7 @@ use gpui_kit::{
     linear_gradient, point, px, rems, size,
 };
 use irori_core::settings::{
-    CoverCaption, CoverHover, Density, LibraryBackground, LibraryLayout, UiPrefs,
+    CoverCaption, CoverFit, CoverHover, Density, LibraryBackground, LibraryLayout, UiPrefs,
 };
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
@@ -2299,18 +2299,37 @@ impl LibraryView {
         let metrics = self.frame.metrics;
         let end = range.end.min(self.frame.games.len());
         let games: Vec<_> = self.frame.games[range.start.min(end)..end].to_vec();
+        let shapes = self.whole_shapes(&games, metrics.tile_rem, cx);
         h_flex()
             .items_start()
             .h(rems(metrics.row_rem))
             .pt(rems(grid::ROW_INSET_REM))
             .px(rems(grid::EDGE_REM))
             .gap(rems(metrics.gap_rem))
-            .children(
-                games
-                    .iter()
-                    .map(|g| self.render_tile(g, rems(metrics.tile_rem), false, window, cx)),
-            )
+            .children(games.iter().enumerate().map(|(ix, g)| {
+                let shape = shapes.as_ref().and_then(|s| s.get(ix).copied());
+                self.render_tile(g, rems(metrics.tile_rem), shape, false, window, cx)
+            }))
             .into_any_element()
+    }
+
+    /// With covers drawn whole, each one's size in rem inside its cell
+    /// ([`grid::whole_sizes`]) for one row of `games`; `None` while they are
+    /// cropped to 2:3.
+    fn whole_shapes(
+        &self,
+        games: &[Arc<GameInfo>],
+        tile_rem: f32,
+        cx: &mut Context<Self>,
+    ) -> Option<Vec<(f32, f32)>> {
+        if self.ui_prefs.cover_fit != CoverFit::Whole {
+            return None;
+        }
+        let aspects: Vec<Option<f32>> = games
+            .iter()
+            .map(|g| g.cover_art().and_then(|url| irori_ui::art::aspect(url, cx)))
+            .collect();
+        Some(grid::whole_sizes(&aspects, tile_rem))
     }
 
     /// A cover tile with live status, markers, and Play/Install plus "…" on
@@ -2319,6 +2338,7 @@ impl LibraryView {
         &mut self,
         game: &Arc<GameInfo>,
         width: Rems,
+        shape: Option<(f32, f32)>,
         in_recent: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -2511,11 +2531,13 @@ impl LibraryView {
             .rounded(radius)
             .when(active && lifts, |el| el.shadow_lg())
             .when(keyboard, |el| el.focus_ring_style(window, cx))
-            .child(
-                div()
-                    .when(dim, |el| el.opacity(0.45))
-                    .child(GameCover::new(game.clone()).width(width).radius(radius)),
-            )
+            .child(div().when(dim, |el| el.opacity(0.45)).child({
+                let cover = GameCover::new(game.clone()).radius(radius);
+                match shape {
+                    Some((w, h)) => cover.width(rems(w)).height(rems(h)),
+                    None => cover.width(width),
+                }
+            }))
             .when(active || selected, |el| {
                 el.child(
                     div()
@@ -2609,11 +2631,25 @@ impl LibraryView {
             }))
             // Pointed-at and focused covers rise a little off the grid,
             // unless the user keeps them in place.
-            .child(cover.with_spring(
-                SharedString::from(format!("tile-lift:{key}")),
-                SpringAnimation::new(HOVER_SPRING).to(if active && lifts { 1.0 } else { 0.0 }),
-                |el, lift: f32| el.top(px(-TILE_LIFT_PX * lift)),
-            ))
+            .child({
+                let cover = cover.with_spring(
+                    SharedString::from(format!("tile-lift:{key}")),
+                    SpringAnimation::new(HOVER_SPRING).to(if active && lifts { 1.0 } else { 0.0 }),
+                    |el, lift: f32| el.top(px(-TILE_LIFT_PX * lift)),
+                );
+                // A cover drawn whole stands on its cell's foot, so the
+                // captions of a row stay on one line.
+                match shape {
+                    Some(_) => v_flex()
+                        .w(width)
+                        .h(rems(width.0 * grid::COVER_RATIO))
+                        .justify_end()
+                        .items_center()
+                        .child(cover)
+                        .into_any_element(),
+                    None => cover.into_any_element(),
+                }
+            })
             .when(caption_kind != CoverCaption::None, |tile| {
                 tile.child(
                     v_flex()
@@ -2705,7 +2741,12 @@ impl LibraryView {
                 .collect(),
             TopKind::Favourites => games
                 .iter()
-                .map(|g| self.render_tile(g, rems(FAVOURITE_REM), false, window, cx))
+                .map(|g| {
+                    let shape = self
+                        .whole_shapes(std::slice::from_ref(g), FAVOURITE_REM, cx)
+                        .and_then(|s| s.first().copied());
+                    self.render_tile(g, rems(FAVOURITE_REM), shape, false, window, cx)
+                })
                 .collect(),
         };
         v_flex()
