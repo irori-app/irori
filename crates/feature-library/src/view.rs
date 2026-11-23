@@ -64,10 +64,12 @@ use crate::launch::{self, LaunchChoice};
 use crate::layouts;
 use crate::top::{TopCache, TopKind};
 use crate::{
-    ActivateSelected, EndSelection, FocusSearch, GRID_CONTEXT, LIBRARY_CONTEXT, LibraryEvent,
-    NextLibraryView, OpenSelected, RemovePicked, SelectAllGames, SelectDown, SelectFirst,
-    SelectLast, SelectLeft, SelectPageDown, SelectPageUp, SelectRight, SelectUp, ShowFocus,
-    ShowGrid, ShowList, ToggleDrawer, ToggleModeGroups, ToggleStatusGroups,
+    ActivateSelected, EndSelection, ExtendDown, ExtendFirst, ExtendLast, ExtendLeft,
+    ExtendPageDown, ExtendPageUp, ExtendRight, ExtendUp, FocusSearch, GRID_CONTEXT,
+    LIBRARY_CONTEXT, LibraryEvent, NextLibraryView, OpenSelected, PickFocused, RemovePicked,
+    SelectAllGames, SelectDown, SelectFirst, SelectLast, SelectLeft, SelectPageDown, SelectPageUp,
+    SelectRight, SelectUp, ShowFocus, ShowGrid, ShowList, ToggleDrawer, ToggleModeGroups,
+    ToggleStatusGroups,
 };
 
 /// Width of a "Continue playing" card, in rem (16:9 art).
@@ -1260,6 +1262,18 @@ impl LibraryView {
     // ---- keyboard --------------------------------------------------------
 
     fn move_focus(&mut self, step: Move, window: &mut Window, cx: &mut Context<Self>) {
+        self.step_focus(step, false, window, cx);
+    }
+
+    /// Move the selection by `step`; with `extend` (Shift), pick the games
+    /// from where the Shift steps began to the new one.
+    pub(super) fn step_focus(
+        &mut self,
+        step: Move,
+        extend: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let games = self.frame.games.clone();
         let current = self.focused.as_ref().and_then(|id| self.games.position(id));
         let rem = window.rem_size();
@@ -1284,6 +1298,12 @@ impl LibraryView {
         }
         if let Some(ix) = target {
             let id = games[ix].id();
+            if extend {
+                let from = current.map_or_else(|| id.clone(), |c| games[c].id());
+                self.selection.extend_range(&from, &id, &games);
+            } else {
+                self.selection.end_range();
+            }
             self.check_shortcut(&id, cx);
             self.focused = Some(id);
             self.focused_ix = Some(ix);
@@ -2097,57 +2117,83 @@ impl LibraryView {
             let filter = self.filters.read(cx).filter().clone();
             self.render_list_toolbar(&filter, window, cx)
         });
-        let content = div()
-            .image_cache(self.images.clone())
-            .id("library-content")
-            .key_context(GRID_CONTEXT)
-            .track_focus(&self.grid_focus)
-            .on_key_down(cx.listener(Self::type_to_search))
-            .on_action(
-                cx.listener(|this, _: &SelectLeft, w, cx| this.move_focus(Move::Left, w, cx)),
-            )
-            .on_action(
-                cx.listener(|this, _: &SelectRight, w, cx| this.move_focus(Move::Right, w, cx)),
-            )
-            .on_action(cx.listener(|this, _: &SelectUp, w, cx| this.move_focus(Move::Up, w, cx)))
-            .on_action(
-                cx.listener(|this, _: &SelectDown, w, cx| this.move_focus(Move::Down, w, cx)),
-            )
-            .on_action(
-                cx.listener(|this, _: &SelectFirst, w, cx| this.move_focus(Move::First, w, cx)),
-            )
-            .on_action(
-                cx.listener(|this, _: &SelectLast, w, cx| this.move_focus(Move::Last, w, cx)),
-            )
-            .on_action(
-                cx.listener(|this, _: &SelectPageUp, w, cx| {
+        let content =
+            div()
+                .image_cache(self.images.clone())
+                .id("library-content")
+                .key_context(GRID_CONTEXT)
+                .track_focus(&self.grid_focus)
+                .on_key_down(cx.listener(Self::type_to_search))
+                .on_action(
+                    cx.listener(|this, _: &SelectLeft, w, cx| this.move_focus(Move::Left, w, cx)),
+                )
+                .on_action(
+                    cx.listener(|this, _: &SelectRight, w, cx| this.move_focus(Move::Right, w, cx)),
+                )
+                .on_action(
+                    cx.listener(|this, _: &SelectUp, w, cx| this.move_focus(Move::Up, w, cx)),
+                )
+                .on_action(
+                    cx.listener(|this, _: &SelectDown, w, cx| this.move_focus(Move::Down, w, cx)),
+                )
+                .on_action(
+                    cx.listener(|this, _: &SelectFirst, w, cx| this.move_focus(Move::First, w, cx)),
+                )
+                .on_action(
+                    cx.listener(|this, _: &SelectLast, w, cx| this.move_focus(Move::Last, w, cx)),
+                )
+                .on_action(cx.listener(|this, _: &SelectPageUp, w, cx| {
                     this.move_focus(Move::PageUp(1), w, cx)
-                }),
-            )
-            .on_action(cx.listener(|this, _: &SelectPageDown, w, cx| {
-                this.move_focus(Move::PageDown(1), w, cx)
-            }))
-            .on_action(cx.listener(|this, _: &OpenSelected, w, cx| this.open_focused(w, cx)))
-            .on_action(cx.listener(|this, _: &ToggleDrawer, w, cx| this.toggle_drawer(w, cx)))
-            .on_action(cx.listener(|this, _: &SelectAllGames, _, cx| this.select_all(cx)))
-            .on_action(cx.listener(|this, _: &RemovePicked, w, cx| this.remove_picked(w, cx)))
-            .on_action(cx.listener(|this, _: &EndSelection, _, cx| this.end_selection(cx)))
-            .on_action(
-                cx.listener(|this, _: &ActivateSelected, w, cx| this.activate_focused(w, cx)),
-            )
-            .relative()
-            .h_full()
-            .min_h_0()
-            .map(|el| match layout {
-                LibraryLayout::Focus => el.w(rems(self.frame.focus_rem)).flex_shrink_0(),
-                _ => el.flex_1().min_w_0(),
-            })
-            .child(list)
-            .vertical_scrollbar(&self.scroll)
-            .children(list_toolbar)
-            .when(layout == LibraryLayout::Focus, |el| {
-                el.child(self.render_focus_handle(cx))
-            });
+                }))
+                .on_action(cx.listener(|this, _: &SelectPageDown, w, cx| {
+                    this.move_focus(Move::PageDown(1), w, cx)
+                }))
+                .on_action(cx.listener(|this, _: &ExtendLeft, w, cx| {
+                    this.step_focus(Move::Left, true, w, cx)
+                }))
+                .on_action(cx.listener(|this, _: &ExtendRight, w, cx| {
+                    this.step_focus(Move::Right, true, w, cx)
+                }))
+                .on_action(
+                    cx.listener(|this, _: &ExtendUp, w, cx| this.step_focus(Move::Up, true, w, cx)),
+                )
+                .on_action(cx.listener(|this, _: &ExtendDown, w, cx| {
+                    this.step_focus(Move::Down, true, w, cx)
+                }))
+                .on_action(cx.listener(|this, _: &ExtendFirst, w, cx| {
+                    this.step_focus(Move::First, true, w, cx)
+                }))
+                .on_action(cx.listener(|this, _: &ExtendLast, w, cx| {
+                    this.step_focus(Move::Last, true, w, cx)
+                }))
+                .on_action(cx.listener(|this, _: &ExtendPageUp, w, cx| {
+                    this.step_focus(Move::PageUp(1), true, w, cx)
+                }))
+                .on_action(cx.listener(|this, _: &ExtendPageDown, w, cx| {
+                    this.step_focus(Move::PageDown(1), true, w, cx)
+                }))
+                .on_action(cx.listener(|this, _: &PickFocused, w, cx| this.pick_focused(w, cx)))
+                .on_action(cx.listener(|this, _: &OpenSelected, w, cx| this.open_focused(w, cx)))
+                .on_action(cx.listener(|this, _: &ToggleDrawer, w, cx| this.toggle_drawer(w, cx)))
+                .on_action(cx.listener(|this, _: &SelectAllGames, _, cx| this.select_all(cx)))
+                .on_action(cx.listener(|this, _: &RemovePicked, w, cx| this.remove_picked(w, cx)))
+                .on_action(cx.listener(|this, _: &EndSelection, _, cx| this.end_selection(cx)))
+                .on_action(
+                    cx.listener(|this, _: &ActivateSelected, w, cx| this.activate_focused(w, cx)),
+                )
+                .relative()
+                .h_full()
+                .min_h_0()
+                .map(|el| match layout {
+                    LibraryLayout::Focus => el.w(rems(self.frame.focus_rem)).flex_shrink_0(),
+                    _ => el.flex_1().min_w_0(),
+                })
+                .child(list)
+                .vertical_scrollbar(&self.scroll)
+                .children(list_toolbar)
+                .when(layout == LibraryLayout::Focus, |el| {
+                    el.child(self.render_focus_handle(cx))
+                });
         let drawer = (layout == LibraryLayout::Grid && self.panels.drawer_open)
             .then(|| self.render_drawer(window, cx));
         let focus_page = (layout == LibraryLayout::Focus).then(|| self.render_focus_page(cx));

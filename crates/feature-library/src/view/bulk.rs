@@ -111,6 +111,19 @@ impl LibraryView {
         cx.notify();
     }
 
+    /// Shift+Space (Ctrl+Space): pick or unpick the focused game, starting
+    /// selection mode, as a Ctrl-click does.
+    pub(super) fn pick_focused(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.grid_focus.is_focused(window) {
+            cx.propagate();
+            return;
+        }
+        if let Some(id) = self.focused_in_view() {
+            self.selection.toggle(&id);
+            cx.notify();
+        }
+    }
+
     /// The toolbar's "Select" / "Done".
     pub(super) fn toggle_selection_mode(&mut self, cx: &mut Context<Self>) {
         if self.selection.is_active() {
