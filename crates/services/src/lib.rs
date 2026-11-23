@@ -24,6 +24,7 @@ pub mod displays;
 mod download_power;
 mod download_space;
 mod downloads;
+pub mod duplicates;
 mod engines;
 mod facts;
 pub mod field_rules;
@@ -45,6 +46,7 @@ pub mod mangohud;
 pub mod media;
 pub mod mods;
 mod network;
+mod other_launchers;
 pub mod play_status;
 pub mod power;
 pub mod prefixes;
@@ -67,6 +69,7 @@ pub mod smart_categories;
 pub mod status;
 pub mod steam_link;
 pub mod steam_overlay;
+mod steam_shortcuts;
 mod steam_tags;
 pub mod storage;
 mod store_facts;
@@ -215,6 +218,8 @@ pub struct Inner {
     /// The computer is kept awake for downloads after the screen was turned
     /// off (`screen.rs`).
     screen_off_hold: AtomicBool,
+    /// Steam shortcut changes waiting, as last told to the Steam card.
+    steam_shortcuts_shown: std::sync::atomic::AtomicUsize,
     presence: discord::Presence,
     /// The replay buffer of the session it records, and its shortcut.
     replay: replay::ReplayState,
@@ -330,6 +335,7 @@ impl Backend {
             isolated,
             auto_paused: AtomicBool::new(false),
             screen_off_hold: AtomicBool::new(false),
+            steam_shortcuts_shown: std::sync::atomic::AtomicUsize::new(0),
             presence: discord::Presence::default(),
             replay: replay::ReplayState::default(),
             expired_logins: RwLock::new(BTreeMap::new()),
@@ -634,7 +640,11 @@ impl Backend {
         // Periodic update checks and connectivity.
         if interactive && !self.isolated {
             let b = self.clone();
-            self.spawn(async move { b.periodic_tasks().await });
+            self.spawn(async move {
+                b.load_steam_shortcut_queue().await;
+                b.note_other_launchers().await;
+                b.periodic_tasks().await
+            });
             self.watch_for_sunshine();
         }
     }
@@ -654,6 +664,7 @@ impl Backend {
             self.sync_when_due().await;
             self.cloud_copies_when_due().await;
             self.sync_sunshine_when_due().await;
+            self.steam_shortcuts_when_due().await;
             self.back_up_when_due().await;
             self.check_app_update_when_due().await;
             self.check_components_when_due().await;

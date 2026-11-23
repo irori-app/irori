@@ -73,6 +73,14 @@ pub(crate) enum PaletteTarget {
     AddEmulator,
     /// Start an emulator without a game (its id and name).
     OpenEngine(String, SharedString),
+    /// Start a third-party launcher.
+    OpenLauncher(irori_launchers::LauncherKind),
+    /// Add desktop and menu shortcuts that open a third-party launcher.
+    LauncherShortcut(irori_launchers::LauncherKind),
+    /// A set-up launcher's Wine build and variables.
+    LauncherWine(irori_launchers::LauncherKind),
+    /// Review added games that are probably one game twice.
+    Duplicates,
     /// The Getting started checklist.
     GettingStarted,
     /// The usual ROM folders found on this computer, to add.
@@ -917,6 +925,47 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::OpenEngine(engine.id, engine.name));
     }
+    for launcher in irori_manage::known_launchers(cx) {
+        let name = launcher.display_name();
+        items.push(
+            Entry::new()
+                .label(t_args("shell.palette.open_launcher", &[("launcher", name)]))
+                .keywords([t("shell.nav.stores")])
+                .icon(IconName::ExternalLink),
+        );
+        targets.push(PaletteTarget::OpenLauncher(launcher));
+        items.push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.launcher_shortcut",
+                    &[("launcher", name)],
+                ))
+                .keywords([t("shell.palette.launcher_shortcut_keywords")])
+                .icon(IconName::Link),
+        );
+        targets.push(PaletteTarget::LauncherShortcut(launcher));
+    }
+    items.push(
+        Entry::new()
+            .label(t("shell.palette.duplicates"))
+            .keywords([t("shell.palette.duplicates_keywords")])
+            .icon(IconName::Copy),
+    );
+    targets.push(PaletteTarget::Duplicates);
+    if !cfg!(windows) {
+        for launcher in irori_manage::wine_launchers(cx) {
+            items.push(
+                Entry::new()
+                    .label(t_args(
+                        "shell.palette.launcher_wine",
+                        &[("launcher", launcher.display_name())],
+                    ))
+                    .keywords([t("shell.palette.launcher_wine_keywords")])
+                    .icon(IconName::Wine),
+            );
+            targets.push(PaletteTarget::LauncherWine(launcher));
+        }
+    }
     if irori_manage::steam_client_library_state(cx).is_some_and(|s| s.steam_found && !s.signed_in) {
         items.push(
             Entry::new()
@@ -987,6 +1036,14 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::AddEmulator => irori_manage::open_custom_engine_dialog(None, window, cx),
         PaletteTarget::OpenEngine(id, name) => irori_manage::open_engine(id, name, window, cx),
+        PaletteTarget::OpenLauncher(launcher) => irori_manage::open_launcher(launcher, window, cx),
+        PaletteTarget::LauncherShortcut(launcher) => {
+            irori_manage::launcher_shortcut(launcher, true, window, cx)
+        }
+        PaletteTarget::LauncherWine(launcher) => {
+            irori_manage::open_launcher_wine_dialog(launcher, window, cx)
+        }
+        PaletteTarget::Duplicates => irori_library::open_duplicates_dialog(window, cx),
         PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
         PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),

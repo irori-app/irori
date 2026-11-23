@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "The saves there now are kept as another earlier save first, so this can be undone. Files saved since that aren’t in it stay.",
   "game.saves.snapshot_restored_one": "{count} file of “{title}” was restored",
   "game.saves.snapshot_restored_other": "{count} files of “{title}” were restored",
-  "game.saves.snapshot_restore_failed": "Couldn’t restore the earlier saves"
+  "game.saves.snapshot_restore_failed": "Couldn’t restore the earlier saves",
+  "game.ops.steam_shortcut_queued": "Steam is running: the Steam shortcut for {title} is added when Steam closes",
+  "game.ops.steam_shortcut_remove_queued": "Steam is running: the Steam shortcut for {title} is removed when Steam closes"
 }

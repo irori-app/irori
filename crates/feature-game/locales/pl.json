@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Obecne zapisy są najpierw zachowywane jako kolejny wcześniejszy zapis, więc można to cofnąć. Pliki zapisane od tamtej pory, których w nim nie ma, zostają.",
   "game.saves.snapshot_restored_one": "Przywrócono {count} plik gry „{title}”",
   "game.saves.snapshot_restored_other": "Przywrócono pliki gry „{title}”: {count}",
-  "game.saves.snapshot_restore_failed": "Nie udało się przywrócić wcześniejszych zapisów"
+  "game.saves.snapshot_restore_failed": "Nie udało się przywrócić wcześniejszych zapisów",
+  "game.ops.steam_shortcut_queued": "Steam działa: skrót Steam do {title} zostanie dodany po zamknięciu Steama",
+  "game.ops.steam_shortcut_remove_queued": "Steam działa: skrót Steam do {title} zostanie usunięty po zamknięciu Steama"
 }

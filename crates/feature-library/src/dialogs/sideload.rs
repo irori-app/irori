@@ -857,6 +857,17 @@ impl SideloadDialog {
                             }),
                     )
                     .child(
+                        Button::new("sideload-duplicates")
+                            .small()
+                            .ghost()
+                            .icon(IconName::Copy)
+                            .label(t("library.duplicates.open"))
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                                super::duplicates::open_duplicates_dialog(window, cx);
+                            }),
+                    )
+                    .child(
                         Button::new("sideload-accounts")
                             .small()
                             .ghost()

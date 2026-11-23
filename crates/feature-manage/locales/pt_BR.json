@@ -801,5 +801,21 @@
   "manage.xbox.offline.turn_off": "Parar de jogar offline",
   "manage.xbox.offline.close": "Fechar",
   "manage.xbox.offline.changed": "Jogo offline alterado",
-  "manage.xbox.offline.failed": "Não foi possível alterar o jogo offline"
+  "manage.xbox.offline.failed": "Não foi possível alterar o jogo offline",
+  "manage.steam_shortcuts.waiting_one": "1 alteração de atalhos aguarda o Steam fechar",
+  "manage.steam_shortcuts.waiting_other": "{count} alterações de atalhos aguardam o Steam fechar",
+  "manage.launchers.more": "Mais",
+  "manage.launchers.add_shortcut": "Adicionar atalho",
+  "manage.launchers.remove_shortcut": "Remover atalho",
+  "manage.launchers.shortcut_added": "Foi adicionado um atalho que abre o {launcher} na área de trabalho e no menu de aplicativos",
+  "manage.launchers.shortcut_removed": "Os atalhos que abrem o {launcher} foram removidos",
+  "manage.launchers.shortcut_failed": "Não foi possível alterar os atalhos do {launcher}",
+  "manage.launchers.wine_settings": "Configurações do Wine…",
+  "manage.launchers.wine.title": "Configurações do Wine do {launcher}",
+  "manage.launchers.wine.build": "Versão do Wine",
+  "manage.launchers.wine.variables": "Variáveis de ambiente",
+  "manage.launchers.wine.variables_help": "CHAVE=valor, separadas por espaços. Valem para o inicializador e para cada jogo aberto por ele, acima dos padrões dos jogos.",
+  "manage.launchers.wine.save": "Salvar",
+  "manage.launchers.wine.saved": "O {launcher} usará as novas configurações do Wine a partir da próxima abertura",
+  "manage.launchers.wine.failed": "Não foi possível salvar as configurações do Wine do {launcher}"
 }

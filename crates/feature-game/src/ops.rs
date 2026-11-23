@@ -333,7 +333,14 @@ pub fn add_shortcuts(id: &GameId, steam: bool, window: &mut Window, cx: &mut App
         cx,
         t_args("game.ops.shortcuts_add_failed", &[("title", &title)]),
         async move { shortcuts::add(&game, &b.settings.app(), targets).await },
-        move |_, window, cx| notify_success(window, cx, t_args(done, &[("title", &title)])),
+        move |report, window, cx| {
+            let key = if report.steam_queued {
+                "game.ops.steam_shortcut_queued"
+            } else {
+                done
+            };
+            notify_success(window, cx, t_args(key, &[("title", &title)]))
+        },
     )
 }
 
@@ -360,7 +367,7 @@ pub fn remove_shortcuts(id: &GameId, window: &mut Window, cx: &mut App) -> Task<
 }
 
 /// Remove Irori's Steam shortcut of the game; other programs' shortcuts
-/// stay. Steam has to be closed.
+/// stay. While Steam runs the removal waits for it to close.
 pub fn remove_from_steam(id: &GameId, window: &mut Window, cx: &mut App) -> Task<bool> {
     let b = backend(cx);
     let Some(game) = b.game(id) else {
@@ -374,7 +381,9 @@ pub fn remove_from_steam(id: &GameId, window: &mut Window, cx: &mut App) -> Task
         t_args("game.ops.steam_remove_failed", &[("title", &title)]),
         async move { shortcuts::remove_from_steam(Some(&ids), &b.settings.app()).await },
         move |report, window, cx| {
-            let key = if report.removed > 0 {
+            let key = if report.queued > 0 {
+                "game.ops.steam_shortcut_remove_queued"
+            } else if report.removed > 0 {
                 "game.ops.steam_shortcut_removed"
             } else {
                 "game.ops.steam_shortcut_absent"

@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Os salvamentos atuais são guardados primeiro como outro anterior, então isso pode ser desfeito. Arquivos salvos depois que não estejam nele permanecem.",
   "game.saves.snapshot_restored_one": "{count} arquivo de “{title}” foi restaurado",
   "game.saves.snapshot_restored_other": "{count} arquivos de “{title}” foram restaurados",
-  "game.saves.snapshot_restore_failed": "Não foi possível restaurar os salvamentos anteriores"
+  "game.saves.snapshot_restore_failed": "Não foi possível restaurar os salvamentos anteriores",
+  "game.ops.steam_shortcut_queued": "O Steam está aberto: o atalho do Steam de {title} será adicionado quando o Steam fechar",
+  "game.ops.steam_shortcut_remove_queued": "O Steam está aberto: o atalho do Steam de {title} será removido quando o Steam fechar"
 }

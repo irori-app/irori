@@ -1747,5 +1747,11 @@
   "settings.field.rosetta.label": "Rulează cu Rosetta",
   "settings.field.rosetta.help": "Pornește versiunea pentru Intel a jocului chiar dacă are și una pentru Apple silicon, pentru jocurile a căror versiune Apple silicon nu merge bine. Jocurile doar pentru Mac-uri cu Intel rulează mereu cu Rosetta.",
   "settings.field.metal_fx_dlss.label": "DLSS prin MetalFX",
-  "settings.field.metal_fx_dlss.help": "Permite jocurilor care folosesc NVIDIA DLSS să scaleze imaginea cu MetalFX de la Apple. Pot face asta doar versiunile Wine care îl includ: Game Porting Toolkit 3, un CrossOver recent sau o versiune cu DXMT. Cu celelalte rămâne oprit, iar jurnalul jocului spune de ce."
+  "settings.field.metal_fx_dlss.help": "Permite jocurilor care folosesc NVIDIA DLSS să scaleze imaginea cu MetalFX de la Apple. Pot face asta doar versiunile Wine care îl includ: Game Porting Toolkit 3, un CrossOver recent sau o versiune cu DXMT. Cu celelalte rămâne oprit, iar jurnalul jocului spune de ce.",
+  "settings.field.shortcut_icon_from_exe.label": "Pictograme din programul jocului",
+  "settings.field.shortcut_icon_from_exe.help": "Comenzile rapide ale jocurilor Windows folosesc pictograma din fișierul .exe al jocului, înaintea imaginilor magazinului.",
+  "settings.field.launcher_sync_lutris.label": "Păstrează jocurile din Lutris sincronizate",
+  "settings.field.launcher_sync_bottles.label": "Păstrează programele din Bottles sincronizate",
+  "settings.field.launcher_sync_faugus.label": "Păstrează jocurile din Faugus Launcher sincronizate",
+  "settings.field.launcher_sync.help": "Irori citește din nou lansatorul la pornire și la fiecare 15 minute și adaugă jocurile pe care nu le-a văzut. Jocurile eliminate din Irori nu revin, iar fișierele lansatorului sunt doar citite."
 }

@@ -801,5 +801,21 @@
   "manage.xbox.offline.turn_off": "Interrompi gioco offline",
   "manage.xbox.offline.close": "Chiudi",
   "manage.xbox.offline.changed": "Gioco offline modificato",
-  "manage.xbox.offline.failed": "Impossibile modificare il gioco offline"
+  "manage.xbox.offline.failed": "Impossibile modificare il gioco offline",
+  "manage.steam_shortcuts.waiting_one": "1 modifica ai collegamenti attende la chiusura di Steam",
+  "manage.steam_shortcuts.waiting_other": "{count} modifiche ai collegamenti attendono la chiusura di Steam",
+  "manage.launchers.more": "Altro",
+  "manage.launchers.add_shortcut": "Aggiungi collegamento",
+  "manage.launchers.remove_shortcut": "Rimuovi collegamento",
+  "manage.launchers.shortcut_added": "Aggiunto un collegamento che apre {launcher} sul desktop e nel menu delle applicazioni",
+  "manage.launchers.shortcut_removed": "Rimossi i collegamenti che aprono {launcher}",
+  "manage.launchers.shortcut_failed": "Impossibile modificare i collegamenti di {launcher}",
+  "manage.launchers.wine_settings": "Impostazioni di Wine…",
+  "manage.launchers.wine.title": "Impostazioni di Wine di {launcher}",
+  "manage.launchers.wine.build": "Versione di Wine",
+  "manage.launchers.wine.variables": "Variabili d’ambiente",
+  "manage.launchers.wine.variables_help": "CHIAVE=valore, separati da spazi. Valgono per il launcher e per ogni gioco avviato tramite esso, sopra le impostazioni predefinite.",
+  "manage.launchers.wine.save": "Salva",
+  "manage.launchers.wine.saved": "{launcher} userà le nuove impostazioni di Wine dal prossimo avvio",
+  "manage.launchers.wine.failed": "Impossibile salvare le impostazioni di Wine di {launcher}"
 }

@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Die jetzigen Spielstände werden zuerst als weiterer früherer Spielstand aufbewahrt, sodass sich das rückgängig machen lässt. Seitdem gespeicherte Dateien, die nicht darin sind, bleiben.",
   "game.saves.snapshot_restored_one": "{count} Datei von „{title}“ wurde wiederhergestellt",
   "game.saves.snapshot_restored_other": "{count} Dateien von „{title}“ wurden wiederhergestellt",
-  "game.saves.snapshot_restore_failed": "Die früheren Spielstände konnten nicht wiederhergestellt werden"
+  "game.saves.snapshot_restore_failed": "Die früheren Spielstände konnten nicht wiederhergestellt werden",
+  "game.ops.steam_shortcut_queued": "Steam läuft: Die Steam-Verknüpfung für {title} wird angelegt, sobald Steam beendet ist",
+  "game.ops.steam_shortcut_remove_queued": "Steam läuft: Die Steam-Verknüpfung für {title} wird entfernt, sobald Steam beendet ist"
 }

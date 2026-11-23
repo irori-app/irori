@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Primero se guardan las partidas actuales como otra anterior, así que se puede deshacer. Los archivos guardados desde entonces que no estén en ella se quedan.",
   "game.saves.snapshot_restored_one": "Se restauró {count} archivo de «{title}»",
   "game.saves.snapshot_restored_other": "Se restauraron {count} archivos de «{title}»",
-  "game.saves.snapshot_restore_failed": "No se pudieron restaurar las partidas anteriores"
+  "game.saves.snapshot_restore_failed": "No se pudieron restaurar las partidas anteriores",
+  "game.ops.steam_shortcut_queued": "Steam está abierto: el acceso directo de Steam de {title} se añadirá cuando se cierre Steam",
+  "game.ops.steam_shortcut_remove_queued": "Steam está abierto: el acceso directo de Steam de {title} se quitará cuando se cierre Steam"
 }

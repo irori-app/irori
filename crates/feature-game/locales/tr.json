@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Şu anki kayıtlar önce başka bir önceki kayıt olarak saklanır, yani bu geri alınabilir. O zamandan beri kaydedilmiş ve içinde olmayan dosyalar kalır.",
   "game.saves.snapshot_restored_one": "“{title}” oyununun {count} dosyası geri yüklendi",
   "game.saves.snapshot_restored_other": "“{title}” oyununun {count} dosyası geri yüklendi",
-  "game.saves.snapshot_restore_failed": "Önceki kayıtlar geri yüklenemedi"
+  "game.saves.snapshot_restore_failed": "Önceki kayıtlar geri yüklenemedi",
+  "game.ops.steam_shortcut_queued": "Steam çalışıyor: {title} için Steam kısayolu Steam kapanınca eklenecek",
+  "game.ops.steam_shortcut_remove_queued": "Steam çalışıyor: {title} için Steam kısayolu Steam kapanınca kaldırılacak"
 }

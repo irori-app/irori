@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "Välj bland andra spel",
   "shell.palette.random_empty": "Det finns inga spel att välja bland här",
   "shell.palette.preview_enter_play": "Retur spelar det, eller går tillbaka till det medan det körs; Skift+Retur visar det i Irori; → visar dess åtgärder",
-  "shell.quick_launch.failed": "Snabbstartaren kunde inte öppnas"
+  "shell.quick_launch.failed": "Snabbstartaren kunde inte öppnas",
+  "shell.notice.steam_shortcuts_failed": "Steam-genvägarna ändrades inte",
+  "shell.palette.open_launcher": "Öppna {launcher}",
+  "shell.palette.launcher_shortcut": "Lägg till en genväg som öppnar {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "genväg skrivbord meny startprogram ikon",
+  "shell.notice.launcher_open_failed": "{launcher} öppnades inte",
+  "shell.notice.launcher_sync_added": "Nya spel från {launcher}",
+  "shell.notice.launcher_sync_added_message": "Tillagda i biblioteket: {count}",
+  "shell.palette.launcher_wine": "Wine-inställningar för {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton version variabler miljö startprogram",
+  "shell.palette.duplicates": "Granska dubbla tillagda spel",
+  "shell.palette.duplicates_keywords": "dubblett slå ihop samma två gånger tillagd lutris import"
 }

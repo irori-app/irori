@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "De huidige opslagbestanden worden eerst als nog een eerder opslagbestand bewaard, dus dit is ongedaan te maken. Bestanden die sindsdien zijn opgeslagen en er niet in zitten, blijven.",
   "game.saves.snapshot_restored_one": "{count} bestand van ‘{title}’ is teruggezet",
   "game.saves.snapshot_restored_other": "{count} bestanden van ‘{title}’ zijn teruggezet",
-  "game.saves.snapshot_restore_failed": "De eerdere opslagbestanden konden niet worden teruggezet"
+  "game.saves.snapshot_restore_failed": "De eerdere opslagbestanden konden niet worden teruggezet",
+  "game.ops.steam_shortcut_queued": "Steam draait: de Steam-snelkoppeling voor {title} wordt toegevoegd zodra Steam sluit",
+  "game.ops.steam_shortcut_remove_queued": "Steam draait: de Steam-snelkoppeling voor {title} wordt verwijderd zodra Steam sluit"
 }

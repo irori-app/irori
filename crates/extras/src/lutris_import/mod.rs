@@ -43,6 +43,38 @@ pub struct LutrisPlan {
     pub warnings: Vec<String>,
 }
 
+impl LutrisPlan {
+    /// The folders the launcher keeps its games' files and prefixes in:
+    /// each Windows or native game's folder (its working folder, else its
+    /// program's) and prefix. Irori never deletes these
+    /// (`irori_core::fs_guard::OtherLaunchers`).
+    pub fn folders(&self) -> Vec<PathBuf> {
+        self.games.iter().flat_map(PlannedGame::folders).collect()
+    }
+}
+
+impl PlannedGame {
+    /// This game's folder and prefix, as [`LutrisPlan::folders`] lists them.
+    pub fn folders(&self) -> Vec<PathBuf> {
+        let (exe, working_dir, prefix) = match &self.kind {
+            ImportKind::Windows {
+                exe,
+                working_dir,
+                prefix,
+                ..
+            } => (exe, working_dir, prefix.as_ref()),
+            ImportKind::Native {
+                exe, working_dir, ..
+            } => (exe, working_dir, None),
+            _ => return Vec::new(),
+        };
+        let folder = working_dir
+            .clone()
+            .or_else(|| exe.parent().map(Path::to_path_buf));
+        folder.into_iter().chain(prefix.cloned()).collect()
+    }
+}
+
 /// One Lutris game and what it becomes in Irori.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlannedGame {

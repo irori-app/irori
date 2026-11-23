@@ -1747,5 +1747,11 @@
   "settings.field.rosetta.label": "Rosetta で実行",
   "settings.field.rosetta.help": "Apple シリコン版があってもゲームの Intel 版を起動します。Apple シリコン版がうまく動かないゲーム向けです。Intel Mac 専用のゲームは常に Rosetta で動きます。",
   "settings.field.metal_fx_dlss.label": "MetalFX による DLSS",
-  "settings.field.metal_fx_dlss.help": "NVIDIA DLSS を使うゲームが Apple の MetalFX でアップスケールできるようにします。対応するのはこれを含む Wine ビルドだけです: Game Porting Toolkit 3、最近の CrossOver、DXMT 入りのビルド。それ以外ではオフのままで、理由はゲームのログに記録されます。"
+  "settings.field.metal_fx_dlss.help": "NVIDIA DLSS を使うゲームが Apple の MetalFX でアップスケールできるようにします。対応するのはこれを含む Wine ビルドだけです: Game Porting Toolkit 3、最近の CrossOver、DXMT 入りのビルド。それ以外ではオフのままで、理由はゲームのログに記録されます。",
+  "settings.field.shortcut_icon_from_exe.label": "ゲームのプログラムのアイコン",
+  "settings.field.shortcut_icon_from_exe.help": "Windows ゲームのショートカットに、ストアの画像より先にゲームの .exe 内のアイコンを使います。",
+  "settings.field.launcher_sync_lutris.label": "Lutris のゲームを同期する",
+  "settings.field.launcher_sync_bottles.label": "Bottles のプログラムを同期する",
+  "settings.field.launcher_sync_faugus.label": "Faugus Launcher のゲームを同期する",
+  "settings.field.launcher_sync.help": "Irori は起動時と 15 分ごとにランチャーを読み直し、まだ見ていないゲームを追加します。Irori から削除したゲームは戻らず、ランチャーのファイルは読み取るだけです。"
 }

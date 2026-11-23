@@ -1747,5 +1747,11 @@
   "settings.field.rosetta.label": "Rosetta ile çalıştır",
   "settings.field.rosetta.help": "Apple silicon sürümü de olsa oyunun Intel sürümünü başlatır; Apple silicon sürümü sorun çıkaran oyunlar içindir. Yalnızca Intel Mac’ler için yapılan oyunlar her zaman Rosetta ile çalışır.",
   "settings.field.metal_fx_dlss.label": "MetalFX ile DLSS",
-  "settings.field.metal_fx_dlss.help": "NVIDIA DLSS kullanan oyunların Apple’ın MetalFX’iyle ölçeklemesini sağlar. Bunu yalnızca onu içeren Wine sürümleri yapabilir: Game Porting Toolkit 3, yeni bir CrossOver veya DXMT içeren bir sürüm. Diğerlerinde kapalı kalır ve oyun günlüğü nedenini söyler."
+  "settings.field.metal_fx_dlss.help": "NVIDIA DLSS kullanan oyunların Apple’ın MetalFX’iyle ölçeklemesini sağlar. Bunu yalnızca onu içeren Wine sürümleri yapabilir: Game Porting Toolkit 3, yeni bir CrossOver veya DXMT içeren bir sürüm. Diğerlerinde kapalı kalır ve oyun günlüğü nedenini söyler.",
+  "settings.field.shortcut_icon_from_exe.label": "Oyunun programındaki simgeler",
+  "settings.field.shortcut_icon_from_exe.help": "Windows oyunlarının kısayolları, mağaza görsellerinden önce oyunun .exe dosyasındaki simgeyi kullanır.",
+  "settings.field.launcher_sync_lutris.label": "Lutris oyunlarını eşitle",
+  "settings.field.launcher_sync_bottles.label": "Bottles programlarını eşitle",
+  "settings.field.launcher_sync_faugus.label": "Faugus Launcher oyunlarını eşitle",
+  "settings.field.launcher_sync.help": "Irori, başlatıcıyı açılışta ve her 15 dakikada bir yeniden okur ve görmediği oyunları ekler. Irori'den kaldırdığınız oyunlar geri gelmez; başlatıcının dosyaları yalnızca okunur."
 }

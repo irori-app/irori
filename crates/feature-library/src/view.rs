@@ -1051,7 +1051,7 @@ impl LibraryView {
                             app_menu: true,
                             steam: false,
                         };
-                        shortcuts::add(&game, &app, targets).await
+                        shortcuts::add(&game, &app, targets).await.map(|_| ())
                     } else {
                         shortcuts::remove(&game, &app).await
                     }
@@ -1087,11 +1087,14 @@ impl LibraryView {
                 });
                 let failed = t_args("library.error.add_to_steam", &[("title", &title)]);
                 let done = t_args("library.steam_added", &[("title", &title)]);
+                let queued = t_args("library.steam_queued", &[("title", &title)]);
                 cx.spawn_in(window, async move |_, cx| {
                     let result = task.await;
                     cx.update(|window, cx| match result {
-                        Ok(()) => window.push_notification(
-                            gpui_kit::component::notification::Notification::success(done),
+                        Ok(report) => window.push_notification(
+                            gpui_kit::component::notification::Notification::success(
+                                if report.steam_queued { queued } else { done },
+                            ),
                             cx,
                         ),
                         Err(e) => crate::notify_error(failed, &e, window, cx),
@@ -1109,12 +1112,19 @@ impl LibraryView {
                 let failed = t_args("library.error.remove_from_steam", &[("title", &title)]);
                 let done = t_args("library.steam_removed", &[("title", &title)]);
                 let absent = t_args("library.steam_absent", &[("title", &title)]);
+                let queued = t_args("library.steam_remove_queued", &[("title", &title)]);
                 cx.spawn_in(window, async move |_, cx| {
                     let result = task.await;
                     cx.update(|window, cx| match result {
                         Ok(report) => window.push_notification(
                             gpui_kit::component::notification::Notification::success(
-                                if report.removed > 0 { done } else { absent },
+                                if report.queued > 0 {
+                                    queued
+                                } else if report.removed > 0 {
+                                    done
+                                } else {
+                                    absent
+                                },
                             ),
                             cx,
                         ),

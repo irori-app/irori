@@ -1747,5 +1747,11 @@
   "settings.field.rosetta.label": "Запускать через Rosetta",
   "settings.field.rosetta.help": "Запускает Intel-версию игры, даже если есть версия для Apple silicon, — для игр, у которых версия для Apple silicon работает плохо. Игры только для Mac с Intel всегда запускаются через Rosetta.",
   "settings.field.metal_fx_dlss.label": "DLSS через MetalFX",
-  "settings.field.metal_fx_dlss.help": "Позволяет играм с NVIDIA DLSS масштабировать изображение через MetalFX от Apple. Это умеют только сборки Wine, в которых это есть: Game Porting Toolkit 3, свежий CrossOver или сборка с DXMT. С другими параметр остаётся выключенным, а журнал игры объясняет почему."
+  "settings.field.metal_fx_dlss.help": "Позволяет играм с NVIDIA DLSS масштабировать изображение через MetalFX от Apple. Это умеют только сборки Wine, в которых это есть: Game Porting Toolkit 3, свежий CrossOver или сборка с DXMT. С другими параметр остаётся выключенным, а журнал игры объясняет почему.",
+  "settings.field.shortcut_icon_from_exe.label": "Значки из программы игры",
+  "settings.field.shortcut_icon_from_exe.help": "Ярлыки игр для Windows используют значок из .exe игры, а не изображения магазина.",
+  "settings.field.launcher_sync_lutris.label": "Синхронизировать игры Lutris",
+  "settings.field.launcher_sync_bottles.label": "Синхронизировать программы Bottles",
+  "settings.field.launcher_sync_faugus.label": "Синхронизировать игры Faugus Launcher",
+  "settings.field.launcher_sync.help": "Irori заново читает лаунчер при запуске и каждые 15 минут и добавляет игры, которых ещё не видел. Удалённые из Irori игры не возвращаются, а файлы лаунчера только читаются."
 }

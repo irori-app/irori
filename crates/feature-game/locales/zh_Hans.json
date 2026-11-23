@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "当前的存档会先保留为另一份较早的存档，因此可以撤销。之后保存且不在其中的文件会保留。",
   "game.saves.snapshot_restored_one": "已恢复“{title}”的 {count} 个文件",
   "game.saves.snapshot_restored_other": "已恢复“{title}”的 {count} 个文件",
-  "game.saves.snapshot_restore_failed": "无法恢复较早的存档"
+  "game.saves.snapshot_restore_failed": "无法恢复较早的存档",
+  "game.ops.steam_shortcut_queued": "Steam 正在运行：{title} 的 Steam 快捷方式将在 Steam 关闭后添加",
+  "game.ops.steam_shortcut_remove_queued": "Steam 正在运行：{title} 的 Steam 快捷方式将在 Steam 关闭后移除"
 }

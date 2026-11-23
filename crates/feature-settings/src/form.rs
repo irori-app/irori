@@ -602,6 +602,13 @@ impl SettingsForm {
             {
                 return false;
             }
+            // Keeping a launcher in sync is offered where it is found.
+            match f.path {
+                "iroriLauncherImports.lutris" if !self.lutris_detected => return false,
+                "iroriLauncherImports.bottles" if !self.bottles_detected => return false,
+                "iroriLauncherImports.faugus" if !self.faugus_detected => return false,
+                _ => {}
+            }
             if matches!(f.kind, FieldKind::Action(ActionKind::ImportPlaynite))
                 && !self.playnite_detected
             {

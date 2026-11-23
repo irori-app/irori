@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "Alege din alte jocuri",
   "shell.palette.random_empty": "Aici nu sunt jocuri din care să alegi",
   "shell.palette.preview_enter_play": "Enter îl pornește sau revine la el cât rulează; Shift+Enter îl arată în Irori; → îi arată acțiunile",
-  "shell.quick_launch.failed": "Lansatorul rapid nu s-a putut deschide"
+  "shell.quick_launch.failed": "Lansatorul rapid nu s-a putut deschide",
+  "shell.notice.steam_shortcuts_failed": "Comenzile rapide Steam nu au fost modificate",
+  "shell.palette.open_launcher": "Deschide {launcher}",
+  "shell.palette.launcher_shortcut": "Adaugă o comandă rapidă care deschide {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "comandă rapidă desktop meniu lansator pictogramă",
+  "shell.notice.launcher_open_failed": "{launcher} nu s-a deschis",
+  "shell.notice.launcher_sync_added": "Jocuri noi din {launcher}",
+  "shell.notice.launcher_sync_added_message": "Adăugate în bibliotecă: {count}",
+  "shell.palette.launcher_wine": "Setări Wine pentru {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton versiune variabile mediu lansator",
+  "shell.palette.duplicates": "Verifică jocurile adăugate duplicate",
+  "shell.palette.duplicates_keywords": "duplicat îmbină același de două ori adăugat lutris import"
 }

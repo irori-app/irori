@@ -381,13 +381,17 @@ impl LibraryView {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
                 match result {
-                    Ok(added) => window.push_notification(
-                        Notification::success(t_args(
-                            "library.bulk.steam_added",
-                            &[("count", &added.to_string())],
-                        )),
-                        cx,
-                    ),
+                    Ok(report) => {
+                        let (key, count) = if report.queued > 0 {
+                            ("library.bulk.steam_queued", report.queued)
+                        } else {
+                            ("library.bulk.steam_added", report.added)
+                        };
+                        window.push_notification(
+                            Notification::success(t_args(key, &[("count", &count.to_string())])),
+                            cx,
+                        )
+                    }
                     Err(e) => crate::notify_error(t("library.bulk.steam_failed"), &e, window, cx),
                 }
                 this.selection.end();
@@ -456,13 +460,17 @@ impl LibraryView {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
                 match result {
-                    Ok(report) => window.push_notification(
-                        Notification::success(t_args(
-                            "library.bulk.steam_removed",
-                            &[("count", &report.removed.to_string())],
-                        )),
-                        cx,
-                    ),
+                    Ok(report) => {
+                        let (key, count) = if report.queued > 0 {
+                            ("library.bulk.steam_remove_queued", report.queued)
+                        } else {
+                            ("library.bulk.steam_removed", report.removed)
+                        };
+                        window.push_notification(
+                            Notification::success(t_args(key, &[("count", &count.to_string())])),
+                            cx,
+                        )
+                    }
                     Err(e) => {
                         crate::notify_error(t("library.bulk.steam_remove_failed"), &e, window, cx)
                     }

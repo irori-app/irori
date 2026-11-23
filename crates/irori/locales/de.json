@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "Aus anderen Spielen wählen",
   "shell.palette.random_empty": "Hier gibt es keine Spiele zur Auswahl",
   "shell.palette.preview_enter_play": "Eingabe startet es oder kehrt zu ihm zurück, während es läuft; Umschalt+Eingabe zeigt es in Irori; → zeigt seine Aktionen",
-  "shell.quick_launch.failed": "Der Schnellstarter konnte nicht geöffnet werden"
+  "shell.quick_launch.failed": "Der Schnellstarter konnte nicht geöffnet werden",
+  "shell.notice.steam_shortcuts_failed": "Steam-Verknüpfungen wurden nicht geändert",
+  "shell.palette.open_launcher": "{launcher} öffnen",
+  "shell.palette.launcher_shortcut": "Verknüpfung zum Öffnen von {launcher} anlegen",
+  "shell.palette.launcher_shortcut_keywords": "Verknüpfung Desktop Menü Launcher Symbol",
+  "shell.notice.launcher_open_failed": "{launcher} wurde nicht geöffnet",
+  "shell.notice.launcher_sync_added": "Neue Spiele aus {launcher}",
+  "shell.notice.launcher_sync_added_message": "Zur Bibliothek hinzugefügt: {count}",
+  "shell.palette.launcher_wine": "Wine-Einstellungen von {launcher}",
+  "shell.palette.launcher_wine_keywords": "Wine Proton Version Variablen Umgebung Launcher",
+  "shell.palette.duplicates": "Doppelte hinzugefügte Spiele prüfen",
+  "shell.palette.duplicates_keywords": "doppelt zusammenführen gleich zweimal hinzugefügt Lutris Import"
 }

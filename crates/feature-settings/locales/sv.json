@@ -1747,5 +1747,11 @@
   "settings.field.rosetta.label": "Kör med Rosetta",
   "settings.field.rosetta.help": "Startar spelets Intel-version även när det också har en för Apple silicon, för spel vars Apple silicon-version krånglar. Spel som bara är gjorda för Intel-Mac körs alltid med Rosetta.",
   "settings.field.metal_fx_dlss.label": "DLSS via MetalFX",
-  "settings.field.metal_fx_dlss.help": "Låter spel som använder NVIDIA DLSS skala upp med Apples MetalFX. Bara Wine-versioner som har det kan: Game Porting Toolkit 3, en ny CrossOver eller en DXMT-version. Med andra förblir det av och spelloggen säger varför."
+  "settings.field.metal_fx_dlss.help": "Låter spel som använder NVIDIA DLSS skala upp med Apples MetalFX. Bara Wine-versioner som har det kan: Game Porting Toolkit 3, en ny CrossOver eller en DXMT-version. Med andra förblir det av och spelloggen säger varför.",
+  "settings.field.shortcut_icon_from_exe.label": "Ikoner från spelets program",
+  "settings.field.shortcut_icon_from_exe.help": "Genvägar till Windows-spel använder ikonen i spelets .exe före butikens bilder.",
+  "settings.field.launcher_sync_lutris.label": "Håll Lutris-spel synkroniserade",
+  "settings.field.launcher_sync_bottles.label": "Håll Bottles-program synkroniserade",
+  "settings.field.launcher_sync_faugus.label": "Håll Faugus Launcher-spel synkroniserade",
+  "settings.field.launcher_sync.help": "Irori läser startprogrammet igen vid start och var 15:e minut och lägger till spel som det inte sett. Spel du tagit bort ur Irori förblir borta, och startprogrammets filer läses bara."
 }

@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Salvările de acum se păstrează mai întâi ca altă salvare anterioară, deci poți anula. Fișierele salvate între timp care nu sunt în ea rămân.",
   "game.saves.snapshot_restored_one": "A fost restaurat {count} fișier al „{title}”",
   "game.saves.snapshot_restored_other": "Au fost restaurate {count} fișiere ale „{title}”",
-  "game.saves.snapshot_restore_failed": "Salvările anterioare nu au putut fi restaurate"
+  "game.saves.snapshot_restore_failed": "Salvările anterioare nu au putut fi restaurate",
+  "game.ops.steam_shortcut_queued": "Steam rulează: comanda rapidă Steam pentru {title} se adaugă când se închide Steam",
+  "game.ops.steam_shortcut_remove_queued": "Steam rulează: comanda rapidă Steam pentru {title} se elimină când se închide Steam"
 }

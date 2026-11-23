@@ -1747,5 +1747,11 @@
   "settings.field.rosetta.label": "透過 Rosetta 執行",
   "settings.field.rosetta.help": "即使遊戲也有 Apple 晶片版本，仍啟動它的 Intel 版本，適用於 Apple 晶片版本執行不正常的遊戲。只為 Intel Mac 製作的遊戲總是透過 Rosetta 執行。",
   "settings.field.metal_fx_dlss.label": "透過 MetalFX 使用 DLSS",
-  "settings.field.metal_fx_dlss.help": "讓使用 NVIDIA DLSS 的遊戲透過 Apple 的 MetalFX 進行超解析度縮放。只有內建此功能的 Wine 版本可以：Game Porting Toolkit 3、較新的 CrossOver 或含 DXMT 的版本。其他版本下保持關閉，遊戲記錄會說明原因。"
+  "settings.field.metal_fx_dlss.help": "讓使用 NVIDIA DLSS 的遊戲透過 Apple 的 MetalFX 進行超解析度縮放。只有內建此功能的 Wine 版本可以：Game Porting Toolkit 3、較新的 CrossOver 或含 DXMT 的版本。其他版本下保持關閉，遊戲記錄會說明原因。",
+  "settings.field.shortcut_icon_from_exe.label": "使用遊戲程式的圖示",
+  "settings.field.shortcut_icon_from_exe.help": "Windows 遊戲的捷徑優先使用遊戲 .exe 中的圖示，而不是商店的圖片。",
+  "settings.field.launcher_sync_lutris.label": "保持 Lutris 遊戲同步",
+  "settings.field.launcher_sync_bottles.label": "保持 Bottles 程式同步",
+  "settings.field.launcher_sync_faugus.label": "保持 Faugus Launcher 遊戲同步",
+  "settings.field.launcher_sync.help": "Irori 會在啟動時以及每 15 分鐘重新讀取該啟動器，並加入先前未見過的遊戲。你從 Irori 移除的遊戲不會再加回來，啟動器的檔案只會被讀取。"
 }

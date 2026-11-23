@@ -9,6 +9,10 @@
 //! Bottles and Faugus Launcher are imported the same way from the plans of
 //! [`irori_extras::wine_launchers`]; a bottle's Start menu shortcuts are
 //! read here too, since games installed into a bottle show up there.
+//!
+//! The folders and prefixes the launcher keeps, and those of the games
+//! imported from it, are recorded with `fs_guard::OtherLaunchers`: Irori
+//! never deletes them (the launcher removes its own games).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -52,6 +56,17 @@ pub async fn import(
     sideload: Option<Arc<SideloadStore>>,
     emulation: Option<Arc<irori_emulation::EmulationStore>>,
 ) -> Result<LutrisSummary> {
+    import_lutris(backend, sideload, emulation, false).await
+}
+
+/// [`import`]; with `only_new`, only the games no import or sync of this
+/// launcher has seen ([`crate::launcher_sync`]).
+pub(crate) async fn import_lutris(
+    backend: &Backend,
+    sideload: Option<Arc<SideloadStore>>,
+    emulation: Option<Arc<irori_emulation::EmulationStore>>,
+    only_new: bool,
+) -> Result<LutrisSummary> {
     let installs = tokio::task::spawn_blocking(LutrisDirs::discover)
         .await
         .context("looking for Lutris stopped")?;
@@ -60,8 +75,12 @@ pub async fn import(
         "No Lutris library was found on this computer"
     );
     let mut summary = LutrisSummary::default();
+    let mut folders = Vec::new();
     for dirs in installs {
+        folders.push(dirs.data_dir.join("runners"));
         let plan = lutris_import::plan_async(dirs).await?;
+        folders.extend(plan.folders());
+        let plan = crate::launcher_sync::take_unseen(LUTRIS, plan, only_new).await;
         apply_plan(
             backend,
             sideload.as_deref(),
@@ -71,14 +90,68 @@ pub async fn import(
         )
         .await;
     }
-    backend.refresh_all(false).await;
+    note_found(LUTRIS, folders).await;
+    refresh_after(backend, only_new, &summary).await;
     Ok(summary)
+}
+
+pub(crate) const LUTRIS: &str = "Lutris";
+pub(crate) const BOTTLES: &str = "Bottles";
+pub(crate) const FAUGUS: &str = "Faugus Launcher";
+
+/// Show what an import added. A sync refreshes only the libraries it
+/// adds to, and only when it added something: it runs every quarter of an
+/// hour, and a whole refresh asks every store's servers.
+async fn refresh_after(backend: &Backend, only_new: bool, summary: &LutrisSummary) {
+    if !only_new {
+        backend.refresh_all(false).await;
+        return;
+    }
+    if summary.imported == 0 {
+        return;
+    }
+    for runner in [Runner::Sideload, Runner::Emulation] {
+        if let Err(e) = backend.refresh_store(runner, false).await {
+            tracing::info!("refreshing after a launcher sync: {e:#}");
+        }
+    }
+}
+
+/// Record what a launcher keeps, as just read from it.
+async fn note_found(launcher: &'static str, folders: Vec<std::path::PathBuf>) {
+    let done = tokio::task::spawn_blocking(move || {
+        irori_core::fs_guard::OtherLaunchers::set_found(launcher, folders)
+    })
+    .await;
+    if let Ok(Err(e)) = done {
+        tracing::warn!("recording {launcher}'s folders: {e:#}");
+    }
+}
+
+/// Record the folder and prefix of a game imported from `launcher`.
+async fn note_imported(launcher: String, folders: Vec<std::path::PathBuf>) {
+    let done = tokio::task::spawn_blocking(move || {
+        irori_core::fs_guard::OtherLaunchers::note_imported(&launcher, folders)
+    })
+    .await;
+    if let Ok(Err(e)) = done {
+        tracing::warn!("recording an imported game's folders: {e:#}");
+    }
 }
 
 /// Import the programs of every bottle of every Bottles installation.
 pub async fn import_bottles(
     backend: &Backend,
     sideload: Option<Arc<SideloadStore>>,
+) -> Result<LutrisSummary> {
+    import_bottles_with(backend, sideload, false).await
+}
+
+/// [`import_bottles`]; with `only_new`, only the games not seen before.
+pub(crate) async fn import_bottles_with(
+    backend: &Backend,
+    sideload: Option<Arc<SideloadStore>>,
+    only_new: bool,
 ) -> Result<LutrisSummary> {
     let installs = tokio::task::spawn_blocking(bottles::BottlesDirs::discover)
         .await
@@ -88,20 +161,26 @@ pub async fn import_bottles(
         "No Bottles bottles were found on this computer"
     );
     let mut summary = LutrisSummary {
-        launcher: Some("Bottles".into()),
+        launcher: Some(BOTTLES.into()),
         ..Default::default()
     };
+    let mut folders = Vec::new();
     for dirs in installs {
-        let plan = tokio::task::spawn_blocking(move || {
+        folders.push(dirs.runners_dir.clone());
+        let (plan, bottles) = tokio::task::spawn_blocking(move || {
             let (mut plan, bottles) = bottles::plan(&dirs)?;
             plan.games.extend(start_menu_games(&bottles, &plan));
-            anyhow::Ok(plan)
+            anyhow::Ok((plan, bottles))
         })
         .await
         .context("reading Bottles stopped")??;
+        folders.extend(bottles.into_iter().map(|b| b.path));
+        folders.extend(plan.folders());
+        let plan = crate::launcher_sync::take_unseen(BOTTLES, plan, only_new).await;
         apply_plan(backend, sideload.as_deref(), None, plan, &mut summary).await;
     }
-    backend.refresh_all(false).await;
+    note_found(BOTTLES, folders).await;
+    refresh_after(backend, only_new, &summary).await;
     Ok(summary)
 }
 
@@ -109,6 +188,15 @@ pub async fn import_bottles(
 pub async fn import_faugus(
     backend: &Backend,
     sideload: Option<Arc<SideloadStore>>,
+) -> Result<LutrisSummary> {
+    import_faugus_with(backend, sideload, false).await
+}
+
+/// [`import_faugus`]; with `only_new`, only the games not seen before.
+pub(crate) async fn import_faugus_with(
+    backend: &Backend,
+    sideload: Option<Arc<SideloadStore>>,
+    only_new: bool,
 ) -> Result<LutrisSummary> {
     let files = tokio::task::spawn_blocking(faugus::discover)
         .await
@@ -118,16 +206,20 @@ pub async fn import_faugus(
         "No Faugus Launcher game list was found on this computer"
     );
     let mut summary = LutrisSummary {
-        launcher: Some("Faugus Launcher".into()),
+        launcher: Some(FAUGUS.into()),
         ..Default::default()
     };
+    let mut folders = Vec::new();
     for file in files {
         let plan = tokio::task::spawn_blocking(move || faugus::plan(&file))
             .await
             .context("reading Faugus Launcher stopped")??;
+        folders.extend(plan.folders());
+        let plan = crate::launcher_sync::take_unseen(FAUGUS, plan, only_new).await;
         apply_plan(backend, sideload.as_deref(), None, plan, &mut summary).await;
     }
-    backend.refresh_all(false).await;
+    note_found(FAUGUS, folders).await;
+    refresh_after(backend, only_new, &summary).await;
     Ok(summary)
 }
 
@@ -431,6 +523,11 @@ async fn apply_game(
         }
     };
     let Some(id) = id else { return };
+    let folders = game.folders();
+    if !folders.is_empty() {
+        let launcher = summary.launcher.clone().unwrap_or_else(|| LUTRIS.into());
+        note_imported(launcher, folders).await;
+    }
     apply_commands(backend, &id, &game.commands);
     if !matches!(
         game.kind,

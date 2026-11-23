@@ -10,6 +10,7 @@ mod export;
 mod headless;
 mod import;
 mod instance;
+mod launcher_sync;
 mod lutris;
 #[cfg(not(target_os = "linux"))]
 mod menu_theme;
@@ -210,6 +211,7 @@ fn main() -> Result<()> {
         let prefs = backend.settings.app().ui.clone();
         irori_ui::theme::apply(&prefs, None, cx);
 
+        launcher_sync::start(backend.clone());
         let app = Arc::new(Mutex::new(AppHandles::default()));
         start_tray(&backend, tx.clone(), app.clone(), cx);
         {
@@ -260,7 +262,8 @@ fn main() -> Result<()> {
             || (can_hide
                 && (((cli.minimized || backend.settings.app().start_in_tray)
                     && !cli.has_request())
-                    || cli.quick_launch_only()));
+                    || cli.quick_launch_only()
+                    || cli.open_launcher_only()));
         if !start_hidden {
             open_main_window(&app, cx);
             let app_settings = backend.settings.app();
@@ -484,6 +487,9 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             });
         }
     }
+    if let Some(id) = &cli.open_launcher {
+        open_launcher(id, cx);
+    }
     if let Some(id) = &cli.launch {
         if cli.launch_from_link {
             confirm_link_launch(id.clone(), app, cx);
@@ -491,6 +497,38 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             launch_from_outside(id.clone(), app, cx);
         }
     }
+}
+
+/// Open a third-party launcher Irori set up (its shortcut, `--open-launcher`,
+/// `irori://launcher/<id>`). It only starts a program the user set up, so a
+/// link needs no question; a failure becomes a notice.
+fn open_launcher(id: &str, cx: &mut App) {
+    let backend = irori_ui::backend(cx);
+    let Some(launcher) = irori_launchers::LauncherKind::from_id(id) else {
+        tracing::warn!("no launcher is called {id}");
+        return;
+    };
+    let Some(store) = stores::LAUNCHERS.get().cloned() else {
+        return;
+    };
+    let b = backend.clone();
+    backend.spawn(async move {
+        if let Err(e) = store.open(launcher).await {
+            let name = launcher.display_name();
+            b.bus.notice(
+                irori_core::Notice::new(
+                    irori_core::NoticeLevel::Error,
+                    format!("{name} didn't open"),
+                )
+                .message(format!("{e:#}"))
+                .keys(
+                    "shell.notice.launcher_open_failed",
+                    None,
+                    &[("launcher", name)],
+                ),
+            );
+        }
+    });
 }
 
 /// A link can come from any web page or program, and playing runs the game's

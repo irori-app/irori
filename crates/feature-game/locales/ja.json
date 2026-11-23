@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "今あるセーブデータは先に別の以前のセーブデータとして保存されるので、元に戻せます。その後に保存され、ここに含まれないファイルは残ります。",
   "game.saves.snapshot_restored_one": "「{title}」のファイル {count} 個を復元しました",
   "game.saves.snapshot_restored_other": "「{title}」のファイル {count} 個を復元しました",
-  "game.saves.snapshot_restore_failed": "以前のセーブデータを復元できませんでした"
+  "game.saves.snapshot_restore_failed": "以前のセーブデータを復元できませんでした",
+  "game.ops.steam_shortcut_queued": "Steam が起動中です: {title} の Steam ショートカットは Steam の終了後に追加されます",
+  "game.ops.steam_shortcut_remove_queued": "Steam が起動中です: {title} の Steam ショートカットは Steam の終了後に削除されます"
 }

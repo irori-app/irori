@@ -801,5 +801,21 @@
   "manage.xbox.offline.turn_off": "Çevrimdışı oyunu durdur",
   "manage.xbox.offline.close": "Kapat",
   "manage.xbox.offline.changed": "Çevrimdışı oyun değiştirildi",
-  "manage.xbox.offline.failed": "Çevrimdışı oyun değiştirilemedi"
+  "manage.xbox.offline.failed": "Çevrimdışı oyun değiştirilemedi",
+  "manage.steam_shortcuts.waiting_one": "1 kısayol değişikliği Steam'in kapanmasını bekliyor",
+  "manage.steam_shortcuts.waiting_other": "{count} kısayol değişikliği Steam'in kapanmasını bekliyor",
+  "manage.launchers.more": "Diğer",
+  "manage.launchers.add_shortcut": "Kısayol ekle",
+  "manage.launchers.remove_shortcut": "Kısayolu kaldır",
+  "manage.launchers.shortcut_added": "{launcher} uygulamasını açan kısayol masaüstüne ve uygulama menüsüne eklendi",
+  "manage.launchers.shortcut_removed": "{launcher} uygulamasını açan kısayollar kaldırıldı",
+  "manage.launchers.shortcut_failed": "{launcher} kısayolları değiştirilemedi",
+  "manage.launchers.wine_settings": "Wine ayarları…",
+  "manage.launchers.wine.title": "{launcher} Wine ayarları",
+  "manage.launchers.wine.build": "Wine sürümü",
+  "manage.launchers.wine.variables": "Ortam değişkenleri",
+  "manage.launchers.wine.variables_help": "ANAHTAR=değer, boşlukla ayrılır. Başlatıcıya ve onunla açılan her oyuna, oyun varsayılanlarının üzerine uygulanır.",
+  "manage.launchers.wine.save": "Kaydet",
+  "manage.launchers.wine.saved": "{launcher}, yeni Wine ayarlarını bir sonraki açılışta kullanacak",
+  "manage.launchers.wine.failed": "{launcher} Wine ayarları kaydedilemedi"
 }

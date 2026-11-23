@@ -1747,5 +1747,11 @@
   "settings.field.rosetta.label": "Mit Rosetta ausführen",
   "settings.field.rosetta.help": "Startet die Intel-Version des Spiels, auch wenn es eine für Apple Silicon hat – für Spiele, deren Apple-Silicon-Version Probleme macht. Spiele nur für Intel-Macs laufen immer mit Rosetta.",
   "settings.field.metal_fx_dlss.label": "DLSS über MetalFX",
-  "settings.field.metal_fx_dlss.help": "Lässt Spiele mit NVIDIA DLSS mit Apples MetalFX hochskalieren. Das können nur Wine-Builds, die es mitbringen: Game Porting Toolkit 3, ein aktuelles CrossOver oder ein DXMT-Build. Bei anderen bleibt es aus, und das Spielprotokoll nennt den Grund."
+  "settings.field.metal_fx_dlss.help": "Lässt Spiele mit NVIDIA DLSS mit Apples MetalFX hochskalieren. Das können nur Wine-Builds, die es mitbringen: Game Porting Toolkit 3, ein aktuelles CrossOver oder ein DXMT-Build. Bei anderen bleibt es aus, und das Spielprotokoll nennt den Grund.",
+  "settings.field.shortcut_icon_from_exe.label": "Symbole aus dem Programm des Spiels",
+  "settings.field.shortcut_icon_from_exe.help": "Verknüpfungen von Windows-Spielen verwenden das Symbol aus der .exe des Spiels, noch vor den Bildern des Stores.",
+  "settings.field.launcher_sync_lutris.label": "Lutris-Spiele abgleichen",
+  "settings.field.launcher_sync_bottles.label": "Bottles-Programme abgleichen",
+  "settings.field.launcher_sync_faugus.label": "Faugus-Launcher-Spiele abgleichen",
+  "settings.field.launcher_sync.help": "Irori liest den Launcher beim Start und alle 15 Minuten erneut und fügt Spiele hinzu, die es noch nicht kennt. Aus Irori entfernte Spiele bleiben draußen, und die Dateien des Launchers werden nur gelesen."
 }

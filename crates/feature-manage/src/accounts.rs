@@ -105,6 +105,8 @@ pub(crate) struct StoreCard {
     pub steam_client: Option<irori_steam::ClientLibraryState>,
     /// Steam: what the card says about the games hidden in Steam.
     pub steam_hidden: Option<SharedString>,
+    /// Steam: the shortcut changes waiting for Steam to close.
+    pub steam_waiting: Option<SharedString>,
 }
 
 /// Cards for the stores this build has, in display order.
@@ -149,8 +151,24 @@ pub(crate) fn store_cards(cx: &App) -> Vec<StoreCard> {
                 .and_then(|s| {
                     crate::steam_library::hidden_games_text(&s, library.snapshot.hidden_locked)
                 }),
+            steam_waiting: (runner == Runner::Steam)
+                .then(|| steam_waiting_text(b.steam_shortcuts_waiting()))
+                .flatten(),
         })
         .collect()
+}
+
+/// What the Steam card says about shortcut changes waiting for Steam to
+/// close; nothing when none wait.
+pub(crate) fn steam_waiting_text(waiting: usize) -> Option<SharedString> {
+    match waiting {
+        0 => None,
+        1 => Some(t("manage.steam_shortcuts.waiting_one")),
+        n => Some(t_args(
+            "manage.steam_shortcuts.waiting_other",
+            &[("count", &n.to_string())],
+        )),
+    }
 }
 
 /// An account's name, or a stand-in when the store gave none.
@@ -775,6 +793,16 @@ impl AccountsView {
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
                         .child(text)
+                }))
+                .children(card_data.steam_waiting.clone().map(|text| {
+                    h_flex()
+                        .debug_selector(|| "steam-shortcuts-waiting".into())
+                        .gap_2()
+                        .min_w_0()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(Icon::new(IconName::Clock).small())
+                        .child(div().min_w_0().child(text))
                 }))
                 .children(
                     card_data

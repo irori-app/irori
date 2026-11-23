@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "다른 게임 중에서 고르기",
   "shell.palette.random_empty": "여기에는 고를 게임이 없습니다",
   "shell.palette.preview_enter_play": "Enter 키로 실행하거나 실행 중이면 돌아가기, Shift+Enter 키로 Irori에서 보기, → 키로 작업 보기",
-  "shell.quick_launch.failed": "빠른 실행을 열 수 없습니다"
+  "shell.quick_launch.failed": "빠른 실행을 열 수 없습니다",
+  "shell.notice.steam_shortcuts_failed": "Steam 바로 가기를 변경하지 못했습니다",
+  "shell.palette.open_launcher": "{launcher} 열기",
+  "shell.palette.launcher_shortcut": "{launcher}을(를) 여는 바로 가기 추가",
+  "shell.palette.launcher_shortcut_keywords": "바로 가기 바탕 화면 메뉴 런처 아이콘",
+  "shell.notice.launcher_open_failed": "{launcher}이(가) 열리지 않았습니다",
+  "shell.notice.launcher_sync_added": "{launcher}의 새 게임",
+  "shell.notice.launcher_sync_added_message": "라이브러리에 추가됨: {count}",
+  "shell.palette.launcher_wine": "{launcher}의 Wine 설정",
+  "shell.palette.launcher_wine_keywords": "wine proton 빌드 변수 환경 런처",
+  "shell.palette.duplicates": "중복된 추가 게임 검토",
+  "shell.palette.duplicates_keywords": "중복 병합 같은 두 번 추가 lutris 가져오기"
 }

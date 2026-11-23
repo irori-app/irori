@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "目前的存檔會先保留為另一份較早的存檔，因此可以還原。之後儲存且不在其中的檔案會保留。",
   "game.saves.snapshot_restored_one": "已還原「{title}」的 {count} 個檔案",
   "game.saves.snapshot_restored_other": "已還原「{title}」的 {count} 個檔案",
-  "game.saves.snapshot_restore_failed": "無法還原較早的存檔"
+  "game.saves.snapshot_restore_failed": "無法還原較早的存檔",
+  "game.ops.steam_shortcut_queued": "Steam 正在執行：{title} 的 Steam 捷徑將在 Steam 關閉後新增",
+  "game.ops.steam_shortcut_remove_queued": "Steam 正在執行：{title} 的 Steam 捷徑將在 Steam 關閉後移除"
 }

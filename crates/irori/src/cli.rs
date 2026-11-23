@@ -49,6 +49,10 @@ pub struct Cli {
     /// Open the quick launcher, or close it when it is open
     /// (`--quick-launch`, `irori://quick-launch`).
     pub quick_launch: bool,
+    /// Open a third-party launcher Irori set up, by its id (`battlenet`,
+    /// `ea`, `ubisoft`, `rockstar`): `--open-launcher <id>`,
+    /// `irori://launcher/<id>`. Its shortcuts use it.
+    pub open_launcher: Option<String>,
     pub version: bool,
     pub help: bool,
 }
@@ -68,6 +72,7 @@ impl Cli {
                 "--save-clip" => cli.save_clip = true,
                 "--screenshot" => cli.screenshot = true,
                 "--quick-launch" => cli.quick_launch = true,
+                "--open-launcher" => cli.open_launcher = it.next().filter(|id| is_slug(id)),
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
                 s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
@@ -132,6 +137,12 @@ impl Cli {
             "game" | "open" => self.open = game,
             "bigpicture" | "console" => self.big_picture = true,
             "quick-launch" => self.quick_launch = true,
+            "launcher" => {
+                self.open_launcher = url
+                    .path_segments()
+                    .and_then(|mut s| s.find(|p| !p.is_empty()).map(decode))
+                    .filter(|s| is_slug(s))
+            }
             "library" => self.route = Some(Route::Library),
             "downloads" => self.route = Some(Route::Downloads),
             "updates" => self.route = Some(Route::Updates),
@@ -181,7 +192,19 @@ impl Cli {
             || self.windows_uri.is_some()
             || self.big_picture
             || self.quick_launch
+            || self.open_launcher.is_some()
             || self.capture()
+    }
+
+    /// Whether this invocation opens a third-party launcher and asks for
+    /// nothing else (its shortcut): Irori's own window stays as it is.
+    pub fn open_launcher_only(&self) -> bool {
+        let rest = Cli {
+            open_launcher: None,
+            minimized: false,
+            ..self.clone()
+        };
+        self.open_launcher.is_some() && !rest.has_request()
     }
 
     /// Whether this invocation asks for the quick launcher and nothing
@@ -308,11 +331,13 @@ Options:
                                 (bind both to keys in your compositor; see Settings)
       --quick-launch            Open the quick launcher (the command palette in a window
                                 of its own), or close it; bind it to a key
+      --open-launcher <id>      Open a third-party launcher set up in Irori
+                                (battlenet, ea, ubisoft, rockstar)
   -V, --version                 Print the version
   -h, --help                    Print this help
 
 URLs: irori://launch/<runner>/<app>, irori://game/<runner>/<app>, heroic://launch/<runner>/<app>,
-      irori://quick-launch,
+      irori://quick-launch, irori://launcher/<id>,
       irori://library, irori://downloads, irori://accounts, irori://stores, irori://wine,
       irori://settings/<section>, irori://lutris/<slug>, lutris:<slug>,
       nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads),
@@ -331,6 +356,22 @@ mod tests {
 
     fn parse(args: &[&str]) -> Cli {
         Cli::parse(args.iter().map(|s| s.to_string()))
+    }
+
+    #[test]
+    fn opening_a_launcher_by_flag_and_link() {
+        for args in [
+            &["--open-launcher", "battlenet"][..],
+            &["irori://launcher/battlenet"][..],
+        ] {
+            let cli = parse(args);
+            assert_eq!(cli.open_launcher.as_deref(), Some("battlenet"));
+            assert!(cli.has_request() && cli.open_launcher_only());
+        }
+        assert!(!parse(&["--open-launcher", "ea", "irori://library"]).open_launcher_only());
+        assert_eq!(parse(&["--open-launcher", "../x"]).open_launcher, None);
+        assert_eq!(parse(&["--open-launcher"]).open_launcher, None);
+        assert!(HELP.contains("--open-launcher"));
     }
 
     #[test]

@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "Выбирать из других игр",
   "shell.palette.random_empty": "Здесь нет игр для выбора",
   "shell.palette.preview_enter_play": "Enter запускает игру или возвращает в неё, пока она идёт; Shift+Enter показывает её в Irori; → — её действия",
-  "shell.quick_launch.failed": "Не удалось открыть быстрый запуск"
+  "shell.quick_launch.failed": "Не удалось открыть быстрый запуск",
+  "shell.notice.steam_shortcuts_failed": "Ярлыки Steam не изменены",
+  "shell.palette.open_launcher": "Открыть {launcher}",
+  "shell.palette.launcher_shortcut": "Добавить ярлык, открывающий {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "ярлык рабочий стол меню лаунчер значок",
+  "shell.notice.launcher_open_failed": "{launcher} не открылся",
+  "shell.notice.launcher_sync_added": "Новые игры из {launcher}",
+  "shell.notice.launcher_sync_added_message": "Добавлено в библиотеку: {count}",
+  "shell.palette.launcher_wine": "Настройки Wine для {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton сборка переменные окружение лаунчер",
+  "shell.palette.duplicates": "Проверить повторяющиеся добавленные игры",
+  "shell.palette.duplicates_keywords": "повтор объединить одинаковые дважды добавленные lutris импорт"
 }

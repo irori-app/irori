@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "別のゲームの中から選ぶ",
   "shell.palette.random_empty": "ここには選べるゲームがありません",
   "shell.palette.preview_enter_play": "Enter で起動、実行中ならゲームに戻る。Shift+Enter で Irori に表示、→ でアクションを表示",
-  "shell.quick_launch.failed": "クイックランチャーを開けませんでした"
+  "shell.quick_launch.failed": "クイックランチャーを開けませんでした",
+  "shell.notice.steam_shortcuts_failed": "Steam ショートカットは変更されませんでした",
+  "shell.palette.open_launcher": "{launcher} を開く",
+  "shell.palette.launcher_shortcut": "{launcher} を開くショートカットを追加",
+  "shell.palette.launcher_shortcut_keywords": "ショートカット デスクトップ メニュー ランチャー アイコン",
+  "shell.notice.launcher_open_failed": "{launcher} を開けませんでした",
+  "shell.notice.launcher_sync_added": "{launcher} の新しいゲーム",
+  "shell.notice.launcher_sync_added_message": "ライブラリに追加: {count}",
+  "shell.palette.launcher_wine": "{launcher} の Wine の設定",
+  "shell.palette.launcher_wine_keywords": "Wine Proton ビルド 変数 環境 ランチャー",
+  "shell.palette.duplicates": "重複している追加したゲームを確認",
+  "shell.palette.duplicates_keywords": "重複 統合 同じ 2 回 追加 Lutris インポート"
 }

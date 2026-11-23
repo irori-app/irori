@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "Losuj spośród innych gier",
   "shell.palette.random_empty": "Nie ma tu gier do wylosowania",
   "shell.palette.preview_enter_play": "Enter uruchamia grę albo do niej wraca, gdy działa; Shift+Enter pokazuje ją w Irori; → pokazuje jej działania",
-  "shell.quick_launch.failed": "Nie udało się otworzyć szybkiego programu uruchamiającego"
+  "shell.quick_launch.failed": "Nie udało się otworzyć szybkiego programu uruchamiającego",
+  "shell.notice.steam_shortcuts_failed": "Skróty Steam nie zostały zmienione",
+  "shell.palette.open_launcher": "Otwórz {launcher}",
+  "shell.palette.launcher_shortcut": "Dodaj skrót otwierający {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "skrót pulpit menu launcher ikona",
+  "shell.notice.launcher_open_failed": "{launcher} się nie otworzył",
+  "shell.notice.launcher_sync_added": "Nowe gry z {launcher}",
+  "shell.notice.launcher_sync_added_message": "Dodano do biblioteki: {count}",
+  "shell.palette.launcher_wine": "Ustawienia Wine dla {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton wersja zmienne środowisko launcher",
+  "shell.palette.duplicates": "Przejrzyj zduplikowane dodane gry",
+  "shell.palette.duplicates_keywords": "duplikat scal ten sam dwa razy dodane lutris import"
 }

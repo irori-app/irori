@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "從其他遊戲中挑選",
   "shell.palette.random_empty": "這裡沒有可挑選的遊戲",
   "shell.palette.preview_enter_play": "按 Enter 開始遊玩，執行中則返回遊戲；按 Shift+Enter 在 Irori 中顯示；按 → 列出其動作",
-  "shell.quick_launch.failed": "無法開啟快速啟動器"
+  "shell.quick_launch.failed": "無法開啟快速啟動器",
+  "shell.notice.steam_shortcuts_failed": "未變更 Steam 捷徑",
+  "shell.palette.open_launcher": "開啟 {launcher}",
+  "shell.palette.launcher_shortcut": "新增開啟 {launcher} 的捷徑",
+  "shell.palette.launcher_shortcut_keywords": "捷徑 桌面 選單 啟動器 圖示",
+  "shell.notice.launcher_open_failed": "{launcher} 未能開啟",
+  "shell.notice.launcher_sync_added": "來自 {launcher} 的新遊戲",
+  "shell.notice.launcher_sync_added_message": "已加入遊戲庫：{count}",
+  "shell.palette.launcher_wine": "{launcher} 的 Wine 設定",
+  "shell.palette.launcher_wine_keywords": "wine proton 版本 變數 環境 啟動器",
+  "shell.palette.duplicates": "檢查重複的已加入遊戲",
+  "shell.palette.duplicates_keywords": "重複 合併 相同 兩次 已加入 lutris 匯入"
 }

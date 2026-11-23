@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "I salvataggi attuali vengono prima conservati come un altro salvataggio precedente, quindi si può annullare. I file salvati da allora che non vi sono restano.",
   "game.saves.snapshot_restored_one": "È stato ripristinato {count} file di “{title}”",
   "game.saves.snapshot_restored_other": "Sono stati ripristinati {count} file di “{title}”",
-  "game.saves.snapshot_restore_failed": "Impossibile ripristinare i salvataggi precedenti"
+  "game.saves.snapshot_restore_failed": "Impossibile ripristinare i salvataggi precedenti",
+  "game.ops.steam_shortcut_queued": "Steam è in esecuzione: il collegamento Steam di {title} verrà aggiunto alla chiusura di Steam",
+  "game.ops.steam_shortcut_remove_queued": "Steam è in esecuzione: il collegamento Steam di {title} verrà rimosso alla chiusura di Steam"
 }

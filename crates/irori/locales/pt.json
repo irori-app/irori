@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "Escolher entre outros jogos",
   "shell.palette.random_empty": "Não há aqui jogos para escolher",
   "shell.palette.preview_enter_play": "Enter joga-o, ou volta a ele enquanto corre; Shift+Enter mostra-o no Irori; → mostra as suas ações",
-  "shell.quick_launch.failed": "Não foi possível abrir o lançador rápido"
+  "shell.quick_launch.failed": "Não foi possível abrir o lançador rápido",
+  "shell.notice.steam_shortcuts_failed": "Os atalhos do Steam não foram alterados",
+  "shell.palette.open_launcher": "Abrir {launcher}",
+  "shell.palette.launcher_shortcut": "Adicionar um atalho que abre o {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "atalho ambiente de trabalho menu iniciador ícone",
+  "shell.notice.launcher_open_failed": "O {launcher} não abriu",
+  "shell.notice.launcher_sync_added": "Jogos novos do {launcher}",
+  "shell.notice.launcher_sync_added_message": "Adicionados à biblioteca: {count}",
+  "shell.palette.launcher_wine": "Definições do Wine do {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton versão variáveis ambiente iniciador",
+  "shell.palette.duplicates": "Rever jogos adicionados duplicados",
+  "shell.palette.duplicates_keywords": "duplicado fundir mesmo duas vezes adicionado lutris importar"
 }

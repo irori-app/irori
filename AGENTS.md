@@ -137,6 +137,12 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   `start` (`irori_runtime::windows_uri`, `Backend::open_windows_uri`,
   `irori_game::open_windows_uri_dialog`; `docs/PLATFORMS.md`, "Other programs' links").
   Irori registers no such scheme; the user points one at it (`xdg-mime default`).
+- `--open-launcher <id>` and `irori://launcher/<id>` (`battlenet`, `ea`, `ubisoft`,
+  `rockstar`) start a third-party launcher Irori set up, without showing Irori's window
+  when that is all they ask (`Cli::open_launcher_only`); a failure becomes a notice. The
+  launcher card's ⋯ menu and the palette add desktop and menu shortcuts that do this
+  (`irori_manage::launcher_shortcut`, `shortcuts::launcher_client`: app name
+  `client:<id>` under `Runner::Launchers`, the launcher's program icon).
 - `--sign-in-window` is internal. On macOS and Windows it makes Irori run the store
   sign-in window instead of itself (see [4.6](#46-store-sign-in)).
 - `--gpu-helper` is internal too: on Windows, started elevated, it hides a graphics card
@@ -467,7 +473,11 @@ host (Steam, Ludusavi, another Flatpak) is found with `host::find_program` /
 list and stop host processes. Outside a Flatpak they act on this system.
 
 **Deleting files:** call `fs_guard::ensure_deletable(dir, app)` before any recursive
-delete of a game or prefix directory.
+delete of a game or prefix directory. It also refuses the folders other launchers keep
+(`fs_guard::OtherLaunchers`, `state/other-launchers.json`: Lutris', Bottles' and Faugus
+Launcher's games, prefixes and Wine builds, read from their data at start and by the
+imports, plus the folders of every game imported from them) and any folder holding
+one; storage cleanups never offer them.
 
 **Untrusted data** (store APIs, community JSON, archives, links):
 
@@ -1025,7 +1035,11 @@ commands without a window.
   an icon Irori made (the name, collections and the rest stay the user's; an entry
   without `appid` gets the one Steam computed, so its art stays). The file is edited only
   while Steam is closed, copied to `shortcuts.vdf.irori-backup` first and read back after
-  every write (a bad read-back puts the previous file back). Art goes to `grid/`
+  every write (a bad read-back puts the previous file back). A change asked for while
+  Steam runs (always in Game Mode) waits in `state/steam-shortcut-queue.json`
+  (`shortcuts::steam::queue`; a later change of a game replaces an earlier one) and is
+  made from the periodic tick once Steam has closed; the Steam card says how many wait
+  (`Backend::steam_shortcuts_waiting`). Art goes to `grid/`
   (portrait, wide, hero, logo; existing pictures stay): Irori's own art first, from the art
   store's originals (`Paths::art_original`), then Steam's CDN for slots it lacks (and the
   wide capsule). UI: "Add to Steam" and "Remove from Steam" in the game menu, the
@@ -1040,6 +1054,13 @@ commands without a window.
   channel (`instance::Caller`) to `LaunchParams::steam`; the game gets it unless it runs
   in gamescope or the sandbox or is Steam's. Irori never finds or preloads the overlay
   by itself.
+- **Shortcut icons** (`irori-extras::shortcuts::icon`): a square PNG per game under
+  `<data>/icons`, from the store's art; with `iroriShortcutIconFromExe` a Windows game's
+  own program icon comes first (`shortcuts::pe_icon`, a bounded PE resource reader under
+  `#![forbid(unsafe_code)]`: the first `RT_GROUP_ICON`, its largest `RT_ICON`), kept as
+  `<runner>-<app>-exe.png` so the setting takes effect at the next shortcut. App bundles
+  get it as `Contents/Resources/icon.icns`, Windows links as an `.ico`
+  `IconLocation`; the freedesktop entries use the PNG.
 - **Discord Rich Presence** (`discord.rs`, opt-in `discordRPC`, per game
   `iroriDiscordPresence`): "Playing <title>" with the start time, the game's `https`
   art as the large image (Discord fetches external URLs), the `irori` art asset of
@@ -1313,6 +1334,11 @@ store means:
    its Heroic import in `HEROIC_IMPORTS`.
 4. Its login flow.
 5. Its strings in every locale.
+
+**GOG Galaxy's installs** (Windows, `irori-gog`'s `galaxy.rs`): after each GOG refresh,
+owned games Galaxy lists in `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games` that Irori has no
+install of are imported from their folder through the usual import, once per folder
+(`galaxy-imports.json` in GOG's config folder). Nothing of Galaxy's is written.
 
 ### 4.4 UI (`irori-ui` and the feature crates)
 
@@ -1845,6 +1871,14 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
 - **BIOS.** Never download or link to BIOS files or ROMs. The BIOS index hashes only
   plausible files and caches digests by path, size and modification time; nothing is
   hashed at launch. Files are linked under the expected names before a launch.
+- **Duplicate added games** (`irori-services`' `duplicates.rs`,
+  `irori_library::open_duplicates_dialog`: Add game's "Review duplicates", the palette):
+  pairs of added games that are probably one (same program, a program inside the other's
+  folder, the same prefix setting, the same folded title), each game in one pair at most,
+  the one played longer first. Keeping one moves the other's sessions to it and carries
+  its user data over (`UserData::carry_over`, under `SyncService::playtime_guard`), then
+  takes it out of the library without touching files; "Keep both" is remembered per
+  computer in `state/duplicates.json`.
 - **Play as a PC game.** A ROM entry that is really a program (the game
   menu, the library's context menu, the palette:
   `irori_library::open_play_as_pc_game_dialog`) opens "Add game" filled in from
@@ -1891,6 +1925,15 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   store games are matched by id. Every game not imported comes back with a reason id
   that `irori_ui::lutris_summary` translates. Tests build the SQLite database in the
   test; `rusqlite` is built with `bundled` on every OS.
+- **Keeping launchers in sync** (`crates/irori/src/launcher_sync.rs`,
+  `iroriLauncherImports.{lutris,bottles,faugus}`, off by default, offered where the
+  launcher is found): the launcher is read again 30 s after start, every 15 minutes and
+  when its switch is turned on, and only games no import or sync has seen
+  (`state/launcher-imports.json`, by row id and slug; skipped games aren't noted, so a
+  later read imports them) are imported, so settings changed in Irori are never
+  overwritten and a game the user removed stays out. A game the launcher uninstalled
+  shows as not installed by itself, its playtime kept. A sync refreshes only the added
+  games' and ROM libraries, and only when it added something.
 - **Playnite import** (Windows; `irori-extras::playnite` reads, `crates/irori/src/playnite.rs`
   applies, its summary is the Lutris one). Playnite is found through the program its
   `playnite://` link opens (`HKCU\Software\Classes\Playnite\shell\open\command`), a
@@ -1980,6 +2023,16 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   started from its folder); "Remove from Irori" forgets it and leaves the prefix and
   games on disk. The user signs in and installs games inside the launcher. A Proton
   prefix keeps `drive_c` in `pfx/`; read the launcher's files there.
+- **A launcher's own Wine settings** (`LaunchersStore::set_wine_settings`,
+  `irori_manage::open_launcher_wine_dialog`: the card's ⋯ menu and the palette; not on
+  Windows): the Wine build, which can change after setup, and environment variables, kept
+  in its setup as sparse overrides (`Setup::settings`) laid over the game defaults for the
+  launcher and every game started through it.
+- **Wine-friendly settings at setup** (`irori_launchers_data::wine_config`, before the
+  installer first starts the launcher in a new prefix; never on Windows or for an adopted
+  prefix): Battle.net with `Client.HardwareAcceleration` off in `Battle.net.config`,
+  Ubisoft Connect with `overlay.enabled: false` in `settings.yaml`, for every user of the
+  prefix. Only those keys change; the rest of a file stays as written.
 - Games are read from the launcher's local data (`irori-launchers-data`) and listed as
   `Runner::Launchers` with `third_party_managed_app` set. App names are
   `<launcher>:<id>` (`battlenet`, `ea`, `ubisoft`, `rockstar`). They start through the

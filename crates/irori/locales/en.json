@@ -263,5 +263,16 @@
   "shell.palette.pick_other_games": "Pick from other games",
   "shell.palette.random_empty": "There are no games here to pick from",
   "shell.palette.preview_enter_play": "Enter plays it, or goes back to it while it runs; Shift+Enter shows it in Irori; → lists its actions",
-  "shell.quick_launch.failed": "The quick launcher couldn’t open"
+  "shell.quick_launch.failed": "The quick launcher couldn’t open",
+  "shell.notice.steam_shortcuts_failed": "Steam shortcuts weren’t changed",
+  "shell.palette.open_launcher": "Open {launcher}",
+  "shell.palette.launcher_shortcut": "Add a shortcut that opens {launcher}",
+  "shell.palette.launcher_shortcut_keywords": "shortcut desktop menu launcher icon",
+  "shell.notice.launcher_open_failed": "{launcher} didn’t open",
+  "shell.notice.launcher_sync_added": "New games from {launcher}",
+  "shell.notice.launcher_sync_added_message": "Added to the library: {count}",
+  "shell.palette.launcher_wine": "Wine settings of {launcher}",
+  "shell.palette.launcher_wine_keywords": "wine proton build variables environment launcher",
+  "shell.palette.duplicates": "Review duplicate added games",
+  "shell.palette.duplicates_keywords": "duplicate merge same twice added lutris import"
 }

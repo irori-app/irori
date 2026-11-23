@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Поточні збереження спершу зберігаються як ще одна попередня копія, тож це можна скасувати. Файли, збережені пізніше й відсутні в ній, лишаються.",
   "game.saves.snapshot_restored_one": "Відновлено {count} файл «{title}»",
   "game.saves.snapshot_restored_other": "Відновлено файлів «{title}»: {count}",
-  "game.saves.snapshot_restore_failed": "Не вдалося відновити попередні збереження"
+  "game.saves.snapshot_restore_failed": "Не вдалося відновити попередні збереження",
+  "game.ops.steam_shortcut_queued": "Steam запущено: ярлик Steam для {title} буде додано, коли Steam закриється",
+  "game.ops.steam_shortcut_remove_queued": "Steam запущено: ярлик Steam для {title} буде вилучено, коли Steam закриється"
 }

@@ -801,5 +801,21 @@
   "manage.xbox.offline.turn_off": "停止離線遊玩",
   "manage.xbox.offline.close": "關閉",
   "manage.xbox.offline.changed": "已變更離線遊玩",
-  "manage.xbox.offline.failed": "無法變更離線遊玩"
+  "manage.xbox.offline.failed": "無法變更離線遊玩",
+  "manage.steam_shortcuts.waiting_one": "1 項捷徑變更正在等待 Steam 關閉",
+  "manage.steam_shortcuts.waiting_other": "{count} 項捷徑變更正在等待 Steam 關閉",
+  "manage.launchers.more": "更多",
+  "manage.launchers.add_shortcut": "新增捷徑",
+  "manage.launchers.remove_shortcut": "移除捷徑",
+  "manage.launchers.shortcut_added": "已在桌面和應用程式選單中新增開啟 {launcher} 的捷徑",
+  "manage.launchers.shortcut_removed": "已移除開啟 {launcher} 的捷徑",
+  "manage.launchers.shortcut_failed": "無法變更 {launcher} 的捷徑",
+  "manage.launchers.wine_settings": "Wine 設定…",
+  "manage.launchers.wine.title": "{launcher} 的 Wine 設定",
+  "manage.launchers.wine.build": "Wine 版本",
+  "manage.launchers.wine.variables": "環境變數",
+  "manage.launchers.wine.variables_help": "KEY=value，以空格分隔。適用於該啟動器及透過它啟動的每個遊戲，優先於遊戲預設設定。",
+  "manage.launchers.wine.save": "儲存",
+  "manage.launchers.wine.saved": "{launcher} 將從下次啟動起使用新的 Wine 設定",
+  "manage.launchers.wine.failed": "無法儲存 {launcher} 的 Wine 設定"
 }

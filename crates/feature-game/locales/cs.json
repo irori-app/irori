@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Současné uložené pozice se nejdřív uchovají jako další dřívější pozice, takže to lze vrátit. Soubory uložené od té doby, které v ní nejsou, zůstanou.",
   "game.saves.snapshot_restored_one": "Obnoven {count} soubor hry „{title}“",
   "game.saves.snapshot_restored_other": "Obnoveno souborů hry „{title}“: {count}",
-  "game.saves.snapshot_restore_failed": "Dřívější uložené pozice se nepodařilo obnovit"
+  "game.saves.snapshot_restore_failed": "Dřívější uložené pozice se nepodařilo obnovit",
+  "game.ops.steam_shortcut_queued": "Steam běží: zástupce Steamu pro {title} se přidá, až se Steam zavře",
+  "game.ops.steam_shortcut_remove_queued": "Steam běží: zástupce Steamu pro {title} se odebere, až se Steam zavře"
 }

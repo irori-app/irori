@@ -961,5 +961,7 @@
   "game.saves.snapshot_restore_description": "Sparfilerna som finns nu behålls först som ytterligare en tidigare sparfil, så detta kan ångras. Filer som sparats sedan dess och inte finns i den ligger kvar.",
   "game.saves.snapshot_restored_one": "{count} fil för ”{title}” återställdes",
   "game.saves.snapshot_restored_other": "{count} filer för ”{title}” återställdes",
-  "game.saves.snapshot_restore_failed": "Det gick inte att återställa de tidigare sparfilerna"
+  "game.saves.snapshot_restore_failed": "Det gick inte att återställa de tidigare sparfilerna",
+  "game.ops.steam_shortcut_queued": "Steam körs: Steam-genvägen för {title} läggs till när Steam stängs",
+  "game.ops.steam_shortcut_remove_queued": "Steam körs: Steam-genvägen för {title} tas bort när Steam stängs"
 }
