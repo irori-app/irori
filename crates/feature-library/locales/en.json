@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Pick the other copies of “{title}”, then choose Combine as one game.",
   "library.bulk.combine": "Combine as one game",
   "library.bulk.combine_tooltip": "Show the picked games as copies of one game, from their stores",
+  "library.bulk.move": "Move to",
+  "library.bulk.move_tooltip": "Move the picked installed games to a library folder",
   "library.bulk.details.failed_one": "{count} game couldn’t be read.",
   "library.bulk.details.failed_other": "{count} games couldn’t be read.",
   "library.bulk.details.link_failed": "Couldn’t search Steam",

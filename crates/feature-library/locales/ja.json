@@ -1040,6 +1040,8 @@
   "library.combine.hint": "「{title}」のほかのコピーを選んでから、「1 つのゲームにまとめる」を選んでください。",
   "library.bulk.combine": "1 つのゲームにまとめる",
   "library.bulk.combine_tooltip": "選んだゲームを、それぞれのストアにある 1 つのゲームのコピーとして表示します",
+  "library.bulk.move": "移動先",
+  "library.bulk.move_tooltip": "選んだインストール済みゲームをライブラリフォルダーへ移動",
   "library.bulk.details.failed_one": "{count} 本のゲームを読み込めませんでした。",
   "library.bulk.details.failed_other": "{count} 本のゲームを読み込めませんでした。",
   "library.bulk.details.link_failed": "Steam を検索できませんでした",

@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Scegli le altre copie di «{title}», poi Unisci in un solo gioco.",
   "library.bulk.combine": "Unisci in un solo gioco",
   "library.bulk.combine_tooltip": "Mostra i giochi scelti come copie di un unico gioco, dai loro negozi",
+  "library.bulk.move": "Sposta in",
+  "library.bulk.move_tooltip": "Sposta i giochi installati scelti in una cartella della libreria",
   "library.bulk.details.failed_one": "Impossibile leggere {count} gioco.",
   "library.bulk.details.failed_other": "Impossibile leggere {count} giochi.",
   "library.bulk.details.link_failed": "Impossibile cercare su Steam",

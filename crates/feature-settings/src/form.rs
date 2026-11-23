@@ -803,6 +803,10 @@ impl SettingsForm {
                 Some(cx.new(crate::quick_launch::QuickLaunchPanel::new).into())
             }
             PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
+            PanelKind::LibraryFolders => Some(
+                cx.new(|cx| crate::library_folders::LibraryFoldersPanel::new(window, cx))
+                    .into(),
+            ),
             PanelKind::LaunchBox => crate::stores::emulation(cx).map(|store| {
                 cx.new(|cx| crate::launchbox::LaunchBoxPanel::new(store, cx))
                     .into()

@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Abrir a página de dispositivos da Microsoft",
   "ui.game_window.no_window": "O jogo ainda não tem uma janela para trazer para a frente",
   "ui.game_window.unsupported": "Este ambiente não deixa o Irori trazer a janela do jogo para a frente; mude para ela na barra de tarefas",
-  "ui.game_window.failed": "Não foi possível trazer a janela do jogo para a frente"
+  "ui.game_window.failed": "Não foi possível trazer a janela do jogo para a frente",
+  "ui.library_folders.default": "Predefinida",
+  "ui.library_folders.move_title_one": "Mover {count} jogo para «{folder}»?",
+  "ui.library_folders.move_title_other": "Mover {count} jogos para «{folder}»?",
+  "ui.library_folders.move_description": "A pasta de cada jogo é movida para {path}, um jogo de cada vez. Os jogos em execução ou ocupados ficam onde estão.",
+  "ui.library_folders.move_confirm": "Mover",
+  "ui.library_folders.cancel": "Cancelar",
+  "ui.library_folders.move_failed": "Não foi possível mover alguns jogos",
+  "ui.library_folders.nothing_to_move": "Nenhum destes jogos pode ser movido para lá",
+  "ui.library_folders.moved_one": "{count} jogo movido para «{folder}»",
+  "ui.library_folders.moved_other": "{count} jogos movidos para «{folder}»"
 }

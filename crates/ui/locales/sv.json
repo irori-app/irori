@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Öppna Microsofts enhetssida",
   "ui.game_window.no_window": "Spelet har inget fönster att ta fram ännu",
   "ui.game_window.unsupported": "Det här skrivbordet låter inte Irori ta fram spelets fönster; byt till det från aktivitetsfältet",
-  "ui.game_window.failed": "Spelets fönster kunde inte tas fram"
+  "ui.game_window.failed": "Spelets fönster kunde inte tas fram",
+  "ui.library_folders.default": "Standard",
+  "ui.library_folders.move_title_one": "Flytta {count} spel till ”{folder}”?",
+  "ui.library_folders.move_title_other": "Flytta {count} spel till ”{folder}”?",
+  "ui.library_folders.move_description": "Varje spels mapp flyttas till {path}, ett spel i taget. Spel som körs eller är upptagna stannar där de är.",
+  "ui.library_folders.move_confirm": "Flytta",
+  "ui.library_folders.cancel": "Avbryt",
+  "ui.library_folders.move_failed": "Vissa spel kunde inte flyttas",
+  "ui.library_folders.nothing_to_move": "Inget av de här spelen kan flyttas dit",
+  "ui.library_folders.moved_one": "{count} spel flyttat till ”{folder}”",
+  "ui.library_folders.moved_other": "{count} spel flyttade till ”{folder}”"
 }

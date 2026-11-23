@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Открыть страницу устройств Microsoft",
   "ui.game_window.no_window": "У игры пока нет окна, которое можно вывести вперёд",
   "ui.game_window.unsupported": "Это окружение не позволяет Irori вывести окно игры вперёд; переключитесь на него через панель задач",
-  "ui.game_window.failed": "Не удалось вывести окно игры вперёд"
+  "ui.game_window.failed": "Не удалось вывести окно игры вперёд",
+  "ui.library_folders.default": "По умолчанию",
+  "ui.library_folders.move_title_one": "Переместить {count} игру в «{folder}»?",
+  "ui.library_folders.move_title_other": "Переместить игры ({count}) в «{folder}»?",
+  "ui.library_folders.move_description": "Папка каждой игры перемещается в {path}, по одной игре за раз. Запущенные или занятые игры остаются на месте.",
+  "ui.library_folders.move_confirm": "Переместить",
+  "ui.library_folders.cancel": "Отмена",
+  "ui.library_folders.move_failed": "Некоторые игры не удалось переместить",
+  "ui.library_folders.nothing_to_move": "Ни одну из этих игр нельзя туда переместить",
+  "ui.library_folders.moved_one": "{count} игра перемещена в «{folder}»",
+  "ui.library_folders.moved_other": "Игры ({count}) перемещены в «{folder}»"
 }

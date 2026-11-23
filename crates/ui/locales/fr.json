@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Ouvrir la page des appareils de Microsoft",
   "ui.game_window.no_window": "Le jeu n’a pas encore de fenêtre à mettre au premier plan",
   "ui.game_window.unsupported": "Ce bureau ne permet pas à Irori de mettre la fenêtre du jeu au premier plan ; passez-y depuis la barre des tâches",
-  "ui.game_window.failed": "La fenêtre du jeu n’a pas pu être mise au premier plan"
+  "ui.game_window.failed": "La fenêtre du jeu n’a pas pu être mise au premier plan",
+  "ui.library_folders.default": "Par défaut",
+  "ui.library_folders.move_title_one": "Déplacer {count} jeu vers « {folder} » ?",
+  "ui.library_folders.move_title_other": "Déplacer {count} jeux vers « {folder} » ?",
+  "ui.library_folders.move_description": "Le dossier de chaque jeu est déplacé dans {path}, un jeu après l’autre. Les jeux en cours ou occupés restent où ils sont.",
+  "ui.library_folders.move_confirm": "Déplacer",
+  "ui.library_folders.cancel": "Annuler",
+  "ui.library_folders.move_failed": "Certains jeux n’ont pas pu être déplacés",
+  "ui.library_folders.nothing_to_move": "Aucun de ces jeux ne peut y être déplacé",
+  "ui.library_folders.moved_one": "{count} jeu déplacé vers « {folder} »",
+  "ui.library_folders.moved_other": "{count} jeux déplacés vers « {folder} »"
 }

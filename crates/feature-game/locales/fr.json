@@ -316,6 +316,7 @@
   "game.install.password_failed": "Impossible d’enregistrer le mot de passe de la branche",
   "game.install.password_placeholder": "Mot de passe de la branche privée",
   "game.install.path_placeholder": "Dossier du jeu",
+  "game.install.library_folder": "Dossier de bibliothèque",
   "game.install.pin": "Conserver le jeu dans une version précise",
   "game.install.package": "Paquet",
   "game.install.pin_failed": "Impossible de modifier l’épinglage de version",

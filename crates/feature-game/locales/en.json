@@ -316,6 +316,7 @@
   "game.install.password_failed": "Couldn't save the branch password",
   "game.install.password_placeholder": "Private branch password",
   "game.install.path_placeholder": "Folder for the game",
+  "game.install.library_folder": "Library folder",
   "game.install.pin": "Keep the game at a specific version",
   "game.install.package": "Package",
   "game.install.pin_failed": "Couldn't change the version pin",

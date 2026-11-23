@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "開啟 Microsoft 裝置頁面",
   "ui.game_window.no_window": "遊戲還沒有可置於前景的視窗",
   "ui.game_window.unsupported": "此桌面不允許 Irori 將遊戲視窗置於前景；請從工作列切換過去",
-  "ui.game_window.failed": "無法將遊戲視窗置於前景"
+  "ui.game_window.failed": "無法將遊戲視窗置於前景",
+  "ui.library_folders.default": "預設",
+  "ui.library_folders.move_title_one": "將 {count} 個遊戲移到「{folder}」？",
+  "ui.library_folders.move_title_other": "將 {count} 個遊戲移到「{folder}」？",
+  "ui.library_folders.move_description": "每個遊戲的資料夾會逐一移到 {path}。正在執行或忙碌的遊戲保持不動。",
+  "ui.library_folders.move_confirm": "移動",
+  "ui.library_folders.cancel": "取消",
+  "ui.library_folders.move_failed": "部分遊戲無法移動",
+  "ui.library_folders.nothing_to_move": "這些遊戲都無法移到那裡",
+  "ui.library_folders.moved_one": "已將 {count} 個遊戲移到「{folder}」",
+  "ui.library_folders.moved_other": "已將 {count} 個遊戲移到「{folder}」"
 }

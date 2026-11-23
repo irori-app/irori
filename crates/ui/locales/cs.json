@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Otevřít stránku zařízení Microsoftu",
   "ui.game_window.no_window": "Hra zatím nemá okno, které by šlo přenést do popředí",
   "ui.game_window.unsupported": "Toto prostředí nedovolí Irori přenést okno hry do popředí; přepněte se do něj z panelu úloh",
-  "ui.game_window.failed": "Okno hry nešlo přenést do popředí"
+  "ui.game_window.failed": "Okno hry nešlo přenést do popředí",
+  "ui.library_folders.default": "Výchozí",
+  "ui.library_folders.move_title_one": "Přesunout {count} hru do „{folder}“?",
+  "ui.library_folders.move_title_other": "Přesunout her ({count}) do „{folder}“?",
+  "ui.library_folders.move_description": "Složka každé hry se přesune do {path}, jedna hra po druhé. Hry, které běží nebo jsou zaneprázdněné, zůstanou, kde jsou.",
+  "ui.library_folders.move_confirm": "Přesunout",
+  "ui.library_folders.cancel": "Zrušit",
+  "ui.library_folders.move_failed": "Některé hry nešlo přesunout",
+  "ui.library_folders.nothing_to_move": "Žádnou z těchto her tam nelze přesunout",
+  "ui.library_folders.moved_one": "Přesunuta {count} hra do „{folder}“",
+  "ui.library_folders.moved_other": "Přesunuto her: {count} do „{folder}“"
 }

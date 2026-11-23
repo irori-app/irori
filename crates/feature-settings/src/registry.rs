@@ -277,6 +277,8 @@ pub enum PanelKind {
     ButtonMap,
     /// The quick launcher's shortcut: its keys, or the lines to bind.
     QuickLaunch,
+    /// Named folders games install into, and moving their games.
+    LibraryFolders,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -1555,6 +1557,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.install_per_store.help")
     .keywords(&["path", "directory", "folder", "store", "install"]),
+    app(
+        "panel.libraryFolders",
+        "settings.field.panel_library_folders.label",
+        General,
+        "settings.group.folders",
+        Panel(PanelKind::LibraryFolders),
+    )
+    .help("settings.field.panel_library_folders.help")
+    .keywords(&["library", "folders", "drive", "sd card", "move", "install"]),
     app(
         "defaultWinePrefixDir",
         "settings.field.default_wine_prefix_dir.label",

@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Deschide pagina de dispozitive Microsoft",
   "ui.game_window.no_window": "Jocul nu are încă o fereastră de adus în față",
   "ui.game_window.unsupported": "Acest desktop nu-i permite lui Irori să aducă fereastra jocului în față; comută la ea din bara de activități",
-  "ui.game_window.failed": "Fereastra jocului nu a putut fi adusă în față"
+  "ui.game_window.failed": "Fereastra jocului nu a putut fi adusă în față",
+  "ui.library_folders.default": "Implicit",
+  "ui.library_folders.move_title_one": "Muți {count} joc în „{folder}”?",
+  "ui.library_folders.move_title_other": "Muți {count} jocuri în „{folder}”?",
+  "ui.library_folders.move_description": "Dosarul fiecărui joc se mută în {path}, un joc după altul. Jocurile care rulează sau sunt ocupate rămân unde sunt.",
+  "ui.library_folders.move_confirm": "Mută",
+  "ui.library_folders.cancel": "Anulează",
+  "ui.library_folders.move_failed": "Unele jocuri nu au putut fi mutate",
+  "ui.library_folders.nothing_to_move": "Niciunul dintre aceste jocuri nu poate fi mutat acolo",
+  "ui.library_folders.moved_one": "{count} joc mutat în „{folder}”",
+  "ui.library_folders.moved_other": "{count} jocuri mutate în „{folder}”"
 }

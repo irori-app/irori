@@ -1040,6 +1040,8 @@
   "library.combine.hint": "Kies de andere exemplaren van ‘{title}’ en daarna Samenvoegen tot één game.",
   "library.bulk.combine": "Samenvoegen tot één game",
   "library.bulk.combine_tooltip": "De gekozen games tonen als exemplaren van één game, uit hun winkels",
+  "library.bulk.move": "Verplaatsen naar",
+  "library.bulk.move_tooltip": "De gekozen geïnstalleerde spellen naar een bibliotheekmap verplaatsen",
   "library.bulk.details.failed_one": "{count} spel kon niet worden gelezen.",
   "library.bulk.details.failed_other": "{count} spellen konden niet worden gelezen.",
   "library.bulk.details.link_failed": "Kan Steam niet doorzoeken",

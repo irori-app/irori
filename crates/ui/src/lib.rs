@@ -24,6 +24,7 @@ pub mod i18n;
 pub mod journal;
 mod kde;
 mod launcher_problem;
+pub mod library_folders;
 pub mod lutris_summary;
 pub mod middle_scroll;
 mod missing_files;

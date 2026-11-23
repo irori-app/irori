@@ -1408,6 +1408,54 @@ fn fetching_details_again_forgets_what_was_kept() {
 
 #[cfg(unix)]
 #[test]
+fn moves_games_into_a_library_folder_and_says_which_failed() {
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let game_dir = dir.path().join("games").join("Celeste");
+    std::fs::create_dir_all(&game_dir).unwrap();
+    std::fs::write(game_dir.join("Celeste.x86_64"), b"x").unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "folders-celeste".into(),
+            title: "Celeste".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: game_dir.display().to_string(),
+                platform: InstallPlatform::Linux,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    let card = irori_core::settings::LibraryFolder {
+        name: "SD card".into(),
+        path: dir.path().join("sd").display().to_string(),
+    };
+    let missing = irori_core::GameId::new(Runner::Sideload, "folders-gone");
+    let mut rx = b.subscribe();
+    let report = b
+        .runtime()
+        .block_on(b.move_installs(&[id.clone(), missing], &card));
+    assert_eq!(report.moved, 1);
+    assert_eq!(report.failed.len(), 1);
+    assert_eq!(report.failed[0].0, "folders-gone");
+    assert!(dir.path().join("sd/Celeste/Celeste.x86_64").is_file());
+    assert!(!game_dir.exists());
+    // One summary is the caller's to give: no notice per game.
+    assert!(notices(&mut rx).is_empty());
+}
+
+#[cfg(unix)]
+#[test]
 fn removing_a_prefix_forgets_it() {
     isolate_paths();
     let dir = tempfile::tempdir().unwrap();

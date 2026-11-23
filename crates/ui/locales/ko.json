@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Microsoft 장치 페이지 열기",
   "ui.game_window.no_window": "게임에 아직 앞으로 가져올 창이 없습니다",
   "ui.game_window.unsupported": "이 데스크톱에서는 Irori가 게임 창을 앞으로 가져올 수 없습니다. 작업 표시줄에서 전환하세요",
-  "ui.game_window.failed": "게임 창을 앞으로 가져오지 못했습니다"
+  "ui.game_window.failed": "게임 창을 앞으로 가져오지 못했습니다",
+  "ui.library_folders.default": "기본",
+  "ui.library_folders.move_title_one": "게임 {count}개를 “{folder}”(으)로 옮길까요?",
+  "ui.library_folders.move_title_other": "게임 {count}개를 “{folder}”(으)로 옮길까요?",
+  "ui.library_folders.move_description": "각 게임의 폴더를 한 번에 하나씩 {path}(으)로 옮깁니다. 실행 중이거나 작업 중인 게임은 그대로 둡니다.",
+  "ui.library_folders.move_confirm": "옮기기",
+  "ui.library_folders.cancel": "취소",
+  "ui.library_folders.move_failed": "일부 게임을 옮기지 못했습니다",
+  "ui.library_folders.nothing_to_move": "이 게임들은 그곳으로 옮길 수 없습니다",
+  "ui.library_folders.moved_one": "게임 {count}개를 “{folder}”(으)로 옮겼습니다",
+  "ui.library_folders.moved_other": "게임 {count}개를 “{folder}”(으)로 옮겼습니다"
 }

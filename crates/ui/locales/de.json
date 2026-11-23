@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Microsofts Geräteseite öffnen",
   "ui.game_window.no_window": "Das Spiel hat noch kein Fenster, das nach vorne geholt werden kann",
   "ui.game_window.unsupported": "Dieser Desktop lässt Irori das Spielfenster nicht nach vorne holen; wechsle über die Taskleiste dorthin",
-  "ui.game_window.failed": "Das Spielfenster konnte nicht nach vorne geholt werden"
+  "ui.game_window.failed": "Das Spielfenster konnte nicht nach vorne geholt werden",
+  "ui.library_folders.default": "Standard",
+  "ui.library_folders.move_title_one": "{count} Spiel nach „{folder}“ verschieben?",
+  "ui.library_folders.move_title_other": "{count} Spiele nach „{folder}“ verschieben?",
+  "ui.library_folders.move_description": "Der Ordner jedes Spiels wird nach {path} verschoben, ein Spiel nach dem anderen. Laufende oder beschäftigte Spiele bleiben, wo sie sind.",
+  "ui.library_folders.move_confirm": "Verschieben",
+  "ui.library_folders.cancel": "Abbrechen",
+  "ui.library_folders.move_failed": "Einige Spiele konnten nicht verschoben werden",
+  "ui.library_folders.nothing_to_move": "Keines dieser Spiele kann dorthin verschoben werden",
+  "ui.library_folders.moved_one": "{count} Spiel nach „{folder}“ verschoben",
+  "ui.library_folders.moved_other": "{count} Spiele nach „{folder}“ verschoben"
 }

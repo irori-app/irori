@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Microsoft のデバイス ページを開く",
   "ui.game_window.no_window": "ゲームには、まだ前面に出せるウィンドウがありません",
   "ui.game_window.unsupported": "このデスクトップでは Irori がゲームのウィンドウを前面に出せません。タスクバーから切り替えてください",
-  "ui.game_window.failed": "ゲームのウィンドウを前面に出せませんでした"
+  "ui.game_window.failed": "ゲームのウィンドウを前面に出せませんでした",
+  "ui.library_folders.default": "既定",
+  "ui.library_folders.move_title_one": "{count} 本のゲームを「{folder}」に移動しますか？",
+  "ui.library_folders.move_title_other": "{count} 本のゲームを「{folder}」に移動しますか？",
+  "ui.library_folders.move_description": "各ゲームのフォルダーを 1 本ずつ {path} に移動します。実行中または処理中のゲームはそのままです。",
+  "ui.library_folders.move_confirm": "移動",
+  "ui.library_folders.cancel": "キャンセル",
+  "ui.library_folders.move_failed": "一部のゲームを移動できませんでした",
+  "ui.library_folders.nothing_to_move": "これらのゲームはどれもそこへ移動できません",
+  "ui.library_folders.moved_one": "{count} 本のゲームを「{folder}」に移動しました",
+  "ui.library_folders.moved_other": "{count} 本のゲームを「{folder}」に移動しました"
 }

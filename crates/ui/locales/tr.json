@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Microsoft'un cihaz sayfasını aç",
   "ui.game_window.no_window": "Oyunun öne getirilecek bir penceresi henüz yok",
   "ui.game_window.unsupported": "Bu masaüstü Irori’nin oyun penceresini öne getirmesine izin vermiyor; görev çubuğundan ona geçin",
-  "ui.game_window.failed": "Oyun penceresi öne getirilemedi"
+  "ui.game_window.failed": "Oyun penceresi öne getirilemedi",
+  "ui.library_folders.default": "Varsayılan",
+  "ui.library_folders.move_title_one": "{count} oyun “{folder}” klasörüne taşınsın mı?",
+  "ui.library_folders.move_title_other": "{count} oyun “{folder}” klasörüne taşınsın mı?",
+  "ui.library_folders.move_description": "Her oyunun klasörü sırayla {path} içine taşınır. Çalışan veya meşgul oyunlar oldukları yerde kalır.",
+  "ui.library_folders.move_confirm": "Taşı",
+  "ui.library_folders.cancel": "İptal",
+  "ui.library_folders.move_failed": "Bazı oyunlar taşınamadı",
+  "ui.library_folders.nothing_to_move": "Bu oyunların hiçbiri oraya taşınamaz",
+  "ui.library_folders.moved_one": "{count} oyun “{folder}” klasörüne taşındı",
+  "ui.library_folders.moved_other": "{count} oyun “{folder}” klasörüne taşındı"
 }

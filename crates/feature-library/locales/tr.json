@@ -1040,6 +1040,8 @@
   "library.combine.hint": "“{title}” oyununun diğer kopyalarını seçin, sonra Tek oyunda birleştir’i seçin.",
   "library.bulk.combine": "Tek oyunda birleştir",
   "library.bulk.combine_tooltip": "Seçilen oyunları, mağazalarından tek bir oyunun kopyaları olarak göster",
+  "library.bulk.move": "Taşı",
+  "library.bulk.move_tooltip": "Seçilen kurulu oyunları bir kitaplık klasörüne taşı",
   "library.bulk.details.failed_one": "{count} oyun okunamadı.",
   "library.bulk.details.failed_other": "{count} oyun okunamadı.",
   "library.bulk.details.link_failed": "Steam’de arama yapılamadı",

@@ -681,6 +681,17 @@ commands without a window.
   that lists games must leave hidden ones out: `LibraryFilter::apply` does, Big
   Picture's options, the palette, `visible_sessions` (stats, Year in review),
   `Backend::concealed` (CLI, Discord). New screens that list games must too.
+- **Library folders** (`iroriLibraryFolders`, `irori_core::settings::LibraryFolder`):
+  named folders games install into beside `defaultInstallPath`, which
+  `AppSettings::library_folders` lists first (unnamed); `iroriInstallPerStore` applies
+  in each (`install_folder_in`), and `library_folder_of` says which holds a game. The
+  install sheet offers them as "Library folder" (it fills the path field); Settings →
+  General → Folders lists them with their installed games and moves all of a folder's
+  games into another; the library's selection bar moves the picked ones ("Move to").
+  Both ask through `irori_ui::library_folders::confirm_move` and move with
+  `Backend::move_installs` (one game at a time, running or busy games skipped, one
+  summary instead of a notice per game). Removing a folder from the list leaves its
+  games where they are.
 - **Removing games from the library** (`irori-library` `view/remove.rs`): the bulk bar,
   a picked game's context menu, the palette and Delete take the picked added games
   and ROMs out through `Backend::uninstall` after one confirmation; store games,

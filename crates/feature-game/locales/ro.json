@@ -316,6 +316,7 @@
   "game.install.password_failed": "Parola ramurii nu a putut fi salvată",
   "game.install.password_placeholder": "Parola ramurii private",
   "game.install.path_placeholder": "Dosarul pentru joc",
+  "game.install.library_folder": "Dosarul bibliotecii",
   "game.install.pin": "Păstrează jocul la o anumită versiune",
   "game.install.package": "Pachet",
   "game.install.pin_failed": "Fixarea versiunii nu a putut fi modificată",

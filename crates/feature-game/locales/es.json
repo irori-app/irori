@@ -316,6 +316,7 @@
   "game.install.password_failed": "No se pudo guardar la contraseña de la rama",
   "game.install.password_placeholder": "Contraseña de la rama privada",
   "game.install.path_placeholder": "Carpeta para el juego",
+  "game.install.library_folder": "Carpeta de biblioteca",
   "game.install.pin": "Mantener el juego en una versión concreta",
   "game.install.package": "Paquete",
   "game.install.pin_failed": "No se pudo cambiar la fijación de versión",

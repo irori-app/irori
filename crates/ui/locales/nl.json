@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Apparatenpagina van Microsoft openen",
   "ui.game_window.no_window": "De game heeft nog geen venster om naar voren te halen",
   "ui.game_window.unsupported": "Deze desktop laat Irori het gamevenster niet naar voren halen; wissel ernaar via de taakbalk",
-  "ui.game_window.failed": "Het gamevenster kon niet naar voren worden gehaald"
+  "ui.game_window.failed": "Het gamevenster kon niet naar voren worden gehaald",
+  "ui.library_folders.default": "Standaard",
+  "ui.library_folders.move_title_one": "{count} spel naar ‘{folder}’ verplaatsen?",
+  "ui.library_folders.move_title_other": "{count} spellen naar ‘{folder}’ verplaatsen?",
+  "ui.library_folders.move_description": "De map van elk spel wordt naar {path} verplaatst, één spel tegelijk. Spellen die draaien of bezig zijn, blijven waar ze zijn.",
+  "ui.library_folders.move_confirm": "Verplaatsen",
+  "ui.library_folders.cancel": "Annuleren",
+  "ui.library_folders.move_failed": "Sommige spellen konden niet worden verplaatst",
+  "ui.library_folders.nothing_to_move": "Geen van deze spellen kan daarheen worden verplaatst",
+  "ui.library_folders.moved_one": "{count} spel verplaatst naar ‘{folder}’",
+  "ui.library_folders.moved_other": "{count} spellen verplaatst naar ‘{folder}’"
 }

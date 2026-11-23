@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "打开 Microsoft 设备页面",
   "ui.game_window.no_window": "游戏还没有可置于前台的窗口",
   "ui.game_window.unsupported": "此桌面不允许 Irori 将游戏窗口置于前台；请从任务栏切换过去",
-  "ui.game_window.failed": "无法将游戏窗口置于前台"
+  "ui.game_window.failed": "无法将游戏窗口置于前台",
+  "ui.library_folders.default": "默认",
+  "ui.library_folders.move_title_one": "将 {count} 个游戏移到“{folder}”？",
+  "ui.library_folders.move_title_other": "将 {count} 个游戏移到“{folder}”？",
+  "ui.library_folders.move_description": "每个游戏的文件夹会逐个移到 {path}。正在运行或忙碌的游戏保持不动。",
+  "ui.library_folders.move_confirm": "移动",
+  "ui.library_folders.cancel": "取消",
+  "ui.library_folders.move_failed": "部分游戏无法移动",
+  "ui.library_folders.nothing_to_move": "这些游戏都无法移到那里",
+  "ui.library_folders.moved_one": "已将 {count} 个游戏移到“{folder}”",
+  "ui.library_folders.moved_other": "已将 {count} 个游戏移到“{folder}”"
 }

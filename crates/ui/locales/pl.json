@@ -349,5 +349,15 @@
   "ui.xbox.open_devices": "Otwórz stronę urządzeń Microsoftu",
   "ui.game_window.no_window": "Gra nie ma jeszcze okna do przeniesienia na pierwszy plan",
   "ui.game_window.unsupported": "To środowisko nie pozwala Irori przenieść okna gry na pierwszy plan; przełącz się na nie z paska zadań",
-  "ui.game_window.failed": "Nie udało się przenieść okna gry na pierwszy plan"
+  "ui.game_window.failed": "Nie udało się przenieść okna gry na pierwszy plan",
+  "ui.library_folders.default": "Domyślny",
+  "ui.library_folders.move_title_one": "Przenieść {count} grę do „{folder}”?",
+  "ui.library_folders.move_title_other": "Przenieść gry ({count}) do „{folder}”?",
+  "ui.library_folders.move_description": "Folder każdej gry zostanie przeniesiony do {path}, jedna gra po drugiej. Gry uruchomione lub zajęte zostaną na miejscu.",
+  "ui.library_folders.move_confirm": "Przenieś",
+  "ui.library_folders.cancel": "Anuluj",
+  "ui.library_folders.move_failed": "Nie udało się przenieść niektórych gier",
+  "ui.library_folders.nothing_to_move": "Żadnej z tych gier nie można tam przenieść",
+  "ui.library_folders.moved_one": "Przeniesiono {count} grę do „{folder}”",
+  "ui.library_folders.moved_other": "Przeniesiono gry ({count}) do „{folder}”"
 }
