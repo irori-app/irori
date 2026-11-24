@@ -1,7 +1,7 @@
 //! The Wine manager: downloadable Wine/Proton builds from their projects'
 //! release pages (GE-Proton, Proton-CachyOS, Proton-Wineland, DW-Proton,
-//! UMU-Proton, Proton-EM, Proton-Sarek, Wine-GE and Kron4ek's Wine builds on
-//! GitHub; DW-Proton on its own Forgejo, dawn.wine), a cached
+//! UMU-Proton, Proton-EM, Proton-GE RTSP, Proton-Sarek, Wine-GE and Kron4ek's
+//! Wine builds on GitHub; DW-Proton on its own Forgejo, dawn.wine), a cached
 //! release list with install state, and install/remove with progress,
 //! cancellation and SHA-512 or SHA-256 verification.
 //!
@@ -45,18 +45,21 @@ pub enum ReleaseKind {
     UmuProton,
     /// Proton-EM, a development-oriented Proton (HDR and Wayland work).
     ProtonEm,
+    /// Proton-GE with RTSP codec patches (commonly used for VRChat).
+    ProtonGeRtsp,
     /// Proton-Sarek, Proton for older GPUs (DXVK for Vulkan 1.1 hardware).
     ProtonSarek,
 }
 
 impl ReleaseKind {
-    pub const ALL: [ReleaseKind; 13] = [
+    pub const ALL: [ReleaseKind; 14] = [
         ReleaseKind::GeProton,
         ReleaseKind::ProtonCachyOs,
         ReleaseKind::ProtonWineland,
         ReleaseKind::DwProton,
         ReleaseKind::UmuProton,
         ReleaseKind::ProtonEm,
+        ReleaseKind::ProtonGeRtsp,
         ReleaseKind::ProtonSarek,
         ReleaseKind::NexusRuntime,
         ReleaseKind::WineGe,
@@ -79,6 +82,7 @@ impl ReleaseKind {
                 Self::DwProton,
                 Self::UmuProton,
                 Self::ProtonEm,
+                Self::ProtonGeRtsp,
                 Self::ProtonSarek,
                 Self::NexusRuntime,
                 Self::WineGe,
@@ -111,6 +115,7 @@ impl ReleaseKind {
             Self::DwProton => "DW-Proton",
             Self::UmuProton => "UMU-Proton",
             Self::ProtonEm => "Proton-EM",
+            Self::ProtonGeRtsp => "Proton-GE-RTSP",
             Self::ProtonSarek => "Proton-Sarek",
         }
     }
@@ -149,6 +154,9 @@ impl ReleaseKind {
                 "https://api.github.com/repos/Open-Wine-Components/umu-proton/releases"
             }
             Self::ProtonEm => "https://api.github.com/repos/BananaWorks07/Proton/releases",
+            Self::ProtonGeRtsp => {
+                "https://api.github.com/repos/SpookySkeletons/proton-ge-rtsp/releases"
+            }
             Self::ProtonSarek => "https://api.github.com/repos/pythonlover02/Proton-Sarek/releases",
         }
     }
@@ -176,6 +184,7 @@ impl ReleaseKind {
                 | ReleaseKind::DwProton
                 | ReleaseKind::UmuProton
                 | ReleaseKind::ProtonEm
+                | ReleaseKind::ProtonGeRtsp
                 | ReleaseKind::ProtonSarek
         )
     }
@@ -368,6 +377,11 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
         Some(ReleaseKind::ProtonEm) => {
             !arm && file_name_of(url).starts_with("proton-EM-") && is_tarball(url)
         }
+        Some(ReleaseKind::ProtonGeRtsp) => {
+            let name = file_name_of(url);
+            !arm && (name.starts_with("proton-rtsp-") || name.starts_with("GE-Proton"))
+                && is_tarball(&name)
+        }
         // `-async` builds turn on DXVK's asynchronous shader compiling,
         // which some online games' anticheat takes for cheating.
         Some(ReleaseKind::ProtonSarek) => {
@@ -445,6 +459,23 @@ fn checksum_names(asset: &str) -> [String; 2] {
     [format!("{stem}.sha512sum"), format!("{stem}.sha256sum")]
 }
 
+/// Pick the strongest checksum asset published beside `asset`, accepting both
+/// `<stem>.<sum>` and `<asset>.<sum>` (used by Proton-GE RTSP).
+fn select_checksum(asset: &str, assets: &[GhAsset]) -> String {
+    let [stem_512, stem_256] = checksum_names(asset);
+    let candidates = [
+        stem_512,
+        format!("{asset}.sha512sum"),
+        stem_256,
+        format!("{asset}.sha256sum"),
+    ];
+    candidates
+        .iter()
+        .find_map(|wanted| assets.iter().find(|a| &a.name == wanted))
+        .map(|a| a.browser_download_url.clone())
+        .unwrap_or_default()
+}
+
 fn select_asset<'a>(kind: ReleaseKind, assets: &'a [GhAsset], arch: &str) -> Option<&'a GhAsset> {
     let ty = kind.type_str();
     match kind {
@@ -455,6 +486,7 @@ fn select_asset<'a>(kind: ReleaseKind, assets: &'a [GhAsset], arch: &str) -> Opt
         | ReleaseKind::DwProton
         | ReleaseKind::UmuProton
         | ReleaseKind::ProtonEm
+        | ReleaseKind::ProtonGeRtsp
         | ReleaseKind::ProtonSarek => assets
             .iter()
             .find(|a| is_compatible_download(ty, &a.browser_download_url, arch)),
@@ -510,6 +542,16 @@ fn version_of(kind: ReleaseKind, tag: &str) -> String {
             format!("DW-Proton-{}", tag.strip_prefix("dwproton-").unwrap_or(tag))
         }
         ReleaseKind::ProtonEm => format!("Proton-EM-{}", tag.strip_prefix("EM-").unwrap_or(tag)),
+        ReleaseKind::ProtonGeRtsp => {
+            if tag.starts_with("GE-Proton") {
+                tag.to_string()
+            } else {
+                format!(
+                    "Proton-GE-RTSP-{}",
+                    tag.strip_prefix("proton-rtsp-").unwrap_or(tag)
+                )
+            }
+        }
         k if k.type_str().contains("Wine") => format!("Wine-{tag}"),
         _ => tag.to_string(),
     }
@@ -524,13 +566,7 @@ fn releases_from_github(kind: ReleaseKind, gh: Vec<GhRelease>, arch: &str) -> Ve
         .filter(|r| !r.draft)
         .filter_map(|r| {
             let asset = select_asset(kind, &r.assets, arch)?;
-            let checksum_of = |name: &str| {
-                checksum_names(name)
-                    .iter()
-                    .find_map(|wanted| r.assets.iter().find(|a| &a.name == wanted))
-                    .map(|a| a.browser_download_url.clone())
-                    .unwrap_or_default()
-            };
+            let checksum_of = |name: &str| select_checksum(name, &r.assets);
             let checksum = checksum_of(&asset.name);
             let v3 = v3_asset(kind, &asset.name, &r.assets);
             Some(Release {
@@ -2045,5 +2081,40 @@ mod tests {
                 &format!("{}-latest", kind.type_str())
             ));
         }
+    }
+
+    #[test]
+    fn proton_ge_rtsp_source() {
+        let list = parse(serde_json::json!([gh(
+            "proton-rtsp-11.0-20260609-4",
+            "2026-06-09",
+            &[
+                "proton-rtsp-11.0-20260609-4.tar.gz",
+                "proton-rtsp-11.0-20260609-4.tar.gz.sha512sum",
+            ]
+        )]));
+        let rel = releases_from_github(ReleaseKind::ProtonGeRtsp, list.clone(), "x86_64");
+        assert_eq!(rel[0].version, "Proton-GE-RTSP-latest");
+        assert_eq!(rel[1].version, "Proton-GE-RTSP-11.0-20260609-4");
+        assert!(
+            rel[1]
+                .download
+                .ends_with("proton-rtsp-11.0-20260609-4.tar.gz")
+        );
+        assert!(
+            rel[1]
+                .checksum
+                .ends_with("proton-rtsp-11.0-20260609-4.tar.gz.sha512sum")
+        );
+        assert!(releases_from_github(ReleaseKind::ProtonGeRtsp, list, "aarch64").is_empty());
+        assert!(ReleaseKind::ProtonGeRtsp.is_proton());
+        assert_eq!(
+            ReleaseKind::from_type("Proton-GE-RTSP"),
+            Some(ReleaseKind::ProtonGeRtsp)
+        );
+        assert!(
+            ReleaseKind::for_host(irori_core::HostPlatform::Linux)
+                .contains(&ReleaseKind::ProtonGeRtsp)
+        );
     }
 }
