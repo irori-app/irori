@@ -390,6 +390,13 @@ fn steam_card_reads_the_library_from_the_client(cx: &mut TestAppContext) {
     let registered: DynStore = store.clone();
     setup_with(cx, move || vec![registered]);
     cx.update(|cx| crate::install_steam_library_store(store.clone(), cx));
+    // The store finds Steam in `init`, on the backend's own runtime, which a
+    // busy runner may not have reached yet.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !store.client_library_state().steam_found && std::time::Instant::now() < deadline {
+        cx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
     assert!(cx.update(|cx| crate::suggest_steam_client_library(cx)));
     let (handle, _view) = cx.update(|cx| {
         gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
