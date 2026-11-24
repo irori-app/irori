@@ -15,15 +15,23 @@
 //! shell only names it for "Back to Irori" ([`install_show_irori`]). Nothing
 //! of it exists while it is closed: no surface, no thread, no timer. Unlocks
 //! the game made this session are fetched when it opens and announced in its
-//! corner one after another (a corner notice while it is closed would need a
-//! polling timer during play).
+//! corner one after another. While it is closed, unlocks services report as
+//! they happen show over the game in a card of their own ([`show_unlocks`],
+//! `notice`), from the same queue, so each shows once.
 
 #[cfg(any(target_os = "macos", windows))]
 mod hotkey;
+pub(crate) mod level;
 pub(crate) mod model;
+mod notice;
 pub mod support;
 mod view;
 mod window;
+
+#[cfg(any(target_os = "macos", windows))]
+pub use hotkey::{GlobalShortcut, QUICK_LAUNCH_LABEL, register_quick_launch};
+pub use notice::show_unlocks;
+pub use window::take_foreground;
 
 #[cfg(test)]
 mod tests;
@@ -47,6 +55,9 @@ struct Open {
     view: Entity<OverlayView>,
     /// Dropped with the overlay, which lets go of the controllers.
     _grab: Option<Grab>,
+    /// The window in front before the overlay took the foreground (Windows),
+    /// given it back on close.
+    previous: window::Foreground,
 }
 
 /// What "Back to Irori" runs.
@@ -56,8 +67,16 @@ type ShowIrori = Rc<dyn Fn(&mut App)>;
 struct OverlayState {
     open: Option<Open>,
     show_irori: Option<ShowIrori>,
-    /// Unlock notices, kept across openings so each shows once.
+    /// Unlock notices, kept across openings so each shows once; the panel
+    /// shows them while it is open, the card over the game otherwise.
     toasts: Toasts,
+    /// The card over the game, while it shows.
+    notice: Option<notice::Shown>,
+    /// Whether the timer putting notices away runs.
+    toasts_running: bool,
+    /// Counts the notices put away, so the timer leaves one a click
+    /// brought up its whole time.
+    toast_turn: u64,
     /// When each game's achievements were last asked of its store afresh.
     refreshed: HashMap<String, Instant>,
 }
@@ -93,6 +112,19 @@ pub fn enabled(cx: &App) -> bool {
         && cx
             .try_global::<irori_ui::Models>()
             .is_some_and(|m| m.settings.read(cx).app.overlay.enabled)
+}
+
+/// The overlay's settings (defaults before the models exist).
+pub(crate) fn prefs(cx: &App) -> irori_core::settings::OverlayPrefs {
+    cx.try_global::<irori_ui::Models>()
+        .map(|m| m.settings.read(cx).app.overlay.clone())
+        .unwrap_or_default()
+}
+
+/// How far one press of a volume control moves a volume, in percent
+/// (`iroriOverlay.volumeStep`).
+pub(crate) fn volume_step(cx: &App) -> i32 {
+    prefs(cx).volume_step()
 }
 
 /// The game the overlay is for: the one Irori started last that runs.
@@ -146,18 +178,25 @@ pub fn open(cx: &mut App) {
         );
         return;
     }
+    let previous = window::Foreground::current();
     let opened = window::open(cx, |window, cx| {
         let game = game.clone();
         cx.new(|cx| OverlayView::new(game, window, cx))
     });
     match opened {
         Ok((window, view)) => {
+            window::take_foreground(window, cx);
             let grab = crate::gamepad::start_grab(cx);
             state(cx).open = Some(Open {
                 window,
                 view,
                 _grab: grab,
+                previous,
             });
+            // The panel shows the notices in its own corner.
+            if let Some(shown) = state(cx).notice.take() {
+                notice::close(shown, cx);
+            }
         }
         Err(e) => tracing::warn!("opening the in-game overlay: {e:#}"),
     }
@@ -169,6 +208,9 @@ pub fn close(cx: &mut App) {
     cx.defer(|cx| {
         if let Some(open) = state(cx).open.take() {
             window::close(open.window, cx);
+            // Notices still waiting go on over the game.
+            notice::resume(cx);
+            open.previous.give_back();
         }
     });
 }
@@ -199,9 +241,73 @@ pub(crate) fn should_refresh(key: &str, cx: &mut App) -> bool {
     true
 }
 
-/// The unlock notices, for the view.
+/// The unlock notices, for the views.
 pub(crate) fn toasts(cx: &mut App) -> &mut Toasts {
     &mut state(cx).toasts
+}
+
+/// Show the queued notices one after another, each for its time, and take
+/// the card over the game away after the last. Does nothing while they are
+/// being shown already.
+pub(crate) fn start_toasts(cx: &mut App) {
+    refresh_toasts(cx);
+    let s = state(cx);
+    if s.toasts_running || s.toasts.current().is_none() {
+        return;
+    }
+    s.toasts_running = true;
+    cx.spawn(async move |cx| {
+        loop {
+            let turn = cx.update(|cx| state(cx).toast_turn);
+            cx.background_executor().timer(notice::TOAST_TIME).await;
+            let more = cx.update(|cx| {
+                if state(cx).toast_turn == turn {
+                    advance_toast(cx)
+                } else {
+                    // A click put that one away: the next gets its time.
+                    state(cx).toasts.current().is_some()
+                }
+            });
+            if !more {
+                cx.update(|cx| state(cx).toasts_running = false);
+                break;
+            }
+        }
+    })
+    .detach();
+}
+
+/// Put the notice shown away now (a click on it). Deferred, since the card
+/// it may close is the window asking.
+pub(crate) fn next_toast(cx: &mut App) {
+    cx.defer(|cx| {
+        advance_toast(cx);
+    });
+}
+
+/// Done with the notice shown; returns whether another follows.
+fn advance_toast(cx: &mut App) -> bool {
+    let s = state(cx);
+    s.toast_turn += 1;
+    let more = s.toasts.advance();
+    if !more && let Some(shown) = s.notice.take() {
+        notice::close(shown, cx);
+    }
+    refresh_toasts(cx);
+    more
+}
+
+/// Draw the views that show the notices again.
+fn refresh_toasts(cx: &mut App) {
+    let s = state(cx);
+    let panel = s.open.as_ref().map(|o| o.view.clone());
+    let card = s.notice.as_ref().map(|n| n.view.clone());
+    if let Some(view) = panel {
+        view.update(cx, |_, cx| cx.notify());
+    }
+    if let Some(view) = card {
+        view.update(cx, |_, cx| cx.notify());
+    }
 }
 
 /// Hand `input` to the overlay's panel, or to the dialog open over it (the

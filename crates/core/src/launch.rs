@@ -48,6 +48,7 @@ impl WineLaunch {
 #[derive(Debug, Clone, Default)]
 pub struct LaunchEnvironment {
     pub env: BTreeMap<String, String>,
+    pub env_remove: Vec<String>,
     pub wrappers: Vec<Vec<String>>,
     pub wine: Option<WineLaunch>,
 }
@@ -96,6 +97,35 @@ pub trait GameWatch: Send + Sync {
 
     /// Ask the game to quit, never the program that started it.
     fn stop(&self, force: bool);
+
+    /// Block until the tracked game processes exit when the OS provides kernel
+    /// exit notifications (`pidfd_open` on Linux). Returns `true` when it
+    /// waited (or saw a tracked PID already gone) and `false` when the caller
+    /// should sleep for its poll interval instead.
+    fn wait_for_exit(&self, _timeout: std::time::Duration) -> bool {
+        false
+    }
+}
+
+/// An installed game's files weren't there when it was started: a drive not
+/// mounted, a folder moved, renamed or deleted. The UI offers to point the
+/// install at the files' new place, or to forget the install.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "The game files of {title} were not found{}",
+    .path.as_ref().map(|p| format!(" at {}", p.display())).unwrap_or_default()
+)]
+pub struct GameFilesMissing {
+    pub title: String,
+    /// Where the files were expected, when the store records it.
+    pub path: Option<PathBuf>,
+}
+
+impl GameFilesMissing {
+    /// The missing files behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&GameFilesMissing> {
+        error.downcast_ref()
+    }
 }
 
 /// Why a game set to run sandboxed could not be: Irori refuses to start it

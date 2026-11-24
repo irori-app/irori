@@ -240,6 +240,7 @@ async fn installs_updates_repairs_launches_and_uninstalls() {
         settings: GameSettings::default(),
         environment: LaunchEnvironment {
             env: BTreeMap::new(),
+            env_remove: Vec::new(),
             wrappers: vec![],
             wine: Some(WineLaunch {
                 bin: "/usr/bin/wine".into(),

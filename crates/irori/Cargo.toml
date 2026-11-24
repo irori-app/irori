@@ -71,6 +71,12 @@ irori-sign-in.workspace = true
 # The `Run` value that starts Irori with Windows; already in the lockfile
 # through another dependency.
 windows-registry = "0.6"
+# The tray menu's light or dark (uxtheme's ordinals, `menu_theme.rs`); already
+# in the lockfile.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+] }
 
 [target.'cfg(windows)'.build-dependencies]
 winresource.workspace = true

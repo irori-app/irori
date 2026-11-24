@@ -1,11 +1,17 @@
 //! Keeping installs in sync with an Epic Games Launcher (EGL) running in a
 //! Wine prefix (or the native Windows launcher): games installed by EGL show up in Irori and Irori's installs
 //! show up in EGL.
+//!
+//! Linked or not, Epic's own record of a build (`.egstore` in the install)
+//! says when the Epic Games Launcher updated a game Irori knows, so the update
+//! Irori offered goes away ([`EpicStore::adopt_egl_updates`]).
 
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use anyhow::{Context as _, Result, bail};
 use irori_epic_api::egl::{self, EglItem, ExportInfo};
+use irori_epic_api::{Manifest, Secrets};
 
 use crate::EpicStore;
 use crate::state::{InstalledGame, real_prefix};
@@ -77,7 +83,99 @@ pub(crate) fn forget_export(prefix: &Path, installed: &InstalledGame, delete_fil
     }
 }
 
+/// The manifest the Epic Games Launcher left in `install_dir`'s `.egstore`
+/// for build `version` of `app`, with its bytes.
+///
+/// Manifests older than `not_before` (Irori's own copy of the installed
+/// build's manifest) are skipped unread: EGL can only have updated the game
+/// after Irori last wrote its build, and a big manifest is costly to parse on
+/// every refresh. Blocking.
+fn egstore_build(
+    install_dir: &Path,
+    app: &str,
+    version: &str,
+    not_before: Option<SystemTime>,
+    secrets: &Secrets,
+) -> Option<(Vec<u8>, Manifest)> {
+    let entries = std::fs::read_dir(egl::egstore_dir(install_dir)).ok()?;
+    entries.flatten().find_map(|entry| {
+        let path = entry.path();
+        if path.extension().is_none_or(|x| x != "manifest") {
+            return None;
+        }
+        let modified = entry.metadata().and_then(|m| m.modified()).ok();
+        if let (Some(modified), Some(not_before)) = (modified, not_before)
+            && modified < not_before
+        {
+            return None;
+        }
+        let bytes = std::fs::read(&path).ok()?;
+        let manifest = Manifest::parse(&bytes, secrets)
+            .map_err(|e| tracing::debug!("EGL manifest {}: {e:#}", path.display()))
+            .ok()?;
+        (manifest.meta.app_name == app && manifest.meta.build_version == version)
+            .then_some((bytes, manifest))
+    })
+}
+
 impl EpicStore {
+    /// Take the installed build from Epic's own records when the Epic Games
+    /// Launcher updated a game to the build Epic offers, whether or not EGL
+    /// sync is on (Heronite #347: the update stayed on offer after updating
+    /// in EGL).
+    ///
+    /// Only the current build is taken: a record of an older build (left by
+    /// an earlier export while Irori updated the game itself) never lowers
+    /// the version Irori knows.
+    pub(crate) async fn adopt_egl_updates(&self) -> Result<()> {
+        let candidates: Vec<(InstalledGame, String)> = {
+            let state = self.state.read();
+            state
+                .installed
+                .values()
+                .filter(|g| !g.third_party && !g.is_dlc && !g.pinned_version)
+                .filter_map(|g| {
+                    let latest = state.records.get(&g.app_name)?.version(g.platform_arg())?;
+                    (latest != g.version).then(|| (g.clone(), latest.to_string()))
+                })
+                .collect()
+        };
+        for (installed, latest) in candidates {
+            let layout = self.layout.clone();
+            let app = installed.app_name.clone();
+            let dir = PathBuf::from(&installed.install_path);
+            let secrets = installed.secrets();
+            let found = Self::blocking(move || {
+                let not_before = std::fs::metadata(layout.build_manifest(&app))
+                    .and_then(|m| m.modified())
+                    .ok();
+                egstore_build(&dir, &app, &latest, not_before, &secrets)
+            })
+            .await?;
+            let Some((bytes, manifest)) = found else {
+                continue;
+            };
+            let path = self.layout.build_manifest(&installed.app_name);
+            Self::blocking(move || irori_core::json_store::write_bytes(&path, &bytes)).await??;
+            tracing::info!(
+                "{} was updated to {} outside Irori",
+                installed.app_name,
+                manifest.meta.build_version
+            );
+            let app = installed.app_name.clone();
+            self.update_installed(|map| {
+                if let Some(g) = map.get_mut(&app) {
+                    g.version = manifest.meta.build_version.clone();
+                    g.install_size = manifest.install_size(&g.install_tags);
+                    g.prereq = crate::install_info::prerequisites_of(&manifest);
+                }
+            })
+            .await?;
+            self.install_info.clear().await;
+        }
+        Ok(())
+    }
+
     /// The linked EGL prefix, if sync is enabled.
     pub(crate) fn egl_prefix(&self) -> Option<PathBuf> {
         let linked = (self.settings)().egs_linked_path.clone();
@@ -135,7 +233,7 @@ impl EpicStore {
                 g.version != item.version() || g.install_tags != item.install_tags()
             });
             if changed {
-                match self.egl_import(&pfx, item).await {
+                match self.egl_import(prefix, &pfx, item).await {
                     Ok(()) => imported.push(item.display_name().to_string()),
                     Err(e) => tracing::warn!("importing {} from EGL: {e:#}", item.app_name()),
                 }
@@ -182,7 +280,9 @@ impl EpicStore {
         ))
     }
 
-    async fn egl_import(&self, pfx: &Path, item: &EglItem) -> Result<()> {
+    /// Take EGL's install of `item`. `prefix` is the linked prefix as the
+    /// user chose it, `pfx` the folder holding its `drive_c`.
+    async fn egl_import(&self, prefix: &Path, pfx: &Path, item: &EglItem) -> Result<()> {
         let path = host_path(pfx, item.install_location())
             .with_context(|| format!("cannot resolve {}", item.install_location()))?;
         let manifest =
@@ -192,7 +292,16 @@ impl EpicStore {
         irori_epic_api::Manifest::parse(&bytes, &Default::default())
             .context("the EGL manifest is unreadable")?;
         irori_core::json_store::write_bytes(&self.layout.build_manifest(item.app_name()), &bytes)?;
-        let previous = self.installed_entry(item.app_name()).unwrap_or_default();
+        let previous = self.installed_entry(item.app_name());
+        // A game first installed in EGL's prefix keeps its saves and
+        // configuration there (Heroic #6001). One Irori already had (its own
+        // install, exported to EGL) stays in the prefix it played in.
+        let wine_prefix = match &previous {
+            Some(previous) => previous.wine_prefix.clone(),
+            None if cfg!(windows) => String::new(),
+            None => prefix.to_string_lossy().into_owned(),
+        };
+        let previous = previous.unwrap_or_default();
         let entry = InstalledGame {
             app_name: item.app_name().to_string(),
             title: item.display_name().to_string(),
@@ -210,6 +319,7 @@ impl EpicStore {
             save_timestamp: previous.save_timestamp,
             prereq: previous.prereq,
             pinned_version: previous.pinned_version,
+            wine_prefix,
             ..Default::default()
         };
         let app = item.app_name().to_string();

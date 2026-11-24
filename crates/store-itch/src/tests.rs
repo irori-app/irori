@@ -124,6 +124,7 @@ fn request(f: &Fixture) -> LaunchRequest {
         settings: Default::default(),
         environment: LaunchEnvironment {
             env: Default::default(),
+            env_remove: Vec::new(),
             wrappers: vec![],
             wine: Some(WineLaunch {
                 bin: "/opt/wine/bin/wine".into(),

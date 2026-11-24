@@ -2,7 +2,8 @@
 //! Irori. Games built with the Galaxy SDK connect to it on
 //! `127.0.0.1:9977` for achievements, statistics and leaderboards. Every local
 //! program can reach that port, so it only serves games Irori started, and
-//! never the account's own token.
+//! never the account's own token. What those games unlock is told to Irori
+//! as it happens ([`Service::unlocks`]).
 
 #![forbid(unsafe_code)]
 
@@ -20,7 +21,7 @@ use comet::api::notification_pusher::{NotificationPusherClient, PusherEvent};
 use comet::api::structs::{Token, UserInfo};
 use comet::constants;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, broadcast};
 use tokio_util::sync::CancellationToken;
 
 /// Port the Galaxy SDK connects to.
@@ -47,9 +48,68 @@ impl std::fmt::Debug for Account {
 pub struct Service {
     shutdown: CancellationToken,
     allowed_clients: constants::AllowedClients,
+    overlay: broadcast::Sender<(u32, OverlayPeerMessage)>,
+}
+
+/// An achievement a game unlocked through the service.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unlocked {
+    /// The Galaxy client id the game signed in with.
+    pub client_id: String,
+    /// GOG's id of the achievement (`achievement_id` in its web API).
+    pub id: String,
+    pub key: String,
+    pub name: String,
+    /// RFC 3339; `None` when the game gave no time.
+    pub unlocked_at: Option<String>,
+}
+
+/// The unlocks games make through the service, as they happen.
+pub struct Unlocks {
+    rx: broadcast::Receiver<(u32, OverlayPeerMessage)>,
+    stop: CancellationToken,
+}
+
+impl Unlocks {
+    /// The next unlock; `None` once the service stopped.
+    pub async fn next(&mut self) -> Option<Unlocked> {
+        loop {
+            let message = tokio::select! {
+                _ = self.stop.cancelled() => return None,
+                message = self.rx.recv() => message,
+            };
+            match message {
+                Ok((
+                    _,
+                    OverlayPeerMessage::Unlocked {
+                        client_id,
+                        achievement,
+                    },
+                )) => {
+                    return Some(Unlocked {
+                        client_id,
+                        id: achievement.achievement_id().to_owned(),
+                        key: achievement.achievement_key().to_owned(),
+                        name: achievement.name().to_owned(),
+                        unlocked_at: achievement.date_unlocked().clone(),
+                    });
+                }
+                Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(broadcast::error::RecvError::Closed) => return None,
+            }
+        }
+    }
 }
 
 impl Service {
+    /// What games unlock through the service from now on.
+    pub fn unlocks(&self) -> Unlocks {
+        Unlocks {
+            rx: self.overlay.subscribe(),
+            stop: self.shutdown.clone(),
+        }
+    }
+
     /// Let a game Irori is starting sign in, by its Galaxy client id. It stays
     /// allowed until the service stops, with the last game.
     pub async fn allow_client(&self, client_id: String) {
@@ -127,7 +187,8 @@ pub async fn start(account: Account) -> Result<Service> {
         }
     });
 
-    let (overlay, _) = tokio::sync::broadcast::channel::<(u32, OverlayPeerMessage)>(32);
+    let (overlay, _) = broadcast::channel::<(u32, OverlayPeerMessage)>(32);
+    let host_overlay = overlay.clone();
     let stop = shutdown.clone();
     let allowed = allowed_clients.clone();
     tokio::spawn(async move {
@@ -163,5 +224,62 @@ pub async fn start(account: Account) -> Result<Service> {
     Ok(Service {
         shutdown,
         allowed_clients,
+        overlay: host_overlay,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn achievement(key: &str) -> Arc<comet::api::gog::achievements::Achievement> {
+        Arc::new(comet::api::gog::achievements::Achievement::new(
+            "38".into(),
+            key.into(),
+            "Name".into(),
+            String::new(),
+            String::new(),
+            String::new(),
+            true,
+            Some("2026-05-01T12:00:00+00:00".into()),
+            1.0,
+            String::new(),
+            String::new(),
+        ))
+    }
+
+    #[tokio::test]
+    async fn tells_unlocks_and_ends_with_the_service() {
+        let (overlay, _) = broadcast::channel(8);
+        let stop = CancellationToken::new();
+        let mut unlocks = Unlocks {
+            rx: overlay.subscribe(),
+            stop: stop.clone(),
+        };
+        // What the overlay pipe reads is no unlock of the host's.
+        overlay
+            .send((1, OverlayPeerMessage::Achievement(achievement("other"))))
+            .unwrap();
+        overlay
+            .send((
+                1,
+                OverlayPeerMessage::Unlocked {
+                    client_id: "53652320436400298".into(),
+                    achievement: achievement("k"),
+                },
+            ))
+            .unwrap();
+        assert_eq!(
+            unlocks.next().await,
+            Some(Unlocked {
+                client_id: "53652320436400298".into(),
+                id: "38".into(),
+                key: "k".into(),
+                name: "Name".into(),
+                unlocked_at: Some("2026-05-01T12:00:00+00:00".into()),
+            })
+        );
+        stop.cancel();
+        assert_eq!(unlocks.next().await, None);
+    }
 }

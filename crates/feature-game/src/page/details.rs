@@ -14,8 +14,8 @@ use gpui_kit::{
     AnyElement, App, Context, Hsla, InteractiveElement as _, IntoElement, ParentElement,
     SharedString, Styled, div, px, relative, rems,
 };
-use irori_core::GameInfo;
 use irori_core::util::{format_bytes, unix_now};
+use irori_core::{GameInfo, GameMode};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -94,6 +94,67 @@ fn chip_split(count: usize, max: usize) -> (usize, Option<usize>) {
     }
 }
 
+/// Steam tags shown as chips before the rest wait behind "+N".
+const TAG_CHIPS: usize = 6;
+
+/// The Steam tags worth a chip: those that no genre or game mode the page
+/// already shows names (in the interface language or as Steam spells the
+/// mode in English).
+pub(super) fn tag_chips(tags: &[String], genres: &[String], modes: &[GameMode]) -> Vec<String> {
+    use irori_services::search::tag_key;
+    let shown: std::collections::HashSet<String> = genres
+        .iter()
+        .map(|g| tag_key(g))
+        .chain(
+            modes
+                .iter()
+                .map(|m| tag_key(&irori_ui::game_mode::label(*m))),
+        )
+        .collect();
+    tags.iter()
+        .filter(|tag| !shown.contains(&tag_key(tag)))
+        .filter(|tag| {
+            GameMode::from_search(tag).is_none_or(|named| !named.iter().all(|m| modes.contains(m)))
+        })
+        .cloned()
+        .collect()
+}
+
+/// The pages the Links row offers besides the store page and the user's
+/// own, as name and address: SteamDB for a game with a Steam app, then the
+/// pages the compatibility sources found.
+pub(super) fn known_links(
+    steam_app: Option<u32>,
+    compat: Option<&crate::hooks::CompatibilityInfo>,
+) -> Vec<(String, String)> {
+    let mut links = Vec::new();
+    if let Some(app) = steam_app {
+        links.push(("SteamDB".into(), format!("https://steamdb.info/app/{app}/")));
+    }
+    let Some(info) = compat else {
+        return links;
+    };
+    if let Some(url) = &info.pcgamingwiki_url {
+        links.push(("PCGamingWiki".into(), url.clone()));
+    }
+    // A search page isn't the game's.
+    if let Some(url) = info.protondb_url.as_ref().filter(|u| u.contains("/app/")) {
+        links.push(("ProtonDB".into(), url.clone()));
+    }
+    if let Some(url) = info
+        .scores
+        .iter()
+        .find(|s| s.source == "IGDB")
+        .and_then(|s| s.url.clone())
+    {
+        links.push(("IGDB".into(), url));
+    }
+    if let Some(url) = info.how_long_to_beat.as_ref().and_then(|h| h.url.clone()) {
+        links.push(("HowLongToBeat".into(), url));
+    }
+    links
+}
+
 /// Rows separated into groups by a hairline.
 fn group(rows: Vec<AnyElement>, cx: &App) -> Option<AnyElement> {
     (!rows.is_empty()).then(|| {
@@ -137,10 +198,64 @@ impl GamePage {
             )
             .children(group(credits, cx))
             .children(group(self.tag_rows(game, muted), cx))
+            .children(group(self.steam_tag_rows(game, muted, cx), cx))
             .children(group(play, cx))
             .children(group(install, cx))
             .children(group(compat, cx))
+            .children(group(self.steam_rows(muted), cx))
+            .children(group(self.link_rows(game, muted, cx), cx))
             .into_any_element()
+    }
+
+    /// The Steam app a game of another store is linked to, with "Link to
+    /// Steam" to change it.
+    fn steam_rows(&self, muted: Hsla) -> Vec<AnyElement> {
+        if matches!(
+            self.id.runner,
+            irori_core::Runner::Steam | irori_core::Runner::Emulation
+        ) {
+            return Vec::new();
+        }
+        let link = self.steam_link;
+        let value: AnyElement = match link.app_id() {
+            Some(app) => {
+                let label = t_args("game.steam_link.app", &[("id", &app.to_string())]);
+                match irori_ui::web_url(&format!("https://store.steampowered.com/app/{app}/")) {
+                    Some(url) => gpui_kit::component::link::Link::new("details-steam-app")
+                        .href(url)
+                        .child(label)
+                        .into_any_element(),
+                    None => text(label),
+                }
+            }
+            None if link == irori_services::SteamLink::NoneChosen => {
+                text(t("game.steam_link.none"))
+            }
+            None => text(t("game.steam_link.not_linked")),
+        };
+        let id = self.id.clone();
+        let change = Button::new("details-steam-link")
+            .ghost()
+            .xsmall()
+            .label(if link.app_id().is_some() {
+                t("game.steam_link.change")
+            } else {
+                t("game.steam_link.link")
+            })
+            .tooltip(crate::steam_match::describe(link))
+            .on_click(move |_, window, cx| {
+                crate::steam_match::open_steam_link_dialog(id.clone(), window, cx)
+            });
+        vec![row(
+            "Steam",
+            h_flex()
+                .w_full()
+                .gap_2()
+                .justify_between()
+                .child(div().min_w_0().truncate().child(value))
+                .child(change),
+            muted,
+        )]
     }
 
     /// Developer, publisher and release date.
@@ -196,6 +311,136 @@ impl GamePage {
             rows.push(row(t("game.details.tags"), chips(game.tags.clone()), muted));
         }
         rows
+    }
+
+    /// The game's Steam tags as chips, each showing the library's games with
+    /// that tag; the strongest first, the rest behind "+N".
+    fn steam_tag_rows(&self, game: &GameInfo, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
+        let genres = self
+            .extra
+            .ready()
+            .map(|e| e.genres.clone())
+            .filter(|g| !g.is_empty())
+            .unwrap_or_else(|| game.genres.clone());
+        let tags = tag_chips(&game.store_tags, &genres, &game.game_modes);
+        if tags.is_empty() {
+            return Vec::new();
+        }
+        let (shown, more) = if self.tags_expanded {
+            (tags.len(), None)
+        } else {
+            chip_split(tags.len(), TAG_CHIPS)
+        };
+        let chips = tags.into_iter().take(shown).enumerate().map(|(i, tag)| {
+            let label: SharedString = tag.into();
+            let event = label.clone();
+            Button::new(("steam-tag", i))
+                .xsmall()
+                .outline()
+                .label(label.clone())
+                .tooltip(t_args("game.details.show_tag", &[("tag", &label)]))
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    cx.emit(super::GamePageEvent::ShowTag(event.clone()))
+                }))
+        });
+        let toggle = match more {
+            Some(n) => Some(
+                Button::new("steam-tags-more")
+                    .xsmall()
+                    .ghost()
+                    .label(t_args("game.details.more", &[("count", &n.to_string())])),
+            ),
+            None if self.tags_expanded => Some(
+                Button::new("steam-tags-more")
+                    .xsmall()
+                    .ghost()
+                    .label(t("game.details.fewer")),
+            ),
+            None => None,
+        }
+        .map(|b| {
+            b.on_click(cx.listener(|this, _, _, cx| {
+                this.tags_expanded = !this.tags_expanded;
+                cx.notify();
+            }))
+        });
+        vec![row(
+            t("game.details.steam_tags"),
+            h_flex()
+                .w_full()
+                .min_w_0()
+                .gap_1()
+                .flex_wrap()
+                .children(chips)
+                .children(toggle),
+            muted,
+        )]
+    }
+
+    /// The Links row: the store page, the pages sources know of and the
+    /// user's own links, each a button opening it, with "Edit links…".
+    fn link_rows(&self, game: &GameInfo, muted: Hsla, cx: &Context<Self>) -> Vec<AnyElement> {
+        let store_url = game
+            .store_url
+            .clone()
+            .or_else(|| self.extra.ready().and_then(|e| e.store_url.clone()))
+            .filter(|u| !u.is_empty());
+        let mut buttons: Vec<AnyElement> = Vec::new();
+        if let Some(url) = store_url {
+            let runner = self.id.runner;
+            buttons.push(
+                Button::new("link-store-page")
+                    .xsmall()
+                    .ghost()
+                    .icon(IconName::Store)
+                    .label(t("game.menu.store_page"))
+                    .on_click(move |_, window, cx| {
+                        irori_ui::hooks::open_store_page(runner, url.clone(), window, cx)
+                    })
+                    .into_any_element(),
+            );
+        }
+        let own = crate::links::of(&self.id, cx);
+        let pages = known_links(self.steam_link.app_id(), self.compat.ready())
+            .into_iter()
+            .chain(own.iter().map(|l| (l.label(), l.url.clone())));
+        for (i, (name, url)) in pages.enumerate() {
+            let Some(url) = irori_ui::web_url(&url) else {
+                continue;
+            };
+            buttons.push(
+                Button::new(("game-link", i))
+                    .xsmall()
+                    .ghost()
+                    .icon(IconName::ExternalLink)
+                    .label(name)
+                    .tooltip(url.to_string())
+                    .on_click(move |_, _, cx| cx.open_url(&url))
+                    .into_any_element(),
+            );
+        }
+        let id = self.id.clone();
+        buttons.push(
+            Button::new("game-links-edit")
+                .xsmall()
+                .ghost()
+                .icon(IconName::Pencil)
+                .tooltip(t("game.links.edit"))
+                .on_click(move |_, window, cx| {
+                    crate::links::open_links_dialog(id.clone(), window, cx)
+                })
+                .into_any_element(),
+        );
+        vec![row(
+            t("game.links.title"),
+            h_flex()
+                .w_full()
+                .min_w_0()
+                .gap_1()
+                .flex_wrap()
+                .children(buttons),
+            muted,
+        )]
     }
 
     /// The release date in the interface language, or as the store wrote it
@@ -588,6 +833,56 @@ fn hltb_bar(h: &HowLongToBeat, played_hours: f32, muted: Hsla, cx: &App) -> AnyE
 #[cfg(test)]
 mod tests {
     use super::chip_split;
+    use irori_core::GameMode;
+
+    #[test]
+    fn tag_chips_leave_out_what_genres_and_modes_say() {
+        crate::i18n::register();
+        let tags: Vec<String> = [
+            "Roguelike",
+            "Action",
+            "Co-op",
+            "Singleplayer",
+            "Great Soundtrack",
+        ]
+        .map(String::from)
+        .to_vec();
+        let genres = vec!["action".to_string()];
+        assert_eq!(
+            super::tag_chips(&tags, &genres, &[GameMode::Single, GameMode::Coop]),
+            ["Roguelike", "Great Soundtrack"]
+        );
+        // A mode the page doesn't show keeps its tag.
+        assert_eq!(
+            super::tag_chips(&tags, &[], &[GameMode::Single]),
+            ["Roguelike", "Action", "Co-op", "Great Soundtrack"]
+        );
+    }
+
+    #[test]
+    fn links_name_the_pages_sources_found() {
+        use crate::hooks::{CompatibilityInfo, ReviewScore};
+        assert!(super::known_links(None, None).is_empty());
+        let info = CompatibilityInfo {
+            pcgamingwiki_url: Some("https://www.pcgamingwiki.com/wiki/?curid=1".into()),
+            protondb_url: Some("https://www.protondb.com/search?q=Hades".into()),
+            scores: vec![ReviewScore::new(
+                "IGDB",
+                90,
+                Some("https://www.igdb.com/games/hades".into()),
+            )],
+            ..Default::default()
+        };
+        let names: Vec<String> = super::known_links(Some(1145360), Some(&info))
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(
+            names,
+            ["SteamDB", "PCGamingWiki", "IGDB"],
+            "not a search page"
+        );
+    }
 
     #[test]
     fn chips_past_the_limit_collapse() {

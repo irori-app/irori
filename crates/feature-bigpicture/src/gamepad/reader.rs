@@ -14,8 +14,8 @@ use gilrs::LinuxGamepadExt as _;
 use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, PowerInfo};
 
 use super::input::{
-    AxisChange, Chord, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease, HoldTimer,
-    PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device, map_button,
+    AxisChange, Chord, Chords, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease,
+    HoldTimer, PadButton, Repeater, SteamIgnoreList, StickAxis, is_ignored_device,
 };
 use super::{Battery, ControllerInfo};
 use parking_lot::Mutex;
@@ -28,8 +28,9 @@ pub(crate) struct SharedConfig {
     pub disabled: AtomicBool,
     pub initial_ms: AtomicU32,
     pub repeat_ms: AtomicU32,
-    /// The in-game overlay is on, and with it Guide + RB / Up / Down.
-    pub overlay: AtomicBool,
+    /// The in-game overlay's chords that are on (Guide + RB / Up / Down),
+    /// as [`Self::set_chords`] packs them.
+    chords: AtomicU8,
     /// The event devices of the controllers read (Linux), which the overlay
     /// holds from the game while it is open.
     pub devices: Mutex<Vec<(PathBuf, ControllerKind)>>,
@@ -45,17 +46,30 @@ pub(crate) struct SharedConfig {
 }
 
 impl SharedConfig {
-    pub fn new(disabled: bool, initial_ms: u32, repeat_ms: u32, overlay: bool) -> Self {
+    pub fn new(disabled: bool, initial_ms: u32, repeat_ms: u32, chords: Chords) -> Self {
         Self {
             disabled: AtomicBool::new(disabled),
             initial_ms: AtomicU32::new(initial_ms),
             repeat_ms: AtomicU32::new(repeat_ms),
-            overlay: AtomicBool::new(overlay),
+            chords: AtomicU8::new(pack(chords)),
             devices: Mutex::new(Vec::new()),
             hold_button: AtomicU8::new(0),
             hold_ms: AtomicU32::new(1000),
             big_picture: AtomicBool::new(false),
             focus_changes: AtomicU64::new(0),
+        }
+    }
+
+    /// Follow the overlay's chord settings.
+    pub(crate) fn set_chords(&self, chords: Chords) {
+        self.chords.store(pack(chords), Ordering::Relaxed);
+    }
+
+    fn chords(&self) -> Chords {
+        let bits = self.chords.load(Ordering::Relaxed);
+        Chords {
+            screenshot: bits & 1 != 0,
+            volume: bits & 2 != 0,
         }
     }
 
@@ -93,6 +107,11 @@ impl SharedConfig {
     }
 }
 
+/// [`Chords`] as the bits [`SharedConfig`] keeps.
+fn pack(chords: Chords) -> u8 {
+    u8::from(chords.screenshot) | (u8::from(chords.volume) << 1)
+}
+
 /// What the reader reports to the GPUI side.
 pub(crate) enum Message {
     Input {
@@ -104,6 +123,11 @@ pub(crate) enum Message {
     Chord(Chord),
     /// Holding the button that opens Big Picture.
     Hold(HoldEvent),
+    /// Back + Start pressed together while a game has the focus (Windows,
+    /// `gamepad::xinput`): open or close the overlay.
+    // Only the Windows reader sends it.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    BackStart,
 }
 
 /// How holding the button that opens Big Picture goes.
@@ -128,6 +152,19 @@ struct Device {
     ignored: bool,
     stick_x: StickAxis,
     stick_y: StickAxis,
+    /// Its Bluetooth address, read once when it connects (Linux).
+    bluetooth: Option<String>,
+}
+
+/// The Bluetooth address of `pad`, for turning it off from the overlay.
+#[cfg(target_os = "linux")]
+fn bluetooth_address(pad: &gilrs::Gamepad<'_>) -> Option<String> {
+    irori_services::bluetooth::address_of(pad.devpath())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn bluetooth_address(_pad: &gilrs::Gamepad<'_>) -> Option<String> {
+    None
 }
 
 struct Reader {
@@ -288,6 +325,10 @@ impl Reader {
                         || self.steam_ignored.ignores(vendor, product),
                     stick_x: previous.as_ref().map(|d| d.stick_x).unwrap_or_default(),
                     stick_y: previous.as_ref().map(|d| d.stick_y).unwrap_or_default(),
+                    bluetooth: match previous {
+                        Some(previous) => previous.bluetooth,
+                        None => bluetooth_address(&pad),
+                    },
                 },
             );
         }
@@ -333,6 +374,7 @@ impl Reader {
                 battery: battery(pad.power_info()),
                 vendor: pad.vendor_id(),
                 product: pad.product_id(),
+                bluetooth: self.devices.get(&id).and_then(|d| d.bluetooth.clone()),
             })
             .collect();
         if controllers != self.controllers {
@@ -365,8 +407,9 @@ impl Reader {
                 if device.ignored {
                     return;
                 }
-                let input = map_button(button, device.kind);
-                if input == GamepadInput::Guide {
+                // `None`: the user gave this button no job.
+                let input = super::bindings::input(button, device.kind);
+                if input == Some(GamepadInput::Guide) {
                     self.guide.press(usize::from(id), Instant::now());
                     return;
                 }
@@ -384,8 +427,11 @@ impl Reader {
                 // A chord with Guide held (X: a clip; with the overlay's
                 // shortcuts RB: a screenshot, Up/Down: the volume), even
                 // while a game has the window.
-                let overlay = self.shared.overlay.load(Ordering::Relaxed);
-                if let Some(chord) = Chord::of(input, overlay)
+                let Some(input) = input else {
+                    return;
+                };
+                let chords = self.shared.chords();
+                if let Some(chord) = Chord::of(input, chords)
                     && self.guide.chord(usize::from(id), Instant::now())
                 {
                     if self.enabled() {
@@ -402,14 +448,16 @@ impl Reader {
                 let Some(device) = self.devices.get(&id) else {
                     return;
                 };
-                let input = map_button(button, device.kind);
+                let input = super::bindings::input(button, device.kind);
                 if self.holding == Some(button) {
                     match self.hold.release(usize::from(id), Instant::now()) {
                         HoldRelease::NotHeld => {}
                         HoldRelease::Tap => {
                             self.holding = None;
                             self.send_hold(HoldEvent::Cancelled);
-                            self.press(id, Source::DPad, input);
+                            if let Some(input) = input {
+                                self.press(id, Source::DPad, input);
+                            }
                             return;
                         }
                         HoldRelease::Completed => {
@@ -423,12 +471,16 @@ impl Reader {
                         }
                     }
                 }
-                if input == GamepadInput::Guide {
-                    if self.guide.release(usize::from(id), Instant::now()) {
-                        self.press(id, Source::DPad, input);
+                match input {
+                    Some(GamepadInput::Guide) => {
+                        if self.guide.release(usize::from(id), Instant::now()) {
+                            self.press(id, Source::DPad, GamepadInput::Guide);
+                        }
                     }
-                } else if input.is_directional() {
-                    self.release(id, Source::DPad, input);
+                    Some(input) if input.is_directional() => {
+                        self.release(id, Source::DPad, input);
+                    }
+                    _ => {}
                 }
             }
             EventType::AxisChanged(axis @ (Axis::LeftStickX | Axis::LeftStickY), value, _) => {

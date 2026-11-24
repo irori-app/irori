@@ -5,14 +5,18 @@
 //! Each system is asked the way it can answer without privileges:
 //! - Linux: the kernel's connectors (`/sys/class/drm/card*-*`: status, modes,
 //!   EDID for the name and HDR support) plus the compositor's own tool for
-//!   the mode in use and HDR: `kscreen-doctor` on KDE Plasma, `hyprctl` on
-//!   Hyprland, `wlr-randr` on other wlroots compositors, `xrandr` on X11
-//!   (where HDR is always off). GNOME and other compositors leave the mode in
-//!   use and HDR's state unknown.
+//!   the mode in use, HDR and variable refresh (VRR, FreeSync, G-Sync
+//!   Compatible): `kscreen-doctor` on KDE Plasma, `hyprctl` on Hyprland,
+//!   `wlr-randr` on other wlroots compositors, `xrandr` on X11 (where HDR is
+//!   always off). GNOME and other compositors leave the mode in use and
+//!   HDR's and VRR's state unknown; the EDID still says whether a display
+//!   can vary its refresh rate.
 //! - Windows: the display configuration (`QueryDisplayConfig`, advanced
 //!   colour for HDR) and `EnumDisplaySettingsW` for the modes.
 //! - macOS: `system_profiler SPDisplaysDataType -json`, which gives the
 //!   resolution in use but no other modes and no HDR state.
+//!
+//! `irori displays --json` prints the report for other tools.
 //!
 //! Probing runs tools with a timeout and reads files on blocking threads,
 //! never on the UI thread; the answer is kept until a refresh asks again.
@@ -85,6 +89,14 @@ pub struct Display {
     pub hdr_on: Option<bool>,
     /// The display can show HDR; `None` when unknown.
     pub hdr_capable: Option<bool>,
+    /// Variable refresh is on for this display (KDE's "Automatic" counts:
+    /// it turns on for full-screen games); `None` when the system doesn't
+    /// say.
+    pub vrr_on: Option<bool>,
+    /// The display can vary its refresh rate; `None` when unknown.
+    pub vrr_capable: Option<bool>,
+    /// The refresh range the display announces, in whole hertz.
+    pub vrr_range: Option<(u32, u32)>,
 }
 
 impl Display {
@@ -159,7 +171,8 @@ pub enum HdrSummary {
     Unknown,
 }
 
-/// What [`Backend::displays`] found.
+/// What [`Backend::displays`] found. Its JSON (`irori displays --json`)
+/// gains fields over time and never renames them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct DisplayReport {
     pub displays: Vec<Display>,
@@ -239,6 +252,13 @@ pub fn merge(tool: Vec<Display>, kernel: Vec<Display>, kernel_names: bool) -> Ve
                 if d.hdr_capable.is_none() {
                     d.hdr_capable = k.hdr_capable;
                 }
+                // VRR on says the display can, whatever the EDID says.
+                if d.vrr_capable.is_none() {
+                    d.vrr_capable = k.vrr_capable.or(d.vrr_on.filter(|on| *on));
+                }
+                if d.vrr_range.is_none() {
+                    d.vrr_range = k.vrr_range;
+                }
                 if d.modes.is_empty() {
                     d.modes = k.modes.clone();
                 }
@@ -296,6 +316,15 @@ pub fn format(report: &DisplayReport) -> String {
             d.current.map_or_else(|| "unknown".into(), |m| m.plain()),
             yes_no(d.hdr_on, "on", "off"),
             yes_no(d.hdr_capable, "yes", "no"),
+        ));
+        let range = d
+            .vrr_range
+            .map(|(min, max)| format!(", {min}-{max} Hz"))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "    VRR: {} (supported: {}{range})\n",
+            yes_no(d.vrr_on, "on", "off"),
+            yes_no(d.vrr_capable, "yes", "no"),
         ));
         if !d.modes.is_empty() {
             let sizes: Vec<String> = d
@@ -476,6 +505,7 @@ mod tests {
         let mut kernel_dp = display("DP-1");
         kernel_dp.name = Some("DELL U2720Q".into());
         kernel_dp.hdr_capable = Some(true);
+        kernel_dp.vrr_range = Some((48, 60));
         kernel_dp.modes = vec![mode(3840, 2160, None)];
         let mut kernel_hdmi = display("HDMI-A-1");
         kernel_hdmi.enabled = false;
@@ -493,7 +523,14 @@ mod tests {
         assert_eq!(merged[0].hdr_capable, Some(true));
         assert_eq!(merged[0].hdr_on, Some(false));
         assert_eq!(merged[0].modes, [mode(3840, 2160, None)]);
+        assert_eq!(merged[0].vrr_range, Some((48, 60)));
         assert_eq!(merged[1].connector, "HDMI-A-1");
+
+        // The compositor's VRR on stands in for an EDID that says nothing.
+        let mut vrr = tool.clone();
+        vrr.vrr_on = Some(true);
+        let merged = merge(vec![vrr], vec![display("DP-1")], true);
+        assert_eq!(merged[0].vrr_capable, Some(true));
 
         // X11 names connectors its own way: only a single display pairs up,
         // and the kernel's names aren't added.
@@ -523,11 +560,14 @@ mod tests {
         ];
         d.hdr_on = Some(false);
         d.hdr_capable = Some(true);
+        d.vrr_capable = Some(true);
+        d.vrr_range = Some((48, 144));
         let text = format(&DisplayReport::new("kscreen-doctor", vec![d], true));
         assert_eq!(
             text,
             "Displays (kscreen-doctor):\n  Display 1: DELL U2720Q (DP-1), main\n    \
              Mode: 3840x2160 @ 60 Hz\n    HDR: off (supported: yes)\n    \
+             VRR: unknown (supported: yes, 48-144 Hz)\n    \
              Modes: 3840x2160 (60, 30 Hz), 1920x1080\n"
         );
         let empty = format(&DisplayReport::new("sysfs", vec![], true));

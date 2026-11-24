@@ -3,12 +3,23 @@
 
 use std::ops::Range;
 
-use irori_core::settings::Density;
+use irori_core::settings::{CoverCaption, Density};
 
 /// Gap between tiles, in rem.
 pub const GAP_REM: f32 = 1.25;
 /// Room under the cover for the title and status lines, in rem.
 pub const CAPTION_REM: f32 = 2.75;
+/// Room under the cover for the title alone, in rem.
+pub const TITLE_ONLY_REM: f32 = 1.75;
+
+/// Room under each cover for what `caption` writes there, in rem.
+pub fn caption_rem(caption: CoverCaption) -> f32 {
+    match caption {
+        CoverCaption::Full => CAPTION_REM,
+        CoverCaption::Title => TITLE_ONLY_REM,
+        CoverCaption::None => 0.0,
+    }
+}
 /// Space above each row so a focused tile's ring is not clipped, in rem.
 pub const ROW_INSET_REM: f32 = 0.25;
 /// Horizontal content inset of the scroll region, in rem.
@@ -81,6 +92,16 @@ pub fn grid_metrics(available_rem: f32, preferred_rem: f32) -> GridMetrics {
 
 /// [`grid_metrics`] at a density: covers, gaps and list rows scaled by it.
 pub fn grid_metrics_at(available_rem: f32, preferred_rem: f32, density: Density) -> GridMetrics {
+    grid_metrics_for(available_rem, preferred_rem, density, CoverCaption::Full)
+}
+
+/// [`grid_metrics_at`] with `caption` under each cover.
+pub fn grid_metrics_for(
+    available_rem: f32,
+    preferred_rem: f32,
+    density: Density,
+    caption: CoverCaption,
+) -> GridMetrics {
     let preferred = preferred_rem.clamp(MIN_TILE_REM, MAX_TILE_REM) * density.cover_scale();
     let gap = GAP_REM * density.spacing_scale();
     let available = available_rem.max(preferred);
@@ -90,10 +111,51 @@ pub fn grid_metrics_at(available_rem: f32, preferred_rem: f32, density: Density)
     GridMetrics {
         columns,
         tile_rem,
-        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + CAPTION_REM + gap,
+        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + caption_rem(caption) + gap,
         gap_rem: gap,
         list_row_rem: LIST_ROW_REM * density.row_scale(),
     }
+}
+
+/// Height over width from which a picture counts as a tall box: boxes of a
+/// row share one height. Squarer art (handheld and disc boxes) and wide art
+/// keep their own.
+pub const TALL_RATIO: f32 = 1.2;
+
+/// Width and height in rem of each cover drawn whole in a row of cells
+/// `tile_rem` wide and [`COVER_RATIO`] tall, from each picture's height over
+/// width (`None` while unknown: the whole cell). Each picture keeps its shape
+/// inside its cell; the tall ones share the lowest of their heights, so a row
+/// of boxes stands even instead of stepping by a few pixels.
+pub fn whole_sizes(aspects: &[Option<f32>], tile_rem: f32) -> Vec<(f32, f32)> {
+    let cell_h = tile_rem * COVER_RATIO;
+    let natural = |ratio: f32| {
+        if ratio > COVER_RATIO {
+            (cell_h / ratio, cell_h)
+        } else {
+            (tile_rem, tile_rem * ratio)
+        }
+    };
+    let ratios: Vec<Option<f32>> = aspects
+        .iter()
+        .map(|a| a.filter(|r| r.is_finite() && *r > 0.0))
+        .collect();
+    let shared = ratios
+        .iter()
+        .flatten()
+        .filter(|r| **r >= TALL_RATIO)
+        .map(|r| natural(*r).1)
+        .fold(None, |low: Option<f32>, h| {
+            Some(low.map_or(h, |l| l.min(h)))
+        });
+    ratios
+        .iter()
+        .map(|ratio| match (ratio, shared) {
+            (None, _) => (tile_rem, cell_h),
+            (Some(r), Some(h)) if *r >= TALL_RATIO => (h / r, h),
+            (Some(r), _) => natural(*r),
+        })
+        .collect()
 }
 
 /// Screens of covers the library keeps decoded: the one shown plus one above
@@ -221,6 +283,17 @@ mod tests {
     }
 
     #[test]
+    fn rows_leave_room_for_the_caption_shown() {
+        let full = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Full);
+        let title = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Title);
+        let none = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::None);
+        assert_eq!(full, grid_metrics(60.0, 11.0));
+        assert!((full.row_rem - title.row_rem - (CAPTION_REM - TITLE_ONLY_REM)).abs() < 1e-4);
+        assert!((full.row_rem - none.row_rem - CAPTION_REM).abs() < 1e-4);
+        assert_eq!((full.columns, full.tile_rem), (none.columns, none.tile_rem));
+    }
+
+    #[test]
     fn metrics_fill_the_row() {
         // 58rem fits 4 tiles of 11rem with 1.25rem gaps, not 5 (5*11 + 4*1.25 = 60).
         let compact = grid_metrics_at(58.0, 11.0, Density::Compact);
@@ -246,6 +319,36 @@ mod tests {
         // Preferred width is clamped to the slider range.
         let m = grid_metrics(100.0, 2.0);
         assert!(m.tile_rem >= MIN_TILE_REM);
+    }
+
+    #[test]
+    fn whole_covers_keep_their_shape_and_tall_boxes_share_a_height() {
+        let close = |a: (f32, f32), b: (f32, f32)| {
+            assert!(
+                (a.0 - b.0).abs() < 1e-4 && (a.1 - b.1).abs() < 1e-4,
+                "{a:?} {b:?}"
+            );
+        };
+        // A 2:3 box fills its cell; unknown art keeps the whole cell.
+        let sizes = whole_sizes(&[Some(1.5), None], 10.0);
+        close(sizes[0], (10.0, 15.0));
+        close(sizes[1], (10.0, 15.0));
+        // A DVD box (1.4) and a 2:3 one stand at the DVD's height.
+        let sizes = whole_sizes(&[Some(1.5), Some(1.4)], 10.0);
+        close(sizes[0], (14.0 / 1.5, 14.0));
+        close(sizes[1], (10.0, 14.0));
+        // Square and wide art keep their own height, full width.
+        let sizes = whole_sizes(&[Some(1.0), Some(0.5), Some(1.4)], 10.0);
+        close(sizes[0], (10.0, 10.0));
+        close(sizes[1], (10.0, 5.0));
+        close(sizes[2], (10.0, 14.0));
+        // Taller than the cell: as high as it, narrower.
+        let sizes = whole_sizes(&[Some(2.0)], 10.0);
+        close(sizes[0], (7.5, 15.0));
+        // Nothing grows past its cell.
+        for (w, h) in whole_sizes(&[Some(1.3), Some(1.7), Some(0.2), Some(f32::NAN)], 8.0) {
+            assert!(w <= 8.0 + 1e-4 && h <= 12.0 + 1e-4);
+        }
     }
 
     #[test]

@@ -307,7 +307,7 @@ pub fn open_uninstall_dialog(id: GameId, window: &mut Window, cx: &mut App) {
     let prefix = uses_wine.then(|| irori_runtime::prefix_path(&app, &settings, &game));
     let prefix_is_shared = prefix
         .as_ref()
-        .is_some_and(|p| irori_runtime::prefix_is_shared(&app, p));
+        .is_some_and(|p| irori_runtime::prefix_is_shared(&app, &game, p));
     let is_dlc = game.is_dlc;
     let options = cx.new(|_| UninstallOptions {
         is_dlc,

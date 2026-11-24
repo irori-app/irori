@@ -9,17 +9,22 @@
 pub mod discovery;
 pub mod download;
 pub mod env;
+pub mod frame_limit;
 pub mod graphics;
 pub mod hooks;
+pub mod hud;
 pub mod locations;
 pub mod mac_driver;
 pub mod manager;
+pub mod mangohud;
 pub mod prefix;
 pub mod protontricks;
+pub mod release_checks;
 pub mod runtimes;
 pub mod sandbox;
 pub mod sysinfo;
 pub mod tools;
+pub mod umu;
 pub mod vdf;
 pub mod windows_file;
 pub mod windows_uri;
@@ -224,21 +229,100 @@ fn find_on_path(name: &str) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
-/// Resolve MangoHud, GameMode and gamescope (Heroic's `prepareLaunch` steps
-/// 7–9). A missing program fails the launch: Heroic only logs a missing
-/// gamescope, which leaves the game running without what was asked for.
-async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
+/// How MangoHud takes part in a launch: the in-game stats ([`hud`]) load
+/// it, and the frame limiter ([`frame_limit`]) may use it, hidden then.
+#[derive(Debug, Clone, Copy, Default)]
+struct MangoUse {
+    /// MangoHud loads for the session.
+    loads: bool,
+    /// The in-game stats show it.
+    shown: bool,
+    /// Only the frame limit loads it: Irori starts it itself.
+    limit_only: bool,
+}
+
+/// The launch's frame limit and limiter ([`frame_limit`]), the settings
+/// the rest of the launch reads (only that limiter switched on), and how
+/// MangoHud takes part: when the in-game stats show it, or when it limits
+/// (hidden then). The stats switched off for the game leave it out as a
+/// limiter. Steam Deck's Game Mode has Steam's own MangoHud and gamescope.
+fn frame_limits(
+    settings: &GameSettings,
+    platform: InstallPlatform,
+    deck_game_mode: bool,
+    hud_plan: &hud::launch_env::HudLaunchPlan,
+) -> (GameSettings, Option<frame_limit::FrameLimit>, MangoUse) {
+    let linux = cfg!(target_os = "linux") && !deck_game_mode;
+    let shown = hud_plan.env_set.get("MANGOHUD").is_some_and(|v| v == "1");
+    let disabled = hud_plan.env_set.contains_key("DISABLE_MANGOHUD");
+    let cx = frame_limit::LimitContext {
+        linux: cfg!(target_os = "linux"),
+        gamescope: linux && wrappers::gamescope_enabled(&settings.gamescope),
+        mangohud: linux && !disabled && (shown || find_on_path("mangohud").is_some()),
+        wine: platform.needs_wine(),
+    };
+    let limit = frame_limit::resolve(settings, cx);
+    let limits = linux && limit.is_some_and(|l| l.limiter == frame_limit::Limiter::MangoHud);
+    let mango = MangoUse {
+        loads: linux && (shown || limits),
+        shown: linux && shown,
+        limit_only: limits && !shown,
+    };
+    (frame_limit::apply(settings, limit), limit, mango)
+}
+
+/// MangoHud's file or variable for the session ([`mangohud::prepare`]),
+/// over the in-game stats' configuration when they set one: hidden unless
+/// it shows (and isn't started hidden), with the limit when it is the
+/// launch's limiter.
+async fn mangohud_env(
+    id: &irori_core::GameId,
+    settings: &GameSettings,
+    limit: Option<frame_limit::FrameLimit>,
+    vars: &mut env::EnvMap,
+    host: &HostEnv,
+    shown: bool,
+) {
+    let ours = limit.filter(|l| l.limiter == frame_limit::Limiter::MangoHud);
+    let limits = limit.is_none() || ours.is_some();
+    let hidden = settings.mangohud_hidden || !shown;
+    let (id, mut moved, host) = (id.clone(), vars.clone(), host.clone());
+    // A small file read and written: off the async workers all the same.
+    let done = tokio::task::spawn_blocking(move || {
+        mangohud::prepare(&id, &mut moved, &host, hidden, ours.map(|l| l.fps), limits);
+        moved
+    })
+    .await;
+    match done {
+        Ok(back) => *vars = back,
+        Err(e) => tracing::warn!("setting MangoHud up: {e}"),
+    }
+}
+
+/// Resolve GameMode, MAKO, gamescope and the MangoHud wrapper (Heroic's
+/// `prepareLaunch` steps 7–9): the in-game stats' OpenGL wrapper, or
+/// `mangohud --dlsym` when only the frame limit loads MangoHud. A missing
+/// `gamemoderun`, `gamescope` or (for the limit) `mangohud` fails the
+/// launch; Vulkan-layer MangoHud and gamescope `--mangoapp` never require
+/// the `mangohud` wrapper binary.
+async fn wrapper_parts(
+    settings: &GameSettings,
+    hud_plan: &hud::launch_env::HudLaunchPlan,
+    limit_only: bool,
+) -> Result<WrapperParts> {
     if !cfg!(target_os = "linux") {
         return Ok(WrapperParts::default());
     }
     let deck_game_mode = locations::is_steam_deck_game_mode();
-    let flatpak_hint = if locations::is_flatpak() {
-        ". Make sure to install the MangoHud Flatpak extension matching Irori's runtime and restart Irori."
-    } else {
-        ""
-    };
     let mut parts = WrapperParts::default();
-    if settings.show_mangohud && !deck_game_mode {
+    if let Some(wrapper) = &hud_plan.opengl_wrapper {
+        parts.mangohud = wrapper.clone();
+    } else if limit_only {
+        let flatpak_hint = if locations::is_flatpak() {
+            ". Make sure to install the MangoHud Flatpak extension matching Irori's runtime and restart Irori."
+        } else {
+            ""
+        };
         let bin = find_on_path("mangohud").ok_or_else(|| {
             anyhow!("Mangohud is enabled, but `mangohud` executable could not be found on $PATH{flatpak_hint}")
         })?;
@@ -271,12 +355,160 @@ async fn wrapper_parts(settings: &GameSettings) -> Result<WrapperParts> {
         let mut cmd = vec![bin.to_string_lossy().into_owned()];
         cmd.extend(wrappers::gamescope_args(
             &settings.gamescope,
-            settings.show_mangohud,
+            hud_plan.use_mangoapp || limit_only,
             new_cli,
         ));
         parts.gamescope = cmd;
     }
     Ok(parts)
+}
+
+/// Resolve the effective HUD configuration for an optional `game_id`, write any
+/// Irori-managed `MangoHud.conf` under `paths`, and return the launch mutations.
+pub async fn prepare_hud_plan_for_paths(
+    paths: &irori_core::Paths,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+    gamescope_enabled: bool,
+) -> Result<hud::launch_env::HudLaunchPlan> {
+    let backend = irori_core::HudBackend::current();
+    let resolved = irori_core::hud::resolve_effective_hud(
+        &app.hud,
+        &settings.game_hud,
+        settings.show_mangohud,
+        settings.show_fps,
+        backend,
+    );
+    let deck_game_mode = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let gamescope_enabled = gamescope_enabled && !deck_game_mode;
+    let is_native_linux_game = cfg!(target_os = "linux") && platform == InstallPlatform::Linux;
+
+    let mut config_file: Option<PathBuf> = None;
+    let mut mangohud_dir: Option<PathBuf> = None;
+    let mut mangohud_bin_path: Option<PathBuf> = None;
+
+    if backend == irori_core::HudBackend::MangoHud
+        && !deck_game_mode
+        && matches!(resolved, irori_core::ResolvedHud::MangoHudProfile(_))
+    {
+        let linux_env = tokio::task::spawn_blocking(hud::hardware_linux::detect_linux_hud_env)
+            .await
+            .unwrap_or_else(|_| hud::hardware_linux::detect_linux_hud_env());
+        mangohud_bin_path = linux_env.mangohud_bin_path.clone();
+
+        if let irori_core::ResolvedHud::MangoHudProfile(ref profile) = resolved {
+            let dir = paths.mangohud_dir();
+            let conf_name = if settings.game_hud.mode == irori_core::GameHudMode::Custom
+                && let Some(id) = game_id
+            {
+                format!("{}_{}", id.runner.id(), id.app_name)
+            } else {
+                "global".to_string()
+            };
+            let file = paths.mangohud_config_file(&conf_name);
+            let ctx = hud::mangohud_conf::ConfRenderContext {
+                detected_gpu_label: hud::hardware_linux::default_gpu_short_label(
+                    &profile.gpu_selection,
+                    &linux_env.gpus,
+                ),
+                detected_cpu_label: linux_env.cpu_label.clone(),
+                gpu_vendor: hud::hardware_linux::default_gpu_vendor(
+                    &profile.gpu_selection,
+                    &linux_env.gpus,
+                ),
+                cpu_vendor: linux_env.cpu_vendor,
+                pci_dev: hud::hardware_linux::resolve_pci_dev(
+                    &profile.gpu_selection,
+                    &linux_env.gpus,
+                ),
+                theme_colors: app.hud.cached_theme_colors.clone(),
+            };
+            let rendered = hud::mangohud_conf::render_mangohud_conf(profile, &ctx);
+            hud::write_config_live(&file, &rendered).await?;
+            config_file = Some(file);
+            mangohud_dir = Some(dir);
+        }
+    }
+
+    Ok(hud::launch_env::build_hud_launch_plan(
+        &hud::launch_env::HudLaunchInput {
+            backend,
+            resolved: &resolved,
+            config_file: config_file.as_deref(),
+            mangohud_dir: mangohud_dir.as_deref(),
+            mangohud_bin_path: mangohud_bin_path.as_deref(),
+            is_native_linux_game,
+            gamescope_enabled,
+            deck_game_mode,
+        },
+    ))
+}
+
+/// Write any managed HUD configuration under `paths` and apply the resulting
+/// environment variables to `spec`.
+pub async fn apply_hud_to_command_with_paths(
+    spec: &mut CommandSpec,
+    paths: &irori_core::Paths,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+) -> Result<()> {
+    let plan = prepare_hud_plan_for_paths(paths, app, settings, game_id, platform, false).await?;
+    hud::launch_env::apply_hud_plan_to_spec(spec, &plan);
+    Ok(())
+}
+
+/// Write any managed HUD configuration under the active [`Paths`] and apply
+/// the resulting environment variables to `spec`.
+pub async fn apply_hud_to_command(
+    spec: &mut CommandSpec,
+    app: &AppSettings,
+    settings: &GameSettings,
+    game_id: Option<&GameId>,
+    platform: InstallPlatform,
+) -> Result<()> {
+    apply_hud_to_command_with_paths(
+        spec,
+        irori_core::Paths::get(),
+        app,
+        settings,
+        game_id,
+        platform,
+    )
+    .await
+}
+
+/// Resolve the effective Performance HUD for `target`, write any Irori-managed
+/// `MangoHud.conf` atomically, and return the launch mutations.
+async fn prepare_hud_plan(
+    app: &AppSettings,
+    settings: &GameSettings,
+    target: Target<'_>,
+) -> Result<hud::launch_env::HudLaunchPlan> {
+    let deck_game_mode = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let gamescope_enabled = cfg!(target_os = "linux")
+        && wrappers::gamescope_enabled(&settings.gamescope)
+        && !deck_game_mode;
+    prepare_hud_plan_for_paths(
+        irori_core::Paths::get(),
+        app,
+        settings,
+        Some(target.id),
+        target.platform,
+        gamescope_enabled,
+    )
+    .await
+}
+
+/// Apply HUD environment removals and overrides on top of assembled launch vars.
+fn apply_hud_env(vars: &mut env::EnvMap, hud_plan: &hud::launch_env::HudLaunchPlan) {
+    for key in &hud_plan.env_remove {
+        vars.remove(key);
+    }
+    env::layer(vars, hud_plan.env_set.clone());
 }
 
 /// [`graphics::graphics_env`] for a launch, probing the host on a blocking
@@ -328,7 +560,11 @@ pub async fn prepare_launch(
         });
     }
 
-    let mut parts = wrapper_parts(settings).await?;
+    let hud_plan = prepare_hud_plan(app, settings, target).await?;
+    let deck = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let (adjusted, limit, mango) = frame_limits(settings, target.platform, deck, &hud_plan);
+    let settings = &adjusted;
+    let mut parts = wrapper_parts(settings, &hud_plan, mango.limit_only).await?;
     let fixes = if cfg!(target_os = "linux") {
         hooks::hooks().known_fixes_env(target.id).await
     } else {
@@ -353,9 +589,23 @@ pub async fn prepare_launch(
         );
         env::layer(&mut vars, graphics_env(app, settings, &host).await);
         env::layer(&mut vars, fixes);
-        parts.sandbox = sandbox_wrapper(app, settings, target, None, &parts, &vars).await?;
+        apply_hud_env(&mut vars, &hud_plan);
+        if mango.loads {
+            mangohud_env(target.id, settings, limit, &mut vars, &host, mango.shown).await;
+        }
+        parts.sandbox = sandbox_wrapper(
+            app,
+            settings,
+            target,
+            None,
+            &parts,
+            &vars,
+            &hud_plan.sandbox_ro_binds,
+        )
+        .await?;
         return Ok(LaunchEnvironment {
             env: vars,
+            env_remove: hud_plan.env_remove,
             wrappers: wrappers::setup_wrappers(settings, &parts),
             wine: None,
         });
@@ -441,17 +691,28 @@ pub async fn prepare_launch(
     env::layer(&mut vars, env::game_debug_env(&effective, &host));
     env::apply_dll_overrides(&mut vars, &effective.dll_overrides);
     if wc.uses_umu
-        && let Some(id) = hooks::hooks()
-            .umu_id(target.id)
-            .await
-            .filter(|i| !i.is_empty())
+        && let Some(found) = umu::resolve(target.id, &target.game.title, &effective).await
     {
-        vars.insert("GAMEID".into(), id);
+        vars.insert("GAMEID".into(), found.id);
     }
-    parts.sandbox = sandbox_wrapper(app, settings, target, Some(&wc), &parts, &vars).await?;
+    apply_hud_env(&mut vars, &hud_plan);
+    if mango.loads {
+        mangohud_env(target.id, &effective, limit, &mut vars, &host, mango.shown).await;
+    }
+    parts.sandbox = sandbox_wrapper(
+        app,
+        settings,
+        target,
+        Some(&wc),
+        &parts,
+        &vars,
+        &hud_plan.sandbox_ro_binds,
+    )
+    .await?;
 
     Ok(LaunchEnvironment {
         env: vars,
+        env_remove: hud_plan.env_remove,
         wrappers: wrappers::setup_wrappers(settings, &parts),
         wine: Some(WineLaunch {
             bin: wc.runner_bin(),
@@ -475,6 +736,7 @@ async fn sandbox_wrapper(
     wc: Option<&WineContext>,
     parts: &WrapperParts,
     vars: &env::EnvMap,
+    hud_ro_binds: &[PathBuf],
 ) -> Result<Vec<String>> {
     if !settings.sandbox.is_enabled() {
         return Ok(Vec::new());
@@ -488,7 +750,7 @@ async fn sandbox_wrapper(
     if exe.is_absolute() {
         game_dirs.extend(exe.parent().map(Path::to_path_buf));
     }
-    let mut tool_dirs: Vec<PathBuf> = Vec::new();
+    let mut tool_dirs: Vec<PathBuf> = hud_ro_binds.to_vec();
     let mut overlay_dirs: Vec<PathBuf> = Vec::new();
     let uses_umu = !parts.steam_runtime.is_empty() || wc.is_some_and(|w| w.uses_umu);
     let kind = match wc {
@@ -519,6 +781,15 @@ async fn sandbox_wrapper(
         if let Some(p) = vars.get(key).map(PathBuf::from).filter(|p| p.is_absolute()) {
             tool_dirs.push(p);
         }
+    }
+    // MangoHud's file for the session, which it reads and watches.
+    if let Some(dir) = vars
+        .get("MANGOHUD_CONFIGFILE")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        tool_dirs.push(dir);
     }
     let plan = sandbox::SandboxPlan {
         settings: settings.sandbox,
@@ -589,15 +860,23 @@ pub async fn run_in_prefix(
     cmd.env = env::wrapper_env(target.id);
     cmd.install_path = target.game.install_path();
     cmd.game_id = target.folder_id();
-    if let Some(first) = cmd.argv.first() {
-        let p = Path::new(first);
-        if p.is_absolute() && p.is_file() {
-            cmd.cwd = p.parent().map(Path::to_path_buf);
-        }
+    if let Some(file) = cmd.argv.iter().find_map(|arg| {
+        let p = Path::new(arg);
+        (p.is_absolute() && p.is_file()).then_some(p)
+    }) {
+        cmd.cwd = file.parent().map(Path::to_path_buf);
     }
     if wait {
         cmd.wait = true;
         cmd.verb = "waitforexitandrun";
+        // Point Proton's game drive (`S:`) at the prefix's `drive_c` while an
+        // installer runs so installers that default to `S:\Games\<Title>` (such
+        // as FitGirl repacks) install into `<prefix>/drive_c/Games/<Title>`
+        // instead of root-owned `/home` on Btrfs `/home` subvolumes.
+        let drive_c = wc.wine_prefix_dir().join("drive_c");
+        let dc = drive_c.to_string_lossy().into_owned();
+        cmd.install_path = Some(drive_c);
+        cmd.env.insert("STEAM_COMPAT_LIBRARY_PATHS".into(), dc);
     } else {
         cmd.detach = true;
     }
@@ -674,14 +953,51 @@ pub async fn kill_game_prefix(
     prefix::kill(&wine, &prefix).await
 }
 
-/// Default prefix path for a game when its settings name none.
+/// Default prefix path for a game when its settings name none: the prefix
+/// another launcher installed it in, else one of its own under the prefixes
+/// folder.
 pub fn default_prefix(app: &AppSettings, game: &GameInfo) -> PathBuf {
+    if let Some(prefix) = game
+        .install
+        .as_ref()
+        .and_then(|i| i.store_prefix.as_deref())
+        .filter(|p| !p.trim().is_empty())
+    {
+        return irori_core::paths::expand_home(prefix.trim());
+    }
     let base = if app.default_wine_prefix_dir.is_empty() {
         PathBuf::from(&app.default_install_path).join("Prefixes")
     } else {
         PathBuf::from(&app.default_wine_prefix_dir)
     };
     base.join(irori_core::paths::sanitize(&game.title))
+}
+
+/// The folder holding every game's own prefix (`<folder>/<title>`): the
+/// prefixes folder of the settings, else `Prefixes` in the install folder.
+pub fn prefixes_root(app: &AppSettings) -> PathBuf {
+    let dir = app.default_wine_prefix_dir.trim();
+    if dir.is_empty() {
+        irori_core::paths::expand_home(&app.default_install_path).join("Prefixes")
+    } else {
+        irori_core::paths::expand_home(dir)
+    }
+}
+
+/// The prefixes directly inside `root` (folders holding an initialised
+/// prefix, flat or Proton's `pfx/`), sorted by name. Reads the folder; call
+/// off the UI thread.
+pub fn prefixes_in(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && is_prefix(p))
+        .collect();
+    found.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    found
 }
 
 /// Every Wine/Proton build usable on this system (system Wine, downloaded
@@ -692,6 +1008,14 @@ pub async fn wine_installations(app: &AppSettings) -> Vec<WineInstallation> {
         .into_iter()
         .map(|d| d.installation)
         .collect()
+}
+
+/// Every usable build, as [`wine_installations`], each with its source when
+/// another build has the same name, for pickers to tell them apart.
+pub async fn wine_installations_with_sources(
+    app: &AppSettings,
+) -> Vec<(WineInstallation, Option<discovery::WineSource>)> {
+    discovery::sources_where_shared(discovery::discover(app).await)
 }
 
 /// Run winetricks for the game's prefix: GUI when `verbs` is empty.
@@ -742,14 +1066,41 @@ pub fn prefix_path(app: &AppSettings, settings: &GameSettings, game: &GameInfo) 
     }
 }
 
-/// Whether `prefix` is shared by several games: the root that holds every
-/// game's own prefix, or the prefix set for all games in the defaults.
-/// Deleting it with one game would take the others' saves with it.
-pub fn prefix_is_shared(app: &AppSettings, prefix: &Path) -> bool {
-    let same = |setting: &str| {
-        !setting.trim().is_empty() && irori_core::paths::expand_home(setting) == prefix
+/// The prefix to suggest when installing: the game's saved prefix while it
+/// still exists, else the one the defaults give it. A prefix deleted since
+/// (by hand, or a cleanup) would otherwise be offered again.
+pub fn install_prefix(app: &AppSettings, settings: &GameSettings, game: &GameInfo) -> PathBuf {
+    let saved = prefix_path(app, settings, game);
+    if settings.wine_prefix.is_empty() || saved.exists() {
+        return saved;
+    }
+    let defaults = GameSettings {
+        wine_version: settings.wine_version.clone(),
+        wine_crossover_bottle: settings.wine_crossover_bottle.clone(),
+        wine_prefix: app.game.wine_prefix.clone(),
+        ..GameSettings::default()
     };
-    same(&app.default_wine_prefix_dir) || same(&app.game.wine_prefix)
+    prefix_path(app, &defaults, game)
+}
+
+/// Whether `prefix` is shared by several games: the root that holds every
+/// game's own prefix, the prefix set for all games in the defaults, or the
+/// prefix of another launcher (the linked Epic Games Launcher's, the one
+/// `game` was installed in). Deleting it with one game would take the others'
+/// saves, or the launcher, with it.
+pub fn prefix_is_shared(app: &AppSettings, game: &GameInfo, prefix: &Path) -> bool {
+    let same = |setting: &str| {
+        !setting.trim().is_empty() && irori_core::paths::expand_home(setting.trim()) == prefix
+    };
+    let store_prefix = game
+        .install
+        .as_ref()
+        .and_then(|i| i.store_prefix.as_deref())
+        .unwrap_or_default();
+    same(&app.default_wine_prefix_dir)
+        || same(&app.game.wine_prefix)
+        || same(&app.egs_linked_path)
+        || same(store_prefix)
 }
 
 /// Install (`enabled`) or remove a DLL tool in the game's prefix (the DXVK /
@@ -851,13 +1202,13 @@ mod tests {
             default_wine_prefix_dir: "~/Games/Prefixes".into(),
             ..Default::default()
         };
-        assert!(prefix_is_shared(&app, &root));
-        assert!(!prefix_is_shared(&app, &root.join("My Game")));
+        assert!(prefix_is_shared(&app, &game(), &root));
+        assert!(!prefix_is_shared(&app, &game(), &root.join("My Game")));
         app.game.wine_prefix = "/data/shared".into();
-        assert!(prefix_is_shared(&app, Path::new("/data/shared")));
+        assert!(prefix_is_shared(&app, &game(), Path::new("/data/shared")));
         app.game.wine_prefix.clear();
         assert!(
-            !prefix_is_shared(&app, Path::new("")),
+            !prefix_is_shared(&app, &game(), Path::new("")),
             "no setting, no match"
         );
     }
@@ -875,6 +1226,84 @@ mod tests {
         );
         gs.wine_prefix = "/x/y".into();
         assert_eq!(prefix_path(&app, &gs, &game()), PathBuf::from("/x/y"));
+    }
+
+    /// Heroic #6001: a game imported from the Epic Games Launcher's prefix
+    /// plays there unless the user chose a prefix, and that prefix (EGL's
+    /// own) is never deleted with the game.
+    #[test]
+    fn games_from_another_launcher_use_its_prefix() {
+        let mut app = AppSettings {
+            default_wine_prefix_dir: "/p".into(),
+            ..Default::default()
+        };
+        let mut imported = game();
+        if let Some(install) = imported.install.as_mut() {
+            install.store_prefix = Some("/egl".into());
+        }
+        let mut gs = GameSettings::default();
+        assert_eq!(default_prefix(&app, &imported), PathBuf::from("/egl"));
+        assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/egl"));
+        assert!(prefix_is_shared(&app, &imported, Path::new("/egl")));
+        assert!(!prefix_is_shared(&app, &game(), Path::new("/egl")));
+        app.egs_linked_path = " /egl ".into();
+        assert!(prefix_is_shared(&app, &game(), Path::new("/egl")));
+        gs.wine_prefix = "/mine".into();
+        assert_eq!(prefix_path(&app, &gs, &imported), PathBuf::from("/mine"));
+    }
+
+    #[test]
+    fn lists_the_prefixes_in_the_prefixes_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("zeta")).unwrap();
+        std::fs::write(root.join("zeta/system.reg"), "").unwrap();
+        std::fs::create_dir_all(root.join("Alpha/pfx")).unwrap();
+        std::fs::write(root.join("Alpha/pfx/system.reg"), "").unwrap();
+        // Not prefixes: an empty folder and a file.
+        std::fs::create_dir_all(root.join("empty")).unwrap();
+        std::fs::write(root.join("notes.txt"), "").unwrap();
+        assert_eq!(
+            prefixes_in(root),
+            vec![root.join("Alpha"), root.join("zeta")]
+        );
+        assert!(prefixes_in(&root.join("missing")).is_empty());
+
+        let app = AppSettings {
+            default_wine_prefix_dir: " /p ".into(),
+            ..Default::default()
+        };
+        assert_eq!(prefixes_root(&app), PathBuf::from("/p"));
+        let app = AppSettings {
+            default_install_path: "/games".into(),
+            default_wine_prefix_dir: String::new(),
+            ..Default::default()
+        };
+        assert_eq!(prefixes_root(&app), PathBuf::from("/games/Prefixes"));
+    }
+
+    #[test]
+    fn a_deleted_prefix_is_not_suggested_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = AppSettings {
+            default_wine_prefix_dir: dir.path().display().to_string(),
+            ..Default::default()
+        };
+        let mut gs = GameSettings {
+            wine_prefix: dir.path().join("old").display().to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
+        std::fs::create_dir(dir.path().join("old")).unwrap();
+        assert_eq!(install_prefix(&app, &gs, &game()), dir.path().join("old"));
+        gs.wine_prefix.clear();
+        assert_eq!(
+            install_prefix(&app, &gs, &game()),
+            dir.path().join("My_ Game")
+        );
     }
 
     #[test]
@@ -950,7 +1379,9 @@ mod tests {
             use_game_mode: true,
             ..Default::default()
         };
-        let err = wrapper_parts(&gs).await.unwrap_err();
+        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default(), false)
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("gamemoderun"));
     }
 
@@ -967,8 +1398,40 @@ mod tests {
             },
             ..Default::default()
         };
-        let err = wrapper_parts(&gs).await.unwrap_err();
+        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default(), false)
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("gamescope"));
+    }
+
+    #[tokio::test]
+    async fn native_launch_applies_disabled_hud_env_and_removals() {
+        let id = GameId::new(Runner::Gog, "app");
+        let g = game();
+        let mut gs = GameSettings::default();
+        gs.game_hud.mode = irori_core::GameHudMode::Disabled;
+        gs.environment_options.push(irori_core::EnvVar {
+            key: "MANGOHUD_CONFIG".into(),
+            value: "fps".into(),
+        });
+        let target = Target {
+            id: &id,
+            game: &g,
+            platform: irori_core::HostPlatform::current().native(),
+        };
+        let le = prepare_launch(&AppSettings::default(), &gs, target, &OpContext::detached())
+            .await
+            .unwrap();
+        if cfg!(target_os = "linux") {
+            assert_eq!(le.env["DISABLE_MANGOHUD"], "1");
+            assert_eq!(le.env["MANGOHUD"], "0");
+            assert!(!le.env.contains_key("MANGOHUD_CONFIG"));
+            assert!(le.env_remove.contains(&"MANGOHUD_CONFIG".into()));
+            assert!(le.env_remove.contains(&"MANGOHUD_CONFIGFILE".into()));
+        } else if cfg!(target_os = "macos") {
+            assert_eq!(le.env["MTL_HUD_ENABLED"], "0");
+            assert!(le.env_remove.contains(&"MTL_HUD_ALIGNMENT".into()));
+        }
     }
 
     #[test]

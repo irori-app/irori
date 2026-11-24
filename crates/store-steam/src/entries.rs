@@ -109,7 +109,11 @@ pub(crate) fn installed(
     remote: Option<&RemoteArt>,
 ) -> GameInfo {
     let native = HostPlatform::current().native();
+    let base = base(&app.app_id, &app.name, Art::of(&app.app_id, local, remote));
     GameInfo {
+        // Steam still starts it, but the build is Windows': Proton runs it.
+        // What changes inside its folder (ReShade) has to know.
+        is_linux_native: base.is_linux_native && !app.windows_build,
         is_installed: true,
         install: Some(InstalledInfo {
             install_path: app.install_path.to_string_lossy().into_owned(),
@@ -120,7 +124,7 @@ pub(crate) fn installed(
             ..Default::default()
         }),
         installable: false,
-        ..base(&app.app_id, &app.name, Art::of(&app.app_id, local, remote))
+        ..base
     }
     .finalize()
 }
@@ -227,10 +231,29 @@ pub(crate) fn extra_info(id: &str, details: &AppDetails) -> ExtraInfo {
             .map(|s| s.path_full.clone())
             .filter(|p| !p.is_empty())
             .collect(),
+        videos: videos(&details.movies),
         age_ratings: age_ratings(details),
         game_modes: game_modes(details.categories.iter().map(|c| c.id)),
         details_from: None,
     }
+}
+
+/// The store page's trailers that have something to play, the store's
+/// picks first.
+pub(crate) fn videos(movies: &[irori_steam_api::library::Movie]) -> Vec<irori_core::Video> {
+    let mut found: Vec<(bool, irori_core::Video)> = movies
+        .iter()
+        .filter_map(|m| {
+            let video = irori_core::Video {
+                name: m.name.trim().to_string(),
+                thumbnail: m.thumbnail_url(),
+                url: m.stream_url()?,
+            };
+            Some((m.highlight, video))
+        })
+        .collect();
+    found.sort_by_key(|(highlight, _)| !highlight);
+    found.into_iter().map(|(_, v)| v).collect()
 }
 
 /// Game modes from the store page's categories. Steam marks the venue
@@ -366,6 +389,28 @@ mod tests {
         assert_eq!(game_modes([20]), [GameMode::Online, GameMode::Mmo]);
         assert_eq!(game_modes([47, 48]), [GameMode::Coop, GameMode::Online]);
         assert!(game_modes([22, 23, 44]).is_empty());
+    }
+
+    #[test]
+    fn maps_trailers_with_the_stores_pick_first() {
+        let details: AppDetails = serde_json::from_value(serde_json::json!({
+            "movies": [
+                {"id": 1, "name": "Gameplay ", "mp4": {"480": "https://cdn/g.mp4"}},
+                {"id": 2, "name": "Launch", "highlight": true,
+                 "thumbnail": "https://cdn/l.jpg", "hls_h264": "https://cdn/l.m3u8"},
+                {"id": 3, "name": "Nothing"}
+            ]
+        }))
+        .unwrap();
+        let info = extra_info("10", &details);
+        let names: Vec<&str> = info.videos.iter().map(|v| v.name.as_str()).collect();
+        assert_eq!(names, ["Launch", "Gameplay"]);
+        assert_eq!(info.videos[0].url, "https://cdn/l.m3u8");
+        assert_eq!(
+            info.videos[0].thumbnail.as_deref(),
+            Some("https://cdn/l.jpg")
+        );
+        assert_eq!(info.videos[1].thumbnail, None);
     }
 
     #[test]

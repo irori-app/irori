@@ -56,7 +56,7 @@ pub(crate) fn rows(report: &DisplayReport) -> Vec<(SharedString, SharedString)> 
     rows
 }
 
-/// `M32QC (HDMI-A-2) · main · 2560 × 1440 at 144 Hz · HDR on`.
+/// `M32QC (HDMI-A-2) · main · 2560 × 1440 at 144 Hz · HDR on · VRR on`.
 fn summary(d: &Display) -> SharedString {
     let mut parts: Vec<SharedString> = Vec::new();
     let mut title = d.label();
@@ -87,7 +87,28 @@ fn summary(d: &Display) -> SharedString {
     if let Some(key) = hdr.filter(|_| d.enabled) {
         parts.push(t(key));
     }
+    if let Some((key, args)) = vrr(d).filter(|_| d.enabled) {
+        let args: Vec<(&str, &str)> = args.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        parts.push(t_args(key, &args));
+    }
     parts.join(" · ").into()
+}
+
+/// What to say about variable refresh: its state when the system says,
+/// else whether (and over which range) the display can; nothing when
+/// neither is known.
+fn vrr(d: &Display) -> Option<(&'static str, Vec<(&'static str, String)>)> {
+    match (d.vrr_on, d.vrr_capable, d.vrr_range) {
+        (Some(true), ..) => Some(("settings.display.vrr_on", vec![])),
+        (_, Some(false), _) => Some(("settings.display.vrr_unsupported", vec![])),
+        (Some(false), ..) => Some(("settings.display.vrr_off", vec![])),
+        (None, Some(true), Some((min, max))) => Some((
+            "settings.display.vrr_range",
+            vec![("min", min.to_string()), ("max", max.to_string())],
+        )),
+        (None, Some(true), None) => Some(("settings.display.vrr_supported", vec![])),
+        (None, None, _) => None,
+    }
 }
 
 /// The sizes a display offers with their refresh rates, the largest first.
@@ -228,6 +249,25 @@ mod tests {
         d.hdr_capable = None;
         assert!(hint("enableHDR", &report(vec![d])).is_none());
         assert!(hint("enableHDR", &report(vec![])).is_none());
+    }
+
+    #[test]
+    fn vrr_follows_what_is_known() {
+        let mut d = display("M32QC");
+        assert!(vrr(&d).is_none());
+        d.vrr_capable = Some(true);
+        assert_eq!(vrr(&d).unwrap().0, "settings.display.vrr_supported");
+        d.vrr_range = Some((48, 144));
+        let (key, args) = vrr(&d).unwrap();
+        assert_eq!(key, "settings.display.vrr_range");
+        assert_eq!(args[1], ("max", "144".to_string()));
+        d.vrr_on = Some(false);
+        assert_eq!(vrr(&d).unwrap().0, "settings.display.vrr_off");
+        d.vrr_on = Some(true);
+        assert_eq!(vrr(&d).unwrap().0, "settings.display.vrr_on");
+        d.vrr_on = None;
+        d.vrr_capable = Some(false);
+        assert_eq!(vrr(&d).unwrap().0, "settings.display.vrr_unsupported");
     }
 
     #[test]

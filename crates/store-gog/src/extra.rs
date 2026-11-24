@@ -259,6 +259,7 @@ impl GogStore {
             screenshots: product.as_ref().map(screenshots).unwrap_or_default(),
             age_ratings: v2.as_ref().map(age_ratings_from_v2).unwrap_or_default(),
             game_modes: v2.as_ref().map(game_modes_from_v2).unwrap_or_default(),
+            videos: Vec::new(),
             details_from: None,
         };
         if v2.is_some() || product.is_some() {
@@ -308,10 +309,17 @@ impl GogStore {
         let key = format!("{app_name}:{language}");
         let path = self.paths.achievements_cache();
         let mut cache: HashMap<String, Cached<Vec<Achievement>>> = load_json(path.clone()).await;
+        let live = self.live_unlocks.lock().get(app_name).cloned();
+        let with_live = |mut list: Vec<Achievement>| {
+            if let Some(live) = &live {
+                crate::launch::merge_live_unlocks(&mut list, live);
+            }
+            list
+        };
         if let Some(c) = cache.get(&key)
             && util::unix_now().saturating_sub(c.at) < ACHIEVEMENTS_TTL_SECS
         {
-            return Ok(c.value.clone());
+            return Ok(with_live(c.value.clone()));
         }
         if self.user_data().is_none() {
             return Ok(Vec::new());
@@ -320,7 +328,9 @@ impl GogStore {
             Ok(c) => c,
             Err(e) => {
                 tracing::debug!("achievements of {app_name}: {e:#}");
-                return Ok(cache.remove(&key).map(|c| c.value).unwrap_or_default());
+                return Ok(with_live(
+                    cache.remove(&key).map(|c| c.value).unwrap_or_default(),
+                ));
             }
         };
         let mut items = Vec::new();
@@ -341,7 +351,7 @@ impl GogStore {
             },
         );
         let _ = save_json(path, cache).await;
-        Ok(list)
+        Ok(with_live(list))
     }
 
     /// Total minutes GOG recorded for a game (`None` when unavailable or disabled).

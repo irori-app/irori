@@ -22,6 +22,9 @@ pub struct Cli {
     pub lutris: Option<String>,
     /// A Nexus Mods "Mod manager download" link (`nxm://…`) to install.
     pub nxm: Option<String>,
+    /// A Thunderstore "Install with Mod Manager" link (`ror2mm://…`) to
+    /// install.
+    pub thunderstore: Option<String>,
     /// A Windows file opened with Irori (`.exe`, `.msi`, `.bat`, `.cmd`,
     /// `.reg`, as an absolute path or a `file://` URL) to open in a game's
     /// Wine prefix. Not on Windows, which opens them itself.
@@ -43,6 +46,9 @@ pub struct Cli {
     /// Ask the running Irori to take a screenshot of the game
     /// (`--screenshot`, for a compositor's key binding). Never starts Irori.
     pub screenshot: bool,
+    /// Open the quick launcher, or close it when it is open
+    /// (`--quick-launch`, `irori://quick-launch`).
+    pub quick_launch: bool,
     pub version: bool,
     pub help: bool,
 }
@@ -55,13 +61,17 @@ impl Cli {
             match arg.as_str() {
                 "--launch" | "-l" => cli.launch = it.next().as_deref().and_then(parse_game_ref),
                 "--big-picture" | "--console" => cli.big_picture = true,
-                "--minimized" | "--tray" => cli.minimized = true,
+                // `--no-gui` is Heroic's spelling, which shortcuts made
+                // for Heroic carry.
+                "--minimized" | "--tray" | "--no-gui" => cli.minimized = true,
                 "--wait" => cli.wait = true,
                 "--save-clip" => cli.save_clip = true,
                 "--screenshot" => cli.screenshot = true,
+                "--quick-launch" => cli.quick_launch = true,
                 "--version" | "-V" => cli.version = true,
                 "--help" | "-h" => cli.help = true,
                 s if s.starts_with("nxm://") => cli.nxm = Some(s.to_string()),
+                s if s.starts_with("ror2mm://") => cli.thunderstore = Some(s.to_string()),
                 s if s.starts_with("file://") => {
                     cli.windows_file = url::Url::parse(s)
                         .ok()
@@ -121,6 +131,7 @@ impl Cli {
             }
             "game" | "open" => self.open = game,
             "bigpicture" | "console" => self.big_picture = true,
+            "quick-launch" => self.quick_launch = true,
             "library" => self.route = Some(Route::Library),
             "downloads" => self.route = Some(Route::Downloads),
             "updates" => self.route = Some(Route::Updates),
@@ -165,10 +176,34 @@ impl Cli {
             || self.route.is_some()
             || self.lutris.is_some()
             || self.nxm.is_some()
+            || self.thunderstore.is_some()
             || self.windows_file.is_some()
             || self.windows_uri.is_some()
             || self.big_picture
+            || self.quick_launch
             || self.capture()
+    }
+
+    /// Whether this invocation asks for the quick launcher and nothing
+    /// else: the main window then stays as it is (hidden in the tray too).
+    pub fn quick_launch_only(&self) -> bool {
+        let rest = Cli {
+            quick_launch: false,
+            ..self.clone()
+        };
+        self.quick_launch && !rest.has_request()
+    }
+
+    /// Whether this invocation only plays a game and asks for no window
+    /// (`--launch` with `--minimized`, `--tray` or `--no-gui`): the game
+    /// starts and Irori stays out of sight, Big Picture included. A link's
+    /// launch asks the user first, which takes the window.
+    pub fn launch_without_window(&self) -> bool {
+        let rest = Cli {
+            launch: None,
+            ..self.clone()
+        };
+        self.minimized && self.launch.is_some() && !self.launch_from_link && !rest.has_request()
     }
 
     /// Whether this invocation asks the running Irori for a clip or a
@@ -266,17 +301,22 @@ Options:
       --big-picture             Start in Big Picture mode
       --wait                    With --launch or --big-picture: stay until the game
                                 (or Big Picture) ends, and end it when stopped (Sunshine)
-      --minimized               Start in the tray
+      --minimized               Start in the tray; with --launch, play without
+                                opening the window
       --save-clip               Ask the running Irori to save a clip of the replay buffer
       --screenshot              Ask the running Irori to take a screenshot of the game
                                 (bind both to keys in your compositor; see Settings)
+      --quick-launch            Open the quick launcher (the command palette in a window
+                                of its own), or close it; bind it to a key
   -V, --version                 Print the version
   -h, --help                    Print this help
 
 URLs: irori://launch/<runner>/<app>, irori://game/<runner>/<app>, heroic://launch/<runner>/<app>,
+      irori://quick-launch,
       irori://library, irori://downloads, irori://accounts, irori://stores, irori://wine,
       irori://settings/<section>, irori://lutris/<slug>, lutris:<slug>,
-      nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads)
+      nxm://<game>/mods/<mod>/files/<file> (Nexus Mods downloads),
+      ror2mm://v1/install/thunderstore.io/<owner>/<package>/<version>/ (Thunderstore installs)
 
 Files: a Windows program, installer, batch or registry file (.exe, .msi, .bat, .cmd, .reg)
        opens in the Wine prefix of a game you choose (Linux and macOS)
@@ -303,6 +343,42 @@ mod tests {
         let none = parse(&["--minimized"]);
         assert!(!none.capture() && !none.has_request());
         assert!(HELP.contains("--save-clip") && HELP.contains("--screenshot"));
+    }
+
+    #[test]
+    fn the_quick_launcher_is_asked_for_by_flag_and_link() {
+        for args in [&["--quick-launch"][..], &["irori://quick-launch"][..]] {
+            let cli = parse(args);
+            assert!(cli.quick_launch && cli.has_request() && cli.quick_launch_only());
+        }
+        // With another request it is no longer the only one.
+        let both = parse(&["--quick-launch", "irori://library"]);
+        assert!(both.quick_launch && !both.quick_launch_only());
+        assert!(!parse(&[]).quick_launch_only());
+        assert!(HELP.contains("--quick-launch"));
+    }
+
+    #[test]
+    fn a_launch_with_minimized_or_no_gui_opens_no_window() {
+        for flag in ["--minimized", "--tray", "--no-gui"] {
+            assert!(
+                parse(&["--launch", "gog/1", flag]).launch_without_window(),
+                "{flag}"
+            );
+            assert!(parse(&[flag, "--launch", "gog/1", "--wait"]).launch_without_window());
+        }
+        // Without the flag, or with anything else asked, the window shows.
+        assert!(!parse(&["--launch", "gog/1"]).launch_without_window());
+        assert!(!parse(&["--minimized"]).launch_without_window());
+        assert!(
+            !parse(&["--launch", "gog/1", "--no-gui", "--big-picture"]).launch_without_window()
+        );
+        assert!(
+            !parse(&["--no-gui", "irori://library", "--launch", "gog/1"]).launch_without_window()
+        );
+        // A link's launch asks first.
+        assert!(!parse(&["--no-gui", "irori://launch/gog/1"]).launch_without_window());
+        assert!(!HELP.contains("--no-gui"), "a hidden alias");
     }
 
     #[test]
@@ -364,6 +440,15 @@ mod tests {
         );
         assert!(cli.has_request());
         assert_eq!(cli.launch, None);
+    }
+
+    #[test]
+    fn thunderstore_links_are_kept_for_the_mod_installer() {
+        let link = "ror2mm://v1/install/thunderstore.io/bbepis/BepInExPack/5.4.2100/";
+        let cli = parse(&[link]);
+        assert_eq!(cli.thunderstore.as_deref(), Some(link));
+        assert_eq!(cli.windows_uri, None);
+        assert!(cli.has_request());
     }
 
     #[cfg(not(windows))]

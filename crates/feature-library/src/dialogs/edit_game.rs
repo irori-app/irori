@@ -218,7 +218,8 @@ impl EditGameDialog {
         let title = Some(text(&self.title, cx))
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| self.original.title.clone());
-        let picker = cx.new(|cx| ArtPicker::new(kind, &title, window, cx));
+        let id = self.id.clone();
+        let picker = cx.new(|cx| ArtPicker::for_game(kind, Some(&id), &title, window, cx));
         picker.update(cx, |p, cx| p.focus(window, cx));
         self._picker_subscription = Some(cx.subscribe_in(
             &picker,

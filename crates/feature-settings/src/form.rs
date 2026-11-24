@@ -9,7 +9,8 @@ use anyhow::Context as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
-use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
@@ -25,20 +26,25 @@ use gpui_kit::{
 };
 use irori_core::settings::{AppSettings, GameSettings, UiPrefs, WineInstallation};
 use irori_core::{GameId, InstallPlatform, Paths, Runner};
+use irori_runtime::discovery::WineSource;
 use irori_runtime::graphics::HostGraphics;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::Desktop;
+use irori_ui::wine_choice::build_label;
 use irori_ui::{Route, backend, models};
 use serde_json::Value;
 
 use crate::appearance::{AccentPicker, FontPicker};
 use crate::artwork::ArtworkPanel;
+use crate::controller_map::ButtonMapPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
+use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::LanguageStamp;
 use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
 use crate::launch_programs::LaunchProgramsPanel;
+use crate::overlay::OverlayPanel;
 use crate::registry::{
     self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
     PanelKind, Scope, TextKind,
@@ -46,10 +52,13 @@ use crate::registry::{
 use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
 use crate::sunshine::SunshinePanel;
+use crate::umu::UmuPanel;
+use crate::user_actions::UserActionsPanel;
 use crate::value::{
-    bool_at, effective_overrides, get_path, override_key, plan_game_write, remove_row,
-    split_assignment, text_to_value, upsert_row, validate_discord_client_id, validate_dll_override,
-    validate_env_key, validate_launcher_args, value_to_text, with_path,
+    bool_at, effective_overrides, env_text, get_path, override_key, parse_env_text,
+    plan_game_write, remove_row, split_assignment, text_to_value, upsert_row,
+    validate_discord_client_id, validate_dll_override, validate_env_key, validate_launcher_args,
+    value_to_text, with_path,
 };
 use crate::widgets::{
     RowState, field_row, group_heading, group_panel, muted, panel, section_heading,
@@ -71,6 +80,8 @@ pub enum FormTarget {
 enum FormFilter {
     Sections(Vec<FieldSection>),
     Query(String),
+    /// Only the fields the game changes from the defaults, every section.
+    Changed,
 }
 
 /// Select item: a stable key and a label.
@@ -110,6 +121,9 @@ struct PairEditor {
     second: Entity<InputState>,
     editing: Option<usize>,
     error: Option<SharedString>,
+    /// The variables edited as text (environment variables only), while
+    /// that view is open.
+    text: Option<Entity<TextareaState>>,
 }
 
 impl PairEditor {
@@ -145,6 +159,8 @@ impl PairEditor {
 struct WinePicker {
     select: ChoiceState,
     builds: Option<Vec<WineInstallation>>,
+    /// Where each build sharing its name with another was found, by `bin`.
+    sources: HashMap<String, WineSource>,
     loading: bool,
 }
 
@@ -181,6 +197,9 @@ pub struct SettingsForm {
     /// The displays, for the HDR and gamescope hints (Linux, where those
     /// settings exist).
     displays: Option<Arc<irori_services::displays::DisplayReport>>,
+    /// Game target: the prefixes it could use instead of its own, once
+    /// looked for.
+    prefix_choices: Option<Arc<Vec<irori_services::PrefixChoice>>>,
     /// Release tags offered by each version picker, once loaded.
     tool_versions: HashMap<&'static str, Vec<String>>,
     tool_versions_requested: bool,
@@ -248,6 +267,7 @@ impl SettingsForm {
             wine: None,
             graphics: None,
             displays: None,
+            prefix_choices: None,
             tool_versions: HashMap::new(),
             tool_versions_requested: false,
             errors: HashMap::new(),
@@ -272,6 +292,9 @@ impl SettingsForm {
             if cfg!(target_os = "linux") {
                 this.load_displays(window, cx);
             }
+        }
+        if this.fields.iter().any(|f| f.path == "winePrefix") {
+            this.load_prefix_choices(window, cx);
         }
         let settings_model = models(cx).settings.clone();
         this._subscriptions.push(
@@ -307,6 +330,13 @@ impl SettingsForm {
         cx.notify();
     }
 
+    /// Show only the fields that differ from the game defaults (game
+    /// target), grouped by section, each with its reset.
+    pub fn set_changed_only(&mut self, cx: &mut Context<Self>) {
+        self.filter = FormFilter::Changed;
+        cx.notify();
+    }
+
     /// Show the fields matching a search query, grouped by section.
     pub fn set_query(&mut self, query: &str, cx: &mut Context<Self>) {
         self.filter = FormFilter::Query(query.to_string());
@@ -333,14 +363,18 @@ impl SettingsForm {
         wine.loading = true;
         let app = backend(cx).settings.app();
         let task = irori_ui::run(cx, async move {
-            Ok(irori_runtime::wine_installations(&app).await)
+            Ok(irori_runtime::wine_installations_with_sources(&app).await)
         });
         cx.spawn_in(window, async move |this, cx| {
-            let builds = task.await.unwrap_or_default();
+            let found = task.await.unwrap_or_default();
             this.update_in(cx, |this, window, cx| {
                 if let Some(wine) = &mut this.wine {
                     wine.loading = false;
-                    wine.builds = Some(builds);
+                    wine.sources = found
+                        .iter()
+                        .filter_map(|(w, source)| Some((w.bin.clone(), (*source)?)))
+                        .collect();
+                    wine.builds = Some(found.into_iter().map(|(w, _)| w).collect());
                 }
                 this.sync_wine_select(window, cx);
                 cx.notify();
@@ -367,6 +401,73 @@ impl SettingsForm {
             .ok();
         })
         .detach();
+    }
+
+    /// Look for the prefixes a game could share (its prefix menu).
+    fn load_prefix_choices(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let FormTarget::Game(id) = &self.target else {
+            return;
+        };
+        let (b, id) = (backend(cx), id.clone());
+        let job = b.spawn_blocking({
+            let b = b.clone();
+            move || b.prefix_choices(&id)
+        });
+        let task = irori_ui::run(cx, async move { Ok(job.await?) });
+        cx.spawn_in(window, async move |this, cx| {
+            let choices = task.await.unwrap_or_default();
+            this.update(cx, |this, cx| {
+                this.prefix_choices = Some(Arc::new(choices));
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// The menu beside a game's prefix field: the prefixes in the prefixes
+    /// folder and those other games play in, to share one.
+    fn prefix_menu(&self, disabled: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let FormTarget::Game(_) = &self.target else {
+            return None;
+        };
+        let choices = self.prefix_choices.clone();
+        let view = cx.entity().downgrade();
+        Some(
+            Button::new("prefixes-winePrefix")
+                .ghost()
+                .xsmall()
+                .icon(IconName::ChevronDown)
+                .tooltip(t("settings.prefix_menu.tooltip"))
+                .disabled(disabled)
+                .dropdown_menu(move |menu, window, _| {
+                    let menu = menu.scrollable(true).max_h(window.rem_size() * 24.);
+                    let Some(list) = &choices else {
+                        return menu.label(t("settings.prefix_menu.looking"));
+                    };
+                    if list.is_empty() {
+                        return menu.label(t("settings.prefix_menu.none"));
+                    }
+                    list.iter().fold(menu, |menu, choice| {
+                        let path = choice.path.to_string_lossy().into_owned();
+                        let label: SharedString = match choice.games.as_slice() {
+                            [] => path.clone().into(),
+                            games => t_args(
+                                "settings.prefix_menu.used_by",
+                                &[("path", &path), ("games", &games.join(", "))],
+                            ),
+                        };
+                        let view = view.clone();
+                        menu.item(PopupMenuItem::new(label).on_click(move |_, window, cx| {
+                            let path = path.clone();
+                            let _ = view.update(cx, |this, cx| {
+                                this.write("winePrefix", Value::String(path), window, cx)
+                            });
+                        }))
+                    })
+                })
+                .into_any_element(),
+        )
     }
 
     /// Read the displays for the HDR and gamescope fields' hints.
@@ -484,6 +585,12 @@ impl SettingsForm {
             {
                 return false;
             }
+            // Steam's own launch options belong to Steam games only.
+            if matches!(f.kind, FieldKind::Panel(PanelKind::SteamLaunchOptions))
+                && !matches!(&self.target, FormTarget::Game(id) if id.runner == Runner::Steam)
+            {
+                return false;
+            }
             if f.native_only && !self.native {
                 return false;
             }
@@ -495,6 +602,7 @@ impl SettingsForm {
             match &self.filter {
                 FormFilter::Sections(s) => s.contains(&f.section),
                 FormFilter::Query(q) => f.matches(q),
+                FormFilter::Changed => self.is_overridden(f),
             }
         })
     }
@@ -629,10 +737,19 @@ impl SettingsForm {
     ) {
         let view: Option<AnyView> = match kind {
             PanelKind::Controllers => Some(cx.new(ControllersPanel::new).into()),
+            PanelKind::ButtonMap => Some(cx.new(ButtonMapPanel::new).into()),
+            PanelKind::Overlay => Some(cx.new(OverlayPanel::new).into()),
             PanelKind::EosOverlay => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EosOverlayPanel::new(epic, window, cx)).into()),
             PanelKind::EglSync => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EglSyncPanel::new(epic, window, cx)).into()),
+            PanelKind::UserActions => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(cx.new(|cx| UserActionsPanel::new(id, window, cx)).into())
+                }
+                _ => None,
+            },
             PanelKind::LaunchPrograms => {
                 let target = self.target.clone();
                 Some(
@@ -682,8 +799,57 @@ impl SettingsForm {
                 };
                 Some(cx.new(|cx| ReplayPanel::new(game, cx)).into())
             }
+            PanelKind::PerformanceHud => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    let is_native_linux = self.native;
+                    let is_steam = id.runner == Runner::Steam;
+                    Some(
+                        cx.new(|cx| {
+                            HudPanel::new(
+                                HudPanelScope::PerGame {
+                                    id,
+                                    is_native_linux,
+                                    is_steam,
+                                },
+                                None,
+                                window,
+                                cx,
+                            )
+                        })
+                        .into(),
+                    )
+                }
+                _ => None,
+            },
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
+            PanelKind::QuickLaunch => {
+                Some(cx.new(crate::quick_launch::QuickLaunchPanel::new).into())
+            }
             PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
+            PanelKind::LaunchBox => crate::stores::emulation(cx).map(|store| {
+                cx.new(|cx| crate::launchbox::LaunchBoxPanel::new(store, cx))
+                    .into()
+            }),
+            PanelKind::SteamLaunchOptions => match &self.target {
+                FormTarget::Game(id) if id.runner == Runner::Steam => {
+                    crate::stores::steam(cx).map(|steam| {
+                        let id = id.clone();
+                        cx.new(|cx| {
+                            crate::steam_launch::SteamLaunchPanel::new(id, steam, window, cx)
+                        })
+                        .into()
+                    })
+                }
+                _ => None,
+            },
+            PanelKind::Umu => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(cx.new(|cx| UmuPanel::new(id, window, cx)).into())
+                }
+                _ => None,
+            },
         };
         if let Some(view) = view {
             self.panels.insert(spec.path, view);
@@ -757,6 +923,7 @@ impl SettingsForm {
                 self.wine = Some(WinePicker {
                     select,
                     builds: None,
+                    sources: HashMap::new(),
                     loading: false,
                 });
                 self.sync_wine_select(window, cx);
@@ -788,6 +955,7 @@ impl SettingsForm {
                         second,
                         editing: None,
                         error: None,
+                        text: None,
                     },
                 );
             }
@@ -1033,7 +1201,7 @@ impl SettingsForm {
             .flatten()
             .map(|w| ChoiceItem {
                 key: w.bin.clone().into(),
-                label: w.name.clone().into(),
+                label: build_label(w, wine.sources.get(&w.bin).copied()),
             })
             .collect();
         if current.is_set() && !items.iter().any(|i| i.key.as_ref() == current.bin) {
@@ -1399,6 +1567,105 @@ impl SettingsForm {
             editor.editing = None;
         }
         self.write(path, remove_row(&current, ix), window, cx);
+    }
+
+    /// Show the environment variables as text to edit or paste into.
+    fn open_env_text(&mut self, path: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        let text = env_text(&self.rows(path));
+        let Some(editor) = self.pairs.get_mut(path) else {
+            return;
+        };
+        let state = cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .auto_grow(4, 14)
+                .placeholder(t("settings.env_text.placeholder"))
+                .default_value(text)
+        });
+        state.read(cx).focus_handle(cx).focus(window, cx);
+        editor.editing = None;
+        editor.error = None;
+        editor.text = Some(state);
+        cx.notify();
+    }
+
+    fn close_env_text(&mut self, path: &'static str, cx: &mut Context<Self>) {
+        if let Some(editor) = self.pairs.get_mut(path) {
+            editor.text = None;
+            editor.error = None;
+            cx.notify();
+        }
+    }
+
+    /// Replace the variables with the text's, and take what a launch line
+    /// says around `%command%` into the settings it belongs to.
+    fn apply_env_text(&mut self, path: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = self.pairs.get_mut(path) else {
+            return;
+        };
+        let Some(state) = editor.text.clone() else {
+            return;
+        };
+        let parsed = match parse_env_text(&state.read(cx).value()) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                editor.error = Some(e.into());
+                cx.notify();
+                return;
+            }
+        };
+        editor.text = None;
+        editor.error = None;
+        let rows: Vec<Value> = parsed
+            .vars
+            .iter()
+            .map(|(k, v)| serde_json::json!({ "key": k, "value": v }))
+            .collect();
+        self.write(path, Value::Array(rows), window, cx);
+        let mut also = Vec::new();
+        if parsed.game_mode {
+            self.write("useGameMode", Value::Bool(true), window, cx);
+            also.push("useGameMode");
+        }
+        if parsed.mangohud {
+            self.write("showMangohud", Value::Bool(true), window, cx);
+            also.push("showMangohud");
+        }
+        if let Some((exe, args)) = parsed.wrapper {
+            let current = self
+                .value("wrapperOptions")
+                .cloned()
+                .unwrap_or(Value::Array(Vec::new()));
+            let row = serde_json::json!({ "exe": exe, "args": args });
+            let next = upsert_row(&current, None, row);
+            self.write("wrapperOptions", next, window, cx);
+            also.push("wrapperOptions");
+        }
+        if !parsed.args.is_empty() {
+            let current = value_to_text(self.value("launcherArgs"));
+            let added = crate::value::join_launch_args(&parsed.args);
+            let next = [current.trim(), added.as_str()]
+                .into_iter()
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            self.write("launcherArgs", Value::String(next), window, cx);
+            also.push("launcherArgs");
+        }
+        if !also.is_empty() {
+            let names = also
+                .iter()
+                .filter_map(|p| registry::find(p))
+                .map(|f| f.label_text().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            window.push_notification(
+                Notification::success(t_args(
+                    "settings.env_text.also_set",
+                    &[("settings", &names)],
+                )),
+                cx,
+            );
+        }
     }
 
     // ---- actions ----
@@ -1777,6 +2044,15 @@ impl SettingsForm {
                             this.pick_path(path, kind == TextKind::Directory, window, cx)
                         }))
                 });
+                let prefixes = (path == "winePrefix")
+                    .then(|| self.prefix_menu(disabled, cx))
+                    .flatten();
+                let picker = match (picker, prefixes) {
+                    (Some(picker), Some(menu)) => {
+                        Some(h_flex().child(menu).child(picker).into_any_element())
+                    }
+                    (picker, _) => picker.map(IntoElement::into_any_element),
+                };
                 let wide = matches!(
                     kind,
                     TextKind::Plain | TextKind::Directory | TextKind::File | TextKind::Secret
@@ -1997,6 +2273,9 @@ impl SettingsForm {
         let Some(editor) = self.pairs.get(path) else {
             return v_flex();
         };
+        if let Some(text) = &editor.text {
+            return self.render_env_text(path, text, editor.error.clone(), cx);
+        }
         let rows = self.rows(path);
         let sep = match editor.kind {
             CustomKind::EnvVars | CustomKind::DllOverrides => "=",
@@ -2095,6 +2374,18 @@ impl SettingsForm {
                             this.cancel_edit(path, window, cx)
                         })),
                 )
+            })
+            .when(editor.kind == CustomKind::EnvVars && !editing, |r| {
+                r.child(
+                    Button::new(ElementId::Name(format!("{path}-as-text").into()))
+                        .ghost()
+                        .icon(IconName::Pencil)
+                        .label(t("settings.env_text.open"))
+                        .tooltip(t("settings.env_text.open_tooltip"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_env_text(path, window, cx)
+                        })),
+                )
             });
         let hint = (editor.kind == CustomKind::Wrappers)
             .then(|| muted(t("settings.pairs.wrapper_hint"), cx).text_xs());
@@ -2110,6 +2401,52 @@ impl SettingsForm {
     }
 }
 
+impl SettingsForm {
+    /// The environment variables as text, with Apply and Cancel.
+    fn render_env_text(
+        &self,
+        path: &'static str,
+        text: &Entity<TextareaState>,
+        error: Option<SharedString>,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Div {
+        let danger = cx.theme().danger;
+        v_flex()
+            .gap_2()
+            .w_full()
+            .child(
+                Textarea::new(text)
+                    .aria_label(t("settings.field.environment_options.label"))
+                    .font_family(cx.theme().mono_font_family.clone()),
+            )
+            .child(muted(t("settings.env_text.hint"), cx).text_xs())
+            .when_some(error, |v, e| {
+                v.child(div().text_xs().text_color(danger).child(e))
+            })
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new(ElementId::Name(format!("{path}-text-apply").into()))
+                            .primary()
+                            .icon(IconName::Check)
+                            .label(t("settings.env_text.apply"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.apply_env_text(path, window, cx)
+                            })),
+                    )
+                    .child(
+                        Button::new(ElementId::Name(format!("{path}-text-cancel").into()))
+                            .ghost()
+                            .label(t("settings.common.cancel"))
+                            .on_click(
+                                cx.listener(move |this, _, _, cx| this.close_env_text(path, cx)),
+                            ),
+                    ),
+            )
+    }
+}
+
 impl Render for SettingsForm {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.language.changed() {
@@ -2117,7 +2454,7 @@ impl Render for SettingsForm {
         }
         let multi_section = match &self.filter {
             FormFilter::Sections(s) => s.len() > 1,
-            FormFilter::Query(_) => true,
+            FormFilter::Query(_) | FormFilter::Changed => true,
         };
         let fields: Vec<&'static FieldSpec> = self.visible_fields().collect();
         let border = cx.theme().border;
@@ -2134,6 +2471,15 @@ impl Render for SettingsForm {
                 }
                 section = Some(spec.section);
                 group = "";
+            }
+            if matches!(spec.kind, FieldKind::Panel(PanelKind::PerformanceHud)) {
+                body = body.children(rows.take());
+                body = body.child(section_heading(spec.group_text()));
+                if let Some(view) = self.panels.get(spec.path) {
+                    body = body.child(div().id("row-panel.performance-hud").child(view.clone()));
+                }
+                group = spec.group;
+                continue;
             }
             if group != spec.group {
                 body = body.children(rows.take());

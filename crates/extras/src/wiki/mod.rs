@@ -46,10 +46,20 @@ pub struct StoreIds {
     pub hltb_id: Option<String>,
     /// The release year, to tell remakes apart in HLTB's search.
     pub release_year: Option<u32>,
+    /// The Steam app the user linked the game to (`iroriSteamAppId`), or
+    /// [`STEAM_NONE`] for none: it replaces the one GamesDB or PCGamingWiki
+    /// give for ProtonDB and the Steam Deck. `None` uses theirs.
+    pub steam_link: Option<String>,
+    /// A Steam app found by the game's exact title, used only when neither
+    /// GamesDB nor PCGamingWiki names one.
+    pub steam_guess: Option<String>,
 }
 
 /// [`StoreIds::hltb_id`] for a game the user said HowLongToBeat doesn't have.
 pub const HLTB_NONE: &str = "none";
+
+/// [`StoreIds::steam_link`] for a game the user said Steam doesn't sell.
+pub const STEAM_NONE: &str = "none";
 
 impl StoreIds {
     pub fn of(game: &GameInfo) -> Self {
@@ -67,6 +77,8 @@ impl StoreIds {
                 .as_deref()
                 .and_then(|d| d.get(..4))
                 .and_then(|y| y.parse().ok()),
+            steam_link: None,
+            steam_guess: None,
         }
     }
 }
@@ -90,11 +102,26 @@ pub struct WikiInfo {
     pub gamesdb_steam_id: Option<String>,
     pub steam: Option<SteamCompat>,
     pub umu_id: Option<String>,
+    /// The Steam app the lookup used instead of the sources' (see
+    /// [`StoreIds::steam_link`]); [`STEAM_NONE`] for none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub steam_link: Option<String>,
 }
 
 impl WikiInfo {
-    /// Steam app ID from GamesDB, else PCGamingWiki.
+    /// The game's Steam app ID: the one linked, else GamesDB's, else
+    /// PCGamingWiki's.
     pub fn steam_app_id(&self) -> Option<&str> {
+        match self.steam_link.as_deref().map(str::trim) {
+            Some(STEAM_NONE) => None,
+            Some(id) if !id.is_empty() => Some(id),
+            _ => self.found_steam_app_id(),
+        }
+    }
+
+    /// The Steam app ID GamesDB, else PCGamingWiki, give the game, whatever
+    /// was linked.
+    pub fn found_steam_app_id(&self) -> Option<&str> {
         self.gamesdb_steam_id
             .as_deref()
             .filter(|s| !s.is_empty())
@@ -119,11 +146,18 @@ pub fn clean_title(title: &str) -> String {
 fn cache_file(ids: &StoreIds) -> PathBuf {
     // The user's HLTB choice is part of the name, so changing it reads the
     // game again instead of the answer cached for the old one.
-    let choice = ids
-        .hltb_id
-        .as_deref()
-        .map(|id| format!("-hltb{}", irori_core::paths::sanitize(id)))
-        .unwrap_or_default();
+    let part = |tag: &str, value: &Option<String>| {
+        value
+            .as_deref()
+            .map(|v| format!("-{tag}{}", irori_core::paths::sanitize(v)))
+            .unwrap_or_default()
+    };
+    let choice = format!(
+        "{}{}{}",
+        part("hltb", &ids.hltb_id),
+        part("steam", &ids.steam_link),
+        part("guess", &ids.steam_guess)
+    );
     util::cache_dir("wiki").join(format!(
         "{}-{}{choice}.json",
         ids.runner.id(),
@@ -131,11 +165,31 @@ fn cache_file(ids: &StoreIds) -> PathBuf {
     ))
 }
 
+/// Forget the cached info for a store entry (and the user's choices in
+/// `ids`), so the next lookup asks every source again.
+pub async fn forget(ids: &StoreIds) {
+    match tokio::fs::remove_file(cache_file(ids)).await {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            tracing::warn!("forgetting game information: {e}");
+        }
+        _ => {}
+    }
+}
+
 /// Cached info for a store entry, without network access.
 pub async fn cached(ids: &StoreIds) -> Option<Arc<WikiInfo>> {
     util::cache_read::<WikiInfo>(&cache_file(ids), WIKI_TTL)
         .await
+        .filter(is_current)
         .map(Arc::new)
+}
+
+/// Whether a cached answer has every field this version reads from the
+/// wiki's page (an older one is asked again).
+fn is_current(info: &WikiInfo) -> bool {
+    info.pcgamingwiki
+        .as_ref()
+        .is_none_or(|p| p.version >= pcgamingwiki::PARSE_VERSION)
 }
 
 /// Look a game up in every source (cached for 30 days). Fails only when
@@ -170,7 +224,14 @@ pub async fn game_info(title: &str, ids: &StoreIds) -> Result<Arc<WikiInfo>> {
         gamesdb_steam_id,
         steam: None,
         umu_id,
+        steam_link: None,
     };
+    info.steam_link = ids.steam_link.clone().or_else(|| {
+        info.found_steam_app_id()
+            .is_none()
+            .then(|| ids.steam_guess.clone())
+            .flatten()
+    });
     if let Some(steam_id) = info.steam_app_id().map(str::to_string) {
         let (proton, deck) =
             futures::join!(sources::protondb(&steam_id), sources::steam_deck(&steam_id));
@@ -245,7 +306,9 @@ pub async fn steam_app_id(game: &GameInfo) -> Option<String> {
 }
 
 /// Steam's cover and hero art for a game known only by its title (one
-/// added from a folder), through the Steam app ID PCGamingWiki gives it.
+/// added manually or from a folder), through PCGamingWiki or Steam's store
+/// search and `IStoreBrowseService/GetItems/v1/` (so newer games with
+/// hashed asset URLs also resolve).
 pub async fn steam_art_for_title(title: &str) -> Option<(String, String)> {
     const STEAM_CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
     let game = GameInfo {
@@ -253,11 +316,139 @@ pub async fn steam_art_for_title(title: &str) -> Option<(String, String)> {
         runner: Some(Runner::Sideload),
         ..Default::default()
     };
-    let id = steam_app_id(&game).await?;
+    let id = match steam_app_id(&game).await {
+        Some(id) => id,
+        None => steam_search_app_id(title).await?,
+    };
+    if let Some(hashed) = steam_store_hashed_art(&id).await {
+        return Some(hashed);
+    }
     Some((
         format!("{STEAM_CDN}/{id}/library_600x900_2x.jpg"),
         format!("{STEAM_CDN}/{id}/library_hero.jpg"),
     ))
+}
+
+/// Clean a game title for Steam's `storesearch` endpoint: Windows folder
+/// names replace `:` with ` - ` (e.g. `Shambles - Sons of Apocalypse`),
+/// which Steam's literal search returns 0 results for unless punctuation is
+/// normalised to spaces.
+fn steam_search_query(title: &str) -> String {
+    let cleaned: String = title
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '\'' || c == '&' {
+                c
+            } else {
+                ' '
+            }
+        })
+        .collect();
+    cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+async fn steam_storesearch_items(query: &str) -> Option<Vec<serde_json::Value>> {
+    if query.is_empty() {
+        return None;
+    }
+    let mut url = url::Url::parse("https://store.steampowered.com/api/storesearch/").ok()?;
+    url.query_pairs_mut()
+        .append_pair("term", query)
+        .append_pair("l", "english")
+        .append_pair("cc", "US");
+    let json: serde_json::Value = util::get_json(url.as_str(), std::time::Duration::from_secs(6))
+        .await
+        .ok()?;
+    json.get("items")?.as_array().cloned()
+}
+
+/// Find a game's Steam app ID via Steam's public `storesearch` endpoint.
+async fn steam_search_app_id(title: &str) -> Option<String> {
+    let query = steam_search_query(title);
+    if query.is_empty() {
+        return None;
+    }
+    let mut items = steam_storesearch_items(&query).await?;
+    if items.is_empty()
+        && let Some((prefix, _)) = title.split_once(" - ").or_else(|| title.split_once(": "))
+    {
+        let prefix_query = steam_search_query(prefix);
+        if !prefix_query.is_empty() && prefix_query != query {
+            items = steam_storesearch_items(&prefix_query).await?;
+        }
+    }
+    let squash = |s: &str| -> String {
+        s.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    let wanted = squash(title);
+    if wanted.is_empty() {
+        return None;
+    }
+    let picked = items
+        .iter()
+        .find(|item| {
+            item.get("name")
+                .and_then(|n| n.as_str())
+                .is_some_and(|n| squash(n) == wanted)
+        })
+        .or_else(|| {
+            items.iter().find(|item| {
+                item.get("name").and_then(|n| n.as_str()).is_some_and(|n| {
+                    let s = squash(n);
+                    let lower = n.to_ascii_lowercase();
+                    !lower.contains("soundtrack")
+                        && !lower.contains(" demo")
+                        && (s.contains(&wanted) || wanted.contains(&s))
+                })
+            })
+        })?;
+    picked
+        .get("id")
+        .and_then(|v| v.as_u64())
+        .map(|id| id.to_string())
+}
+
+/// Resolve the hashed library capsule and hero URLs of a Steam app from
+/// `IStoreBrowseService/GetItems/v1/`.
+async fn steam_store_hashed_art(app_id: &str) -> Option<(String, String)> {
+    const ASSETS_BASE: &str = "https://shared.akamai.steamstatic.com/store_item_assets";
+    let id: u64 = app_id.parse().ok()?;
+    let input = serde_json::json!({
+        "ids": [{"appid": id}],
+        "context": {"language": "english", "country_code": "US"},
+        "data_request": {"include_assets": true}
+    });
+    let mut url =
+        url::Url::parse("https://api.steampowered.com/IStoreBrowseService/GetItems/v1/").ok()?;
+    url.query_pairs_mut()
+        .append_pair("input_json", &input.to_string());
+    let json: serde_json::Value = util::get_json(url.as_str(), std::time::Duration::from_secs(6))
+        .await
+        .ok()?;
+    let assets = json.pointer("/response/store_items/0/assets")?;
+    let fmt = assets.get("asset_url_format")?.as_str()?;
+    let build = |key_2x: &str, key_1x: &str| -> Option<String> {
+        let file = assets
+            .get(key_2x)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                assets
+                    .get(key_1x)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+            })?;
+        let rel = fmt.replace("${FILENAME}", file);
+        Some(format!("{ASSETS_BASE}/{}", rel.trim_start_matches('/')))
+    };
+    let cover = build("library_capsule_2x", "library_capsule")?;
+    let hero = build("library_hero_2x", "library_hero")
+        .or_else(|| build("header_2x", "header"))
+        .unwrap_or_else(|| cover.clone());
+    Some((cover, hero))
 }
 
 /// umu ID of a store game, for `GAMEID`. Found IDs are cached forever;
@@ -313,6 +504,25 @@ mod tests {
         assert_eq!(info.steam_app_id(), Some("1"));
         info.gamesdb_steam_id = Some(String::new());
         assert_eq!(info.steam_app_id(), Some("2"));
+        // The user's link wins, and "none" means none.
+        info.steam_link = Some("620".into());
+        assert_eq!(info.steam_app_id(), Some("620"));
+        assert_eq!(info.found_steam_app_id(), Some("2"));
+        info.steam_link = Some(STEAM_NONE.into());
+        assert_eq!(info.steam_app_id(), None);
+    }
+
+    #[test]
+    fn answers_read_before_pc_facts_are_asked_again() {
+        let old: WikiInfo =
+            serde_json::from_value(serde_json::json!({"pcgamingwiki": {"page_id": 1}})).unwrap();
+        assert!(!is_current(&old));
+        let new = WikiInfo {
+            pcgamingwiki: Some(pcgamingwiki::parse_wikitext(1, "")),
+            ..Default::default()
+        };
+        assert!(is_current(&new));
+        assert!(is_current(&WikiInfo::default()), "no page at all");
     }
 
     #[test]
@@ -345,5 +555,24 @@ mod tests {
         let ids = StoreIds::of(&game);
         assert_eq!(ids.store_url.as_deref(), Some("https://www.gog.com/game/x"));
         assert!(cache_file(&ids).ends_with("wiki/gog-1.json"));
+        // Each choice reads its own answer.
+        let linked = StoreIds {
+            steam_link: Some("620".into()),
+            ..ids.clone()
+        };
+        assert!(cache_file(&linked).ends_with("wiki/gog-1-steam620.json"));
+        let guessed = StoreIds {
+            steam_guess: Some("400".into()),
+            ..ids
+        };
+        assert!(cache_file(&guessed).ends_with("wiki/gog-1-guess400.json"));
+    }
+
+    #[test]
+    fn steam_search_normalizes_windows_folder_separators() {
+        assert_eq!(
+            steam_search_query("Shambles - Sons of Apocalypse"),
+            "Shambles Sons of Apocalypse"
+        );
     }
 }

@@ -6,7 +6,6 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-#[cfg(any(unix, test))]
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
@@ -141,6 +140,20 @@ impl CommandSpec {
         self
     }
 
+    pub fn env_remove(mut self, key: impl Into<String>) -> Self {
+        self.env_remove.push(key.into());
+        self
+    }
+
+    pub fn env_removes<I, K>(mut self, keys: I) -> Self
+    where
+        I: IntoIterator<Item = K>,
+        K: Into<String>,
+    {
+        self.env_remove.extend(keys.into_iter().map(Into::into));
+        self
+    }
+
     pub fn cwd(mut self, dir: impl Into<PathBuf>) -> Self {
         self.cwd = Some(dir.into());
         self
@@ -170,6 +183,7 @@ impl CommandSpec {
     }
 
     /// The arguments as they run: the first [`LAUNCH_ENV`] becomes
+    /// `--unsetenv NAME` for each removed variable followed by
     /// `--setenv NAME VALUE` for each of the command's variables.
     pub fn expanded_args(&self) -> Vec<OsString> {
         let mut out = Vec::with_capacity(self.args.len());
@@ -177,6 +191,9 @@ impl CommandSpec {
         for a in &self.args {
             if !expanded && a == LAUNCH_ENV {
                 expanded = true;
+                for k in &self.env_remove {
+                    out.extend(["--unsetenv".into(), k.into()]);
+                }
                 for (k, v) in &self.env {
                     out.extend(["--setenv".into(), k.into(), v.into()]);
                 }
@@ -630,6 +647,56 @@ pub async fn output(spec: &CommandSpec) -> Result<String> {
     Ok(run(spec, RunOptions::default()).await?.check()?.stdout)
 }
 
+/// How long [`open_detached`] waits for the opener to say whether it opened
+/// the link. Some openers run the handler in the foreground (`xdg-open` on
+/// Hyprland, sway and i3 when no desktop's own opener is there): one still
+/// running by then has started what opens the link.
+const OPEN_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Hand something to another program, as `xdg-open`, `open` or `rundll32`
+/// do with a link, and let what it starts live on its own: no standard input
+/// or output of Irori's (a program the opener starts, Steam among them,
+/// would keep a pipe and die writing to it once Irori is gone), a process
+/// group of its own (stopping a game never reaches it), and no waiting for
+/// it to end. The opener's own exit status still counts: a refusal (no
+/// program for the link, or the program failed) is an error naming it.
+pub async fn open_detached(spec: &CommandSpec) -> Result<()> {
+    open_detached_within(spec, OPEN_WAIT).await
+}
+
+async fn open_detached_within(spec: &CommandSpec, wait: std::time::Duration) -> Result<()> {
+    tracing::info!(command = %spec, "open");
+    let mut cmd = spec.to_command(Start::Run)?;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("failed to start {}", spec.program.display()))?;
+    match tokio::time::timeout(wait, child.wait()).await {
+        Ok(status) => {
+            let status = status?;
+            if !status.success() {
+                anyhow::bail!(
+                    "{} couldn't open it ({status})",
+                    spec.program
+                        .file_name()
+                        .unwrap_or(spec.program.as_os_str())
+                        .to_string_lossy()
+                );
+            }
+        }
+        Err(_) => {
+            // Still running: it is the program the link opened, or holds
+            // it. Reap it whenever it ends.
+            tokio::spawn(async move {
+                let _ = child.wait().await;
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Whether a process's command line or program is in the install folder
 /// `folder` (a Windows path as a launcher stores it, or a Unix path). Games
 /// under Wine show their Windows path, so both spellings match.
@@ -676,6 +743,21 @@ pub fn spawn(spec: &CommandSpec, log_file: Option<&Path>) -> Result<Child> {
         .with_context(|| format!("failed to start {}", spec.program.display()))
 }
 
+/// Start a tool whose output Irori reads as a stream of bytes (a decoder
+/// writing frames), with its standard output and error piped and no
+/// console window. Killed when the returned child is dropped, so a reader
+/// that stops never leaves it behind.
+pub fn spawn_piped(spec: &CommandSpec) -> Result<Child> {
+    tracing::debug!(command = %spec, "spawn piped");
+    let mut cmd = spec.to_command(Start::Run)?;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    cmd.spawn()
+        .with_context(|| format!("failed to start {}", spec.program.display()))
+}
+
 /// SIGTERM the child's process group, escalating to SIGKILL after 5 s.
 #[cfg(unix)]
 pub async fn terminate(child: &mut Child) {
@@ -712,6 +794,94 @@ pub fn kill_group(pid: u32, force: bool) {
         Signal::SIGTERM
     };
     let _ = killpg(Pid::from_raw(pid as i32), sig);
+}
+
+/// Block in the kernel until every process in `pids` has exited (or `timeout`
+/// elapses) using `pidfd_open(2)` and `poll(2)`, with zero user-space polling.
+/// Returns `false` when `pids` is empty or `pidfd_open` is unavailable so the
+/// caller can fall back to a timer sleep.
+#[cfg(target_os = "linux")]
+pub fn wait_pids_exit(pids: &[u32], timeout: Duration) -> bool {
+    use nix::errno::Errno;
+    use nix::libc::{
+        POLLERR, POLLHUP, POLLIN, POLLNVAL, SYS_pidfd_open, c_uint, close, nfds_t, pid_t, poll,
+        pollfd, syscall,
+    };
+
+    if pids.is_empty() {
+        return false;
+    }
+    struct PidFds(Vec<pollfd>);
+    impl Drop for PidFds {
+        fn drop(&mut self) {
+            for pfd in &mut self.0 {
+                if pfd.fd >= 0 {
+                    // SAFETY: each fd in this vector was returned by `pidfd_open` and has not been closed yet.
+                    unsafe {
+                        close(pfd.fd);
+                    }
+                    pfd.fd = -1;
+                }
+            }
+        }
+    }
+
+    let mut fds = PidFds(Vec::with_capacity(pids.len()));
+    for &pid in pids {
+        let Ok(raw_pid) = pid_t::try_from(pid) else {
+            return false;
+        };
+        // SAFETY: `SYS_pidfd_open` takes `(pid_t, unsigned int)` and returns an owned file descriptor or -1 on error.
+        let fd = unsafe { syscall(SYS_pidfd_open, raw_pid, 0 as c_uint) };
+        if fd < 0 {
+            // ESRCH means a tracked PID already exited before `pidfd_open`;
+            // return true so the caller re-checks immediately.
+            return Errno::last() == Errno::ESRCH;
+        }
+        fds.0.push(pollfd {
+            fd: fd as i32,
+            events: POLLIN,
+            revents: 0,
+        });
+    }
+
+    let deadline = std::time::Instant::now() + timeout;
+    while fds.0.iter().any(|pfd| pfd.fd >= 0) {
+        let remaining_ms = deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .as_millis()
+            .min(i32::MAX as u128) as i32;
+        if remaining_ms <= 0 {
+            break;
+        }
+        // SAFETY: `fds.0` holds valid open pollfds for `poll` with matching length.
+        let rc = unsafe { poll(fds.0.as_mut_ptr(), fds.0.len() as nfds_t, remaining_ms) };
+        if rc < 0 {
+            if Errno::last() == Errno::EINTR {
+                continue;
+            }
+            break;
+        }
+        if rc == 0 {
+            break;
+        }
+        for pfd in &mut fds.0 {
+            if pfd.fd >= 0 && (pfd.revents & (POLLIN | POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                // SAFETY: `pfd.fd` is an open pidfd owned by `fds` and is marked closed immediately.
+                unsafe {
+                    close(pfd.fd);
+                }
+                pfd.fd = -1;
+                pfd.revents = 0;
+            }
+        }
+    }
+    true
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn wait_pids_exit(_pids: &[u32], _timeout: Duration) -> bool {
+    false
 }
 
 #[cfg(windows)]
@@ -1071,6 +1241,125 @@ mod tests {
     }
 
     #[test]
+    fn launch_env_emits_unsetenv_before_setenv() {
+        let spec = CommandSpec::new("bwrap")
+            .args(["--clearenv", LAUNCH_ENV, "--", "game"])
+            .env_removes(["MANGOHUD_CONFIG", "DISABLE_MANGOHUD"])
+            .env("MANGOHUD", "1")
+            .env("MANGOHUD_CONFIGFILE", "/data/mangohud/global.conf");
+        let args: Vec<String> = spec
+            .expanded_args()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args,
+            [
+                "--clearenv",
+                "--unsetenv",
+                "MANGOHUD_CONFIG",
+                "--unsetenv",
+                "DISABLE_MANGOHUD",
+                "--setenv",
+                "MANGOHUD",
+                "1",
+                "--setenv",
+                "MANGOHUD_CONFIGFILE",
+                "/data/mangohud/global.conf",
+                "--",
+                "game",
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_json_deserializes_app_and_game_settings_with_hud_defaults() {
+        let app: crate::AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(app.hud.mode, crate::GlobalHudMode::Off);
+        assert_eq!(app.hud.mangohud.toggle_hud, crate::hud::DEFAULT_TOGGLE_HUD);
+        assert_eq!(app.hud.metal.alignment, crate::MetalHudAlignment::TopRight);
+
+        let game: crate::GameSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(game.game_hud.mode, crate::GameHudMode::InheritGlobal);
+        assert!(game.game_hud.custom_mangohud.is_none());
+        assert!(game.game_hud.custom_metal.is_none());
+    }
+
+    #[test]
+    fn resolve_effective_hud_covers_inheritance_cloning_and_legacy_fallbacks() {
+        use crate::hud::resolve_effective_hud;
+        use crate::{
+            GameHudMode, GameHudSettings, GlobalHudMode, GlobalHudSettings, HudBackend,
+            MetalHudAlignment, MetalHudSettings, ResolvedHud,
+        };
+
+        let mut global = GlobalHudSettings {
+            mode: GlobalHudMode::IroriProfile,
+            ..Default::default()
+        };
+        global.mangohud.fps_limit = Some(90);
+        global.metal.alignment = MetalHudAlignment::BottomRight;
+
+        // Inherit global profile on Linux & macOS
+        let inherit = GameHudSettings::default();
+        match resolve_effective_hud(&global, &inherit, false, false, HudBackend::MangoHud) {
+            ResolvedHud::MangoHudProfile(p) => assert_eq!(p.fps_limit, Some(90)),
+            other => panic!("expected profile, got {other:?}"),
+        }
+        assert_eq!(
+            resolve_effective_hud(&global, &inherit, false, false, HudBackend::MetalHud),
+            ResolvedHud::MetalHud(MetalHudSettings {
+                alignment: MetalHudAlignment::BottomRight
+            })
+        );
+
+        // Disabled overrides global active profile
+        let disabled = GameHudSettings {
+            mode: GameHudMode::Disabled,
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_effective_hud(&global, &disabled, true, true, HudBackend::MangoHud),
+            ResolvedHud::Disabled
+        );
+        assert_eq!(
+            resolve_effective_hud(&global, &disabled, true, true, HudBackend::MetalHud),
+            ResolvedHud::Disabled
+        );
+
+        // Custom mode clones global when custom profiles are None
+        let mut custom = GameHudSettings {
+            mode: GameHudMode::Custom,
+            ..Default::default()
+        };
+        custom.ensure_custom_from(&global);
+        assert_eq!(custom.custom_mangohud.as_ref().unwrap().fps_limit, Some(90));
+        assert_eq!(
+            custom.custom_metal.as_ref().unwrap().alignment,
+            MetalHudAlignment::BottomRight
+        );
+
+        // Legacy fallbacks when global mode is Off and game inherits global
+        let off_global = GlobalHudSettings::default();
+        assert_eq!(
+            resolve_effective_hud(&off_global, &inherit, true, false, HudBackend::MangoHud),
+            ResolvedHud::MangoHudProfile(Box::new(off_global.mangohud.clone()))
+        );
+        assert_eq!(
+            resolve_effective_hud(&off_global, &inherit, false, true, HudBackend::MetalHud),
+            ResolvedHud::MetalHud(MetalHudSettings::default())
+        );
+        assert_eq!(
+            resolve_effective_hud(&off_global, &inherit, false, false, HudBackend::MangoHud),
+            ResolvedHud::Off
+        );
+        assert_eq!(
+            resolve_effective_hud(&global, &inherit, true, true, HudBackend::Unsupported),
+            ResolvedHud::Off
+        );
+    }
+
+    #[test]
     fn windows_programs_keep_backslashes_on_every_system() {
         let line = r"-save C:\Users\me\saves -name a\b";
         assert_eq!(
@@ -1191,5 +1480,57 @@ mod tests {
             .await
             .unwrap();
         assert!(res.aborted);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wait_pids_exit_wakes_when_process_terminates() {
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.05"])
+            .spawn()
+            .unwrap();
+        let started = std::time::Instant::now();
+        let waited = wait_pids_exit(&[child.id()], Duration::from_secs(5));
+        let elapsed = started.elapsed();
+        let _ = child.wait();
+        assert!(waited);
+        assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+    }
+
+    /// What an opener starts may outlive it and hold whatever it was given:
+    /// Irori neither waits for that nor hands it a pipe, and it runs in a
+    /// process group of its own.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn opens_detached_without_pipes_or_waiting() {
+        let started = std::time::Instant::now();
+        let holds_output = CommandSpec::new("sh").args(["-c", "sleep 30 & exit 0"]);
+        open_detached(&holds_output).await.unwrap();
+        assert!(started.elapsed() < Duration::from_secs(10));
+
+        let no_pipes = CommandSpec::new("sh").args([
+            "-c",
+            "for fd in 0 1 2; do [ -p /dev/fd/$fd ] && exit 9; done; \
+             [ \"$(ps -o pgid= -p $$ | tr -d ' ')\" = \"$$\" ] || exit 8; exit 0",
+        ]);
+        open_detached(&no_pipes).await.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_opener_that_refuses_is_an_error() {
+        let refuses = CommandSpec::new("sh").args(["-c", "exit 4"]);
+        let e = open_detached(&refuses).await.unwrap_err();
+        assert!(format!("{e:#}").contains('4'), "{e:#}");
+        assert!(
+            open_detached(&CommandSpec::new("/nonexistent/opener"))
+                .await
+                .is_err()
+        );
+        // One still running when the wait ends started what opens the link.
+        let foreground = CommandSpec::new("sh").args(["-c", "sleep 30"]);
+        open_detached_within(&foreground, Duration::from_millis(200))
+            .await
+            .unwrap();
     }
 }

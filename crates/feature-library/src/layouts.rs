@@ -69,6 +69,29 @@ pub fn focus_columns(width: f32) -> usize {
         .unwrap_or(1)
 }
 
+/// Covers to a row in the Focus view's column for a library `width` rem
+/// wide when the user asked for `requested` (`libraryFocusColumns`, 0 for
+/// as many as fit): their number while the page beside keeps
+/// [`FOCUS_PAGE_MIN_REM`], fewer in a window too narrow for it.
+pub fn focus_columns_for(requested: u32, width: f32) -> usize {
+    let fit = focus_columns(width);
+    match requested {
+        0 => fit,
+        n => (n as usize).clamp(1, FOCUS_MAX_COLUMNS).min(fit),
+    }
+}
+
+/// The column count nearest to a column dragged to `width` rem, from one to
+/// [`FOCUS_MAX_COLUMNS`].
+pub fn focus_columns_near(width: f32) -> usize {
+    if !width.is_finite() {
+        return 1;
+    }
+    let per = FOCUS_TILE_REM + grid::GAP_REM;
+    let n = ((width - 2.0 * grid::EDGE_REM + grid::GAP_REM) / per).round();
+    (n.max(1.0) as usize).min(FOCUS_MAX_COLUMNS)
+}
+
 /// What a click on a game does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Click {
@@ -134,6 +157,30 @@ mod tests {
         assert_eq!(next_layout(LibraryLayout::Grid), LibraryLayout::List);
         assert_eq!(next_layout(LibraryLayout::List), LibraryLayout::Focus);
         assert_eq!(next_layout(LibraryLayout::Focus), LibraryLayout::Grid);
+    }
+
+    #[test]
+    fn the_focus_column_keeps_the_asked_count_while_the_page_fits() {
+        let wide = 200.0;
+        assert_eq!(focus_columns_for(0, wide), 3);
+        assert_eq!(focus_columns_for(1, wide), 1);
+        assert_eq!(focus_columns_for(2, wide), 2);
+        assert_eq!(focus_columns_for(9, wide), 3);
+        // Too narrow for two beside the page: one, whatever was asked.
+        let narrow = focus_column_rem(1) + FOCUS_PAGE_MIN_REM + 1.0;
+        assert_eq!(focus_columns_for(3, narrow), 1);
+        assert_eq!(focus_columns_for(0, narrow), 1);
+    }
+
+    #[test]
+    fn a_dragged_column_snaps_to_the_nearest_count() {
+        for n in 1..=3 {
+            assert_eq!(focus_columns_near(focus_column_rem(n)), n);
+            assert_eq!(focus_columns_near(focus_column_rem(n) + 2.0), n);
+        }
+        assert_eq!(focus_columns_near(0.0), 1);
+        assert_eq!(focus_columns_near(500.0), 3);
+        assert_eq!(focus_columns_near(f32::NAN), 1);
     }
 
     #[test]

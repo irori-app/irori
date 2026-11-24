@@ -13,11 +13,16 @@
 //! A sync follows library and settings changes after a quiet moment, and
 //! only talks to Sunshine when what Irori wants there differs from what it
 //! last put there, or the last attempt failed.
+//!
+//! Sunshine may run on another computer (`iroriSunshine.address`): its
+//! applications then start `irori` from that computer's `PATH`, and its
+//! certificate is trusted on first use (`remote`).
 
 mod client;
 mod cover;
 mod detect;
 pub(crate) mod plan;
+mod remote;
 mod stream;
 
 use std::collections::BTreeMap;
@@ -30,11 +35,13 @@ use serde::{Deserialize, Serialize};
 
 pub use client::SunshineLogin;
 pub use detect::{StreamHost, SunshineInstall};
+pub use remote::{CertificateChanged, parse_address as parse_sunshine_address};
 pub use stream::StreamClient;
 
 use crate::Backend;
-use client::{Client, Place};
+use client::{Client, Place, Tls};
 use plan::{Step, Wanted};
+use remote::{Address, PinVerifier};
 
 /// Changes are gathered this long before a sync.
 const QUIET: Duration = Duration::from_secs(3);
@@ -86,6 +93,15 @@ pub struct SunshineStatus {
     pub applications: usize,
     pub last: Option<SunshineReport>,
     pub syncing: bool,
+    /// Sunshine on another computer: `host:port`.
+    pub remote: Option<String>,
+    /// The address setting can't be read, and why.
+    pub address_error: Option<String>,
+    /// The fingerprint of the remote certificate Irori trusts.
+    pub pinned: Option<String>,
+    /// The remote certificate changed: the new one's fingerprint, waiting
+    /// for the user to accept it.
+    pub changed_certificate: Option<String>,
 }
 
 impl SunshineStatus {
@@ -110,6 +126,15 @@ struct CoverRecord {
     path: String,
 }
 
+/// A remote certificate that differs from the trusted one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+struct ChangedCertificate {
+    /// `host:port`.
+    address: String,
+    fingerprint: String,
+}
+
 /// `state/sunshine.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -118,6 +143,45 @@ struct SunshineState {
     synced: Vec<Wanted>,
     covers: BTreeMap<String, CoverRecord>,
     last: Option<SunshineReport>,
+    /// Certificates trusted on first use, by `host:port`. Fingerprints
+    /// aren't secret, so they live here rather than with the login.
+    pins: BTreeMap<String, String>,
+    changed_certificate: Option<ChangedCertificate>,
+}
+
+impl SunshineState {
+    /// Remember how connecting to `address` went: the first certificate it
+    /// met is trusted from now on, and a changed one waits for the user.
+    fn note_certificate(&mut self, address: &Address, outcome: Result<Option<String>, String>) {
+        match outcome {
+            Ok(seen) => {
+                if let Some(fingerprint) = seen {
+                    self.pins.entry(address.key()).or_insert(fingerprint);
+                }
+                self.changed_certificate = None;
+            }
+            Err(fingerprint) => {
+                self.changed_certificate = Some(ChangedCertificate {
+                    address: address.key(),
+                    fingerprint,
+                })
+            }
+        }
+    }
+
+    /// Trust the changed certificate of `address`; false when none waits.
+    fn accept_certificate(&mut self, address: &Address) -> bool {
+        match self.changed_certificate.take() {
+            Some(changed) if changed.address == address.key() => {
+                self.pins.insert(changed.address, changed.fingerprint);
+                true
+            }
+            other => {
+                self.changed_certificate = other;
+                false
+            }
+        }
+    }
 }
 
 fn state_file() -> PathBuf {
@@ -129,8 +193,12 @@ fn login_file() -> PathBuf {
 }
 
 /// The program Sunshine should start: the AppImage itself rather than its
-/// mount, which is gone after Irori exits.
-fn program() -> Option<String> {
+/// mount, which is gone after Irori exits. Sunshine on another computer
+/// starts that computer's `irori`, found on its `PATH`.
+fn program(remote: bool) -> Option<String> {
+    if remote {
+        return Some("irori".to_string());
+    }
     if let Some(appimage) = std::env::var_os("APPIMAGE").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(appimage).to_string_lossy().into_owned());
     }
@@ -153,17 +221,34 @@ pub(crate) struct SunshineService {
 }
 
 impl Backend {
-    /// Sunshine on this computer and how Irori's games there are doing.
+    /// Sunshine (on this computer, or the one the address names) and how
+    /// Irori's games there are doing.
     pub async fn sunshine_status(&self) -> SunshineStatus {
         let prefs = self.settings.app().sunshine.clone();
+        let address = remote::parse_address(&prefs.address);
+        let remote = address
+            .as_ref()
+            .ok()
+            .and_then(Option::as_ref)
+            .filter(|a| !a.is_loopback())
+            .cloned();
         let (install, program_installed) =
             tokio::task::spawn_blocking(|| (detect::detect(), detect::program_installed()))
                 .await
                 .unwrap_or_default();
         let login = self.sunshine_login().await.ok().flatten();
         let state = read_state().await;
+        let key = remote.as_ref().map(Address::key);
         SunshineStatus {
-            port: port(prefs.port, install.as_ref()),
+            pinned: key.as_ref().and_then(|k| state.pins.get(k).cloned()),
+            changed_certificate: state
+                .changed_certificate
+                .as_ref()
+                .filter(|c| key.as_deref() == Some(c.address.as_str()))
+                .map(|c| c.fingerprint.clone()),
+            remote: key,
+            address_error: address.err().map(|e| format!("{e:#}")),
+            port: port(&prefs, install.as_ref()),
             program_installed: program_installed || install.is_some(),
             install,
             username: login.map(|l| l.username),
@@ -218,10 +303,30 @@ impl Backend {
         self.apply_to_sunshine(Vec::new()).await
     }
 
+    /// Trust the certificate Sunshine on the other computer shows now, in
+    /// place of the one it showed first, then sync.
+    pub async fn accept_sunshine_certificate(&self) -> Result<SunshineReport> {
+        let prefs = self.settings.app().sunshine.clone();
+        let address = remote::parse_address(&prefs.address)?
+            .filter(|a| !a.is_loopback())
+            .context("Sunshine runs on this computer: there is no certificate to trust")?;
+        let mut state = read_state().await;
+        if !state.accept_certificate(&address) {
+            anyhow::bail!("Sunshine's certificate hasn't changed");
+        }
+        let saved = state.clone();
+        tokio::task::spawn_blocking(move || json_store::write(&state_file(), &saved))
+            .await
+            .context("Could not save Sunshine's certificate")??;
+        self.bus.emit(Event::SunshineChanged);
+        self.sync_sunshine().await
+    }
+
     /// What Irori wants in Sunshine now. Blocking.
     fn sunshine_wanted(&self) -> Vec<Wanted> {
         let prefs = self.settings.app().sunshine.clone();
-        let Some(program) = program() else {
+        let remote = is_remote(&prefs);
+        let Some(program) = program(remote) else {
             return Vec::new();
         };
         let library = self.library();
@@ -357,14 +462,38 @@ impl Backend {
                 .await?
                 .context("Enter the user name and password of Sunshine's web UI first")?;
             let prefs = self.settings.app().sunshine.clone();
-            let install = tokio::task::spawn_blocking(detect::detect)
-                .await
-                .unwrap_or_default();
+            let address = remote::parse_address(&prefs.address)?;
+            let remote = address.clone().filter(|a| !a.is_loopback());
+            let base = match &address {
+                Some(a) => a.base(),
+                None => {
+                    let install = tokio::task::spawn_blocking(detect::detect)
+                        .await
+                        .unwrap_or_default();
+                    format!("https://127.0.0.1:{}", port(&prefs, install.as_ref()))
+                }
+            };
+            let tls = match &remote {
+                Some(a) => Tls::Pinned(PinVerifier::new(state.pins.get(&a.key()).cloned())),
+                None => Tls::Local,
+            };
             let remembered = self.sunshine.session.lock().clone();
-            let client =
-                Client::connect(port(prefs.port, install.as_ref()), login, remembered).await?;
+            let connected = Client::connect(base, tls, login, remembered).await;
+            if let Some(a) = &remote {
+                let outcome = match &connected {
+                    Ok(client) => Ok(client.certificate()),
+                    Err(e) => match e.downcast_ref::<CertificateChanged>() {
+                        Some(changed) => Err(changed.fingerprint.clone()),
+                        // Not reached: nothing to learn about the certificate.
+                        None => Ok(None),
+                    },
+                };
+                state.note_certificate(a, outcome);
+            }
+            let client = connected?;
             *self.sunshine.session.lock() = client.session();
-            let program = program().context("Irori couldn't find its own program")?;
+            let program =
+                program(remote.is_some()).context("Irori couldn't find its own program")?;
             let report = sync(&client, &wanted, &program, &mut state).await?;
             anyhow::Ok(SunshineReport {
                 host: Some(client.host()),
@@ -397,12 +526,21 @@ impl Backend {
     }
 }
 
-/// The port of Sunshine's web UI: the setting, else Sunshine's own.
-fn port(setting: u16, install: Option<&SunshineInstall>) -> u16 {
-    if setting != 0 {
-        return setting;
+/// The port of Sunshine's web UI: the address's, the setting, else
+/// Sunshine's own.
+fn port(prefs: &irori_core::SunshinePrefs, install: Option<&SunshineInstall>) -> u16 {
+    if let Ok(Some(address)) = remote::parse_address(&prefs.address) {
+        return address.port;
+    }
+    if prefs.port != 0 {
+        return prefs.port;
     }
     install.map_or(detect::web_port(""), |i| i.web_port)
+}
+
+/// Sunshine runs on another computer.
+fn is_remote(prefs: &irori_core::SunshinePrefs) -> bool {
+    remote::parse_address(&prefs.address).is_ok_and(|a| a.is_some_and(|a| !a.is_loopback()))
 }
 
 async fn read_state() -> SunshineState {

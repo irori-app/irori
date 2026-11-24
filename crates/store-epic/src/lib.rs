@@ -1049,6 +1049,9 @@ impl Store for EpicStore {
         {
             tracing::warn!("Epic Games Launcher sync: {e:#}");
         }
+        if let Err(e) = self.adopt_egl_updates().await {
+            tracing::warn!("reading builds the Epic Games Launcher installed: {e:#}");
+        }
         // Sessions played offline go up once Epic is reachable again.
         self.flush_playtime().await;
         self.bus.emit(Event::LibraryChanged(Runner::Legendary));

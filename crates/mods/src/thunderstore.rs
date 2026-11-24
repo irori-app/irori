@@ -473,6 +473,8 @@ pub struct Package {
     /// `Namespace-Name-1.2.3`.
     pub dependencies: Vec<String>,
     pub download_url: String,
+    /// The communities listing it (`riskofrain2`).
+    pub communities: Vec<String>,
 }
 
 impl Package {
@@ -513,7 +515,67 @@ pub fn parse_package(body: &Value) -> Option<Package> {
             })
             .unwrap_or_default(),
         download_url,
+        communities: body
+            .get("community_listings")
+            .and_then(Value::as_array)
+            .map(|l| {
+                l.iter()
+                    .filter_map(|c| c.get("community").and_then(Value::as_str))
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
     })
+}
+
+/// A Thunderstore "Install with Mod Manager" link, the scheme r2modman
+/// registers: `ror2mm://v1/install/thunderstore.io/<namespace>/<name>/<version>/`.
+/// It names the package, not the game.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModManagerLink {
+    pub namespace: String,
+    pub name: String,
+    pub version: String,
+}
+
+impl ModManagerLink {
+    pub const SCHEME: &'static str = "ror2mm";
+
+    /// The link's package, when it is one of Thunderstore's (any
+    /// `thunderstore.io` host) and its parts are plain package names, so they
+    /// can't reach another address of the API.
+    pub fn parse(link: &str) -> Option<Self> {
+        let rest = link.trim().strip_prefix("ror2mm://")?;
+        let rest = rest.split(['?', '#']).next()?;
+        let parts: Vec<&str> = rest.split('/').filter(|p| !p.is_empty()).collect();
+        let [version_tag, "install", host, namespace, name, version] = parts.as_slice() else {
+            return None;
+        };
+        let host = host.to_ascii_lowercase();
+        if *version_tag != "v1"
+            || (host != "thunderstore.io" && !host.ends_with(".thunderstore.io"))
+        {
+            return None;
+        }
+        let plain = |s: &str| {
+            !s.is_empty()
+                && s.len() <= 128
+                && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        };
+        let version_ok = !version.is_empty()
+            && version.len() <= 32
+            && version.bytes().all(|b| b.is_ascii_digit() || b == b'.');
+        (plain(namespace) && plain(name) && version_ok).then(|| Self {
+            namespace: namespace.to_string(),
+            name: name.to_string(),
+            version: version.to_string(),
+        })
+    }
+
+    /// `Namespace-Name`.
+    pub fn full_name(&self) -> String {
+        format!("{}-{}", self.namespace, self.name)
+    }
 }
 
 /// `Namespace-Name-1.2.3` → (`Namespace`, `Name`).

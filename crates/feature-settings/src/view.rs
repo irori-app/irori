@@ -26,7 +26,9 @@ use irori_ui::i18n::{t, t_args};
 use crate::app_update::AppUpdatePanel;
 use crate::appearance::AppearancePreview;
 use crate::backup::BackupPanel;
+use crate::feedback::{self, Feedback};
 use crate::form::{FormTarget, SettingsForm};
+use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::{LanguageStamp, english};
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
@@ -37,7 +39,9 @@ use crate::widgets::{group_heading, muted, nav_button, panel};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
     General,
+    Controller,
     GameDefaults,
+    PerformanceHud,
     Appearance,
     Storage,
     Advanced,
@@ -49,9 +53,11 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 10] = [
+    pub const ALL: [SettingsSection; 12] = [
         SettingsSection::General,
+        SettingsSection::Controller,
         SettingsSection::GameDefaults,
+        SettingsSection::PerformanceHud,
         SettingsSection::Appearance,
         SettingsSection::Storage,
         SettingsSection::Advanced,
@@ -62,11 +68,21 @@ impl SettingsSection {
         SettingsSection::About,
     ];
 
+    /// Whether this settings section is available on the current host.
+    pub fn supported_on_host(self) -> bool {
+        match self {
+            SettingsSection::PerformanceHud => irori_core::HudBackend::current().is_supported(),
+            _ => true,
+        }
+    }
+
     /// Route id of the section.
     pub fn id(self) -> &'static str {
         match self {
             SettingsSection::General => "general",
+            SettingsSection::Controller => "controller",
             SettingsSection::GameDefaults => "game-defaults",
+            SettingsSection::PerformanceHud => "hud",
             SettingsSection::Appearance => "appearance",
             SettingsSection::Storage => "storage",
             SettingsSection::Advanced => "advanced",
@@ -78,12 +94,15 @@ impl SettingsSection {
         }
     }
 
-    /// Parse a route id; accepts Heroic's route names. Unknown ids open General.
+    /// Parse a route id; accepts Heroic's route names. Unknown or unsupported
+    /// ids open General.
     pub fn from_id(id: &str) -> Self {
-        match id {
+        let parsed = match id {
             "game-defaults" | "games" | "games_settings" | "wine" | "defaults" => {
                 SettingsSection::GameDefaults
             }
+            "controller" | "controllers" | "gamepad" | "buttons" => SettingsSection::Controller,
+            "hud" | "mangohud" | "metal-hud" | "performance-hud" => SettingsSection::PerformanceHud,
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
             "storage" | "disks" | "cleanup" => SettingsSection::Storage,
             "advanced" => SettingsSection::Advanced,
@@ -93,13 +112,20 @@ impl SettingsSection {
             "system" | "systeminfo" | "system-info" => SettingsSection::SystemInfo,
             "about" => SettingsSection::About,
             _ => SettingsSection::General,
+        };
+        if parsed.supported_on_host() {
+            parsed
+        } else {
+            SettingsSection::General
         }
     }
 
     fn label_key(self) -> &'static str {
         match self {
             SettingsSection::General => "settings.page.general",
+            SettingsSection::Controller => "settings.page.controller",
             SettingsSection::GameDefaults => "settings.page.game_defaults",
+            SettingsSection::PerformanceHud => "settings.page.performance_hud",
             SettingsSection::Appearance => "settings.page.appearance",
             SettingsSection::Storage => "settings.page.storage",
             SettingsSection::Advanced => "settings.page.advanced",
@@ -119,7 +145,14 @@ impl SettingsSection {
     fn description(self) -> SharedString {
         let key = match self {
             SettingsSection::General => "settings.page.general_description",
+            SettingsSection::Controller => "settings.page.controller_description",
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
+            SettingsSection::PerformanceHud => match irori_core::HudBackend::current() {
+                irori_core::HudBackend::MetalHud => {
+                    "settings.page.performance_hud_description_metal"
+                }
+                _ => "settings.page.performance_hud_description_mangohud",
+            },
             SettingsSection::Appearance => "settings.page.appearance_description",
             SettingsSection::Storage => "settings.page.storage_description",
             SettingsSection::Advanced => "settings.page.advanced_description",
@@ -135,7 +168,9 @@ impl SettingsSection {
     fn icon(self) -> IconName {
         match self {
             SettingsSection::General => IconName::Settings,
+            SettingsSection::Controller => IconName::Gamepad2,
             SettingsSection::GameDefaults => IconName::Gamepad2,
+            SettingsSection::PerformanceHud => IconName::Gauge,
             SettingsSection::Appearance => IconName::Palette,
             SettingsSection::Storage => IconName::HardDrive,
             SettingsSection::Advanced => IconName::Wrench,
@@ -150,6 +185,9 @@ impl SettingsSection {
     /// English search terms for pages without fields.
     fn keywords(self) -> &'static str {
         match self {
+            SettingsSection::PerformanceHud => {
+                "performance hud mangohud metal overlay fps frametime gpu cpu vram temperature"
+            }
             SettingsSection::Logs => "logs log launcher debug report problem",
             SettingsSection::SystemInfo => {
                 "system information hardware cpu gpu memory driver os report"
@@ -165,6 +203,7 @@ impl SettingsSection {
     fn field_section(self) -> Option<FieldSection> {
         match self {
             SettingsSection::General => Some(FieldSection::General),
+            SettingsSection::Controller => Some(FieldSection::Controller),
             SettingsSection::Appearance => Some(FieldSection::Appearance),
             SettingsSection::Advanced => Some(FieldSection::Advanced),
             SettingsSection::Saves => Some(FieldSection::Saves),
@@ -190,12 +229,15 @@ pub struct SettingsView {
     query: String,
     app_form: Entity<SettingsForm>,
     defaults_form: Entity<SettingsForm>,
+    hud: Entity<HudPanel>,
     log: Entity<LogViewer>,
     backup: Entity<BackupPanel>,
     app_update: Entity<AppUpdatePanel>,
     preview: Entity<AppearancePreview>,
     storage: Entity<StoragePanel>,
     sysinfo: SysInfoState,
+    /// A problem report is reading this computer's facts.
+    reporting: bool,
     language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
 }
@@ -218,6 +260,7 @@ impl SettingsView {
         );
         let app_form = cx.new(|cx| SettingsForm::new(FormTarget::App, window, cx));
         let defaults_form = cx.new(|cx| SettingsForm::new(FormTarget::Defaults, window, cx));
+        let hud = cx.new(|cx| HudPanel::new(HudPanelScope::Global, None, window, cx));
         // The upload name identifies the log at the paste service and in the
         // upload history, so it stays the same in every language.
         let log =
@@ -229,12 +272,14 @@ impl SettingsView {
             query: String::new(),
             app_form,
             defaults_form,
+            hud,
             log,
             backup: cx.new(|cx| BackupPanel::new(window, cx)),
             app_update: cx.new(AppUpdatePanel::new),
             preview: cx.new(AppearancePreview::new),
             storage: storage.clone(),
             sysinfo: SysInfoState::default(),
+            reporting: false,
             language: LanguageStamp::new(),
             // The header's Rescan button shows the measuring.
             _subscriptions: vec![sub, cx.observe(&storage, |_, _, cx| cx.notify())],
@@ -275,6 +320,11 @@ impl SettingsView {
     }
 
     fn open(&mut self, section: SettingsSection, window: &mut Window, cx: &mut Context<Self>) {
+        let section = if section.supported_on_host() {
+            section
+        } else {
+            SettingsSection::General
+        };
         if self.section == SettingsSection::Logs && section != SettingsSection::Logs {
             self.log.update(cx, |l, _| l.stop());
         }
@@ -389,15 +439,18 @@ impl SettingsView {
 
     fn render_nav(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let searching = !self.query.trim().is_empty();
-        let buttons = SettingsSection::ALL.map(|s| {
-            nav_button(
-                ElementId::Name(format!("settings-nav-{}", s.id()).into()),
-                s.icon(),
-                s.label(),
-                !searching && s == self.section,
-                cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
-            )
-        });
+        let buttons = SettingsSection::ALL
+            .into_iter()
+            .filter(|s| s.supported_on_host())
+            .map(|s| {
+                nav_button(
+                    ElementId::Name(format!("settings-nav-{}", s.id()).into()),
+                    s.icon(),
+                    s.label(),
+                    !searching && s == self.section,
+                    cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
+                )
+            });
         v_flex()
             .w_56()
             .flex_shrink_0()
@@ -420,6 +473,7 @@ impl SettingsView {
         let q = self.query.trim().to_lowercase();
         let pages: Vec<SettingsSection> = SettingsSection::ALL
             .into_iter()
+            .filter(|s| s.supported_on_host())
             .filter(|s| {
                 let hay = format!("{} {} {}", s.label(), english(s.label_key()), s.keywords())
                     .to_lowercase();
@@ -605,6 +659,69 @@ impl SettingsView {
         v_flex().gap_4().child(list).into_any_element()
     }
 
+    fn open_feedback(&mut self, way: Feedback, window: &mut Window, cx: &mut Context<Self>) {
+        if way == Feedback::Report {
+            if self.reporting {
+                return;
+            }
+            self.reporting = true;
+            cx.notify();
+        }
+        let task = feedback::open(way, window, cx);
+        cx.spawn(async move |this, cx| {
+            task.await;
+            this.update(cx, |this, cx| {
+                this.reporting = false;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Help and feedback: one row per way to reach the project.
+    fn render_feedback(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let border = cx.theme().border;
+        Feedback::ALL
+            .into_iter()
+            .enumerate()
+            .fold(panel(cx), |list, (i, way)| {
+                let button = if way == Feedback::Report {
+                    "settings.about.feedback.report_open"
+                } else {
+                    "settings.about.feedback.open"
+                };
+                list.child(
+                    h_flex()
+                        .gap_3()
+                        .px_4()
+                        .py_3()
+                        .when(i > 0, |r| r.border_t_1().border_color(border))
+                        .child(Icon::new(way.icon()).text_color(cx.theme().muted_foreground))
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .child(div().text_sm().font_medium().child(t(way.label_key())))
+                                .child(muted(t(way.help_key()), cx)),
+                        )
+                        .child(
+                            Button::new(ElementId::Name(
+                                format!("feedback-{}", way.label_key()).into(),
+                            ))
+                            .outline()
+                            .small()
+                            .icon(IconName::ExternalLink)
+                            .label(t(button))
+                            .loading(way == Feedback::Report && self.reporting)
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| this.open_feedback(way, window, cx),
+                            )),
+                        ),
+                )
+            })
+    }
+
     fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {
         let credits: [(SharedString, SharedString); 6] = [
             (t("settings.about.credit_gpui"), "Apache-2.0".into()),
@@ -628,6 +745,8 @@ impl SettingsView {
                     .child(muted(t("settings.about.tagline"), cx)),
             )
             .child(self.app_update.clone())
+            .child(group_heading(t("settings.about.feedback.title"), cx))
+            .child(self.render_feedback(cx))
             .child(group_heading(t("settings.about.third_party"), cx))
             .child(credits.into_iter().fold(panel(cx), |p, (name, license)| {
                 p.child(
@@ -742,10 +861,12 @@ impl Render for SettingsView {
                         .child(self.app_form.clone())
                         .into_any_element(),
                     SettingsSection::General
+                    | SettingsSection::Controller
                     | SettingsSection::Advanced
                     | SettingsSection::Saves => self.app_form.clone().into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),
                     SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
+                    SettingsSection::PerformanceHud => self.hud.clone().into_any_element(),
                     SettingsSection::Backup => self.backup.clone().into_any_element(),
                     SettingsSection::SystemInfo => self.render_sysinfo(cx),
                     SettingsSection::About => self.render_about(cx),
@@ -786,12 +907,24 @@ mod tests {
     #[test]
     fn section_ids_round_trip_and_accept_heroic_names() {
         for s in SettingsSection::ALL {
-            assert_eq!(SettingsSection::from_id(s.id()), s);
+            if s.supported_on_host() {
+                assert_eq!(SettingsSection::from_id(s.id()), s);
+            } else {
+                assert_eq!(SettingsSection::from_id(s.id()), SettingsSection::General);
+            }
         }
         assert_eq!(
             SettingsSection::from_id("games_settings"),
             SettingsSection::GameDefaults
         );
+        let expected_hud = if SettingsSection::PerformanceHud.supported_on_host() {
+            SettingsSection::PerformanceHud
+        } else {
+            SettingsSection::General
+        };
+        for alias in ["hud", "mangohud", "metal-hud", "performance-hud"] {
+            assert_eq!(SettingsSection::from_id(alias), expected_hud);
+        }
         assert_eq!(
             SettingsSection::from_id("systeminfo"),
             SettingsSection::SystemInfo

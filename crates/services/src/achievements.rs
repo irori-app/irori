@@ -1,20 +1,33 @@
 //! Achievements across the library. Every answer a store gives
 //! ([`Backend::achievements`]) is summed up per game in
 //! `state/achievements.json`, which the stats page totals without asking
-//! any store. After a session the game's achievements are asked for again
-//! and, when `iroriAchievementNotices` is on, new unlocks are announced.
+//! any store. Each game's unlock history there only grows: an unlock a
+//! later answer leaves out (another account, a store that forgot it) stays,
+//! with the earliest time known. After a session the game's achievements
+//! are asked for again and, when `iroriAchievementNotices` is on, new
+//! unlocks are announced.
+//!
+//! While a game runs, with notices on, unlocks are announced as they
+//! happen ([`Event::AchievementsUnlocked`], shown over the game by the UI).
+//! Services follow the store's own signal where it has one
+//! ([`AchievementSignal`]: GOG's Galaxy service reports unlocks, Steam
+//! writes the game's stats file) and ask nothing in between; otherwise
+//! they ask every few minutes, and only during the session.
+//!
 //! With `iroriFileAchievements` on, games whose files hold an emulator's
 //! achievements answer from those files instead of their store
 //! ([`crate::file_achievements`]).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use irori_core::util::{parse_rfc3339, unix_now};
-use irori_core::{Achievement, GameId, Notice, NoticeLevel, Paths, json_store};
-use parking_lot::RwLock;
+use irori_core::{
+    Achievement, AchievementSignal, Event, GameId, Notice, NoticeLevel, Paths, json_store,
+};
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
 use crate::Backend;
@@ -55,6 +68,9 @@ pub struct GameAchievements {
     pub recent: Vec<Unlock>,
     /// The rarest unlock.
     pub rarest: Option<Unlock>,
+    /// Every unlock ever answered, newest first (undated ones last). Only
+    /// grows: see [`GameAchievements::keep_history`].
+    pub history: Vec<Unlock>,
 }
 
 impl GameAchievements {
@@ -75,6 +91,7 @@ impl GameAchievements {
             .filter(|a| a.rarity > 0.0)
             .min_by(|a, b| a.rarity.total_cmp(&b.rarity))
             .map(|a| unlock(a));
+        let history: Vec<Unlock> = unlocked.iter().map(|a| unlock(a)).collect();
         Self {
             total: list.len(),
             unlocked: unlocked.len(),
@@ -86,17 +103,65 @@ impl GameAchievements {
             points_unlocked: unlocked.iter().map(|a| a.points as u64).sum(),
             updated: unix_now(),
             unlocked_ids: unlocked.iter().map(|a| a.id.clone()).collect(),
-            recent: unlocked
-                .iter()
-                .take(RECENT_PER_GAME)
-                .map(|a| unlock(a))
-                .collect(),
+            recent: history.iter().take(RECENT_PER_GAME).cloned().collect(),
             rarest,
+            history,
         }
     }
 
     pub fn is_perfect(&self) -> bool {
         self.total > 0 && self.unlocked == self.total
+    }
+
+    /// Keep what `before` knew that this answer doesn't: unlocks it leaves
+    /// out stay in the history (and count as seen), and an unlock keeps the
+    /// earliest time either gave it. Names and icons follow this answer.
+    pub fn keep_history(&mut self, before: &GameAchievements) {
+        // Totals written before the history was kept have only the latest.
+        let earlier = if before.history.is_empty() {
+            &before.recent
+        } else {
+            &before.history
+        };
+        let by_id: HashMap<String, usize> = self
+            .history
+            .iter()
+            .enumerate()
+            .map(|(ix, u)| (u.id.clone(), ix))
+            .collect();
+        for old in earlier {
+            match by_id.get(&old.id) {
+                Some(&ix) => {
+                    let now = &mut self.history[ix];
+                    let earlier_time = match (parse_rfc3339(&old.at), parse_rfc3339(&now.at)) {
+                        (Some(a), Some(b)) => a < b,
+                        (Some(_), None) => true,
+                        _ => false,
+                    };
+                    if earlier_time {
+                        now.at = old.at.clone();
+                    }
+                }
+                None => self.history.push(old.clone()),
+            }
+        }
+        self.history
+            .sort_by_key(|u| std::cmp::Reverse(parse_rfc3339(&u.at).unwrap_or(i64::MIN)));
+        self.unlocked_ids
+            .extend(before.unlocked_ids.iter().cloned());
+        self.unlocked_ids
+            .extend(self.history.iter().map(|u| u.id.clone()));
+        self.recent = self.history.iter().take(RECENT_PER_GAME).cloned().collect();
+    }
+
+    /// The unlocks to count by time: the history, or the latest few in
+    /// totals written before it was kept.
+    fn dated_unlocks(&self) -> &[Unlock] {
+        if self.history.is_empty() {
+            &self.recent
+        } else {
+            &self.history
+        }
     }
 }
 
@@ -153,12 +218,15 @@ impl AchievementIndex {
         self.games
             .iter()
             .filter(|(k, _)| counts(k))
-            .flat_map(|(_, g)| &g.recent)
+            .flat_map(|(_, g)| g.dated_unlocks())
             .filter_map(|u| parse_rfc3339(&u.at))
             .filter(|t| (from..until).contains(t))
             .count()
     }
 }
+
+/// Unlocks of a running game waiting for the UI, at most this many per game.
+const LIVE_PER_GAME: usize = 50;
 
 /// The index and where it lives.
 pub(crate) struct AchievementStore {
@@ -166,6 +234,8 @@ pub(crate) struct AchievementStore {
     index: RwLock<Option<Arc<AchievementIndex>>>,
     /// One read-modify-write at a time.
     write: tokio::sync::Mutex<()>,
+    /// Unlocks a running game made that the UI hasn't shown yet, by game key.
+    live: Mutex<HashMap<String, Vec<Achievement>>>,
 }
 
 impl Default for AchievementStore {
@@ -174,6 +244,7 @@ impl Default for AchievementStore {
             path: Paths::get().state_dir().join("achievements.json"),
             index: RwLock::new(None),
             write: tokio::sync::Mutex::new(()),
+            live: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -197,11 +268,16 @@ impl AchievementStore {
     async fn record(&self, key: String, list: &[Achievement]) -> Option<GameAchievements> {
         let _one = self.write.lock().await;
         let mut index = (*self.current().await).clone();
-        let before = if list.is_empty() {
-            index.games.remove(&key)
+        let before = index.games.get(&key).cloned();
+        let mut now = GameAchievements::from_list(list);
+        if let Some(before) = &before {
+            now.keep_history(before);
+        }
+        if now.history.is_empty() && list.is_empty() {
+            index.games.remove(&key);
         } else {
-            index.games.insert(key, GameAchievements::from_list(list))
-        };
+            index.games.insert(key, now);
+        }
         let index = Arc::new(index);
         *self.index.write() = Some(index.clone());
         let path = self.path.clone();
@@ -241,6 +317,35 @@ impl Backend {
         self.achievement_store.current().await
     }
 
+    /// How many of a game's achievements are unlocked, of how many, as last
+    /// answered; `None` before an answer was read this run.
+    pub fn achievement_progress(&self, id: &GameId) -> Option<(usize, usize)> {
+        let index = self.achievement_store.index.read().clone()?;
+        let game = index.games.get(&id.key())?;
+        (game.total > 0).then_some((game.unlocked, game.total))
+    }
+
+    /// Every unlock of a game Irori has seen, newest first.
+    pub async fn achievement_history(&self, id: &GameId) -> Vec<Unlock> {
+        self.achievement_store
+            .current()
+            .await
+            .games
+            .get(&id.key())
+            .map(|g| g.history.clone())
+            .unwrap_or_default()
+    }
+
+    /// The unlocks a running game made since the UI last took them, oldest
+    /// first (see [`Event::AchievementsUnlocked`]).
+    pub fn take_live_unlocks(&self, id: &GameId) -> Vec<Achievement> {
+        self.achievement_store
+            .live
+            .lock()
+            .remove(&id.key())
+            .unwrap_or_default()
+    }
+
     /// Ask the stores for the achievements of `ids`, one game after
     /// another, so the totals cover games not opened yet. Returns how many
     /// have achievements; a game whose store fails is skipped.
@@ -263,42 +368,132 @@ impl Backend {
     /// After a session: ask again (unlocks happen while playing) and, when
     /// the setting is on, announce what the session unlocked.
     pub(crate) async fn after_session_achievements(&self, id: &GameId, title: &str) {
-        self.check_unlocks(id, title).await;
+        // The game is gone: nothing is shown over it any more.
+        self.achievement_store.live.lock().remove(&id.key());
+        self.check_unlocks(id, title, Announce::Notice).await;
     }
 
-    /// While a game runs, with `iroriAchievementNotices` on: ask for its
-    /// achievements every so often and announce new unlocks as they happen,
-    /// so they show over the game (a desktop notification while Irori is in
-    /// the background) rather than only after it. Unlocks the game keeps in
-    /// its own files are read every minute; a store is asked every few.
+    /// While a game runs, with `iroriAchievementNotices` on: announce new
+    /// unlocks as they happen, so they show over the game rather than only
+    /// after it. The store's own signal is followed where it has one (see
+    /// the module docs) and nothing is asked in between; otherwise unlocks
+    /// the game keeps in its own files are read every minute and a store is
+    /// asked every few.
     pub(crate) async fn watch_achievements_while_playing(
         &self,
         id: GameId,
         title: String,
         stop: tokio_util::sync::CancellationToken,
     ) {
-        let mut every = LIVE_FILES;
+        // Once at the start, so the first unlock is told from older ones.
+        let source = loop {
+            if self.is_online() {
+                break self.check_unlocks(&id, &title, Announce::Quietly).await;
+            }
+            tokio::select! {
+                _ = stop.cancelled() => return,
+                _ = tokio::time::sleep(LIVE_STORE) => {}
+            }
+        };
+        let signal = match source {
+            // No achievements to watch.
+            None => return,
+            Some(Source::Files) => AchievementSignal::None,
+            Some(Source::Store) => match self.store(id.runner) {
+                Some(store) => store.achievement_signal(&id.app_name).await,
+                None => return,
+            },
+        };
+        let (tx, mut signals) = tokio::sync::mpsc::channel::<()>(8);
+        let mut every = Some(if source == Some(Source::Files) {
+            LIVE_FILES
+        } else {
+            LIVE_STORE
+        });
+        let _watcher = match &signal {
+            AchievementSignal::None => None,
+            AchievementSignal::Events => {
+                self.forward_signals(id.clone(), tx.clone(), stop.clone());
+                every = None;
+                None
+            }
+            AchievementSignal::Files(files) => {
+                let watcher = watch_files(files, tx.clone());
+                if watcher.is_some() {
+                    every = None;
+                }
+                watcher
+            }
+        };
+        drop(tx);
+        tracing::debug!(
+            "following {id}'s achievements: {}",
+            match (&signal, every) {
+                (_, Some(_)) => "asking now and then",
+                (AchievementSignal::Events, None) => "the store's reports",
+                _ => "the store's files",
+            }
+        );
         loop {
             tokio::select! {
                 _ = stop.cancelled() => return,
-                _ = tokio::time::sleep(every) => {}
+                _ = tokio::time::sleep(every.unwrap_or_default()), if every.is_some() => {}
+                Some(()) = signals.recv() => {
+                    // A store writes its file or reports several times in a
+                    // row: ask once they settle.
+                    tokio::time::sleep(SETTLE).await;
+                    while signals.try_recv().is_ok() {}
+                }
             }
             if !self.settings.app().achievement_notices || !self.is_online() {
                 continue;
             }
-            every = match self.check_unlocks(&id, &title).await {
-                Some(Source::Files) => LIVE_FILES,
-                Some(Source::Store) => LIVE_STORE,
-                // No achievements to watch: stop asking.
-                None => return,
-            };
+            if self
+                .check_unlocks(&id, &title, Announce::OverGame)
+                .await
+                .is_none()
+            {
+                // The answers stopped having achievements: stop asking.
+                return;
+            }
         }
     }
 
+    /// Pass the store's [`Event::AchievementSignal`]s for `id` to `tx`
+    /// until `stop`.
+    fn forward_signals(
+        &self,
+        id: GameId,
+        tx: tokio::sync::mpsc::Sender<()>,
+        stop: tokio_util::sync::CancellationToken,
+    ) {
+        let mut events = self.bus.subscribe();
+        self.spawn(async move {
+            loop {
+                let event = tokio::select! {
+                    _ = stop.cancelled() => return,
+                    event = events.recv() => event,
+                };
+                match event {
+                    Ok(Event::AchievementSignal(game)) if game == id => {
+                        let _ = tx.try_send(());
+                    }
+                    Ok(_) => {}
+                    // The missed events may have held one: ask anyway.
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        let _ = tx.try_send(());
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+                }
+            }
+        });
+    }
+
     /// Ask for `id`'s achievements past every cache, record them and, with
-    /// notices on, announce the unlocks new since the last answer. Returns
-    /// where the answer came from; `None` when nothing answered.
-    async fn check_unlocks(&self, id: &GameId, title: &str) -> Option<Source> {
+    /// notices on, announce the unlocks new since the last answer as
+    /// `announce` says. Returns where the answer came from; `None` when
+    /// nothing answered.
+    async fn check_unlocks(&self, id: &GameId, title: &str, announce: Announce) -> Option<Source> {
         let known = self
             .achievement_store
             .current()
@@ -331,17 +526,77 @@ impl Backend {
             return None;
         }
         let before = self.achievement_store.record(id.key(), &list).await;
-        if !self.settings.app().achievement_notices {
+        if announce == Announce::Quietly || !self.settings.app().achievement_notices {
             return Some(source);
         }
         // Without an earlier answer every unlock would look new.
-        let before = known.or(before)?;
+        let Some(before) = known.or(before) else {
+            return Some(source);
+        };
         let fresh = new_unlocks(&before, &list);
-        if let Some(notice) = unlock_notice(id, title, &fresh) {
+        if fresh.is_empty() {
+            return Some(source);
+        }
+        if announce == Announce::OverGame {
+            {
+                let mut waiting = self.achievement_store.live.lock();
+                let queue = waiting.entry(id.key()).or_default();
+                queue.extend(oldest_first(&fresh).into_iter().cloned());
+                let over = queue.len().saturating_sub(LIVE_PER_GAME);
+                queue.drain(..over);
+            }
+            self.bus.emit(Event::AchievementsUnlocked(id.clone()));
+        } else if let Some(notice) = unlock_notice(id, title, &fresh) {
             self.bus.notice(notice);
         }
         Some(source)
     }
+}
+
+/// `fresh` in the order they were unlocked (undated ones last).
+fn oldest_first<'a>(fresh: &[&'a Achievement]) -> Vec<&'a Achievement> {
+    let mut out = fresh.to_vec();
+    out.sort_by_key(|a| a.unlock_time().and_then(parse_rfc3339).unwrap_or(i64::MAX));
+    out
+}
+
+/// Watch the folders of `files` and send to `tx` when one of them is
+/// written. `None` when no folder could be watched.
+fn watch_files(
+    files: &[PathBuf],
+    tx: tokio::sync::mpsc::Sender<()>,
+) -> Option<notify::RecommendedWatcher> {
+    use notify::Watcher as _;
+    // By name: the store may reach the folder through a link.
+    let names: HashSet<std::ffi::OsString> = files
+        .iter()
+        .filter_map(|f| f.file_name().map(|n| n.to_os_string()))
+        .collect();
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(event) = res
+            && !event.kind.is_access()
+            && event
+                .paths
+                .iter()
+                .any(|p| p.file_name().is_some_and(|n| names.contains(n)))
+        {
+            let _ = tx.try_send(());
+        }
+    })
+    .ok()?;
+    let folders: BTreeSet<PathBuf> = files
+        .iter()
+        .filter_map(|f| f.parent().map(PathBuf::from))
+        .filter(|d| d.is_dir())
+        .collect();
+    let mut watched = false;
+    for dir in folders {
+        match watcher.watch(&dir, notify::RecursiveMode::NonRecursive) {
+            Ok(()) => watched = true,
+            Err(e) => tracing::debug!("watching {}: {e}", dir.display()),
+        }
+    }
+    watched.then_some(watcher)
 }
 
 /// Where a game's achievements were read.
@@ -351,10 +606,23 @@ enum Source {
     Store,
 }
 
+/// How [`Backend::check_unlocks`] tells of new unlocks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Announce {
+    /// Not at all: the answer is what later ones are compared with.
+    Quietly,
+    /// To the UI, which shows them over the running game.
+    OverGame,
+    /// As a notice (after the session).
+    Notice,
+}
+
 /// How often achievements are read while playing: game files (local) and
 /// store APIs (one request per game, kept polite).
 const LIVE_FILES: std::time::Duration = std::time::Duration::from_secs(60);
 const LIVE_STORE: std::time::Duration = std::time::Duration::from_secs(3 * 60);
+/// How long after a store's signal it is asked, so its writes settle.
+const SETTLE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// The notice announcing `fresh` unlocks, if there are any.
 pub fn unlock_notice(id: &GameId, title: &str, fresh: &[&Achievement]) -> Option<Notice> {
@@ -459,6 +727,67 @@ mod tests {
         let jan = parse_rfc3339("2024-01-01T00:00:00Z").unwrap();
         let feb = parse_rfc3339("2024-02-15T00:00:00Z").unwrap();
         assert_eq!(index.unlocked_between(|_| true, jan, feb), 2);
+    }
+
+    #[test]
+    fn the_history_only_grows() {
+        let first = GameAchievements::from_list(&[
+            a("x", Some("2024-03-01T00:00:00Z"), 1.0, 0),
+            a("y", Some("2024-01-01T00:00:00Z"), 1.0, 0),
+        ]);
+        // Another account (or a store that forgot): x is gone, y is dated
+        // later, z is new.
+        let mut later = GameAchievements::from_list(&[
+            a("y", Some("2024-06-01T00:00:00Z"), 1.0, 0),
+            a("z", Some("2024-05-01T00:00:00Z"), 1.0, 0),
+            a("w", None, 1.0, 0),
+        ]);
+        later.keep_history(&first);
+        let history: Vec<(&str, &str)> = later
+            .history
+            .iter()
+            .map(|u| (u.id.as_str(), u.at.as_str()))
+            .collect();
+        assert_eq!(
+            history,
+            [
+                ("z", "2024-05-01T00:00:00Z"),
+                ("x", "2024-03-01T00:00:00Z"),
+                ("y", "2024-01-01T00:00:00Z"),
+            ],
+            "newest first, each at its earliest time"
+        );
+        assert_eq!(later.unlocked, 2, "the totals follow the answer");
+        assert!(
+            later.unlocked_ids.contains("x"),
+            "x isn't new if it returns"
+        );
+        assert_eq!(later.recent[0].id, "z");
+
+        // Totals written before the history was kept: their latest unlocks.
+        let mut old = first.clone();
+        old.history.clear();
+        let mut now = GameAchievements::from_list(&[]);
+        now.keep_history(&old);
+        assert_eq!(now.history.len(), 2);
+        let index = AchievementIndex {
+            games: BTreeMap::from([("gog:1".into(), now)]),
+        };
+        let since = parse_rfc3339("2024-02-01T00:00:00Z").unwrap();
+        assert_eq!(index.unlocked_between(|_| true, since, i64::MAX), 1);
+        assert_eq!(index.totals(|_| true, 5).games, 0, "nothing to total");
+    }
+
+    #[test]
+    fn live_unlocks_come_oldest_first() {
+        let list = [
+            a("late", Some("2024-03-01T00:00:00Z"), 1.0, 0),
+            a("undated", Some(""), 1.0, 0),
+            a("early", Some("2024-01-01T00:00:00Z"), 1.0, 0),
+        ];
+        let refs: Vec<&Achievement> = list.iter().collect();
+        let ids: Vec<&str> = oldest_first(&refs).iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, ["early", "late", "undated"]);
     }
 
     #[test]

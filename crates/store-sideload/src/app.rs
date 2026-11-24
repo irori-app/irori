@@ -81,6 +81,12 @@ pub struct SideloadApp {
     /// processes running from `install_folder`, and removing the app never
     /// deletes that folder, which belongs to the other launcher.
     pub launch_link: Option<String>,
+    /// A command line that starts a Linux or macOS game in place of
+    /// `executable` (`flatpak run org.example.Game`, `./start.sh --hd`),
+    /// split by this system's rules and run without a shell in the install
+    /// folder. A game started this way may have no executable: then its
+    /// install folder is what makes it installed.
+    pub command: Option<String>,
 }
 
 /// Schemes [`SideloadApp::launch_link`] may use: launchers that start a game
@@ -93,9 +99,21 @@ impl SideloadApp {
     pub fn presence_path(&self) -> Option<&Path> {
         if self.launch_link.is_some() {
             self.install_folder.as_deref()
+        } else if self.command.is_some() {
+            self.executable
+                .as_deref()
+                .or(self.install_folder.as_deref())
         } else {
             self.executable.as_deref()
         }
+    }
+
+    /// The program and arguments of [`SideloadApp::command`]: the first
+    /// word (with `~` expanded) and the rest. `None` without a command.
+    pub fn command_line(&self) -> Option<(PathBuf, Vec<String>)> {
+        let mut words = irori_core::process::split_args(self.command.as_deref()?).into_iter();
+        let program = expand_home(&words.next()?);
+        Some((program, words.collect()))
     }
 
     /// Folder holding the app's files: `install_folder`, else the executable's folder.
@@ -131,8 +149,34 @@ impl SideloadApp {
         self.genres = (self.genres.into_iter())
             .filter_map(|g| non_empty(Some(g)))
             .collect();
-        self.launcher_args = self.launcher_args.trim().to_string();
+        self.launcher_args = self.launcher_args.replace('\0', "").trim().to_string();
         self.launch_link = non_empty(self.launch_link);
+        self.command = non_empty(self.command);
+        if let Some(command) = &self.command {
+            if !matches!(
+                self.platform,
+                SideloadPlatform::Linux | SideloadPlatform::Mac
+            ) || self.launch_link.is_some()
+            {
+                bail!("A command can only start a Linux or macOS game");
+            }
+            check_command(command)?;
+            self.install_folder = match self.install_folder {
+                Some(p) if !p.as_os_str().is_empty() => Some(absolute(&p, "install folder")?),
+                _ => None,
+            };
+            self.executable = match self.executable {
+                Some(p) if !p.as_os_str().is_empty() => Some(absolute(&p, "executable")?),
+                _ => None,
+            };
+            if self.executable.is_none() && self.install_folder.is_none() {
+                bail!("Choose the folder the command runs in");
+            }
+            self.browser_url = None;
+            self.custom_user_agent = None;
+            self.launch_fullscreen = false;
+            return Ok(self);
+        }
         if let Some(link) = &self.launch_link {
             let valid =
                 url::Url::parse(link).is_ok_and(|u| LAUNCH_LINK_SCHEMES.contains(&u.scheme()));
@@ -295,6 +339,45 @@ pub(crate) fn generate_app_name() -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Refuse a command line that can't be run as written: an unclosed quote,
+/// no program, or a program named by a relative path (it would depend on
+/// the folder Irori runs from; a bare name is looked up on `PATH`).
+fn check_command(command: &str) -> Result<()> {
+    if has_unclosed_quote(command) {
+        bail!("The command has a quote that isn't closed: {command}");
+    }
+    let words = irori_core::process::split_args(command);
+    let program = words
+        .first()
+        .filter(|p| !p.is_empty())
+        .context("Enter the program the command starts")?;
+    let expanded = expand_home(program);
+    if program.contains(['/', '\\']) && !expanded.is_absolute() {
+        bail!("The program of the command must be a full path or a name on PATH, got {program}");
+    }
+    Ok(())
+}
+
+/// Whether `s` leaves a quote open, as a POSIX shell reads it (a `'…'` is
+/// literal, `\` escapes outside single quotes).
+fn has_unclosed_quote(s: &str) -> bool {
+    let mut quote: Option<char> = None;
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some('\''), '\'') => quote = None,
+            (Some('\''), _) => {}
+            (_, '\\') => {
+                chars.next();
+            }
+            (Some('"'), '"') => quote = None,
+            (None, '"' | '\'') => quote = Some(c),
+            _ => {}
+        }
+    }
+    quote.is_some()
+}
+
 fn non_empty(value: Option<String>) -> Option<String> {
     value
         .map(|s| s.trim().to_string())
@@ -412,6 +495,52 @@ mod tests {
         let mut linux = app;
         linux.platform = SideloadPlatform::Linux;
         assert!(linux.normalized().is_err());
+    }
+
+    #[test]
+    fn normalizes_games_started_by_a_command() {
+        let folder = absolute("/games/Celeste");
+        let app = SideloadApp {
+            title: "Celeste".into(),
+            platform: SideloadPlatform::Linux,
+            command: Some("  flatpak run com.example.Celeste --fullscreen ".into()),
+            install_folder: Some(folder.clone().into()),
+            ..Default::default()
+        }
+        .normalized()
+        .unwrap();
+        assert_eq!(
+            app.command.as_deref(),
+            Some("flatpak run com.example.Celeste --fullscreen")
+        );
+        assert!(app.executable.is_none());
+        assert_eq!(app.presence_path(), Some(Path::new(&folder)));
+        let (program, args) = app.command_line().unwrap();
+        assert_eq!(program, PathBuf::from("flatpak"));
+        assert_eq!(args, ["run", "com.example.Celeste", "--fullscreen"]);
+
+        // A command needs a folder (or a program) to be installed by.
+        let mut no_folder = app.clone();
+        no_folder.install_folder = None;
+        assert!(no_folder.clone().normalized().is_err());
+        let mut with_program = no_folder.clone();
+        with_program.executable = Some(absolute("/games/Celeste/Celeste").into());
+        assert!(with_program.normalized().is_ok());
+        // Only Linux and macOS games start by a command.
+        let mut windows = app.clone();
+        windows.platform = SideloadPlatform::Windows;
+        assert!(windows.normalized().is_err());
+        for bad in ["run \"unclosed", "./relative.sh", "'it''s"] {
+            let mut broken = app.clone();
+            broken.command = Some(bad.into());
+            assert!(broken.normalized().is_err(), "{bad}");
+        }
+        // Single quotes are POSIX shell syntax, which Windows' rules don't read.
+        if cfg!(unix) {
+            let mut quoted = app.clone();
+            quoted.command = Some("'/opt/My Game/start' --x 'it'\\''s'".into());
+            assert!(quoted.normalized().is_ok());
+        }
     }
 
     #[test]

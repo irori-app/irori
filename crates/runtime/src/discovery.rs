@@ -56,6 +56,25 @@ pub struct DiscoveredWine {
     pub source: WineSource,
 }
 
+/// Each build with its source when another build has the same name (Steam's
+/// GE-Proton and the one Irori downloaded), so a picker can tell them apart;
+/// `None` when the name alone is unique.
+pub fn sources_where_shared(
+    builds: Vec<DiscoveredWine>,
+) -> Vec<(WineInstallation, Option<WineSource>)> {
+    let mut counts = std::collections::HashMap::new();
+    for build in &builds {
+        *counts.entry(build.installation.name.clone()).or_insert(0) += 1;
+    }
+    builds
+        .into_iter()
+        .map(|b| {
+            let shared = counts.get(&b.installation.name).copied().unwrap_or(0) > 1;
+            (b.installation, shared.then_some(b.source))
+        })
+        .collect()
+}
+
 /// Directories scanned for builds. [`ScanRoots::for_settings`] fills them for
 /// this system; tests build their own.
 #[derive(Debug, Clone, Default)]
@@ -644,6 +663,29 @@ mod tests {
             assert_eq!(Path::new(&installation.bin), root.join("bin/wine64"));
             assert!(is_valid(&installation));
         }
+    }
+
+    #[test]
+    fn builds_sharing_a_name_carry_their_source() {
+        let build = |name: &str, bin: &str, source| DiscoveredWine {
+            installation: WineInstallation {
+                bin: bin.into(),
+                name: name.into(),
+                kind: WineKind::Proton,
+                ..Default::default()
+            },
+            source,
+        };
+        let labelled = sources_where_shared(vec![
+            build("GE-Proton10-2", "/irori/proton", WineSource::Irori),
+            build("GE-Proton10-2", "/steam/proton", WineSource::Steam),
+            build("Proton 9.0", "/valve/proton", WineSource::Steam),
+        ]);
+        let sources: Vec<_> = labelled.iter().map(|(_, s)| *s).collect();
+        assert_eq!(
+            sources,
+            [Some(WineSource::Irori), Some(WineSource::Steam), None]
+        );
     }
 
     #[test]

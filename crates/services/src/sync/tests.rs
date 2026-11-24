@@ -178,3 +178,64 @@ fn scheduled_backups_land_in_the_chosen_folder_without_this_computers_setup() {
     assert!(b.backup_status().last_error.is_some());
     b.settings.update_app(|a| a.backups.folder = String::new());
 }
+
+#[test]
+fn backups_go_to_the_cloud_once_and_come_back_on_another_computer() {
+    use super::copies::CopyKind;
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| vec![]).unwrap();
+    let cloud = tempfile::tempdir().unwrap();
+    let backups = tempfile::tempdir().unwrap();
+    b.settings.update_app(|a| {
+        a.sync.mode = SyncMode::Folder;
+        a.sync.folder = cloud.path().to_string_lossy().into_owned();
+        a.sync.copies.backups = irori_core::CopyMode::Manual;
+        a.backups.folder = backups.path().to_string_lossy().into_owned();
+    });
+    let made = b.runtime().block_on(b.back_up_now()).unwrap();
+    let name = made.file_name().unwrap().to_string_lossy().into_owned();
+
+    let reports = b.runtime().block_on(b.send_cloud_copies(None)).unwrap();
+    assert_eq!((reports.len(), reports[0].sent), (1, 1));
+    let me = b.sync_status().device_id;
+    let devices = cloud.path().join(target::DIR).join("devices");
+    assert!(devices.join(&me).join("backups").join(&name).is_file());
+    assert!(devices.join(&me).join("device.json").is_file());
+    // Unchanged, it isn't sent again.
+    let reports = b.runtime().block_on(b.send_cloud_copies(None)).unwrap();
+    assert_eq!((reports[0].sent, reports[0].unchanged), (0, 1));
+    let status = b.cloud_copies_status();
+    assert_eq!(status[0].kind, CopyKind::Backups);
+    assert_eq!(status[0].last.as_ref().unwrap().unchanged, 1);
+
+    // Another computer's copies, brought back here without replacing
+    // anything.
+    let laptop = devices.join("laptop");
+    std::fs::create_dir_all(laptop.join("backups")).unwrap();
+    std::fs::write(
+        laptop.join("device.json"),
+        r#"{"id": "laptop", "name": "Laptop", "os": "windows", "updated": "2026-11-01T10:00:00Z"}"#,
+    )
+    .unwrap();
+    std::fs::write(laptop.join("backups").join("irori-laptop.json"), b"{}").unwrap();
+    std::fs::write(laptop.join("backups").join(&name), b"theirs").unwrap();
+    let found = b.runtime().block_on(b.cloud_devices()).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].name, "Laptop");
+    let came = b
+        .runtime()
+        .block_on(b.bring_back_cloud_copies(&found[0], CopyKind::Backups))
+        .unwrap();
+    assert_eq!(came, 1);
+    assert!(backups.path().join("irori-laptop.json").is_file());
+    assert_ne!(
+        std::fs::read(backups.path().join(&name)).unwrap(),
+        b"theirs"
+    );
+
+    b.settings.update_app(|a| {
+        a.sync.mode = SyncMode::Off;
+        a.sync.copies.backups = irori_core::CopyMode::Off;
+        a.backups.folder = String::new();
+    });
+}

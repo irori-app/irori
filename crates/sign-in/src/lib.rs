@@ -28,6 +28,7 @@ use tao::window::WindowBuilder;
 use wry::{PageLoadEvent, WebViewBuilder};
 
 pub mod microsoft;
+pub mod steam;
 pub mod store;
 
 /// Reads the visible text of the page.
@@ -104,6 +105,10 @@ pub fn main(args: impl IntoIterator<Item = String>) -> u8 {
     {
         args.next();
         return microsoft::main(args);
+    }
+    if args.peek().is_some_and(|a| a == steam::STEAM_ACCOUNT_FLAG) {
+        args.next();
+        return steam::main(args);
     }
     let args = match parse_args(args) {
         Ok(args) => args,

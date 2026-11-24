@@ -1,7 +1,7 @@
-//! Where the clip and screenshot shortcuts can come from on this desktop,
-//! and, where Irori can't listen for keys itself, the exact configuration
-//! lines that bind `irori --save-clip` and `irori --screenshot` in the
-//! user's compositor or window manager. Pure: everything it needs is passed
+//! Where the clip, screenshot and quick launcher shortcuts can come from on
+//! this desktop, and, where Irori can't listen for keys itself, the exact
+//! configuration lines that bind `irori --save-clip`, `irori --screenshot`
+//! and `irori --quick-launch` in the user's compositor or window manager. Pure: everything it needs is passed
 //! in, so every desktop's choice and every line is tested here.
 
 use std::path::{Path, PathBuf};
@@ -9,10 +9,14 @@ use std::path::{Path, PathBuf};
 /// The keys Irori asks for, or grabs itself.
 pub const CLIP_KEYS: &str = "Alt+F10";
 pub const SCREENSHOT_KEYS: &str = "Alt+F12";
+/// The quick launcher's keys: K as in the palette's Ctrl+K, with Alt so no
+/// program's own Ctrl+K is taken.
+pub const QUICK_LAUNCH_KEYS: &str = "Ctrl+Alt+K";
 
 /// The command-line flags a binding runs (`crates/irori/src/cli.rs`).
 pub const CLIP_FLAG: &str = "--save-clip";
 pub const SCREENSHOT_FLAG: &str = "--screenshot";
+pub const QUICK_LAUNCH_FLAG: &str = "--quick-launch";
 
 /// The compositors and window managers whose configuration Irori can write
 /// a binding for. Their names are never translated.
@@ -228,6 +232,45 @@ pub struct Binding {
 }
 
 impl Binding {
+    /// The line that binds Ctrl+Alt+K to `irori --quick-launch`, or for an
+    /// unknown desktop the command.
+    pub fn quick_launch(compositor: Option<Compositor>, program: &Program) -> Self {
+        let run = program.shell(QUICK_LAUNCH_FLAG);
+        let lines = match compositor {
+            Some(Compositor::Sway | Compositor::I3) => {
+                format!("bindsym Ctrl+Mod1+k exec {run}")
+            }
+            Some(Compositor::Hyprland) => format!("bind = CTRL ALT, K, exec, {run}"),
+            Some(Compositor::River) => format!(
+                "riverctl map normal Control+Alt K spawn {}",
+                shell_quote(&run)
+            ),
+            Some(Compositor::Niri) => {
+                let args = program
+                    .argv(QUICK_LAUNCH_FLAG)
+                    .map(|a| format!("\"{}\"", a.replace('\\', "\\\\").replace('"', "\\\"")))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("binds {{\n    Ctrl+Alt+K {{ spawn {args}; }}\n}}")
+            }
+            Some(Compositor::Wayfire) => format!(
+                "[command]\nbinding_irori_quick_launch = <ctrl> <alt> KEY_K\n\
+                 command_irori_quick_launch = {run}"
+            ),
+            Some(Compositor::Labwc) => format!(
+                "<keybind key=\"C-A-k\"><action name=\"Execute\" command=\"{}\" /></keybind>",
+                xml_escape(&run)
+            ),
+            Some(Compositor::Openbox) => format!(
+                "<keybind key=\"C-A-k\"><action name=\"Execute\"><command>{}</command></action></keybind>",
+                xml_escape(&run)
+            ),
+            Some(Compositor::Sxhkd) => format!("ctrl + alt + k\n\t{run}"),
+            None => run,
+        };
+        Self { compositor, lines }
+    }
+
     pub fn new(compositor: Option<Compositor>, program: &Program) -> Self {
         let clip = program.shell(CLIP_FLAG);
         let shot = program.shell(SCREENSHOT_FLAG);
@@ -462,6 +505,37 @@ mod tests {
             Binding::new(Some(Compositor::River), &spaced)
                 .lines
                 .contains(r"spawn ''\''/opt/My Games/irori'\'' --save-clip'")
+        );
+        let quick = |c| Binding::quick_launch(Some(c), &irori).lines;
+        assert_eq!(
+            quick(Compositor::Sway),
+            "bindsym Ctrl+Mod1+k exec irori --quick-launch"
+        );
+        assert_eq!(
+            quick(Compositor::Hyprland),
+            "bind = CTRL ALT, K, exec, irori --quick-launch"
+        );
+        assert_eq!(
+            quick(Compositor::River),
+            "riverctl map normal Control+Alt K spawn 'irori --quick-launch'"
+        );
+        assert_eq!(
+            quick(Compositor::Niri),
+            "binds {\n    Ctrl+Alt+K { spawn \"irori\" \"--quick-launch\"; }\n}"
+        );
+        assert!(
+            quick(Compositor::Wayfire)
+                .contains("command_irori_quick_launch = irori --quick-launch")
+        );
+        assert!(quick(Compositor::Labwc).contains(r#"key="C-A-k""#));
+        assert!(quick(Compositor::Openbox).contains("<command>irori --quick-launch</command>"));
+        assert_eq!(
+            quick(Compositor::Sxhkd),
+            "ctrl + alt + k\n\tirori --quick-launch"
+        );
+        assert_eq!(
+            Binding::quick_launch(None, &irori).lines,
+            "irori --quick-launch"
         );
         let quoted = Program(vec!["/opt/a\"b/irori".into()]);
         assert!(

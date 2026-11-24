@@ -108,31 +108,13 @@ impl ControllerKind {
         }
     }
 
-    /// Glyph printed on the button that produces `input` on this family.
+    /// Glyph printed on the button that produces `input` on this family,
+    /// with the buttons' jobs in use (`bindings`); `?` when no button
+    /// gives it.
     pub fn glyph(self, input: GamepadInput) -> &'static str {
-        let playstation = matches!(
-            self,
-            ControllerKind::PlayStation4 | ControllerKind::PlayStation5
-        );
-        match input {
-            GamepadInput::Confirm if playstation => "✕",
-            GamepadInput::Back if playstation => "○",
-            GamepadInput::Alt if playstation => "□",
-            GamepadInput::Menu if playstation => "△",
-            GamepadInput::PrevPage if playstation => "L1",
-            GamepadInput::NextPage if playstation => "R1",
-            GamepadInput::PrevPage if self == ControllerKind::Nintendo => "L",
-            GamepadInput::NextPage if self == ControllerKind::Nintendo => "R",
-            GamepadInput::Confirm => "A",
-            GamepadInput::Back => "B",
-            GamepadInput::Alt => "X",
-            GamepadInput::Menu => "Y",
-            GamepadInput::PrevPage => "LB",
-            GamepadInput::NextPage => "RB",
-            GamepadInput::Guide => "Guide",
-            GamepadInput::Up | GamepadInput::Down | GamepadInput::Left | GamepadInput::Right => {
-                "D-pad"
-            }
+        match super::bindings::button_for(input, self) {
+            Some(button) => self.button_label(button),
+            None => "?",
         }
     }
 
@@ -172,27 +154,10 @@ pub enum PadButton {
     DPadRight,
 }
 
-/// The normalized input a physical button produces on a controller family.
+/// The input a physical button produces on a controller family before the
+/// user changes anything (see `bindings` for the map in use).
 pub fn map_button(button: PadButton, kind: ControllerKind) -> GamepadInput {
-    let swap = kind.swaps_face_buttons();
-    match button {
-        PadButton::South if swap => GamepadInput::Back,
-        PadButton::East if swap => GamepadInput::Confirm,
-        PadButton::North if swap => GamepadInput::Alt,
-        PadButton::West if swap => GamepadInput::Menu,
-        PadButton::South => GamepadInput::Confirm,
-        PadButton::East => GamepadInput::Back,
-        PadButton::West => GamepadInput::Alt,
-        PadButton::North => GamepadInput::Menu,
-        PadButton::Start | PadButton::Select => GamepadInput::Menu,
-        PadButton::LeftShoulder => GamepadInput::PrevPage,
-        PadButton::RightShoulder => GamepadInput::NextPage,
-        PadButton::Guide => GamepadInput::Guide,
-        PadButton::DPadUp => GamepadInput::Up,
-        PadButton::DPadDown => GamepadInput::Down,
-        PadButton::DPadLeft => GamepadInput::Left,
-        PadButton::DPadRight => GamepadInput::Right,
-    }
+    super::bindings::base_input(button, kind.swaps_face_buttons())
 }
 
 /// Analog stick deflection beyond which a direction is pressed.
@@ -663,6 +628,37 @@ pub fn hold_button(setting: irori_core::settings::HoldButton) -> Option<PadButto
     }
 }
 
+/// XInput's bits for Back (View) and Start (Menu) in `wButtons`.
+// Only Windows reads XInput (`xinput`); the chord is tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const XINPUT_BACK: u16 = 0x0020;
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const XINPUT_START: u16 = 0x0010;
+
+/// Back + Start pressed together on one of XInput's four controller slots
+/// (see `gamepad::xinput`): it counts once when the second of the two goes
+/// down, and again only after one of them was let go.
+#[derive(Debug, Default)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub struct BackStart {
+    held: [bool; 4],
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+impl BackStart {
+    /// The buttons `slot` holds now; whether that makes the chord.
+    pub fn update(&mut self, slot: usize, buttons: u16) -> bool {
+        let both = XINPUT_BACK | XINPUT_START;
+        let pressed = buttons & both == both;
+        let Some(held) = self.held.get_mut(slot) else {
+            return false;
+        };
+        let chord = pressed && !*held;
+        *held = pressed;
+        chord
+    }
+}
+
 /// What a button pressed with Guide held does without opening anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chord {
@@ -676,16 +672,36 @@ pub enum Chord {
     VolumeDown,
 }
 
+/// Which of the in-game overlay's chords are on (`iroriOverlay`'s
+/// `screenshotChord` and `volumeChords`, while the overlay is).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Chords {
+    pub screenshot: bool,
+    pub volume: bool,
+}
+
+impl Chords {
+    /// The chords the overlay's settings turn on; none while it is off or
+    /// the system has no overlay (`available`).
+    pub fn from_prefs(prefs: &irori_core::settings::OverlayPrefs, available: bool) -> Self {
+        let on = available && prefs.enabled;
+        Chords {
+            screenshot: on && prefs.screenshot_chord,
+            volume: on && prefs.volume_chords,
+        }
+    }
+}
+
 impl Chord {
     /// The chord `input` makes with Guide. Only the clip is there without
-    /// the in-game overlay's shortcuts (`overlay`), which come with its
-    /// setting.
-    pub fn of(input: GamepadInput, overlay: bool) -> Option<Self> {
+    /// the in-game overlay's shortcuts (`chords`), which come with its
+    /// settings.
+    pub fn of(input: GamepadInput, chords: Chords) -> Option<Self> {
         match input {
             GamepadInput::Alt => Some(Chord::Clip),
-            GamepadInput::NextPage if overlay => Some(Chord::Screenshot),
-            GamepadInput::Up if overlay => Some(Chord::VolumeUp),
-            GamepadInput::Down if overlay => Some(Chord::VolumeDown),
+            GamepadInput::NextPage if chords.screenshot => Some(Chord::Screenshot),
+            GamepadInput::Up if chords.volume => Some(Chord::VolumeUp),
+            GamepadInput::Down if chords.volume => Some(Chord::VolumeDown),
             _ => None,
         }
     }
@@ -1023,17 +1039,61 @@ mod tests {
     }
 
     #[test]
-    fn chords_follow_the_overlay_setting() {
+    fn back_and_start_together_count_once_per_press() {
+        let mut chord = BackStart::default();
+        assert!(!chord.update(0, XINPUT_BACK), "Back alone");
+        assert!(chord.update(0, XINPUT_BACK | XINPUT_START), "then Start");
+        assert!(
+            !chord.update(0, XINPUT_BACK | XINPUT_START | 0x1000),
+            "still held, A added"
+        );
+        assert!(!chord.update(0, XINPUT_START), "Back let go");
+        assert!(chord.update(0, XINPUT_BACK | XINPUT_START), "pressed again");
+        // Slots are apart: another controller makes its own chord.
+        assert!(chord.update(3, XINPUT_BACK | XINPUT_START));
+        assert!(!chord.update(1, XINPUT_START));
+        assert!(!chord.update(9, XINPUT_BACK | XINPUT_START), "no such slot");
+    }
+
+    #[test]
+    fn chords_follow_the_overlay_settings() {
         use GamepadInput::*;
-        assert_eq!(Chord::of(Alt, false), Some(Chord::Clip));
-        assert_eq!(Chord::of(Alt, true), Some(Chord::Clip));
-        assert_eq!(Chord::of(NextPage, false), None);
-        assert_eq!(Chord::of(NextPage, true), Some(Chord::Screenshot));
-        assert_eq!(Chord::of(Up, true), Some(Chord::VolumeUp));
-        assert_eq!(Chord::of(Down, true), Some(Chord::VolumeDown));
-        assert_eq!(Chord::of(Up, false), None);
-        assert_eq!(Chord::of(Confirm, true), None);
-        assert_eq!(Chord::of(PrevPage, true), None);
+        let off = Chords::default();
+        let on = Chords {
+            screenshot: true,
+            volume: true,
+        };
+        assert_eq!(Chord::of(Alt, off), Some(Chord::Clip));
+        assert_eq!(Chord::of(Alt, on), Some(Chord::Clip));
+        assert_eq!(Chord::of(NextPage, off), None);
+        assert_eq!(Chord::of(NextPage, on), Some(Chord::Screenshot));
+        assert_eq!(Chord::of(Up, on), Some(Chord::VolumeUp));
+        assert_eq!(Chord::of(Down, on), Some(Chord::VolumeDown));
+        assert_eq!(Chord::of(Up, off), None);
+        assert_eq!(Chord::of(Confirm, on), None);
+        assert_eq!(Chord::of(PrevPage, on), None);
+        // Each can be turned off on its own.
+        let shots = Chords {
+            screenshot: true,
+            volume: false,
+        };
+        assert_eq!(Chord::of(NextPage, shots), Some(Chord::Screenshot));
+        assert_eq!(Chord::of(Up, shots), None);
+        let volume = Chords {
+            screenshot: false,
+            volume: true,
+        };
+        assert_eq!(Chord::of(NextPage, volume), None);
+        assert_eq!(Chord::of(Down, volume), Some(Chord::VolumeDown));
+        let prefs = irori_core::settings::OverlayPrefs {
+            enabled: true,
+            volume_chords: false,
+            ..Default::default()
+        };
+        assert_eq!(Chords::from_prefs(&prefs, true), shots);
+        assert_eq!(Chords::from_prefs(&prefs, false), off, "not on this system");
+        let disabled = irori_core::settings::OverlayPrefs::default();
+        assert_eq!(Chords::from_prefs(&disabled, true), off, "overlay off");
     }
 
     #[test]

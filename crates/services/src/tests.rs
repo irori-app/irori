@@ -567,6 +567,30 @@ fn a_failed_save_download_stops_the_launch_until_the_user_plays_anyway() {
     assert!(ended.is_some(), "the game ran");
 }
 
+/// Heroic #5968: the force-upload question says when the save folder holds
+/// no files, since the cloud saves are then deleted.
+#[cfg(unix)]
+#[test]
+fn knows_when_a_forced_upload_deletes_cloud_saves() {
+    let (b, id) = play_with("saves-empty-folder", "exit 0", true);
+    let dir = tempfile::tempdir().unwrap();
+    let saves = dir.path().join("saves");
+    std::fs::create_dir_all(&saves).unwrap();
+    b.settings.set_game_value(
+        &id,
+        "savesPath",
+        Some(serde_json::Value::String(saves.display().to_string())),
+    );
+    let deletes = || {
+        b.runtime()
+            .block_on(b.forced_upload_deletes_cloud_saves(&id))
+            .unwrap()
+    };
+    assert!(deletes());
+    std::fs::write(saves.join("slot1.sav"), "x").unwrap();
+    assert!(!deletes());
+}
+
 /// Wait up to `limit` for `id`'s session to end; how long that took.
 #[cfg(unix)]
 fn session_end(
@@ -664,6 +688,168 @@ fn a_daemon_the_launcher_starts_does_not_hold_the_session() {
     assert!(pid.is_some(), "the daemon started");
     let took = took.expect("the session ended without the daemon");
     assert!(took < std::time::Duration::from_secs(6), "{took:?}");
+}
+
+/// Wait up to five seconds for `done`.
+#[cfg(unix)]
+fn eventually(done: impl Fn() -> bool) -> bool {
+    for _ in 0..100 {
+        if done() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    done()
+}
+
+#[cfg(unix)]
+#[test]
+fn a_launch_cancelled_while_its_script_runs_starts_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let started = dir.path().join("started");
+    let script_pid = dir.path().join("script.pid");
+    let script = dir.path().join("before.sh");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\necho $$ > {}.tmp; mv {0}.tmp {0}\nexec sleep 60\n",
+            script_pid.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let (b, id) = play(
+        "cancel-while-preparing",
+        &format!("touch {}", started.display()),
+    );
+    b.settings.set_game_value(
+        &id,
+        "beforeLaunchScriptPath",
+        Some(serde_json::Value::String(script.display().to_string())),
+    );
+    let launch = {
+        let (b, id) = (b.clone(), id.clone());
+        b.runtime()
+            .spawn(async move { b.launch(&id, None, Vec::new()).await })
+    };
+    assert!(eventually(|| script_pid.is_file()), "the script runs");
+    assert_eq!(
+        b.statuses.get(&id).map(|s| s.kind),
+        Some(irori_core::StatusKind::Launching)
+    );
+    assert!(b.cancel_launch(&id));
+    let result = b
+        .runtime()
+        .block_on(async { tokio::time::timeout(std::time::Duration::from_secs(15), launch).await })
+        .expect("the launch ends at once")
+        .unwrap();
+    let e = result.expect_err("cancelled");
+    assert!(crate::LaunchCancelled::of(&e), "{e:#}");
+    assert!(!b.is_running(&id));
+    assert!(b.statuses.get(&id).is_none(), "the status is cleared");
+    assert!(!b.cancel_launch(&id), "nothing left to cancel");
+    let pid = std::fs::read_to_string(&script_pid).unwrap();
+    assert!(
+        eventually(|| !signal(pid.trim(), "-0")),
+        "the script was stopped"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert!(!started.exists(), "the game never started");
+}
+
+/// Whether `id` has a session recorded as running on disk.
+#[cfg(unix)]
+fn recorded_running(id: &irori_core::GameId) -> Option<crate::running::Record> {
+    crate::running::read()
+        .into_iter()
+        .find(|r| r.game == id.key())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_running_session_is_kept_on_disk_until_it_ends() {
+    let (b, id) = play("kept-on-disk", "sleep 2");
+    let mut rx = b.subscribe();
+    b.runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap();
+    let record = recorded_running(&id).expect("recorded while it runs");
+    assert_eq!(Some(record.pid), b.running_pid(&id));
+    assert!(record.process_start.is_some());
+    assert!(session_end(&b, &mut rx, &id, std::time::Duration::from_secs(15)).is_some());
+    assert!(recorded_running(&id).is_none(), "forgotten when it ended");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_game_still_running_after_a_restart_is_followed_to_its_end() {
+    use std::os::unix::process::CommandExt as _;
+    let (b, id) = play("followed-again", "exit 0");
+    // The game an Irori that closed left running, in its own process group
+    // as Irori starts games.
+    let mut game = std::process::Command::new("sh")
+        .args(["-c", "sleep 4"])
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let pid = game.id();
+    // Nobody else reaps it: a zombie would look alive.
+    let reaper = std::thread::spawn(move || game.wait());
+    let record = crate::running::Record {
+        game: id.key(),
+        pid,
+        started_at: (chrono::Utc::now() - chrono::Duration::seconds(90)).to_rfc3339(),
+        process_start: crate::running::process_start(pid),
+        folder: None,
+        mods: false,
+    };
+    crate::running::remember(record.clone());
+    // A game that ended while Irori was closed is only forgotten.
+    let ended = std::process::Command::new("true").spawn().unwrap().wait();
+    assert!(ended.is_ok());
+    let gone = irori_core::GameId::new(Runner::Sideload, "ended-meanwhile");
+    let stale = crate::running::Record {
+        game: gone.key(),
+        pid: 999_999,
+        ..record.clone()
+    };
+    crate::running::remember(stale.clone());
+
+    let mut rx = b.subscribe();
+    b.runtime().block_on(b.adopt_records(vec![record, stale]));
+    assert!(b.is_running(&id));
+    assert_eq!(
+        b.statuses.get(&id).map(|s| s.kind),
+        Some(irori_core::StatusKind::Playing)
+    );
+    assert!(b.playing_for(&id).unwrap() >= std::time::Duration::from_secs(89));
+    assert!(!b.is_running(&gone));
+    assert!(recorded_running(&gone).is_none());
+
+    let seconds = b.runtime().block_on(async {
+        tokio::time::timeout(std::time::Duration::from_secs(20), async {
+            loop {
+                if let Ok(Event::GameExited { id: e, seconds, .. }) = rx.recv().await
+                    && e == id
+                {
+                    return seconds;
+                }
+            }
+        })
+        .await
+        .expect("the session ended with the game")
+    });
+    let _ = reaper.join();
+    assert!(seconds >= 90, "counted from its start: {seconds}");
+    assert!(!b.is_running(&id));
+    assert!(recorded_running(&id).is_none());
+    let session = b
+        .sessions()
+        .into_iter()
+        .rfind(|s| s.game == id.key())
+        .expect("the session was recorded");
+    assert!(!session.crashed);
 }
 
 #[test]
@@ -871,6 +1057,12 @@ fn copies_combine_separate_and_prefer_as_the_user_says() {
     let ids = |b: &Backend, id: &GameId| -> Vec<String> {
         b.library().copies_of(id).iter().map(GameId::key).collect()
     };
+    // The bus's own debounced rebuild may still publish a snapshot of the
+    // user data from before a change: let it finish, then rebuild.
+    let settle = |b: &Backend| {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        b.rebuild_library();
+    };
     let (steam, gog) = (
         GameId::new(Runner::Steam, "copies-620"),
         GameId::new(Runner::Gog, "copies-p2"),
@@ -879,20 +1071,20 @@ fn copies_combine_separate_and_prefer_as_the_user_says() {
         GameId::new(Runner::Steam, "copies-1"),
         GameId::new(Runner::Gog, "copies-b"),
     );
-    b.rebuild_library();
+    settle(&b);
     assert_eq!(ids(&b, &steam), ["gog:copies-p2", "steam:copies-620"]);
     assert!(ids(&b, &a).is_empty());
 
     // The user's choice leads.
     b.userdata
         .set_default_copy(&steam, &[gog.clone(), steam.clone()]);
-    b.rebuild_library();
+    settle(&b);
     assert_eq!(ids(&b, &gog), ["steam:copies-620", "gog:copies-p2"]);
     assert_eq!(b.library().entry_of(&gog).unwrap().id(), steam);
 
     // Games of other titles combine only when the user says so.
     b.userdata.combine_copies(&[a.clone(), other.clone()]);
-    b.rebuild_library();
+    settle(&b);
     assert_eq!(ids(&b, &other), ["steam:copies-1", "gog:copies-b"]);
 
     // Separated, each stands alone; editing a game's title keeps that.
@@ -905,18 +1097,18 @@ fn copies_combine_separate_and_prefer_as_the_user_says() {
             ..Default::default()
         },
     );
-    b.rebuild_library();
+    settle(&b);
     assert!(ids(&b, &steam).is_empty());
     assert!(ids(&b, &gog).is_empty());
     b.userdata.separate_copies(&[a.clone(), other.clone()]);
-    b.rebuild_library();
+    settle(&b);
     assert!(ids(&b, &a).is_empty());
     assert_eq!(b.library().all_games().count(), 4);
 
     // Turned off, nothing is grouped.
     b.userdata.combine_copies(&[a.clone(), other.clone()]);
     b.settings.update_app(|s| s.ui.group_copies = false);
-    b.rebuild_library();
+    settle(&b);
     assert!(ids(&b, &a).is_empty());
     b.settings.update_app(|s| s.ui.group_copies = true);
 }
@@ -941,10 +1133,15 @@ fn third_party_launchers_are_rescanned_on_their_own_timer() {
     );
 }
 
+/// Held by tests that turn `iroriIgdb` on: the settings file is shared, so
+/// a backend started meanwhile would read it on.
+static IGDB_SETTING: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
 #[test]
 fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     use irori_core::GameId;
     use irori_depot::test_server::{Resp, TestServer};
+    let _setting = IGDB_SETTING.lock();
     isolate_paths();
     let b = Backend::start_headless(|_, _| {
         vec![ListStore::store(
@@ -1006,4 +1203,700 @@ fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     rt.block_on(b.set_igdb_credentials(None)).unwrap();
     assert_eq!(rt.block_on(b.igdb_status()).client_id, None);
     b.settings.update_app(|s| s.igdb = false);
+}
+
+#[test]
+fn a_linked_steam_app_lends_its_screenshots() {
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Sideload,
+            &[("steam-linked", "Linked Game")],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| {
+        if req.path.starts_with("/api/appdetails?appids=4242") {
+            Resp::json(serde_json::json!({"4242": {"success": true, "data": {
+                "screenshots": [{"path_full": "https://cdn/shot.jpg"}]
+            }}}))
+        } else {
+            Resp::status(404)
+        }
+    });
+    b.set_steam_link_endpoints(irori_steam_api::Endpoints {
+        api: server.base(),
+        store: server.base(),
+        login: server.base(),
+        assets: server.base(),
+    });
+    b.rebuild_library();
+    let id = GameId::new(Runner::Sideload, "steam-linked");
+    let rt = b.runtime();
+
+    // Not linked: Steam isn't asked.
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert!(info.screenshots.is_empty());
+    assert!(server.requests().is_empty());
+
+    b.settings.set_game_value(
+        &id,
+        "iroriSteamAppId",
+        Some(serde_json::Value::String("4242".into())),
+    );
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.screenshots, ["https://cdn/shot.jpg"]);
+    // Kept for the run: the page is asked once.
+    rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(server.requests().len(), 1);
+}
+
+#[test]
+fn games_link_to_steam_by_exact_title_or_the_users_choice() {
+    use crate::SteamLink;
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    use irori_steam_api::Endpoints;
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Gog,
+            &[
+                ("steam-link-hades", "Hades - Deluxe Edition"),
+                ("steam-link-other", "Nothing Alike"),
+            ],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| {
+        if req.path.starts_with("/api/storesearch/?") {
+            if req.path.contains("Hades") {
+                Resp::json(serde_json::json!({"items": [
+                    {"type": "app", "name": "Hades II", "id": 1145350},
+                    {"type": "app", "name": "Hades", "id": 1145360}
+                ]}))
+            } else {
+                Resp::json(serde_json::json!({"items": [
+                    {"type": "app", "name": "Nothing Alike 2", "id": 9}
+                ]}))
+            }
+        } else if req.path.starts_with("/api/appdetails?appids=1145360") {
+            Resp::json(serde_json::json!({"1145360": {"success": true, "data": {
+                "name": "Hades", "short_description": "Defy the god of the dead.",
+                "genres": [{"description": "Action"}],
+                "release_date": {"coming_soon": false, "date": "17 Sep, 2020"},
+                "screenshots": [{"path_thumbnail": "https://cdn.example/t.jpg",
+                                 "path_full": "https://cdn.example/1.jpg"}]
+            }}}))
+        } else if req.path.starts_with("/api/appdetails?appids=620") {
+            Resp::json(serde_json::json!({"620": {"success": true, "data": {"name": "Portal 2"}}}))
+        } else {
+            Resp::status(404)
+        }
+    });
+    b.set_steam_link_endpoints(Endpoints {
+        api: server.base(),
+        store: server.base(),
+        login: server.base(),
+        assets: server.base(),
+    });
+    b.rebuild_library();
+    let hades = GameId::new(Runner::Gog, "steam-link-hades");
+    let other = GameId::new(Runner::Gog, "steam-link-other");
+    let game = |id: &GameId| b.library().get(id).cloned().unwrap();
+    let rt = b.runtime();
+
+    let report = rt.block_on(b.link_by_title(&[hades.clone(), other.clone()]));
+    assert_eq!((report.linked, report.not_found), (1, 1), "{report:?}");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Title(1145360));
+    assert_eq!(b.steam_link(&game(&other)), SteamLink::Unknown);
+
+    // The linked app's store page fills what the store's lacks.
+    let info = rt.block_on(b.extra_info(&hades)).unwrap();
+    assert_eq!(info.screenshots, ["https://cdn.example/1.jpg"]);
+    assert_eq!(info.genres, ["Action"]);
+    assert_eq!(info.details_from.as_deref(), Some("Steam"));
+
+    // The user's choice wins, is kept in the game's settings, and "none"
+    // takes the link away.
+    b.set_steam_link(
+        &hades,
+        Some("https://store.steampowered.com/app/620/".into()),
+    );
+    assert_eq!(b.settings.game(&hades).steam_app_id, "620");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Chosen(620));
+    b.set_steam_link(&hades, Some(crate::STEAM_NONE.into()));
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::NoneChosen);
+    assert_eq!(
+        rt.block_on(b.link_by_title(std::slice::from_ref(&hades)))
+            .skipped,
+        1,
+        "the user's choice stays"
+    );
+    b.set_steam_link(&hades, None);
+    assert_eq!(b.settings.game(&hades).steam_app_id, "");
+    assert_eq!(b.steam_link(&game(&hades)), SteamLink::Title(1145360));
+
+    // A pasted id or store address names its app.
+    let found = rt.block_on(b.search_steam("steam://store/620")).unwrap();
+    assert_eq!((found[0].id, found[0].name.as_str()), (620, "Portal 2"));
+}
+
+#[test]
+fn fetching_details_again_forgets_what_was_kept() {
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    let _setting = IGDB_SETTING.lock();
+    isolate_paths();
+    // ROMs skip the PC wikis, so nothing here reaches the network.
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Emulation,
+            &[
+                ("refetch-a", "Refetch Found"),
+                ("refetch-b", "Refetch Missing"),
+            ],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| match req.path.as_str() {
+        "/token" => Resp::json(serde_json::json!({"access_token": "t", "expires_in": 3600})),
+        "/v4/games" => {
+            let body = String::from_utf8_lossy(&req.body).to_string();
+            if body.contains("Refetch Found") {
+                Resp::json(serde_json::json!([{"id": 3, "name": "Refetch Found"}]))
+            } else {
+                Resp::json(serde_json::json!([]))
+            }
+        }
+        _ => Resp::status(404),
+    });
+    b.set_igdb_endpoints(irori_extras::igdb::Endpoints {
+        token: server.url("/token"),
+        api: server.url("/v4"),
+    });
+    b.rebuild_library();
+    let rt = b.runtime();
+    let creds = irori_extras::igdb::Credentials::new("client", "secret").unwrap();
+    rt.block_on(b.set_igdb_credentials(Some(creds))).unwrap();
+    b.settings.update_app(|s| s.igdb = true);
+    let ids = [
+        GameId::new(Runner::Emulation, "refetch-a"),
+        GameId::new(Runner::Emulation, "refetch-b"),
+        GameId::new(Runner::Emulation, "gone"),
+    ];
+    let searches = || {
+        server
+            .requests()
+            .iter()
+            .filter(|r| r.path == "/v4/games")
+            .count()
+    };
+    let report = rt.block_on(b.refresh_details(&ids));
+    assert_eq!(
+        (report.refreshed, report.failed, report.not_on_igdb),
+        (2, 1, 1)
+    );
+    let asked = searches();
+    assert!(asked >= 2);
+    // A page opened now reads the kept answers…
+    rt.block_on(b.extra_info(&ids[0])).unwrap();
+    assert_eq!(searches(), asked);
+    // …and fetching again asks IGDB again.
+    rt.block_on(b.refresh_details(&ids[..1]));
+    assert!(searches() > asked);
+    rt.block_on(b.set_igdb_credentials(None)).unwrap();
+    b.settings.update_app(|s| s.igdb = false);
+}
+
+#[cfg(unix)]
+#[test]
+fn removing_a_prefix_forgets_it() {
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let prefix = dir.path().join("prefix");
+    std::fs::create_dir_all(prefix.join("drive_c")).unwrap();
+    std::fs::write(prefix.join("system.reg"), "").unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "prefix-gone".into(),
+            title: "Prefix Gone".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.path().join("game").display().to_string(),
+                platform: InstallPlatform::Windows,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    b.settings.set_game_value(
+        &id,
+        "winePrefix",
+        Some(serde_json::Value::String(prefix.display().to_string())),
+    );
+    let args = RemoveArgs {
+        remove_prefix: true,
+        ..Default::default()
+    };
+    b.runtime().block_on(b.uninstall(&id, args)).unwrap();
+    assert!(!prefix.exists());
+    assert!(!b.settings.overrides(&id).is_overridden("winePrefix"));
+}
+
+/// A ROM's title and ids find nothing in Ludusavi; its emulator manifest's
+/// name does, and is kept so the search runs once.
+#[cfg(unix)]
+#[test]
+fn emulated_games_find_their_manifest_name_once() {
+    use std::os::unix::fs::PermissionsExt as _;
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    // An added game played in an emulator, its title the ROM's, tags and all.
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "ludusavi-emulated".into(),
+            title: "Crash Bandicoot (USA)".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.path().display().to_string(),
+                executable: dir
+                    .path()
+                    .join("Crash Bandicoot (USA).cue")
+                    .display()
+                    .to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    let calls = dir.path().join("calls");
+    let script = dir.path().join("ludusavi");
+    std::fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+[ "$1" = --version ] && {{ echo "ludusavi 0.31.0"; exit 0; }}
+echo "$*" >> '{calls}'
+case "$*" in
+  *--fuzzy*) echo '{{"games": {{"Crash Bandicoot (RetroArch)": {{"score": 0.95}},
+    "Crash Bandicoot (PS1)": {{"score": 0.9}}, "Crash Team Racing (PS1)": {{"score": 0.8}}}}}}' ;;
+  *) echo '{{"errors": {{"unknownGames": ["x"]}}, "games": {{}}}}'; exit 1 ;;
+esac
+"#,
+            calls = calls.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    b.settings
+        .update_app(|a| a.ludusavi_path = script.display().to_string());
+    b.settings.set_game_value(
+        &id,
+        "iroriEngine",
+        Some(serde_json::Value::String("duckstation".into())),
+    );
+    let rt = b.runtime();
+    let title = rt.block_on(b.ludusavi_title(&id)).unwrap();
+    assert_eq!(title.as_deref(), Some("Crash Bandicoot (PS1)"));
+    // Found, not chosen: the user's own choice stays empty.
+    assert!(
+        !b.settings
+            .overrides(&id)
+            .is_overridden("iroriLudusaviTitle")
+    );
+
+    // A new session (no matches in memory) runs only the plain lookup.
+    let fuzzy = || {
+        std::fs::read_to_string(&calls)
+            .unwrap()
+            .lines()
+            .filter(|l| l.contains("--fuzzy"))
+            .count()
+    };
+    let asked = fuzzy();
+    crate::ludusavi::forget_matches_for_test();
+    let again = rt.block_on(b.ludusavi_title(&id)).unwrap();
+    assert_eq!(again.as_deref(), Some("Crash Bandicoot (PS1)"));
+    assert_eq!(fuzzy(), asked, "the kept name needs no search");
+
+    // The user's choice wins over the found name.
+    b.set_ludusavi_title(&id, Some("Crash Bandicoot (RetroArch)"));
+    let chosen = rt.block_on(b.ludusavi_title(&id)).unwrap();
+    assert_eq!(chosen.as_deref(), Some("Crash Bandicoot (RetroArch)"));
+}
+
+/// The clean-up after a store removed a game goes on past a step that fails,
+/// and the one notice names what was left.
+#[cfg(unix)]
+#[test]
+fn uninstall_cleans_up_past_a_prefix_it_cannot_delete() {
+    use std::os::unix::fs::PermissionsExt;
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    // A prefix in a folder nobody may change: deleting it fails.
+    let locked = dir.path().join("locked");
+    let prefix = locked.join("prefix");
+    std::fs::create_dir_all(&prefix).unwrap();
+    std::fs::write(prefix.join("system.reg"), "WINE REGISTRY Version 2\n").unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "cleanup-on".into(),
+            title: "Cleanup On".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: dir.path().display().to_string(),
+                platform: InstallPlatform::Windows,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    b.settings.set_game_value(
+        &id,
+        "winePrefix",
+        Some(serde_json::Value::String(prefix.display().to_string())),
+    );
+    let settings_file = Paths::get().game_settings_file(&id);
+    assert!(settings_file.is_file());
+    let mut rx = b.subscribe();
+    let args = RemoveArgs {
+        remove_prefix: true,
+        delete_files: false,
+        remove_settings: true,
+    };
+    let result = b.runtime().block_on(b.uninstall(&id, args));
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    result.unwrap();
+    assert!(prefix.is_dir(), "the prefix could not go");
+    assert!(!settings_file.exists(), "the settings went anyway");
+    let mut library_changed = false;
+    let mut notices = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        match event {
+            Event::LibraryChanged(Runner::Sideload) => library_changed = true,
+            Event::Notice(n) => notices.push(n),
+            _ => {}
+        }
+    }
+    assert!(library_changed);
+    let [notice] = notices.as_slice() else {
+        panic!("one notice: {notices:?}");
+    };
+    assert_eq!(
+        notice.title_key,
+        Some("shell.notice.uninstalled_with_problems")
+    );
+    assert_eq!(notice.level, irori_core::NoticeLevel::Warning);
+    let message = notice.message.as_deref().unwrap_or_default();
+    assert!(message.contains(&prefix.display().to_string()), "{message}");
+}
+
+/// A game whose folder is gone stops with a typed error the UI turns into
+/// "locate the files or forget the install", never a plain message.
+#[cfg(unix)]
+#[test]
+fn missing_game_files_stop_the_launch_with_a_typed_error() {
+    isolate_paths();
+    let gone = tempfile::tempdir().unwrap().path().join("Moved Away");
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "files-gone".into(),
+            title: "Files Gone".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: gone.display().to_string(),
+                platform: InstallPlatform::Linux,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("sh").args(["-c", "exit 0"]),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    let e = b
+        .runtime()
+        .block_on(b.launch(&id, None, Vec::new()))
+        .unwrap_err();
+    let missing = irori_core::GameFilesMissing::of(&e).expect("a typed error");
+    assert_eq!(missing.title, "Files Gone");
+    assert_eq!(missing.path.as_deref(), Some(gone.as_path()));
+    assert!(!b.is_running(&id));
+    // An added game is located again, never "forgotten".
+    assert!(!Backend::can_forget_install(&id));
+    assert!(b.runtime().block_on(b.forget_install(&id)).is_err());
+    assert!(Backend::can_forget_install(&irori_core::GameId::new(
+        Runner::Gog,
+        "1"
+    )));
+    assert!(!Backend::can_forget_install(&irori_core::GameId::new(
+        Runner::Steam,
+        "1"
+    )));
+}
+
+/// A store with one game whose achievements the test unlocks, reporting
+/// unlocks the way `signal` says.
+struct UnlockStore {
+    list: ListStore,
+    achievements: parking_lot::Mutex<Vec<irori_core::Achievement>>,
+    signal: irori_core::AchievementSignal,
+    /// How often the store was asked for the achievements.
+    asked: std::sync::atomic::AtomicUsize,
+}
+
+impl UnlockStore {
+    fn new(app: &str, signal: irori_core::AchievementSignal) -> Self {
+        let achievement = |id: &str, at: Option<&str>| irori_core::Achievement {
+            id: id.into(),
+            name: id.to_uppercase(),
+            visible: true,
+            unlocked_at: at.map(String::from),
+            ..Default::default()
+        };
+        Self {
+            list: ListStore {
+                runner: Runner::Sideload,
+                games: vec![Arc::new(
+                    GameInfo {
+                        runner: Some(Runner::Sideload),
+                        app_name: app.into(),
+                        title: "Live".into(),
+                        ..Default::default()
+                    }
+                    .finalize(),
+                )],
+            },
+            achievements: parking_lot::Mutex::new(vec![
+                achievement("a", Some("2026-01-01T00:00:00Z")),
+                achievement("b", None),
+            ]),
+            signal,
+            asked: Default::default(),
+        }
+    }
+
+    fn unlock(&self, id: &str) {
+        for a in self.achievements.lock().iter_mut().filter(|a| a.id == id) {
+            a.unlocked_at = Some("2026-02-01T00:00:00Z".into());
+        }
+    }
+
+    fn asked(&self) -> usize {
+        self.asked.load(Ordering::SeqCst)
+    }
+}
+
+#[async_trait]
+impl Store for UnlockStore {
+    fn runner(&self) -> Runner {
+        self.list.runner()
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        self.list.user()
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("not supported")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        self.list.games()
+    }
+    fn game(&self, app: &str) -> Option<Arc<GameInfo>> {
+        self.list.game(app)
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not supported")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn import(&self, _: &str, _: &Path, _: InstallPlatform) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not supported")
+    }
+    async fn achievements(&self, _: &str, _: &str) -> Result<Vec<irori_core::Achievement>> {
+        self.asked.fetch_add(1, Ordering::SeqCst);
+        Ok(self.achievements.lock().clone())
+    }
+    async fn achievement_signal(&self, _: &str) -> irori_core::AchievementSignal {
+        self.signal.clone()
+    }
+}
+
+/// Wait up to ten seconds for `done`.
+async fn soon(done: impl Fn() -> bool) -> bool {
+    for _ in 0..200 {
+        if done() {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    false
+}
+
+/// Whether an `AchievementsUnlocked` for `id` comes within ten seconds.
+async fn unlocked(
+    events: &mut tokio::sync::broadcast::Receiver<Event>,
+    id: &irori_core::GameId,
+) -> bool {
+    let wait = async {
+        loop {
+            match events.recv().await {
+                Ok(Event::AchievementsUnlocked(game)) if game == *id => return true,
+                Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(_) => return false,
+            }
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(10), wait)
+        .await
+        .unwrap_or(false)
+}
+
+/// A session's achievement watch over `store`'s game, with notices on.
+fn watch(
+    store: &Arc<UnlockStore>,
+    app: &str,
+) -> (
+    Backend,
+    irori_core::GameId,
+    tokio::sync::broadcast::Receiver<Event>,
+    tokio_util::sync::CancellationToken,
+) {
+    let shared: irori_core::DynStore = store.clone();
+    let b = Backend::start_headless(move |_, _| vec![shared.clone()]).unwrap();
+    b.settings.update_app(|a| a.achievement_notices = true);
+    let id = irori_core::GameId::new(Runner::Sideload, app);
+    let events = b.subscribe();
+    let stop = tokio_util::sync::CancellationToken::new();
+    let (watcher, game, until) = (b.clone(), id.clone(), stop.clone());
+    b.runtime().spawn(async move {
+        watcher
+            .watch_achievements_while_playing(game, "Live".into(), until)
+            .await
+    });
+    (b, id, events, stop)
+}
+
+#[test]
+fn unlocks_follow_the_stores_reports_while_playing() {
+    isolate_paths();
+    let app = "live-unlocks-events";
+    let store = Arc::new(UnlockStore::new(app, irori_core::AchievementSignal::Events));
+    let (b, id, mut events, stop) = watch(&store, app);
+    let rt = b.runtime();
+    // What is unlocked when the session starts is only noted.
+    assert!(rt.block_on(soon(|| store.asked() == 1)));
+    assert!(b.take_live_unlocks(&id).is_empty());
+
+    store.unlock("b");
+    b.bus.emit(Event::AchievementSignal(id.clone()));
+    assert!(rt.block_on(unlocked(&mut events, &id)));
+    let live: Vec<String> = b.take_live_unlocks(&id).into_iter().map(|a| a.id).collect();
+    assert_eq!(live, ["b"]);
+    assert!(b.take_live_unlocks(&id).is_empty(), "taken once");
+    // Nothing was asked in between: the store's reports are followed.
+    assert_eq!(store.asked(), 2);
+    stop.cancel();
+}
+
+#[test]
+fn unlocks_follow_the_stores_files_while_playing() {
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let stats = dir.path().join("UserGameStats_1_2.bin");
+    std::fs::write(&stats, b"before").unwrap();
+    let app = "live-unlocks-files";
+    let store = Arc::new(UnlockStore::new(
+        app,
+        irori_core::AchievementSignal::Files(vec![stats.clone()]),
+    ));
+    let (b, id, mut events, stop) = watch(&store, app);
+    let rt = b.runtime();
+    assert!(rt.block_on(soon(|| store.asked() == 1)));
+    // Let the watch begin before the store writes its file.
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    store.unlock("b");
+    std::fs::write(&stats, b"after").unwrap();
+    assert!(rt.block_on(unlocked(&mut events, &id)));
+    let live: Vec<String> = b.take_live_unlocks(&id).into_iter().map(|a| a.id).collect();
+    assert_eq!(live, ["b"]);
+    stop.cancel();
 }

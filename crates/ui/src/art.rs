@@ -9,11 +9,18 @@
 //! 3. views render the thumbnail path through an [`LruImageCache`], which
 //!    bounds how many decoded images stay in GPU/CPU memory.
 //!
+//! The disk cache has a size cap (`iroriArtCacheLimit`), kept by
+//! `irori_services::art_cache`; art asked for here is noted as in use, so the
+//! cap never removes what is shown.
+//!
 //! Backdrop art also gets an [`Ambient`]: a small pre-blurred copy (a GPU blur
 //! of a full-size image every frame would cost far more), the colour the art
 //! is mostly made of, which tints the page around it, and the darkest and
 //! lightest tones of the blurred copy, which let text over it be held legible
 //! ([`crate::components::ArtBackdrop`]).
+//!
+//! Views that draw art in its own shape ask for its [`aspect`]: the header
+//! of a thumbnail already made is read once, off the UI thread.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -90,6 +97,14 @@ pub struct ArtStore {
     arrived: HashMap<ArtKey, Instant>,
     /// Ambient art by URL; `None` when it could not be produced.
     ambient: HashMap<SharedString, Option<Ambient>>,
+    /// Height over width of art by URL, learnt from its thumbnail; `None`
+    /// when it could not be read.
+    aspects: HashMap<SharedString, Option<f32>>,
+    aspect_pending: HashSet<SharedString>,
+    /// URLs whose shape a view asked for; only theirs is read.
+    aspect_wanted: HashSet<SharedString>,
+    /// The last thumbnail made ready per URL, to read a shape from.
+    shown: HashMap<SharedString, Arc<Path>>,
     ambient_pending: HashSet<SharedString>,
     downloads: Arc<Semaphore>,
 }
@@ -102,6 +117,12 @@ impl Global for ArtStoreHandle {}
 /// they are not on disk yet. `None` until they are ready or if they fail.
 pub fn ambient(url: &str, cx: &mut App) -> Option<Ambient> {
     art_store(cx).update(cx, |s, cx| s.ambient(url, cx))
+}
+
+/// Height over width of `url`'s picture once it is known (see
+/// [`ArtStore::aspect`]).
+pub fn aspect(url: &str, cx: &mut App) -> Option<f32> {
+    art_store(cx).update(cx, |s, cx| s.aspect(url, cx))
 }
 
 /// The art store entity; observe it to re-render when art arrives.
@@ -117,6 +138,10 @@ pub(crate) fn install(cx: &mut App) {
         stood_in: HashSet::new(),
         arrived: HashMap::new(),
         ambient: HashMap::new(),
+        aspects: HashMap::new(),
+        aspect_pending: HashSet::new(),
+        aspect_wanted: HashSet::new(),
+        shown: HashMap::new(),
         ambient_pending: HashSet::new(),
         downloads: Arc::new(Semaphore::new(MAX_DOWNLOADS)),
     });
@@ -197,9 +222,12 @@ impl ArtStore {
         if self.pending.contains(&key) {
             return self.stand_in_or_loading(&key);
         }
+        // Shown from now on: the disk cache's trim keeps it.
+        irori_services::art_cache::note_used(&digest(url));
         let thumb = thumb_path(url, key.width, keep_alpha);
         if thumb.is_file() {
             let p: Arc<Path> = thumb.into();
+            self.note_shown(&key.url, &p, cx);
             self.ready.insert(key, p.clone());
             return Art::Ready(p);
         }
@@ -226,7 +254,9 @@ impl ArtStore {
                         if !stood_in {
                             store.arrived.insert(key.clone(), Instant::now());
                         }
-                        store.ready.insert(key, path.into());
+                        let path: Arc<Path> = path.into();
+                        store.note_shown(&key.url, &path, cx);
+                        store.ready.insert(key, path);
                     }
                     Err(e) => {
                         tracing::debug!("art {}: {e:#}", key.url);
@@ -238,6 +268,57 @@ impl ArtStore {
         })
         .detach();
         shown
+    }
+
+    /// Height over width of `url`'s picture, once one of its thumbnails is
+    /// ready ([`Self::get`]) and its header was read; `None` until then or
+    /// when it can't be. Asking starts the reading; observers are notified
+    /// when the shape is learnt.
+    pub fn aspect(&mut self, url: &str, cx: &mut Context<Self>) -> Option<f32> {
+        if url.is_empty() {
+            return None;
+        }
+        if let Some(known) = self.aspects.get(url) {
+            return *known;
+        }
+        let url = SharedString::from(url.to_string());
+        if self.aspect_wanted.insert(url.clone())
+            && let Some(thumb) = self.shown.get(&url).cloned()
+        {
+            self.learn_aspect(&url, &thumb, cx);
+        }
+        None
+    }
+
+    /// A thumbnail of `url` is ready: read its shape if a view wants it.
+    fn note_shown(&mut self, url: &SharedString, thumb: &Arc<Path>, cx: &mut Context<Self>) {
+        self.shown.insert(url.clone(), thumb.clone());
+        if self.aspect_wanted.contains(url) {
+            self.learn_aspect(url, thumb, cx);
+        }
+    }
+
+    /// Read the size of `thumb`, a thumbnail of `url`, off the UI thread,
+    /// unless `url`'s shape is known or being read. Thumbnails keep their
+    /// original's shape, and only the header is read.
+    fn learn_aspect(&mut self, url: &SharedString, thumb: &Arc<Path>, cx: &mut Context<Self>) {
+        if self.aspects.contains_key(url) || !self.aspect_pending.insert(url.clone()) {
+            return;
+        }
+        let path = thumb.clone();
+        let job = backend(cx).spawn_blocking(move || image::image_dimensions(&path).ok());
+        let url = url.clone();
+        cx.spawn(async move |this, cx| {
+            let size = job.await.ok().flatten();
+            let _ = this.update(cx, |store, cx| {
+                store.aspect_pending.remove(&url);
+                store
+                    .aspects
+                    .insert(url, size.and_then(|(w, h)| aspect_of(w, h)));
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// While `key` is produced, the same art at the nearest width already in
@@ -300,6 +381,7 @@ impl ArtStore {
         if self.ambient_pending.contains(&key) {
             return None;
         }
+        irori_services::art_cache::note_used(&digest(url));
         let (image, rgb) = ambient_paths(url);
         if let Some(found) = read_ambient(&image, &rgb) {
             self.ambient.insert(key, Some(found.clone()));
@@ -349,6 +431,8 @@ impl ArtStore {
                 store.ready.retain(|k, _| !known(&k.url));
                 store.failed.retain(|k| !known(&k.url));
                 store.ambient.retain(|k, _| !known(k));
+                store.aspects.retain(|k, _| !known(k));
+                store.shown.retain(|k, _| !known(k));
                 cx.notify();
             });
         })
@@ -366,6 +450,12 @@ impl ArtStore {
     }
 }
 
+/// Height over width of a `width` × `height` picture; `None` for an empty
+/// one.
+fn aspect_of(width: u32, height: u32) -> Option<f32> {
+    (width > 0 && height > 0).then(|| height as f32 / width as f32)
+}
+
 /// Hand memory freed by a batch of decodes back to the system. glibc keeps
 /// it otherwise; `malloc_trim` walks every arena, so run it off the UI thread.
 fn release_freed_memory(cx: &App) {
@@ -378,9 +468,14 @@ fn release_freed_memory(cx: &App) {
     });
 }
 
-/// The original of `url` on disk, downloading it on first use.
+/// The original of `url` on disk, downloading it on first use. A local
+/// clip's original is its poster frame, so clips show like pictures
+/// wherever a screenshot would (missing while the computer has no ffmpeg).
 async fn original(url: &str) -> Result<PathBuf> {
     if let Some(p) = local_path(url) {
+        if irori_services::screenshots::is_video(&p) {
+            return irori_services::media::posters::poster(&p).await;
+        }
         return Ok(p);
     }
     let orig = original_path(url);
@@ -696,6 +791,13 @@ mod tests {
             _ => image::Rgb([90, 120, 60]),
         });
         assert_eq!(tonal_range(&img), ([5, 10, 0], [250, 250, 240]));
+    }
+
+    #[test]
+    fn aspects_are_height_over_width() {
+        assert_eq!(aspect_of(600, 900), Some(1.5));
+        assert_eq!(aspect_of(920, 430), Some(430.0 / 920.0));
+        assert_eq!(aspect_of(0, 900), None);
     }
 
     #[test]

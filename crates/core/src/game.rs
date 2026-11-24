@@ -192,6 +192,11 @@ pub struct InstalledInfo {
     pub pinned_version: bool,
     pub is_dosbox: bool,
     pub sdl: Vec<String>,
+    /// The Wine prefix another launcher installed the game in (a game
+    /// imported from the Epic Games Launcher's prefix), where its saves and
+    /// configuration are. The game's default prefix; a prefix the user chose
+    /// wins.
+    pub store_prefix: Option<String>,
 }
 
 /// A DLC entry of a base game.
@@ -226,6 +231,9 @@ pub struct ExtraInfo {
     pub genres: Vec<String>,
     /// Full-size screenshot URLs from the store page.
     pub screenshots: Vec<String>,
+    /// Trailers from the store page (Steam), the store's pick first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub videos: Vec<Video>,
     /// Age ratings from the store page (Steam, GOG).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub age_ratings: Vec<crate::AgeRating>,
@@ -239,6 +247,18 @@ pub struct ExtraInfo {
     /// on the game page; `None` when everything is the store's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details_from: Option<String>,
+}
+
+/// A trailer on a store page.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Video {
+    pub name: String,
+    /// A still of it, shown before it plays.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<String>,
+    /// What plays: an `https` file or stream address.
+    pub url: String,
 }
 
 /// One row of system requirements.
@@ -408,6 +428,58 @@ pub struct GameOverrides {
     /// (an installed copy still goes first).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub default_copy: bool,
+    /// Web pages the user keeps with the game (a wiki, a mod site, a
+    /// guide), in their order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<GameLink>,
+}
+
+/// A web page the user keeps with a game.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GameLink {
+    /// What the user calls it; empty shows the page's host.
+    pub name: String,
+    /// An `https://` or `http://` address.
+    pub url: String,
+}
+
+impl GameLink {
+    /// A link to `url` named `name`, when `url` is a web address (a bare
+    /// host gets `https://`). Names and addresses are trimmed.
+    pub fn new(name: &str, url: &str) -> Option<Self> {
+        let url = url.trim();
+        let url = if url.contains("://") {
+            url.to_owned()
+        } else {
+            format!("https://{url}")
+        };
+        let lower = url.to_ascii_lowercase();
+        let rest = lower
+            .strip_prefix("https://")
+            .or_else(|| lower.strip_prefix("http://"))?;
+        let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+        let valid = host.contains('.')
+            && !host.starts_with('.')
+            && !url.chars().any(|c| c.is_whitespace() || c.is_control());
+        valid.then(|| Self {
+            name: name.trim().to_owned(),
+            url,
+        })
+    }
+
+    /// The name to show: the user's, else the page's host without `www.`.
+    pub fn label(&self) -> String {
+        if !self.name.is_empty() {
+            return self.name.clone();
+        }
+        let rest = self
+            .url
+            .split_once("://")
+            .map_or(self.url.as_str(), |(_, r)| r);
+        let host = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+        host.strip_prefix("www.").unwrap_or(host).to_owned()
+    }
 }
 
 impl GameOverrides {
@@ -432,3 +504,29 @@ pub struct PlaytimeRecord {
 }
 
 pub type PlaytimeMap = BTreeMap<String, PlaytimeRecord>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn links_take_web_addresses_only() {
+        let link = GameLink::new(" Wiki ", " https://hades.fandom.com/wiki ").unwrap();
+        assert_eq!(link.url, "https://hades.fandom.com/wiki");
+        assert_eq!(link.label(), "Wiki");
+        let bare = GameLink::new("", "www.nexusmods.com/hades").unwrap();
+        assert_eq!(bare.url, "https://www.nexusmods.com/hades");
+        assert_eq!(bare.label(), "nexusmods.com");
+        assert!(GameLink::new("", "http://example.org").is_some());
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "steam://run/1",
+            "",
+            "notahost",
+            "https://a b.com",
+        ] {
+            assert!(GameLink::new("x", bad).is_none(), "{bad}");
+        }
+    }
+}

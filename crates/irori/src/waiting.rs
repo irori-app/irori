@@ -225,6 +225,11 @@ fn game(id: GameId, wait: Arc<Wait>, app: &Arc<Mutex<AppHandles>>, cx: &mut App)
     });
     cx.spawn(async move |cx| {
         let Err(e) = task.await else { return };
+        // Nothing will start: the waiting invocation ends with the reason.
+        if irori_services::LaunchCancelled::of(&e) {
+            wait.finish(Some(&format!("{e:#}")));
+            return;
+        }
         cx.update(|cx| {
             let asked = window.is_some_and(|handle| {
                 handle

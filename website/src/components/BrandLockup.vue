@@ -1,29 +1,36 @@
 <script setup lang="ts">
-/** The mark and the stroke-drawn wordmark; the letters take the text colour. */
+/** The mark and the wordmark; the letters take the text colour. */
 defineProps<{ id: string }>()
 </script>
 
 <template>
   <span class="inline-flex items-center gap-2.5">
     <img src="/brand/irori-mark.svg" alt="" width="36" height="36" class="size-9 shrink-0" />
-    <svg viewBox="-24 96 1148 604" class="h-6 w-auto" fill="none" role="img" aria-label="Irori">
+    <svg viewBox="-16 -16 488 221" class="h-6 w-auto" fill="none" role="img" aria-label="Irori">
       <defs>
-        <linearGradient :id="`${id}-spark`" x1="0" y1="112" x2="0" y2="238" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stop-color="#ff5f2a" />
-          <stop offset="1" stop-color="#ffb24f" />
+        <linearGradient :id="`${id}-plus`" x1="42.1" y1="8.7" x2="11.0" y2="45.1" gradientUnits="userSpaceOnUse">
+          <stop offset="0.00" stop-color="#eb4c5f" />
+          <stop offset="0.33" stop-color="#eb3085" />
+          <stop offset="0.67" stop-color="#e419b7" />
+          <stop offset="1.00" stop-color="#bd17e1" />
+        </linearGradient>
+        <linearGradient :id="`${id}-ring`" x1="446.6" y1="6.2" x2="413.6" y2="46.9" gradientUnits="userSpaceOnUse">
+          <stop offset="0.00" stop-color="#febf17" />
+          <stop offset="0.33" stop-color="#fe9d25" />
+          <stop offset="0.67" stop-color="#fe7238" />
+          <stop offset="1.00" stop-color="#fb534b" />
         </linearGradient>
       </defs>
-      <g stroke="currentColor" stroke-width="72" stroke-linecap="round">
-        <path d="M36 316V604" />
-        <path d="M164 604V316M164 470C164 370 204 316 304 316" />
-        <circle cx="540" cy="460" r="144" />
-        <path d="M812 604V316M812 470C812 370 852 316 952 316" />
-        <path d="M1064 316V604" />
+      <path
+        fill="currentColor"
+        fill-rule="evenodd"
+        d="M225.8 62.3C233.8 62.3 241.9 62.8 249.5 65.3C259.0 68.3 268.1 73.4 275.5 80.2C287.4 91.1 293.9 108.7 294.5 124.8C294.9 134.5 292.8 144.6 288.8 153.4C286.0 159.8 281.6 165.3 276.9 170.5C266.0 182.7 248.1 188.9 231.8 189.6C214.5 190.4 195.4 185.8 182.0 174.8C175.0 169.1 169.1 161.7 165.2 153.6C161.4 145.8 159.9 136.8 159.5 128.2C159.1 118.2 161.1 107.8 165.2 98.6C168.2 91.7 173.1 85.5 178.5 80.2C190.5 68.3 209.0 63.0 225.8 62.3ZM146.6 63.5L146.8 95.7C139.1 94.9 130.7 94.2 123.5 97.2C118.0 99.5 112.7 103.8 110.1 109.2C105.8 117.9 106.2 128.4 106.2 138.2L105.8 187.1L71.2 186.9L71.4 64.8L88.5 64.6L103.5 64.6L104.5 65.1L104.7 78.8L105.2 79.5L113.4 71.2L122.2 66.2L131.1 63.8C136.2 62.9 141.5 62.7 146.6 63.5ZM392.2 63.8L392.7 64.5L392.5 95.6L391.5 95.9L386.2 95.1C380.5 94.8 374.6 95.3 369.2 97.1C362.5 99.4 356.7 105.5 354.2 112.1C351.1 120.0 351.9 129.0 351.9 137.5L351.5 187.2L316.5 187.2L316.0 186.2L316.1 166.2L316.1 128.5L316.5 64.8L349.7 64.8L350.5 79.4L351.5 78.9L355.5 74.2L363.5 68.2C367.4 65.8 372.0 64.5 376.5 63.8C381.7 63.1 387.0 62.7 392.2 63.8ZM9.2 64.8L43.8 64.7L44.4 65.5L44.4 84.5L44.4 115.5L44.2 186.8L43.2 187.4L28.2 187.3L9.2 187.0L9.2 64.8ZM412.9 64.8L447.5 64.8L448.0 125.5L447.6 187.2L428.5 187.3L412.5 186.8L412.3 114.5L412.3 84.2L412.3 65.8L412.9 64.8ZM227.8 91.8L220.8 92.1C215.1 93.3 209.3 96.0 205.2 100.2C198.9 106.4 195.7 116.0 195.4 124.8C195.1 133.4 197.5 142.8 202.9 149.5C208.4 156.2 217.9 160.0 226.5 160.2C234.9 160.4 244.3 157.2 249.8 150.9C255.6 144.2 258.8 134.7 258.9 125.8C259.0 116.2 255.2 105.3 247.8 99.2C242.4 94.6 234.9 92.2 227.8 91.8Z"
+      />
+      <g :fill="`url(#${id}-plus)`">
+        <rect x="17.5" y="0.0" width="18.0" height="53.0" rx="4.0" />
+        <rect x="0.0" y="17.5" width="53.0" height="18.0" rx="4.0" />
       </g>
-      <g :fill="`url(#${id}-spark)`">
-        <path d="M44 112C56 150 80 168 80 194A44 44 0 0 1 -8 194C-8 164 26 150 44 112Z" />
-        <path d="M1072 112C1084 150 1108 168 1108 194A44 44 0 0 1 1020 194C1020 164 1054 150 1072 112Z" />
-      </g>
+      <circle cx="430.5" cy="26.5" r="21.7" fill="none" :stroke="`url(#${id}-ring)`" stroke-width="9.2" />
     </svg>
   </span>
 </template>

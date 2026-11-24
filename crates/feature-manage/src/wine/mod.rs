@@ -1,11 +1,13 @@
 //! The Wine manager ([`Route::WineManager`](irori_ui::Route::WineManager)):
-//! downloadable Proton/Wine builds per source, and every build found on this
-//! system with the user's custom Wine paths.
+//! downloadable Proton/Wine builds per source, every build found on this
+//! system with the user's custom Wine paths, and the Wine prefixes with the
+//! games using them.
 
 mod installed;
-mod ops;
+mod prefixes;
+mod sources;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::Duration;
 
@@ -14,6 +16,8 @@ use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::link::Link;
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
@@ -31,6 +35,7 @@ use gpui_kit::{
 };
 use irori_core::{Event, Paths, WineInstallation};
 use irori_runtime::manager::{self, Release, ReleaseKind};
+use irori_runtime::release_checks;
 use irori_ui::components::{EmptyState, PageHeader, SectionTitle};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
@@ -38,7 +43,9 @@ use irori_ui::{backend, models};
 use crate::common::{backend_op, notify_error};
 use crate::format;
 use installed::{WineOrigin, group, kind_label};
-use ops::{OpLive, WineOps, cancel_install, release_key, start_install, wine_ops};
+use irori_ui::wine_installs::{
+    OpLive, WineOps, cancel_install, release_key, start_install, wine_ops,
+};
 
 /// Repaint interval while installs report progress.
 const PROGRESS_TICK: Duration = Duration::from_millis(300);
@@ -47,18 +54,19 @@ fn source_label(kind: ReleaseKind) -> &'static str {
     kind.type_str()
 }
 
-fn source_description(kind: ReleaseKind) -> SharedString {
-    match kind {
-        ReleaseKind::GeProton => t("manage.wine.source.ge_proton"),
-        ReleaseKind::ProtonCachyOs => t("manage.wine.source.proton_cachyos"),
-        ReleaseKind::ProtonWineland => t("manage.wine.source.proton_wineland"),
-        ReleaseKind::WineGe => t("manage.wine.source.wine_ge"),
-        ReleaseKind::WineKron4ek => t("manage.wine.source.wine_kron4ek"),
-        ReleaseKind::NexusRuntime => t("manage.wine.source.nexus_runtime"),
-        ReleaseKind::WineCrossover
-        | ReleaseKind::WineStagingMac
-        | ReleaseKind::GamePortingToolkit => kind.type_str().into(),
-    }
+/// Why a check didn't reach GitHub, and in how long it can.
+fn rate_limited_text(limited: release_checks::RateLimited, now: u64) -> SharedString {
+    t_args(
+        "manage.wine.rate_limited",
+        &[("minutes", &limited.minutes_left(now).to_string())],
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WineTab {
+    Download,
+    System,
+    Prefixes,
 }
 
 #[derive(Clone)]
@@ -77,11 +85,17 @@ enum SystemState {
 
 /// Downloadable builds per source plus the builds found on this system.
 pub struct WineManagerView {
-    tab_ix: usize,
+    active_tab: WineTab,
+    selected_source: Option<ReleaseKind>,
+    show_older: HashSet<ReleaseKind>,
     lists: HashMap<ReleaseKind, ListState>,
     refreshing: bool,
+    /// GitHub's API budget is used up until this unix time.
+    limited_until: Option<u64>,
     search: Entity<InputState>,
     system: Option<SystemState>,
+    /// The Prefixes tab, once opened.
+    prefixes: Option<prefixes::PrefixState>,
     ops: Entity<WineOps>,
     seen_revision: u64,
     ticking: bool,
@@ -116,15 +130,38 @@ impl WineManagerView {
                 if this.system.is_some() {
                     this.load_system(window, cx);
                 }
+                if this.prefixes.is_some() {
+                    this.load_prefixes(window, cx);
+                }
             }),
+            // Installs and uninstalls change who uses a prefix.
+            cx.observe_in(
+                &models(cx).library.clone(),
+                window,
+                |this, _, window, cx| {
+                    if this.prefixes.is_some() {
+                        this.load_prefixes(window, cx);
+                    }
+                },
+            ),
         ];
         let seen_revision = ops.read(cx).revision;
+        let selected_source = ReleaseKind::available().first().copied();
+        let active_tab = if selected_source.is_some() {
+            WineTab::Download
+        } else {
+            WineTab::System
+        };
         let mut this = Self {
-            tab_ix: 0,
+            active_tab,
+            selected_source,
+            show_older: HashSet::new(),
             lists: HashMap::new(),
             refreshing: false,
+            limited_until: None,
             search,
             system: None,
+            prefixes: None,
             ops,
             seen_revision,
             ticking: false,
@@ -132,25 +169,64 @@ impl WineManagerView {
             _ticker: None,
             _subscriptions: subscriptions,
         };
-        this.select_tab(0, window, cx);
+        if let Some(kind) = selected_source {
+            this.load_list(kind, false, window, cx);
+        } else {
+            this.load_system(window, cx);
+        }
         this.ensure_ticker(window, cx);
         this
     }
 
-    fn tab_kind(&self) -> Option<ReleaseKind> {
-        ReleaseKind::available().get(self.tab_ix).copied()
+    fn active_source(&self) -> Option<ReleaseKind> {
+        (self.active_tab == WineTab::Download)
+            .then_some(self.selected_source)
+            .flatten()
+    }
+
+    /// The Prefixes tab, after the downloads and "On this system".
+    fn on_prefixes(&self) -> bool {
+        self.active_tab == WineTab::Prefixes
     }
 
     fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
-        self.tab_ix = ix;
-        self.search.update(cx, |s, cx| s.set_value("", window, cx));
-        match self.tab_kind() {
-            Some(kind) if !self.lists.contains_key(&kind) => {
-                self.load_list(kind, false, window, cx)
+        let has_downloads = !ReleaseKind::available().is_empty();
+        if has_downloads && ix == 0 {
+            self.active_tab = WineTab::Download;
+            if let Some(kind) = self.selected_source
+                && !self.lists.contains_key(&kind)
+            {
+                self.load_list(kind, false, window, cx);
             }
-            Some(_) => {}
-            None if self.system.is_none() => self.load_system(window, cx),
-            None => {}
+        } else if ix == usize::from(has_downloads) {
+            self.active_tab = WineTab::System;
+            if self.system.is_none() {
+                self.load_system(window, cx);
+            }
+        } else {
+            self.active_tab = WineTab::Prefixes;
+            if self.prefixes.is_none() {
+                self.load_prefixes(window, cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn select_source(&mut self, kind: ReleaseKind, window: &mut Window, cx: &mut Context<Self>) {
+        self.active_tab = WineTab::Download;
+        if self.selected_source != Some(kind) {
+            self.selected_source = Some(kind);
+            self.search.update(cx, |s, cx| s.set_value("", window, cx));
+        }
+        if !self.lists.contains_key(&kind) {
+            self.load_list(kind, false, window, cx);
+        }
+        cx.notify();
+    }
+
+    fn toggle_older(&mut self, kind: ReleaseKind, cx: &mut Context<Self>) {
+        if !self.show_older.remove(&kind) {
+            self.show_older.insert(kind);
         }
         cx.notify();
     }
@@ -178,25 +254,51 @@ impl WineManagerView {
         }
         cx.notify();
         let task = irori_ui::run(cx, async move {
-            if fetch {
-                manager::update_releases(true, &[kind]).await?;
+            let list = async {
+                if fetch {
+                    manager::update_releases(true, &[kind]).await?;
+                }
+                manager::available_releases(kind).await
             }
-            manager::available_releases(kind).await
+            .await;
+            let now = irori_core::util::unix_now();
+            Ok((list, release_checks::exhausted_until(now)))
         });
         cx.spawn_in(window, async move |this, cx| {
-            let result = task.await;
+            let Ok((result, limited_until)) = task.await else {
+                return;
+            };
             let _ = this.update_in(cx, |this, window, cx| {
                 if fetch {
                     this.refreshing = false;
                 }
+                this.limited_until = limited_until;
                 match result {
                     Ok(list) => {
                         this.lists.insert(kind, ListState::Loaded(list));
                     }
                     Err(e) => {
-                        let message =
-                            t_args("manage.wine.fetch_failed", &[("error", &format!("{e:#}"))]);
+                        let now = irori_core::util::unix_now();
+                        let limited = release_checks::rate_limited(&e);
+                        let message = match limited {
+                            Some(l) => rate_limited_text(l, now),
+                            None => {
+                                t_args("manage.wine.fetch_failed", &[("error", &format!("{e:#}"))])
+                            }
+                        };
+                        if let Some(l) = limited {
+                            this.limited_until = Some(l.reset);
+                        }
                         match this.lists.get(&kind) {
+                            Some(ListState::Loaded(_)) if limited.is_some() => {
+                                window.push_notification(
+                                    Notification::warning(message).title(t_args(
+                                        "manage.wine.refresh_failed",
+                                        &[("source", source_label(kind))],
+                                    )),
+                                    cx,
+                                );
+                            }
                             Some(ListState::Loaded(_)) => notify_error(
                                 t_args(
                                     "manage.wine.refresh_failed",
@@ -240,8 +342,9 @@ impl WineManagerView {
     }
 
     fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match self.tab_kind() {
+        match self.active_source() {
             Some(kind) => self.load_list(kind, true, window, cx),
+            None if self.on_prefixes() => self.load_prefixes(window, cx),
             None => self.load_system(window, cx),
         }
     }
@@ -367,6 +470,7 @@ impl WineManagerView {
         let key = release_key(release);
         let op = self.ops.read(cx).running.get(&key).map(|op| op.snapshot());
         let installed = release.installed();
+        let latest = sources::is_latest_release(release);
         let has_update = installed && release.has_update == Some(true);
         let size = if installed && release.disksize > 0 {
             release.disksize
@@ -413,7 +517,9 @@ impl WineManagerView {
                                 .small()
                                 .icon(IconName::RefreshCw)
                                 .label(t("manage.wine.update"))
-                                .on_click(move |_, _, cx| start_install(upd.clone(), cx)),
+                                .on_click(move |_, _, cx| {
+                                    start_install(upd.clone(), false, cx);
+                                }),
                         )
                     })
                     .child(
@@ -433,7 +539,10 @@ impl WineManagerView {
                     .small()
                     .icon(IconName::Download)
                     .label(t("manage.wine.install"))
-                    .on_click(move |_, _, cx| start_install(r.clone(), cx))
+                    .when(latest, |b| b.primary())
+                    .on_click(move |_, _, cx| {
+                        start_install(r.clone(), false, cx);
+                    })
                     .into_any_element()
             }
         };
@@ -444,6 +553,7 @@ impl WineManagerView {
             .px_3()
             .py_2()
             .rounded(theme.radius)
+            .when(latest, |row| row.bg(theme.secondary.opacity(0.3)))
             .child(
                 v_flex()
                     .flex_1()
@@ -458,6 +568,13 @@ impl WineManagerView {
                                     .truncate()
                                     .child(release.version.clone()),
                             )
+                            .when(latest, |this| {
+                                this.child(
+                                    Tag::primary()
+                                        .xsmall()
+                                        .child(t("manage.wine.tag.recommended")),
+                                )
+                            })
                             .when(installed, |this| {
                                 this.child(
                                     Tag::success()
@@ -497,8 +614,21 @@ impl WineManagerView {
     }
 
     fn render_source(&self, kind: ReleaseKind, cx: &mut Context<Self>) -> AnyElement {
-        let muted = cx.theme().muted_foreground;
-        let query = self.search.read(cx).value().trim().to_lowercase();
+        let (muted, radius, summary_bg, border) = {
+            let theme = cx.theme();
+            (
+                theme.muted_foreground,
+                theme.radius,
+                theme.secondary.opacity(0.35),
+                theme.border,
+            )
+        };
+        let query = self.search.read(cx).value().trim().to_string();
+        let available = ReleaseKind::available();
+        let quick = sources::quick_sources(available);
+        let other_selected = !quick.contains(&kind);
+        let expanded = self.show_older.contains(&kind);
+
         let body: AnyElement = match self.lists.get(&kind) {
             None | Some(ListState::Loading) => h_flex()
                 .gap_2()
@@ -516,43 +646,195 @@ impl WineManagerView {
                     .into_any_element()
             }
             Some(ListState::Loaded(list)) => {
-                let rows: Vec<AnyElement> = list
-                    .iter()
-                    .filter(|r| !r.download.is_empty() || r.installed())
-                    .filter(|r| query.is_empty() || r.version.to_lowercase().contains(&query))
-                    .map(|r| self.render_release(r, cx))
-                    .collect();
-                if rows.is_empty() {
+                let visible = sources::visible_releases(list, &query, expanded);
+                if visible.items.is_empty() {
                     div()
                         .text_sm()
                         .text_color(muted)
                         .child(t("manage.wine.no_match"))
                         .into_any_element()
                 } else {
-                    v_flex().gap_1().children(rows).into_any_element()
+                    let rows: Vec<AnyElement> = visible
+                        .items
+                        .into_iter()
+                        .map(|r| self.render_release(r, cx))
+                        .collect();
+                    let show_fewer = visible.hidden_count == 0
+                        && expanded
+                        && query.is_empty()
+                        && sources::visible_releases(list, "", false).hidden_count > 0;
+                    v_flex()
+                        .gap_1()
+                        .children(rows)
+                        .when(visible.hidden_count > 0, |col| {
+                            col.child(
+                                div().pt_2().child(
+                                    Button::new("show-older-wine")
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::ChevronDown)
+                                        .label(t_args(
+                                            "manage.wine.show_older",
+                                            &[("count", &visible.hidden_count.to_string())],
+                                        ))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.toggle_older(kind, cx)
+                                        })),
+                                ),
+                            )
+                        })
+                        .when(show_fewer, |col| {
+                            col.child(
+                                div().pt_2().child(
+                                    Button::new("show-fewer-wine")
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::ChevronUp)
+                                        .label(t("manage.wine.show_fewer"))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.toggle_older(kind, cx)
+                                        })),
+                                ),
+                            )
+                        })
+                        .into_any_element()
                 }
             }
         };
-        v_flex()
-            .gap_4()
+
+        let selector = h_flex()
+            .gap_3()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
             .child(
                 h_flex()
-                    .gap_4()
-                    .items_start()
-                    .child(
+                    .gap_2()
+                    .flex_wrap()
+                    .items_center()
+                    .children(quick.iter().copied().map(|q| {
+                        Button::new(ElementId::Name(
+                            format!("wine-source-{}", q.type_str()).into(),
+                        ))
+                        .label(source_label(q))
+                        .map(|b| if q == kind { b.primary() } else { b.outline() })
+                        .on_click(
+                            cx.listener(move |this, _, window, cx| {
+                                this.select_source(q, window, cx)
+                            }),
+                        )
+                    }))
+                    .when(available.len() > quick.len(), |row| {
+                        let groups = sources::grouped_sources(available);
+                        let view = cx.entity().downgrade();
+                        row.child(
+                            Button::new("wine-more-builds")
+                                .dropdown_caret(true)
+                                .map(|b| {
+                                    if other_selected {
+                                        b.primary().label(source_label(kind))
+                                    } else {
+                                        b.outline().label(t("manage.wine.more_builds"))
+                                    }
+                                })
+                                .dropdown_menu(move |mut menu, _, _| {
+                                    for (ix, (group, items)) in groups.iter().enumerate() {
+                                        if ix > 0 {
+                                            menu = menu.separator();
+                                        }
+                                        menu = menu.label(group.label());
+                                        for &source in items {
+                                            let view = view.clone();
+                                            menu = menu.item(
+                                                PopupMenuItem::new(source_label(source))
+                                                    .checked(source == kind)
+                                                    .on_click(move |_, window, cx| {
+                                                        let _ = view.update(cx, |this, cx| {
+                                                            this.select_source(source, window, cx)
+                                                        });
+                                                    }),
+                                            );
+                                        }
+                                    }
+                                    menu
+                                }),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .w(rems(20.))
+                    .flex_shrink_0()
+                    .child(Input::new(&self.search)),
+            );
+
+        let summary = v_flex()
+            .gap_1()
+            .p_3()
+            .rounded(radius)
+            .bg(summary_bg)
+            .border_1()
+            .border_color(border)
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(div().font_semibold().truncate().child(source_label(kind)))
+                    .when_some(sources::source_badge(kind), |this, badge| {
+                        this.child(badge.tag())
+                    }),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(muted)
+                    .child(sources::source_description(kind)),
+            );
+
+        let matched_sources = sources::matching_sources(available, kind, &query);
+
+        v_flex()
+            .gap_4()
+            .child(selector)
+            .child(summary)
+            .when(!matched_sources.is_empty(), |col| {
+                col.child(
+                    h_flex()
+                        .gap_2()
+                        .flex_wrap()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(muted)
+                                .child(t("manage.wine.matching_sources")),
+                        )
+                        .children(matched_sources.into_iter().map(|source| {
+                            Button::new(ElementId::Name(
+                                format!("wine-match-{}", source.type_str()).into(),
+                            ))
+                            .small()
+                            .outline()
+                            .label(source_label(source))
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| this.select_source(source, window, cx),
+                            ))
+                        })),
+                )
+            })
+            .when_some(
+                self.limited_until.filter(|reset| {
+                    *reset > irori_core::util::unix_now() && release_checks::is_github(kind.url())
+                }),
+                |col, reset| {
+                    let limited = release_checks::RateLimited { reset };
+                    col.child(
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_sm()
+                            .text_xs()
                             .text_color(muted)
-                            .child(source_description(kind)),
+                            .child(rate_limited_text(limited, irori_core::util::unix_now())),
                     )
-                    .child(
-                        div()
-                            .w(rems(16.))
-                            .flex_shrink_0()
-                            .child(Input::new(&self.search).small()),
-                    ),
+                },
             )
             .child(body)
             .into_any_element()
@@ -661,10 +943,7 @@ impl WineManagerView {
 /// Inline progress of a running install.
 fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
     let progress = live.progress.unwrap_or_default();
-    let extracting = live
-        .step
-        .as_deref()
-        .is_some_and(|s| s.starts_with("Extracting"));
+    let extracting = live.extracting();
     let detail = if extracting {
         t("manage.wine.progress.extracting").to_string()
     } else {
@@ -722,15 +1001,35 @@ impl Render for WineManagerView {
             });
         }
         let running = self.ops.read(cx).running.len();
-        let tabs = ReleaseKind::available()
-            .iter()
-            .map(|k| Tab::new().label(source_label(*k)))
-            .chain(std::iter::once(
-                Tab::new().label(t("manage.wine.tab.system")),
-            ));
-        let content = match self.tab_kind() {
+        let has_downloads = !ReleaseKind::available().is_empty();
+        let selected_tab = match self.active_tab {
+            WineTab::Download if has_downloads => 0,
+            WineTab::Prefixes => usize::from(has_downloads) + 1,
+            _ => usize::from(has_downloads),
+        };
+        let mut tabs = Vec::with_capacity(3);
+        if has_downloads {
+            tabs.push(Tab::new().label(t("manage.wine.tab.download")));
+        }
+        tabs.push(Tab::new().label(t("manage.wine.tab.system")));
+        tabs.push(Tab::new().label(t("manage.wine.tab.prefixes")));
+        let on_prefixes = self.on_prefixes();
+        let content = match self.active_source() {
             Some(kind) => self.render_source(kind, cx),
+            None if on_prefixes => self.render_prefixes(cx),
             None => self.render_system(cx),
+        };
+        // The prefix list is virtual and scrolls itself.
+        let body = if on_prefixes {
+            content
+        } else {
+            div()
+                .id("wine-body")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scrollbar()
+                .child(div().px_6().py_4().child(content))
+                .into_any_element()
         };
         let description = if cfg!(target_os = "macos") {
             t("manage.wine.description_macos")
@@ -769,20 +1068,13 @@ impl Render for WineManagerView {
                     .child(
                         TabBar::new("wine-tabs")
                             .underline()
-                            .selected_index(self.tab_ix)
+                            .selected_index(selected_tab)
                             .children(tabs)
                             .on_click(cx.listener(|this, ix: &usize, window, cx| {
                                 this.select_tab(*ix, window, cx)
                             })),
                     ),
             )
-            .child(
-                div()
-                    .id("wine-body")
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scrollbar()
-                    .child(div().px_6().py_4().child(content)),
-            )
+            .child(body)
     }
 }

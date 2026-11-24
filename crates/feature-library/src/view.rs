@@ -1,6 +1,7 @@
 //! The library screen view.
 
 mod bulk;
+pub(crate) mod details;
 mod panel;
 mod quick;
 pub(crate) mod remove;
@@ -34,14 +35,17 @@ use gpui_kit::{
     StyledImage as _, Subscription, WeakEntity, Window, canvas, div, linear_color_stop,
     linear_gradient, point, px, rems, size,
 };
-use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
+use irori_core::settings::{
+    CoverCaption, CoverFit, CoverHover, Density, LibraryBackground, LibraryLayout, UiPrefs,
+};
 use irori_core::{
     GameId, GameInfo, GameStatus, InstallPlatform, Runner, StatusKind, UpdateRequest,
 };
+use irori_services::StoreFilter;
 use irori_ui::art::LruImageCache;
 use irori_ui::components::{
-    ArtBackdrop, ArtImage, EmptyState, GameCover, SectionTitle, StoreBadge, art_image, art_img,
-    art_loading, art_missing, physical_width,
+    ArtBackdrop, ArtImage, EmptyState, GameCover, MAX_BADGES, SectionTitle, StoreBadge, art_image,
+    art_img, art_loading, art_missing, badge_row, physical_width,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
@@ -133,6 +137,9 @@ struct Frame {
     items: Rc<Vec<Item>>,
     sizes: Rc<Vec<Size<Pixels>>>,
     key: Option<FrameKey>,
+    /// The library lists one store's games, so store badges would all
+    /// say the same.
+    one_store: bool,
     /// The toolbar sits in the list under the top row, not in the header.
     toolbar_in_list: bool,
 }
@@ -150,6 +157,7 @@ impl Default for Frame {
             focus_rem: layouts::focus_column_rem(2),
             items: Rc::default(),
             sizes: Rc::default(),
+            one_store: false,
             key: None,
             toolbar_in_list: false,
         }
@@ -607,7 +615,10 @@ impl LibraryView {
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.
         let body_rem = f32::from(width) / f32::from(rem);
-        let focus_rem = layouts::focus_column_rem(layouts::focus_columns(body_rem));
+        let focus_rem = layouts::focus_column_rem(layouts::focus_columns_for(
+            self.ui_prefs.library_focus_columns,
+            body_rem,
+        ));
         let list_rem = match self.layout {
             LibraryLayout::Grid if self.panels.drawer_open => {
                 body_rem - layouts::drawer_width(self.panels.drawer_rem, body_rem)
@@ -616,9 +627,15 @@ impl LibraryView {
             _ => body_rem,
         };
         let available = list_rem - 2.0 * grid::EDGE_REM;
+        let caption = self.ui_prefs.cover_caption;
         let metrics = match self.layout {
-            LibraryLayout::Focus => grid::grid_metrics(available, layouts::FOCUS_TILE_REM),
-            _ => grid::grid_metrics_at(available, self.tile_rem, self.density),
+            LibraryLayout::Focus => grid::grid_metrics_for(
+                available,
+                layouts::FOCUS_TILE_REM,
+                Density::Comfortable,
+                caption,
+            ),
+            _ => grid::grid_metrics_for(available, self.tile_rem, self.density, caption),
         };
         // The top row isn't filtered, so the controls that filter sit under
         // it; without one (or with nothing to show) they stay in the header.
@@ -696,6 +713,7 @@ impl LibraryView {
         self.frame.top = top;
         self.frame.toolbar_in_list = toolbar_in_list;
         self.frame.stores = stores;
+        self.frame.one_store = matches!(filter.store, StoreFilter::Store(_));
         self.frame.heading = if filter.has_categories() {
             filter.category_heading(&user).into()
         } else if filter.favourites_only {
@@ -812,6 +830,7 @@ impl LibraryView {
             launching: self.launching.contains(&id),
             shortcut: self.shortcuts.get(&id).map(|(exists, _)| *exists),
             unavailable: game.is_installed && self.availability.missing().contains(&id),
+            rom: id.runner == Runner::Emulation,
         }
     }
 
@@ -903,6 +922,7 @@ impl LibraryView {
         let title = game.title.clone();
         match command {
             GameCommand::Play => self.play(&game, window, cx),
+            GameCommand::BackToGame => irori_ui::game_window::back_to_game(id, window, cx),
             GameCommand::Stop => {
                 let task = irori_ui::run(cx, async move { b.stop(&id).await });
                 let failed = t_args("library.error.stop", &[("title", &title)]);
@@ -1067,6 +1087,9 @@ impl LibraryView {
             }
             GameCommand::Uninstall => cx.emit(LibraryEvent::RequestUninstall(id)),
             GameCommand::Locate => cx.emit(LibraryEvent::RequestLocate(id)),
+            GameCommand::PlayAsPcGame => {
+                dialogs::sideload::open_play_as_pc_game_dialog(&id, window, cx)
+            }
         }
     }
 
@@ -1481,6 +1504,13 @@ fn item_rem(item: Item, top: Option<TopKind>, metrics: &GridMetrics) -> f32 {
 }
 
 /// Persist a UI preference off the UI thread.
+/// Whether covers carry store badges: when they are on, and not while the
+/// library lists one store, where every badge would say the same, unless
+/// the user wants them there too.
+fn store_badges_shown(ui: &UiPrefs, one_store: bool) -> bool {
+    ui.show_store_badges && (!one_store || ui.store_badges_one_store)
+}
+
 fn persist_ui(cx: &App, f: impl FnOnce(&mut irori_core::settings::UiPrefs) + Send + 'static) {
     let b = backend(cx);
     irori_ui::state::run_infallible(cx, async move { b.settings.update_app(|s| f(&mut s.ui)) })
@@ -1600,6 +1630,18 @@ fn game_menu(
                     move |sub, _, cx| irori_ui::play_status::menu(sub, &status_id, cx),
                 );
                 menu = copies_menu(menu, &copies_view, game, window, cx);
+                if game.is_installed && !irori_ui::user_actions::list(&game.id(), cx).is_empty() {
+                    let actions_id = game.id();
+                    menu = menu.submenu_with_icon(
+                        Some(Icon::new(IconName::SquareTerminal)),
+                        t("library.menu.actions"),
+                        window,
+                        cx,
+                        move |sub, _, cx| {
+                            irori_ui::user_actions::menu_items(sub, &actions_id, false, cx)
+                        },
+                    );
+                }
             }
         }
     }
@@ -2106,7 +2148,10 @@ impl LibraryView {
             })
             .child(list)
             .vertical_scrollbar(&self.scroll)
-            .children(list_toolbar);
+            .children(list_toolbar)
+            .when(layout == LibraryLayout::Focus, |el| {
+                el.child(self.render_focus_handle(cx))
+            });
         let drawer = (layout == LibraryLayout::Grid && self.panels.drawer_open)
             .then(|| self.render_drawer(window, cx));
         let focus_page = (layout == LibraryLayout::Focus).then(|| self.render_focus_page(cx));
@@ -2118,6 +2163,7 @@ impl LibraryView {
             .w_full()
             .items_start()
             .on_drag_move(cx.listener(Self::on_drawer_drag))
+            .on_drag_move(cx.listener(Self::on_focus_drag))
             .child(measure)
             .child(content)
             .children(focus_page)
@@ -2255,18 +2301,37 @@ impl LibraryView {
         let metrics = self.frame.metrics;
         let end = range.end.min(self.frame.games.len());
         let games: Vec<_> = self.frame.games[range.start.min(end)..end].to_vec();
+        let shapes = self.whole_shapes(&games, metrics.tile_rem, cx);
         h_flex()
             .items_start()
             .h(rems(metrics.row_rem))
             .pt(rems(grid::ROW_INSET_REM))
             .px(rems(grid::EDGE_REM))
             .gap(rems(metrics.gap_rem))
-            .children(
-                games
-                    .iter()
-                    .map(|g| self.render_tile(g, rems(metrics.tile_rem), false, window, cx)),
-            )
+            .children(games.iter().enumerate().map(|(ix, g)| {
+                let shape = shapes.as_ref().and_then(|s| s.get(ix).copied());
+                self.render_tile(g, rems(metrics.tile_rem), shape, false, window, cx)
+            }))
             .into_any_element()
+    }
+
+    /// With covers drawn whole, each one's size in rem inside its cell
+    /// ([`grid::whole_sizes`]) for one row of `games`; `None` while they are
+    /// cropped to 2:3.
+    fn whole_shapes(
+        &self,
+        games: &[Arc<GameInfo>],
+        tile_rem: f32,
+        cx: &mut Context<Self>,
+    ) -> Option<Vec<(f32, f32)>> {
+        if self.ui_prefs.cover_fit != CoverFit::Whole {
+            return None;
+        }
+        let aspects: Vec<Option<f32>> = games
+            .iter()
+            .map(|g| g.cover_art().and_then(|url| irori_ui::art::aspect(url, cx)))
+            .collect();
+        Some(grid::whole_sizes(&aspects, tile_rem))
     }
 
     /// A cover tile with live status, markers, and Play/Install plus "…" on
@@ -2275,6 +2340,7 @@ impl LibraryView {
         &mut self,
         game: &Arc<GameInfo>,
         width: Rems,
+        shape: Option<(f32, f32)>,
         in_recent: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -2285,8 +2351,19 @@ impl LibraryView {
         let status = models(cx).statuses.read(cx).get(&id).cloned();
         let (show_badges, cover_categories) = {
             let ui = &models(cx).settings.read(cx).app.ui;
-            (ui.show_store_badges, ui.cover_categories)
+            (
+                store_badges_shown(ui, self.frame.one_store),
+                ui.cover_categories,
+            )
         };
+        let badges_always = self.ui_prefs.store_badges_always;
+        let (corners, caption_kind, hover, favourite_star) = (
+            self.ui_prefs.cover_corners,
+            self.ui_prefs.cover_caption,
+            self.ui_prefs.cover_hover,
+            self.ui_prefs.cover_favourite,
+        );
+        let lifts = hover == CoverHover::Lift;
         let focus_view = self.layout == LibraryLayout::Focus;
         // The user's categories, at the cover's foot while nothing else is.
         let categories = (cover_categories && !focus_view)
@@ -2313,7 +2390,7 @@ impl LibraryView {
         let theme = cx.theme();
         let scrim = theme.background.opacity(0.88);
         let muted = theme.muted_foreground;
-        let radius = theme.radius_lg;
+        let radius = irori_ui::components::cover_radius(corners, cx);
 
         // An entry of several stores' copies says so.
         let copies = models(cx).library.read(cx).snapshot.copies_of(&id).len();
@@ -2347,7 +2424,7 @@ impl LibraryView {
                     )
                 },
             )
-            .when(state.favourite, |el| {
+            .when(state.favourite && favourite_star, |el| {
                 el.child(
                     div()
                         .p_1()
@@ -2454,13 +2531,15 @@ impl LibraryView {
         let cover = div()
             .relative()
             .rounded(radius)
-            .when(active, |el| el.shadow_lg())
+            .when(active && lifts, |el| el.shadow_lg())
             .when(keyboard, |el| el.focus_ring_style(window, cx))
-            .child(
-                div()
-                    .when(dim, |el| el.opacity(0.45))
-                    .child(GameCover::new(game.clone()).width(width)),
-            )
+            .child(div().when(dim, |el| el.opacity(0.45)).child({
+                let cover = GameCover::new(game.clone()).radius(radius);
+                match shape {
+                    Some((w, h)) => cover.width(rems(w)).height(rems(h)),
+                    None => cover.width(width),
+                }
+            }))
             .when(active || selected, |el| {
                 el.child(
                     div()
@@ -2473,22 +2552,32 @@ impl LibraryView {
                         .border_color(primary_color.opacity(if selected { 1. } else { 0.85 })),
                 )
             })
-            .when(show_badges && active && !selecting && !focus_view, |el| {
-                // An entry of several stores' copies names every store.
-                let stores = irori_ui::copies::stores(&id, cx);
-                el.child(
-                    h_flex()
-                        .absolute()
-                        .top_2()
-                        .left_2()
-                        .right_2()
-                        .gap_1()
-                        .flex_wrap()
-                        .children(stores.into_iter().map(|runner| {
-                            div().rounded_md().bg(scrim).child(StoreBadge::new(runner))
-                        })),
-                )
-            })
+            .when(
+                show_badges && (active || badges_always) && !selecting && !focus_view,
+                |el| {
+                    // An entry of several stores' copies names every store,
+                    // the first few and a count of the rest.
+                    let row = badge_row(irori_ui::copies::badge_marks(game, cx), MAX_BADGES);
+                    let badge = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
+                    el.child(
+                        h_flex()
+                            .absolute()
+                            .top_2()
+                            .left_2()
+                            .right_2()
+                            .gap_1()
+                            .flex_wrap()
+                            .children(
+                                row.shown
+                                    .into_iter()
+                                    .map(|mark| badge(StoreBadge::mark(mark))),
+                            )
+                            .when(row.more > 0, |el| {
+                                el.child(badge(StoreBadge::more(row.more)))
+                            }),
+                    )
+                },
+            )
             .child(markers)
             .when(actions.is_none() && status_overlay.is_none(), |el| {
                 el.children(categories.map(|names| {
@@ -2542,41 +2631,64 @@ impl LibraryView {
             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
                 this.click_game(&click_id, e.modifiers(), e.click_count(), window, cx)
             }))
-            // Pointed-at and focused covers rise a little off the grid.
-            .child(cover.with_spring(
-                SharedString::from(format!("tile-lift:{key}")),
-                SpringAnimation::new(HOVER_SPRING).to(if active { 1.0 } else { 0.0 }),
-                |el, lift: f32| el.top(px(-TILE_LIFT_PX * lift)),
-            ))
-            .child(
-                v_flex()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_semibold()
-                            .truncate()
-                            .when(dim, |el| el.text_color(muted))
-                            .child(game.title.clone()),
-                    )
-                    .when(!caption_text.is_empty() || played.is_some(), |el| {
-                        el.child(
-                            h_flex()
-                                .min_w_0()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(muted)
-                                .when_some(played, |el, played| {
-                                    el.child(Icon::new(IconName::Clock).xsmall().flex_none())
-                                        .child(div().flex_none().child(played))
-                                        .when(!caption_text.is_empty(), |el| {
-                                            el.child(div().flex_none().child("·"))
-                                        })
-                                })
-                                .child(div().min_w_0().truncate().child(caption_text)),
+            // Pointed-at and focused covers rise a little off the grid,
+            // unless the user keeps them in place.
+            .child({
+                let cover = cover.with_spring(
+                    SharedString::from(format!("tile-lift:{key}")),
+                    SpringAnimation::new(HOVER_SPRING).to(if active && lifts { 1.0 } else { 0.0 }),
+                    |el, lift: f32| el.top(px(-TILE_LIFT_PX * lift)),
+                );
+                // A cover drawn whole stands on its cell's foot, so the
+                // captions of a row stay on one line.
+                match shape {
+                    Some(_) => v_flex()
+                        .w(width)
+                        .h(rems(width.0 * grid::COVER_RATIO))
+                        .justify_end()
+                        .items_center()
+                        .child(cover)
+                        .into_any_element(),
+                    None => cover.into_any_element(),
+                }
+            })
+            .when(caption_kind != CoverCaption::None, |tile| {
+                tile.child(
+                    v_flex()
+                        .min_w_0()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_semibold()
+                                .truncate()
+                                .when(dim, |el| el.text_color(muted))
+                                .child(game.title.clone()),
                         )
-                    }),
-            )
+                        .when(
+                            caption_kind == CoverCaption::Full
+                                && (!caption_text.is_empty() || played.is_some()),
+                            |el| {
+                                el.child(
+                                    h_flex()
+                                        .min_w_0()
+                                        .gap_1()
+                                        .text_xs()
+                                        .text_color(muted)
+                                        .when_some(played, |el, played| {
+                                            el.child(
+                                                Icon::new(IconName::Clock).xsmall().flex_none(),
+                                            )
+                                            .child(div().flex_none().child(played))
+                                            .when(!caption_text.is_empty(), |el| {
+                                                el.child(div().flex_none().child("·"))
+                                            })
+                                        })
+                                        .child(div().min_w_0().truncate().child(caption_text)),
+                                )
+                            },
+                        ),
+                )
+            })
             .context_menu(move |menu, window, cx| {
                 game_menu(menu, &view, &menu_game, in_recent, window, cx)
             })
@@ -2631,7 +2743,12 @@ impl LibraryView {
                 .collect(),
             TopKind::Favourites => games
                 .iter()
-                .map(|g| self.render_tile(g, rems(FAVOURITE_REM), false, window, cx))
+                .map(|g| {
+                    let shape = self
+                        .whole_shapes(std::slice::from_ref(g), FAVOURITE_REM, cx)
+                        .and_then(|s| s.first().copied());
+                    self.render_tile(g, rems(FAVOURITE_REM), shape, false, window, cx)
+                })
                 .collect(),
         };
         v_flex()
@@ -3306,6 +3423,17 @@ fn category_chips(
 #[cfg(test)]
 mod type_to_search_tests {
     use super::*;
+
+    #[test]
+    fn store_badges_leave_a_one_store_library_unless_asked() {
+        let mut ui = UiPrefs::default();
+        assert!(store_badges_shown(&ui, false));
+        assert!(!store_badges_shown(&ui, true));
+        ui.store_badges_one_store = true;
+        assert!(store_badges_shown(&ui, true));
+        ui.show_store_badges = false;
+        assert!(!store_badges_shown(&ui, false));
+    }
 
     #[test]
     fn only_plain_printable_keys_start_a_search() {

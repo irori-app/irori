@@ -24,3 +24,5 @@ pub(super) async fn perform(action: PowerAction) -> Result<()> {
     }
     Ok(())
 }
+
+pub(super) async fn activate_window() {}

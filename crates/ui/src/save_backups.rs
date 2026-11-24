@@ -1,5 +1,6 @@
-//! Ludusavi save backups of one game, and Ludusavi's status for the
-//! settings page. The game page shows the panel as a sheet and the game's
+//! Ludusavi save backups of one game (restoring one into the game's current
+//! prefix, undoing a restore, naming, locking and deleting backups), and
+//! Ludusavi's status for the settings page. The game page shows the panel as a sheet and the game's
 //! settings embed it, so both live here.
 
 use std::path::PathBuf;
@@ -7,6 +8,7 @@ use std::path::PathBuf;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
+use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
@@ -16,9 +18,9 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, IntoElement, ParentElement as _,
-    PathPromptOptions, Render, SharedString, Styled as _, Subscription, UniformListScrollHandle,
-    Window, div, rems, uniform_list,
+    AnyElement, App, AppContext as _, Context, Entity, Focusable as _, IntoElement,
+    ParentElement as _, PathPromptOptions, Render, SharedString, Styled as _, Subscription,
+    UniformListScrollHandle, Window, div, rems, uniform_list,
 };
 use irori_core::{GameId, GameInfo, Runner, util};
 use irori_services::ludusavi::{Change, INSTALL_URL, Source, TitleMatch};
@@ -110,6 +112,46 @@ fn report_backup(
 /// The key for `count`: `one` for a single item, else `other`.
 fn plural(count: usize, one: &'static str, other: &'static str) -> &'static str {
     if count == 1 { one } else { other }
+}
+
+/// What a restore moves or leaves out, in sentences for its confirmation.
+fn restore_notes(plan: &RestorePlan) -> Vec<SharedString> {
+    let mut notes = Vec::new();
+    if let (Some(from), Some(into)) = (&plan.moved_from, &plan.into) {
+        notes.push(t_args(
+            "ui.backups.restore_moved",
+            &[
+                ("from", &from.display().to_string()),
+                ("into", &into.display().to_string()),
+            ],
+        ));
+    }
+    for (count, one, other) in [
+        (
+            plan.left_out_registry,
+            "ui.backups.left_out_registry_one",
+            "ui.backups.left_out_registry_other",
+        ),
+        (
+            plan.left_out_other_prefix,
+            "ui.backups.left_out_other_prefix_one",
+            "ui.backups.left_out_other_prefix_other",
+        ),
+        (
+            plan.left_out_no_place,
+            "ui.backups.left_out_no_place_one",
+            "ui.backups.left_out_no_place_other",
+        ),
+    ] {
+        if count > 0 {
+            notes.push(t_args(
+                plural(count, one, other),
+                &[("count", &count.to_string())],
+            ));
+        }
+    }
+    notes.push(t("ui.backups.restore_undo_note"));
+    notes
 }
 
 /// Days between two local dates, and the date and time of `rfc3339` in
@@ -227,6 +269,12 @@ pub struct SaveBackupsPanel {
     backing_up: bool,
     /// The backup a restore is being prepared or run for.
     restoring: Option<String>,
+    /// The backup being locked, named or deleted.
+    editing: Option<String>,
+    /// Undoing the latest restore.
+    undoing: bool,
+    /// Restore the Wine prefix's registry files too.
+    restore_registry: bool,
     /// Choosing the title by hand.
     picking: bool,
     search: Entity<InputState>,
@@ -262,6 +310,9 @@ impl SaveBackupsPanel {
             load: Load::Loading,
             backing_up: false,
             restoring: None,
+            editing: None,
+            undoing: false,
+            restore_registry: false,
             picking: false,
             search,
             results: None,
@@ -320,8 +371,9 @@ impl SaveBackupsPanel {
         let b = backend(cx);
         let id = self.id.clone();
         let backup_id = backup.id.clone();
+        let registry = self.restore_registry;
         let task = run(cx, async move {
-            let plan = b.preview_restore(&id, &backup_id).await?;
+            let plan = b.preview_restore(&id, &backup_id, registry).await?;
             Ok((plan, b.saves_keeper(&id)))
         });
         cx.spawn_in(window, async move |this, cx| {
@@ -366,12 +418,7 @@ impl SaveBackupsPanel {
                 ("size", &util::format_bytes(plan.bytes)),
             ],
         )];
-        if let Some(prefix) = &plan.elsewhere {
-            text.push(t_args(
-                "ui.backups.restore_elsewhere",
-                &[("path", &prefix.display().to_string())],
-            ));
-        }
+        text.extend(restore_notes(&plan));
         if let Some((runner, true)) = keeper.cloud {
             text.push(t_args(
                 "ui.backups.restore_cloud",
@@ -405,7 +452,11 @@ impl SaveBackupsPanel {
         cx.notify();
         let b = backend(cx);
         let id = self.id.clone();
-        let task = run(cx, async move { b.restore_saves(&id, &backup).await });
+        let registry = self.restore_registry;
+        let task = run(
+            cx,
+            async move { b.restore_saves(&id, &backup, registry).await },
+        );
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
@@ -437,6 +488,191 @@ impl SaveBackupsPanel {
                     )),
                 };
                 window.push_notification(note, cx);
+                this.reload(window, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Ask before undoing the latest restore.
+    fn request_undo(&mut self, when: String, window: &mut Window, cx: &mut Context<Self>) {
+        let title = t_args("ui.backups.undo_title", &[("title", &self.game)]);
+        let description = t_args(
+            "ui.backups.undo_description",
+            &[("when", &when_label(&when))],
+        );
+        let this = cx.entity();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let this = this.clone();
+            alert
+                .title(title.clone())
+                .description(description.clone())
+                .confirm()
+                .ok_text(t("ui.backups.undo"))
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let this = this.clone();
+                    window.defer(cx, move |window, cx| {
+                        this.update(cx, |p, cx| p.undo(window, cx));
+                    });
+                    true
+                })
+        });
+    }
+
+    fn undo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.undoing = true;
+        cx.notify();
+        let b = backend(cx);
+        let id = self.id.clone();
+        let task = run(cx, async move { b.undo_restore(&id).await });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.undoing = false;
+                let note = match result {
+                    Ok(count) => Notification::success(t_args(
+                        plural(count, "ui.backups.undone_one", "ui.backups.undone_other"),
+                        &[("count", &count.to_string()), ("title", &this.game)],
+                    )),
+                    Err(e) => Notification::error(format!("{e:#}"))
+                        .title(t_args("ui.backups.undo_failed", &[("title", &this.game)])),
+                };
+                window.push_notification(note, cx);
+                this.reload(window, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Lock or unlock a backup.
+    fn set_locked(
+        &mut self,
+        backup: String,
+        locked: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let b = backend(cx);
+        let id = self.id.clone();
+        let edited = backup.clone();
+        self.run_edit(
+            backup,
+            run(cx, async move {
+                b.set_saves_backup_locked(&id, &edited, locked)
+                    .await
+                    .map(|_| None)
+            }),
+            window,
+            cx,
+        );
+    }
+
+    /// Ask before deleting a backup.
+    fn request_delete(&mut self, backup: BackupItem, window: &mut Window, cx: &mut Context<Self>) {
+        let title = t_args("ui.backups.delete_title", &[("title", &self.game)]);
+        let key = if backup.differential {
+            "ui.backups.delete_description_differential"
+        } else {
+            "ui.backups.delete_description_full"
+        };
+        let description = t_args(key, &[("when", &when_label(&backup.when))]);
+        let this = cx.entity();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let (this, id) = (this.clone(), backup.id.clone());
+            alert
+                .title(title.clone())
+                .description(description.clone())
+                .confirm()
+                .ok_text(t("ui.backups.delete"))
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let (this, id) = (this.clone(), id.clone());
+                    window.defer(cx, move |window, cx| {
+                        this.update(cx, |p, cx| p.delete(id, window, cx));
+                    });
+                    true
+                })
+        });
+    }
+
+    fn delete(&mut self, backup: String, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let id = self.id.clone();
+        let deleted = backup.clone();
+        self.run_edit(
+            backup,
+            run(cx, async move {
+                b.delete_saves_backup(&id, &deleted).await.map(Some)
+            }),
+            window,
+            cx,
+        );
+    }
+
+    /// Name a backup, in a small dialog.
+    fn request_rename(&mut self, backup: BackupItem, window: &mut Window, cx: &mut Context<Self>) {
+        let panel = cx.entity();
+        let form = cx.new(|cx| RenameForm::new(panel, backup, window, cx));
+        let focus = form.read(cx).input.focus_handle(cx);
+        focus.focus(window, cx);
+        let heading = t("ui.backups.rename_title");
+        window.open_dialog(cx, move |dialog, _, _| {
+            dialog.title(heading.clone()).child(form.clone())
+        });
+    }
+
+    fn rename(
+        &mut self,
+        backup: String,
+        comment: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let b = backend(cx);
+        let id = self.id.clone();
+        let edited = backup.clone();
+        self.run_edit(
+            backup,
+            run(cx, async move {
+                b.set_saves_backup_comment(&id, &edited, &comment)
+                    .await
+                    .map(|_| None)
+            }),
+            window,
+            cx,
+        );
+    }
+
+    /// Run an edit of `backup`, then reload; a deletion reports how many
+    /// backups went.
+    fn run_edit(
+        &mut self,
+        backup: String,
+        task: gpui_kit::Task<anyhow::Result<Option<usize>>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editing = Some(backup);
+        cx.notify();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = task.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.editing = None;
+                match result {
+                    Ok(Some(count)) => window.push_notification(
+                        Notification::success(t_args(
+                            plural(count, "ui.backups.deleted_one", "ui.backups.deleted_other"),
+                            &[("count", &count.to_string())],
+                        )),
+                        cx,
+                    ),
+                    Ok(None) => {}
+                    Err(e) => window.push_notification(
+                        Notification::error(format!("{e:#}")).title(t("ui.backups.edit_failed")),
+                        cx,
+                    ),
+                }
                 this.reload(window, cx);
             });
         })
@@ -544,6 +780,10 @@ fn render_missing(
 }
 
 impl SaveBackupsPanel {
+    fn is_busy(&self) -> bool {
+        self.backing_up || self.restoring.is_some() || self.editing.is_some() || self.undoing
+    }
+
     fn render_match(&self, backups: &GameBackups, cx: &mut Context<Self>) -> AnyElement {
         let muted = cx.theme().muted_foreground;
         let (name, how) = match &backups.title {
@@ -708,7 +948,8 @@ impl SaveBackupsPanel {
         let count = items.len();
         let this = cx.entity();
         let restoring = self.restoring.clone();
-        let busy = self.backing_up || self.restoring.is_some();
+        let editing = self.editing.clone();
+        let busy = self.is_busy();
         let (border, mono) = (cx.theme().border, cx.theme().mono_font_family.clone());
         let list = uniform_list("ludusavi-backups", count, move |range, _, _| {
             range
@@ -724,7 +965,14 @@ impl SaveBackupsPanel {
                         detail.push(comment.clone());
                     }
                     let loading = restoring.as_deref() == Some(backup.id.as_str());
+                    let edited = editing.as_deref() == Some(backup.id.as_str());
+                    let legacy = backup.id == ".";
                     let this = this.clone();
+                    let (lock_this, rename_this, delete_this) =
+                        (this.clone(), this.clone(), this.clone());
+                    let (lock_id, rename_backup, delete_backup) =
+                        (backup.id.clone(), backup.clone(), backup.clone());
+                    let locked = backup.locked;
                     h_flex()
                         .w_full()
                         .gap_3()
@@ -762,6 +1010,65 @@ impl SaveBackupsPanel {
                                         .truncate()
                                         .child(detail.join(" · ")),
                                 ),
+                        )
+                        .child(
+                            Button::new(("ludusavi-lock", i))
+                                .ghost()
+                                .small()
+                                .icon(if locked {
+                                    IconName::LockOpen
+                                } else {
+                                    IconName::Lock
+                                })
+                                .accessibility_label(if locked {
+                                    t("ui.backups.unlock")
+                                } else {
+                                    t("ui.backups.lock")
+                                })
+                                .tooltip(if locked {
+                                    t("ui.backups.unlock")
+                                } else {
+                                    t("ui.backups.lock_help")
+                                })
+                                .loading(edited)
+                                .disabled(busy || legacy)
+                                .on_click(move |_, window, cx| {
+                                    let id = lock_id.clone();
+                                    lock_this
+                                        .update(cx, |p, cx| p.set_locked(id, !locked, window, cx));
+                                }),
+                        )
+                        .child(
+                            Button::new(("ludusavi-rename", i))
+                                .ghost()
+                                .small()
+                                .icon(IconName::Pencil)
+                                .accessibility_label(t("ui.backups.rename"))
+                                .tooltip(t("ui.backups.rename"))
+                                .disabled(busy || legacy)
+                                .on_click(move |_, window, cx| {
+                                    let backup = rename_backup.clone();
+                                    rename_this
+                                        .update(cx, |p, cx| p.request_rename(backup, window, cx));
+                                }),
+                        )
+                        .child(
+                            Button::new(("ludusavi-delete", i))
+                                .ghost()
+                                .small()
+                                .icon(IconName::Trash)
+                                .accessibility_label(t("ui.backups.delete"))
+                                .tooltip(if locked {
+                                    t("ui.backups.delete_locked")
+                                } else {
+                                    t("ui.backups.delete")
+                                })
+                                .disabled(busy || legacy || locked)
+                                .on_click(move |_, window, cx| {
+                                    let backup = delete_backup.clone();
+                                    delete_this
+                                        .update(cx, |p, cx| p.request_delete(backup, window, cx));
+                                }),
                         )
                         .child(
                             Button::new(("ludusavi-restore", i))
@@ -860,7 +1167,7 @@ impl SaveBackupsPanel {
         let muted = cx.theme().muted_foreground;
         let mono = cx.theme().mono_font_family.clone();
         let matched = backups.title.is_some();
-        let busy = self.backing_up || self.restoring.is_some();
+        let busy = self.is_busy();
         let folder = backups.folder.clone();
         v_flex()
             .gap_6()
@@ -934,6 +1241,50 @@ impl SaveBackupsPanel {
                             .child(t("ui.backups.after_session_help")),
                     ),
             )
+            .when_some(backups.undo.clone(), |col, (when, _)| {
+                col.child(
+                    h_flex()
+                        .gap_3()
+                        .items_center()
+                        .child(div().flex_1().min_w_0().text_sm().child(t_args(
+                            "ui.backups.undo_offer",
+                            &[("when", &when_label(&when))],
+                        )))
+                        .child(
+                            Button::new("ludusavi-undo")
+                                .outline()
+                                .small()
+                                .icon(IconName::Undo2)
+                                .label(t("ui.backups.undo"))
+                                .loading(self.undoing)
+                                .disabled(busy)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.request_undo(when.clone(), window, cx)
+                                })),
+                        ),
+                )
+            })
+            .when(backups.wine_prefix.is_some(), |col| {
+                col.child(
+                    v_flex()
+                        .gap_1()
+                        .child(
+                            Switch::new("ludusavi-restore-registry")
+                                .label(t("ui.backups.restore_registry"))
+                                .checked(self.restore_registry)
+                                .on_change(cx.listener(|this, on: &bool, _, cx| {
+                                    this.restore_registry = *on;
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(t("ui.backups.restore_registry_help")),
+                        ),
+                )
+            })
             .child(self.render_list(backups, cx))
             .into_any_element()
     }
@@ -1066,6 +1417,79 @@ impl Render for LudusaviPanel {
                         .child(t("ui.backups.default_after_session_help")),
                 ),
         )
+    }
+}
+
+/// The name of one backup, edited in a dialog.
+struct RenameForm {
+    panel: Entity<SaveBackupsPanel>,
+    backup: String,
+    input: Entity<InputState>,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl RenameForm {
+    fn new(
+        panel: Entity<SaveBackupsPanel>,
+        backup: BackupItem,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t("ui.backups.rename_placeholder"))
+                .default_value(backup.comment.clone().unwrap_or_default())
+        });
+        let subscriptions = vec![cx.subscribe_in(&input, window, |this, _, e, window, cx| {
+            if let InputEvent::PressEnter { .. } = e {
+                this.save(window, cx);
+            }
+        })];
+        Self {
+            panel,
+            backup: backup.id,
+            input,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let comment = self.input.read(cx).value().trim().to_string();
+        let backup = self.backup.clone();
+        let panel = self.panel.clone();
+        window.close_dialog(cx);
+        window.defer(cx, move |window, cx| {
+            panel.update(cx, |p, cx| p.rename(backup, comment, window, cx));
+        });
+    }
+}
+
+impl Render for RenameForm {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex()
+            .gap_4()
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(t("ui.backups.rename_help")),
+            )
+            .child(Input::new(&self.input))
+            .child(
+                DialogFooter::new()
+                    .child(
+                        Button::new("ludusavi-rename-cancel")
+                            .ghost()
+                            .label(t("ui.backups.cancel"))
+                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                    )
+                    .child(
+                        Button::new("ludusavi-rename-save")
+                            .primary()
+                            .label(t("ui.backups.save_name"))
+                            .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
+                    ),
+            )
     }
 }
 

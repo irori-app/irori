@@ -5,6 +5,7 @@
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use chrono::{Local, NaiveDate, TimeZone as _};
 use gpui_kit::assets::IconName;
@@ -24,7 +25,7 @@ use irori_core::GameId;
 use irori_services::JournalEntry;
 use irori_services::journal::MAX_LINKED_SCREENSHOTS;
 
-use crate::components::{art_img, physical_width};
+use crate::components::{art_img, clip_mark, is_clip, physical_width};
 use crate::i18n::{t, t_args};
 use crate::style::KeyboardFocusable as _;
 use crate::{backend, models};
@@ -249,6 +250,9 @@ impl Render for JournalEditor {
                                     .text_color(muted)
                                     .child(Icon::new(IconName::Image)),
                             ),
+                        })
+                        .when(is_clip(Path::new(path.as_str())), |d| {
+                            d.child(clip_mark(Path::new(path.as_str()), cx))
                         })
                         .when(selected, |d| {
                             d.child(

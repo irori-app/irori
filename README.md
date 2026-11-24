@@ -267,10 +267,13 @@ build Irori yourself, see [Building](#building).
 
 ## Wine, Proton and Game Porting Toolkit
 
-- **Wine manager** for GE-Proton, Proton-CachyOS, Wine-GE and Kron4ek on Linux, and
+- **Wine manager** for GE-Proton, Proton-CachyOS, Proton-Wineland, DW-Proton, UMU-Proton,
+  Proton-EM, Proton-Sarek, Wine-GE and Kron4ek on Linux, and
   Wine, CrossOver and Game Porting Toolkit on macOS, plus the system, Steam, Lutris and
   Bottles builds already on your computer.
-- **One switch** for gamescope (upscaling optional), MangoHud and GameMode. Pick the
+- **One switch** for gamescope (upscaling optional) and GameMode, plus **In-game stats**
+  for MangoHud on Linux (live preview, metrics, FPS limits, layout, shortcut and colors)
+  and Metal HUD on macOS (toggle and corner position), with per-game overrides. Pick the
   DXVK and VKD3D-Proton versions per Wine build, and turn on descriptor heap and
   Proton's DLSS, FSR and XeSS upgrades without looking up variables.
 - **Graphics tab per game (Linux):** pick which graphics card a game runs on when the
@@ -307,6 +310,10 @@ build Irori yourself, see [Building](#building).
 - **ROM folders** scanned and watched, with each game's system, region and revision
   from its file name, a generated cover, and the BIOS files each system needs checked
   before you play.
+- **Box art of your region** from the LaunchBox Games Database: a European ROM gets
+  the European box, and the cover picker lists every region's box. Off until you ask
+  for it; then its game list (about 110 MB) is refreshed at most once a week while you
+  have ROMs, and Settings → Advanced → Artwork turns it off and removes the list.
 
 <p align="center">
   <picture>

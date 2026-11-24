@@ -6,7 +6,7 @@
 use crate::prefix::{WineCommand, WineContext};
 
 /// Schemes never forwarded to a prefix: Irori's own links (and the ones it
-/// takes from Heroic, Lutris and Nexus Mods), local files (a Windows file
+/// takes from Heroic, Lutris, Nexus Mods and Thunderstore), local files (a Windows file
 /// opens through `windows_file` instead), web pages, which belong in the
 /// user's browser and not in a Wine one, and a browser's internal schemes,
 /// which no program registers.
@@ -15,6 +15,7 @@ const KEPT: &[&str] = &[
     "heroic",
     "lutris",
     "nxm",
+    "ror2mm",
     "file",
     "http",
     "https",
@@ -112,6 +113,7 @@ mod tests {
             "HEROIC://launch/foo",
             "lutris:quake",
             "nxm://skyrim/mods/1/files/2",
+            "ror2mm://v1/install/thunderstore.io/a/b/1.0.0/",
             "file:///home/me/setup.exe",
             "http://example.com",
             "https://example.com/page",

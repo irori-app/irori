@@ -1,4 +1,6 @@
-//! Settings of one game (`Route::GameSettings`).
+//! Settings of one game (`Route::GameSettings`). Its first section,
+//! "Changed", lists only what the game changes from the game defaults, each
+//! with its own reset.
 
 use std::collections::HashSet;
 
@@ -27,6 +29,7 @@ use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::graphics_mods::GraphicsModsChanged;
 use crate::i18n::LanguageStamp;
 use crate::logs::LogViewer;
+use crate::optiscaler::OptiscalerPanel;
 use crate::registry::FieldSection;
 use crate::renodx::RenodxPanel;
 use crate::reshade::ReshadePanel;
@@ -37,6 +40,8 @@ use crate::winetricks::WinetricksPanel;
 /// Sections of a game's settings page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameSection {
+    /// What the game changes from the defaults, from every section.
+    Changed,
     Wine,
     Performance,
     Gpu,
@@ -48,7 +53,8 @@ pub enum GameSection {
 }
 
 impl GameSection {
-    pub const ALL: [GameSection; 8] = [
+    pub const ALL: [GameSection; 9] = [
+        GameSection::Changed,
         GameSection::Wine,
         GameSection::Performance,
         GameSection::Gpu,
@@ -62,6 +68,7 @@ impl GameSection {
     /// Route id of the section.
     pub fn id(self) -> &'static str {
         match self {
+            GameSection::Changed => "changed",
             GameSection::Wine => "wine",
             GameSection::Performance => "performance",
             GameSection::Gpu => "gpu",
@@ -76,13 +83,14 @@ impl GameSection {
     /// Parse a route id. Unknown ids open the first section that applies.
     pub fn from_id(id: &str) -> Option<Self> {
         Some(match id {
+            "changed" | "overrides" => GameSection::Changed,
             "wine" | "proton" => GameSection::Wine,
             "performance" | "other" => GameSection::Performance,
             "gpu" | "graphics" | "frame-generation" => GameSection::Gpu,
             "art" | "artwork" | "metadata" => GameSection::Artwork,
-            "launch" | "advanced" => GameSection::Launch,
+            "launch" | "advanced" | "actions" => GameSection::Launch,
             "saves" | "sync" | "cloud" => GameSection::CloudSaves,
-            "tools" | "reshade" | "renodx" | "hdr" => GameSection::Tools,
+            "tools" | "reshade" | "renodx" | "hdr" | "optiscaler" => GameSection::Tools,
             "log" | "logs" => GameSection::Log,
             _ => return None,
         })
@@ -91,6 +99,7 @@ impl GameSection {
     /// Name of the section in the interface language.
     pub fn label(self) -> SharedString {
         t(match self {
+            GameSection::Changed => "settings.game.section.changed",
             GameSection::Wine => "settings.game.section.wine",
             GameSection::Performance => "settings.game.section.performance",
             GameSection::Gpu => "settings.game.section.gpu",
@@ -104,6 +113,7 @@ impl GameSection {
 
     fn icon(self) -> IconName {
         match self {
+            GameSection::Changed => IconName::RotateCcw,
             GameSection::Wine => IconName::Wine,
             GameSection::Performance => IconName::Gauge,
             GameSection::Gpu => IconName::Gpu,
@@ -151,6 +161,7 @@ pub struct GameSettingsView {
     winetricks: Entity<WinetricksPanel>,
     reshade: Entity<ReshadePanel>,
     renodx: Entity<RenodxPanel>,
+    optiscaler: Entity<OptiscalerPanel>,
     /// The compatibility tool choice of a Steam game, on Linux: Steam runs
     /// it, so Irori's Wine settings don't apply.
     steam_compat: Option<Entity<SteamCompatPanel>>,
@@ -198,20 +209,26 @@ impl GameSettingsView {
         };
         let reshade = {
             let id = id.clone();
-            cx.new(|_| ReshadePanel::new(id))
+            cx.new(|cx| ReshadePanel::new(id, cx))
         };
         let renodx = {
             let id = id.clone();
             cx.new(|cx| RenodxPanel::new(id, window, cx))
         };
-        // RenoDX installs ReShade's build with add-on support, and removing
-        // ReShade removes RenoDX: each panel reads the other's change.
+        let optiscaler = {
+            let id = id.clone();
+            cx.new(|cx| OptiscalerPanel::new(id, window, cx))
+        };
+        // RenoDX installs ReShade's build with add-on support, removing ReShade
+        // removes RenoDX, and graphics mods may share or release proxy DLL slots:
+        // each panel reads the others' changes.
         let mods_changed = [
             cx.subscribe_in(
                 &reshade,
                 window,
                 |this, _, _: &GraphicsModsChanged, window, cx| {
                     this.renodx.update(cx, |r, cx| r.refresh(window, cx));
+                    this.optiscaler.update(cx, |o, cx| o.refresh(window, cx));
                 },
             ),
             cx.subscribe_in(
@@ -219,6 +236,15 @@ impl GameSettingsView {
                 window,
                 |this, _, _: &GraphicsModsChanged, window, cx| {
                     this.reshade.update(cx, |r, cx| r.refresh(window, cx));
+                    this.optiscaler.update(cx, |o, cx| o.refresh(window, cx));
+                },
+            ),
+            cx.subscribe_in(
+                &optiscaler,
+                window,
+                |this, _, _: &GraphicsModsChanged, window, cx| {
+                    this.reshade.update(cx, |r, cx| r.refresh(window, cx));
+                    this.renodx.update(cx, |r, cx| r.refresh(window, cx));
                 },
             ),
         ];
@@ -242,6 +268,7 @@ impl GameSettingsView {
             winetricks,
             reshade,
             renodx,
+            optiscaler,
             steam_compat,
             running: HashSet::new(),
             language: LanguageStamp::new(),
@@ -295,20 +322,27 @@ impl GameSettingsView {
 
     /// The sections that apply to the game. Steam starts its games itself,
     /// so a Steam game has no Wine, graphics or prefix settings, and no game
-    /// log; Wine & Proton becomes its Steam Play choice (Linux), and
-    /// Performance keeps only the replay buffer (Linux).
-    fn sections(&self) -> Vec<GameSection> {
+    /// log; Wine & Proton becomes its Steam Play choice (Linux), Performance
+    /// keeps the replay buffer (Linux) and the in-game stats (Linux and
+    /// macOS), and Tools is shown for a Windows build (ReShade, RenoDX,
+    /// OptiScaler).
+    fn sections(&self, cx: &Context<Self>) -> Vec<GameSection> {
         if self.id.runner != Runner::Steam {
             return GameSection::ALL.to_vec();
         }
-        let linux = cfg!(target_os = "linux");
+        let has_performance = cfg!(any(target_os = "linux", target_os = "macos"));
+        let graphics_mods = backend(cx)
+            .game(&self.id)
+            .is_some_and(|g| irori_services::supports_reshade(&g));
         GameSection::ALL
             .into_iter()
             .filter(|s| match s {
+                GameSection::Changed => true,
                 GameSection::Wine => self.steam_compat.is_some(),
-                GameSection::Performance => linux,
+                GameSection::Performance => has_performance,
                 GameSection::Launch | GameSection::CloudSaves | GameSection::Artwork => true,
-                GameSection::Gpu | GameSection::Tools | GameSection::Log => false,
+                GameSection::Tools => graphics_mods,
+                GameSection::Gpu | GameSection::Log => false,
             })
             .collect()
     }
@@ -323,7 +357,8 @@ impl GameSettingsView {
 
     fn default_section(&self, cx: &Context<Self>) -> GameSection {
         if self.id.runner == Runner::Steam {
-            return self.sections()[0];
+            // The first section after "Changed".
+            return self.sections(cx)[1];
         }
         if self.uses_wine(cx) {
             GameSection::Wine
@@ -338,7 +373,7 @@ impl GameSettingsView {
     }
 
     fn open(&mut self, section: GameSection, window: &mut Window, cx: &mut Context<Self>) {
-        let section = if self.sections().contains(&section) {
+        let section = if self.sections(cx).contains(&section) {
             section
         } else {
             self.default_section(cx)
@@ -354,12 +389,13 @@ impl GameSettingsView {
         if section == GameSection::Log {
             self.log.update(cx, |l, cx| l.start(window, cx));
         }
-        if section == GameSection::Tools && self.uses_wine(cx) {
+        if section == GameSection::Tools && self.id.runner != Runner::Steam && self.uses_wine(cx) {
             self.winetricks.update(cx, |w, cx| w.activate(window, cx));
         }
         if section == GameSection::Tools {
             self.reshade.update(cx, |r, cx| r.activate(window, cx));
             self.renodx.update(cx, |r, cx| r.activate(window, cx));
+            self.optiscaler.update(cx, |o, cx| o.activate(window, cx));
         }
         self.apply_filter(cx);
     }
@@ -367,9 +403,12 @@ impl GameSettingsView {
     fn apply_filter(&mut self, cx: &mut Context<Self>) {
         let q = self.query.trim().to_string();
         let section = self.section.field_section();
+        let changed = self.section == GameSection::Changed;
         self.form.update(cx, |f, cx| {
             if !q.is_empty() {
                 f.set_query(&q, cx);
+            } else if changed {
+                f.set_changed_only(cx);
             } else if let Some(s) = section {
                 f.set_sections(vec![s], cx);
             }
@@ -512,6 +551,27 @@ impl GameSettingsView {
     }
 
     fn render_tools(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.id.runner == Runner::Steam {
+            // Steam runs the game, so only what goes into its folder applies.
+            return v_flex()
+                .w_full()
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.reshade"),
+                    cx,
+                ))
+                .child(self.reshade.clone())
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.renodx"),
+                    cx,
+                ))
+                .child(self.renodx.clone())
+                .child(crate::widgets::group_heading(
+                    t("settings.tools.group.optiscaler"),
+                    cx,
+                ))
+                .child(self.optiscaler.clone())
+                .into_any_element();
+        }
         let enabled = self.uses_wine(cx);
         let reason = (!enabled).then(|| t("settings.tools.windows_only"));
         let tools = [
@@ -611,6 +671,11 @@ impl GameSettingsView {
             ))
             .child(self.renodx.clone())
             .child(crate::widgets::group_heading(
+                t("settings.tools.group.optiscaler"),
+                cx,
+            ))
+            .child(self.optiscaler.clone())
+            .child(crate::widgets::group_heading(
                 t("settings.tools.group.winetricks"),
                 cx,
             ))
@@ -654,11 +719,19 @@ impl Render for GameSettingsView {
                     .cleanable(true)
                     .mb_2(),
             )
-            .children(self.sections().into_iter().map(|s| {
+            .children(self.sections(cx).into_iter().map(|s| {
+                let label = if s == GameSection::Changed {
+                    t_args(
+                        "settings.game.section.changed_count",
+                        &[("count", &overridden.to_string())],
+                    )
+                } else {
+                    self.label_of(s)
+                };
                 nav_button(
                     ElementId::Name(format!("game-settings-nav-{}", s.id()).into()),
                     s.icon(),
-                    self.label_of(s),
+                    label,
                     !searching && s == self.section,
                     cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
                 )
@@ -752,6 +825,10 @@ impl Render for GameSettingsView {
                 panel.into_any_element()
             } else if !searching && self.section == GameSection::Tools {
                 self.render_tools(cx)
+            } else if !searching && self.section == GameSection::Changed && overridden == 0 {
+                EmptyState::new(IconName::CircleCheck, t("settings.game.changed.none_title"))
+                    .description(t("settings.game.changed.none"))
+                    .into_any_element()
             } else if searching && self.form.read(cx).visible_count() == 0 {
                 EmptyState::new(
                     IconName::Search,

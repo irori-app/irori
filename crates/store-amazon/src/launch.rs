@@ -197,6 +197,7 @@ mod tests {
     fn env_with(wine: Option<WineLaunch>, wrappers: Vec<Vec<String>>) -> LaunchEnvironment {
         LaunchEnvironment {
             env: BTreeMap::from([("WINEPREFIX".to_string(), "/p".to_string())]),
+            env_remove: Vec::new(),
             wrappers,
             wine,
         }

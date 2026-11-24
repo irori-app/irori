@@ -246,8 +246,9 @@ impl ArtworkPanel {
     fn search_online(&mut self, slot: ArtSlot, window: &mut Window, cx: &mut Context<Self>) {
         let this = cx.entity().downgrade();
         let title = self.title(cx);
-        art_picker::open(
+        art_picker::open_for_game(
             slot,
+            &self.id.clone(),
             &title,
             std::rc::Rc::new(move |url, _, cx| {
                 this.update(cx, |this, cx| this.set_art(slot, Some(url), cx))

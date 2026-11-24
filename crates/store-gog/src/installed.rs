@@ -99,6 +99,7 @@ impl InstalledRecord {
             pinned_version: self.pinned_version,
             is_dosbox: false,
             sdl: Vec::new(),
+            store_prefix: None,
         }
     }
 }

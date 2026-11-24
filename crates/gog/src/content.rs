@@ -48,6 +48,13 @@ pub fn galaxy_path(hash: &str) -> String {
     }
 }
 
+/// Whether an ETag can tell two versions apart: present and strong (not
+/// `W/"…"`).
+pub fn is_strong_etag(etag: &str) -> bool {
+    let etag = etag.trim();
+    !etag.is_empty() && !etag.starts_with("W/") && !etag.starts_with("w/")
+}
+
 /// Service base addresses (overridable for tests).
 #[derive(Debug, Clone)]
 pub struct Endpoints {
@@ -744,9 +751,14 @@ impl Client {
         Err(last.context("Could not download the build's file list"))
     }
 
-    /// Whether a build's meta changed since `etag` (`None` when no URL
-    /// answered).
+    /// Whether a build's meta changed since `etag`: `None` when no URL
+    /// answered, or when either ETag is missing or weak and so can't say
+    /// (a weak ETag only claims equivalent content, and a CDN may drop or
+    /// weaken it when it recompresses).
     pub async fn meta_changed(&self, build: &BuildItem, etag: &str) -> Option<bool> {
+        if !is_strong_etag(etag) {
+            return None;
+        }
         for u in build.meta_urls() {
             let Ok(resp) = self.get(&u).header("If-None-Match", etag).send().await else {
                 continue;
@@ -759,7 +771,7 @@ impl Client {
                         .get(reqwest::header::ETAG)
                         .and_then(|v| v.to_str().ok())
                         .map(str::to_string);
-                    return Some(new.as_deref() != Some(etag));
+                    return new.filter(|new| is_strong_etag(new)).map(|new| new != etag);
                 }
                 _ => {}
             }
@@ -940,6 +952,14 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn only_strong_etags_tell_versions_apart() {
+        assert!(is_strong_etag("\"4e4d\""));
+        assert!(!is_strong_etag("W/\"4e4d\""));
+        assert!(!is_strong_etag(""));
+        assert!(!is_strong_etag("  "));
+    }
 
     #[test]
     fn plain_endpoints_get_the_file_appended() {

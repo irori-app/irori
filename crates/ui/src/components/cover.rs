@@ -7,9 +7,10 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, Background, ElementId, Hsla, Img, IntoElement, ObjectFit, ParentElement,
     Pixels, Rems, RenderOnce, SharedString, Styled, StyledImage as _, Window, div, img,
-    linear_color_stop, linear_gradient, rems, rgb,
+    linear_color_stop, linear_gradient, px, rems, rgb,
 };
 use irori_core::GameInfo;
+use irori_core::settings::CoverCorners;
 
 use crate::art::{Art, art_store};
 use crate::motion::fade_in;
@@ -148,12 +149,25 @@ pub fn physical_width(width: Rems, window: &Window) -> u32 {
     (logical * window.scale_factor()).ceil() as u32
 }
 
+/// The corner radius of library covers in the user's `coverCorners`.
+pub fn cover_radius(corners: CoverCorners, cx: &App) -> Pixels {
+    let large = cx.theme().radius_lg;
+    match corners {
+        CoverCorners::Square => Pixels::ZERO,
+        CoverCorners::Rounded => large,
+        // At least a little rounder than the theme's, which may be square.
+        CoverCorners::Round => (large * 2.).max(px(12.)),
+    }
+}
+
 /// A 2:3 cover tile. Pulses while its art loads; a game without cover art
 /// gets its title on a quiet wash instead.
 #[derive(IntoElement)]
 pub struct GameCover {
     game: Arc<GameInfo>,
     width: Rems,
+    /// Set for art drawn whole in its own shape; 2:3 otherwise.
+    height: Option<Rems>,
     radius: Option<Pixels>,
 }
 
@@ -162,6 +176,7 @@ impl GameCover {
         Self {
             game,
             width: rems(11.),
+            height: None,
             radius: None,
         }
     }
@@ -169,6 +184,13 @@ impl GameCover {
     /// Tile width; height follows the 2:3 cover ratio.
     pub fn width(mut self, width: Rems) -> Self {
         self.width = width;
+        self
+    }
+
+    /// Tile height, for art drawn whole in its own shape (sized to it by the
+    /// caller); the 2:3 cover ratio otherwise.
+    pub fn height(mut self, height: Rems) -> Self {
+        self.height = Some(height);
         self
     }
 
@@ -194,7 +216,7 @@ impl RenderOnce for GameCover {
         let radius = self.radius.unwrap_or(theme.radius_lg);
         let base = div()
             .w(self.width)
-            .h(rems(self.width.0 * 1.5))
+            .h(self.height.unwrap_or(rems(self.width.0 * 1.5)))
             .flex_shrink_0()
             .overflow_hidden()
             .rounded(radius)

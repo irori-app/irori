@@ -1,19 +1,24 @@
 //! Library sync between computers (a desktop and a Steam Deck, Linux and
-//! Windows on one PC) through a folder something else syncs, or WebDAV.
+//! Windows on one PC) through a folder something else syncs, WebDAV, or a
+//! remote of the user's own rclone (Google Drive, Dropbox, OneDrive…).
 //!
 //! Each device writes one file, `<device id>.json` in the `Irori sync`
 //! folder, with everything it knows, and reads the others'. What is merged
 //! and how is in [`merge`]. Synced: favourites, hidden games, ratings, play
-//! statuses, categories, custom titles and web art, yearly goals, playtime
-//! and sessions. Install paths, per-game and app settings, recently played
-//! and store sign-ins stay on each device.
+//! statuses, categories, custom titles and web art, games' own links,
+//! yearly goals, playtime and sessions. Install paths, per-game and app settings, recently played
+//! and store sign-ins stay on each device. A device set to send only
+//! playtime (`iroriSync.playtimeOnly`) exchanges playtime and sessions and
+//! keeps its organisation to itself.
 //!
 //! Changes are noted on every periodic tick while sync is on, also when the
 //! other devices are out of reach, so they keep the time they were made.
 //! The state between syncs is `state/sync.json`; the WebDAV login is kept
 //! with `irori_secrets`.
 
+pub mod copies;
 pub mod merge;
+pub mod rclone;
 pub mod target;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -88,6 +93,15 @@ pub struct SyncReport {
     pub newer_version: bool,
 }
 
+/// rclone as the settings page shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RcloneInfo {
+    pub program: String,
+    pub version: Option<String>,
+    /// The remotes set up in rclone, or why they couldn't be listed.
+    pub remotes: Result<Vec<String>, String>,
+}
+
 /// What the settings page shows.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SyncStatus {
@@ -159,7 +173,7 @@ pub fn default_device_name() -> String {
         .unwrap_or_else(|| "Irori".into())
 }
 
-fn os() -> &'static str {
+pub(crate) fn os() -> &'static str {
     std::env::consts::OS
 }
 
@@ -267,10 +281,54 @@ impl Backend {
         }
     }
 
-    fn sync_target(&self) -> Result<Option<Target>> {
+    /// The rclone to run: the program chosen in settings, else the one
+    /// installed. `None` when there is none.
+    pub async fn rclone(&self) -> Option<rclone::Rclone> {
+        let chosen = self.settings.app().sync.rclone_path.clone();
+        rclone::Rclone::locate(&chosen).await
+    }
+
+    /// The installed rclone's program and version, and its remotes; `None`
+    /// when rclone isn't found.
+    pub async fn rclone_info(&self) -> Option<RcloneInfo> {
+        let rclone = self.rclone().await?;
+        let version = rclone
+            .version()
+            .await
+            .inspect_err(|e| tracing::info!("asking rclone its version: {e:#}"))
+            .ok();
+        let remotes = match rclone.remotes().await {
+            Ok(remotes) => Ok(remotes),
+            Err(e) => Err(format!("{e:#}")),
+        };
+        Some(RcloneInfo {
+            program: rclone.display(),
+            version,
+            remotes,
+        })
+    }
+
+    async fn sync_target(&self) -> Result<Option<Target>> {
+        let prefs = self.settings.app().sync.clone();
+        if prefs.mode == SyncMode::Rclone {
+            let remote = prefs.rclone_remote.trim().to_string();
+            if !rclone::is_remote(&remote) {
+                bail!("Choose an rclone remote");
+            }
+            let rclone = self.rclone().await.context(
+                "rclone isn’t installed. Install it, or choose its program in Settings → Backup.",
+            )?;
+            return Ok(Some(Target::Rclone { rclone, remote }));
+        }
+        let b = self.clone();
+        self.spawn_blocking(move || b.blocking_sync_target())
+            .await?
+    }
+
+    fn blocking_sync_target(&self) -> Result<Option<Target>> {
         let prefs = self.settings.app().sync.clone();
         Ok(match prefs.mode {
-            SyncMode::Off => None,
+            SyncMode::Off | SyncMode::Rclone => None,
             SyncMode::Folder => Some(Target::Folder(irori_core::paths::expand_home(
                 prefs.folder.trim(),
             ))),
@@ -380,11 +438,7 @@ impl Backend {
     }
 
     async fn sync_inner(&self) -> Result<SyncReport> {
-        let b = self.clone();
-        let target = self
-            .spawn_blocking(move || b.sync_target())
-            .await??
-            .context("Sync is off")?;
+        let target = self.sync_target().await?.context("Sync is off")?;
         let (me, own) = {
             let state = self.sync.state.lock();
             (state.device_id.clone(), format!("{}.json", state.device_id))
@@ -445,7 +499,13 @@ impl Backend {
             .iter()
             .map(|f| (f.device.id.clone(), f.device.name.clone()))
             .collect();
-        let shared: Vec<&Shared> = remotes.iter().map(|f| &f.shared).collect();
+        let scope = if self.settings.app().sync.playtime_only {
+            merge::Scope::PlaytimeOnly
+        } else {
+            merge::Scope::Everything
+        };
+        let incoming: Vec<Shared> = remotes.iter().map(|f| scope.filter(&f.shared)).collect();
+        let shared: Vec<&Shared> = incoming.iter().collect();
         let mut state = self.sync.state.lock();
         let mut result = None;
         self.userdata.update_if(None, |d| {
@@ -508,11 +568,11 @@ impl Backend {
                 irori_version: env!("CARGO_PKG_VERSION").into(),
                 updated: util::now_rfc3339(),
             },
-            shared: Shared {
+            shared: scope.filter(&Shared {
                 registers: merged.registers.clone(),
                 playtime: merged.playtime.clone(),
                 sessions: merged.sessions.clone(),
-            },
+            }),
         };
         let bytes = serde_json::to_vec(&file)?;
         Ok((merged, bytes))

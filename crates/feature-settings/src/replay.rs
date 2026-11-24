@@ -3,7 +3,9 @@
 //! save a clip with the keyboard shortcuts' state (and, where Irori can't
 //! listen for keys, the lines that bind `irori --save-clip` and
 //! `irori --screenshot` in the user's compositor), and the memory the buffer
-//! takes with the settings below it.
+//! takes with the settings below it. The recorder's line also says its
+//! version, the codecs this GPU encodes and the monitors it can record (from
+//! `gpu-screen-recorder --info`), and whether a buffer records right now.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -15,7 +17,7 @@ use gpui_kit::{
     Styled as _, Subscription, Window, div,
 };
 use irori_core::GameId;
-use irori_services::{Recorder, ShortcutState};
+use irori_services::{Recorder, RecorderInfo, ShortcutState};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -27,8 +29,9 @@ const FLATHUB_URL: &str = "https://flathub.org/apps/com.dec05eba.gpu_screen_reco
 pub(crate) struct ReplayPanel {
     /// The game whose settings are shown; `None` for the defaults.
     game: Option<GameId>,
-    /// `None` until looked for; then the recorder, if any.
-    recorder: Option<Option<Recorder>>,
+    /// `None` until looked for; then the recorder, if any, and what it said
+    /// about this system.
+    recorder: Option<Option<(Recorder, RecorderInfo)>>,
     shortcut: ShortcutState,
     asking: bool,
     /// The binding's lines were just copied.
@@ -45,14 +48,22 @@ impl ReplayPanel {
             shortcut: backend(cx).clip_shortcut(),
             asking: false,
             copied: false,
-            _subscriptions: vec![cx.observe(&settings, |_, _, cx| cx.notify())],
+            _subscriptions: vec![
+                cx.observe(&settings, |_, _, cx| cx.notify()),
+                // A buffer starts and stops with a session.
+                cx.observe(&models(cx).statuses.clone(), |_, _, cx| cx.notify()),
+            ],
         };
         this.detect(cx);
         this
     }
 
     fn detect(&mut self, cx: &mut Context<Self>) {
-        let task = irori_ui::state::run_infallible(cx, async { Recorder::detect() });
+        self.recorder = None;
+        cx.notify();
+        let b = backend(cx);
+        let task =
+            irori_ui::state::run_infallible(cx, async move { b.replay_recorder_info().await });
         cx.spawn(async move |this, cx| {
             let found = task.await.flatten();
             let _ = this.update(cx, |this, cx| {
@@ -234,29 +245,62 @@ impl ReplayPanel {
                 )
                 .child(muted(t("settings.replay.looking"), cx))
                 .into_any_element(),
-            Some(Some(recorder)) => {
+            Some(Some((recorder, info))) => {
                 let how = match recorder {
                     Recorder::Flatpak => SharedString::from("Flatpak"),
                     Recorder::Native(path) => path.display().to_string().into(),
                 };
-                row.items_center()
-                    .child(Icon::new(IconName::CircleCheck).small().text_color(success))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .child(t("settings.replay.found")),
-                    )
-                    .child(
-                        Tag::secondary()
-                            .xsmall()
-                            .outline()
-                            .child(div().max_w_64().truncate().child(how)),
-                    )
-                    .child(refresh)
-                    .into_any_element()
+                let found = match &info.version {
+                    Some(version) => {
+                        t_args("settings.replay.found_version", &[("version", version)])
+                    }
+                    None => t("settings.replay.found"),
+                };
+                let details: Vec<SharedString> = [
+                    (!info.codecs.is_empty()).then(|| {
+                        t_args(
+                            "settings.replay.codecs",
+                            &[("codecs", &info.codecs.join(", "))],
+                        )
+                    }),
+                    (!info.monitors.is_empty()).then(|| {
+                        let monitors: Vec<String> = info
+                            .monitors
+                            .iter()
+                            .map(|(name, size)| format!("{name} ({size})"))
+                            .collect();
+                        t_args(
+                            "settings.replay.monitors",
+                            &[("monitors", &monitors.join(", "))],
+                        )
+                    }),
+                    (info.app_audio == Some(false)).then(|| t("settings.replay.no_app_audio")),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                row.child(
+                    Icon::new(IconName::CircleCheck)
+                        .small()
+                        .text_color(success)
+                        .mt_0p5(),
+                )
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(div().truncate().text_sm().child(found))
+                        .children(details.into_iter().map(|d| muted(d, cx))),
+                )
+                .child(
+                    Tag::secondary()
+                        .xsmall()
+                        .outline()
+                        .child(div().max_w_64().truncate().child(how)),
+                )
+                .child(refresh)
+                .into_any_element()
             }
             Some(None) => row
                 .child(
@@ -330,6 +374,16 @@ impl Render for ReplayPanel {
         };
         let memory = irori_services::replay::buffer_mib(&settings).to_string();
         let seconds = settings.seconds.to_string();
+        let recording = b.replay().map(|r| {
+            t_args(
+                "settings.replay.recording",
+                &[
+                    ("title", &r.title),
+                    ("seconds", &r.seconds.to_string()),
+                    ("fps", &r.settings.fps.to_string()),
+                ],
+            )
+        });
         v_flex()
             .w_full()
             .gap_2()
@@ -338,6 +392,7 @@ impl Render for ReplayPanel {
                     .child(self.render_recorder(cx))
                     .child(self.render_ways(cx)),
             )
+            .children(recording.map(|text| muted(text, cx)))
             .child(muted(
                 t_args(
                     "settings.replay.memory",

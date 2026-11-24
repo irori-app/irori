@@ -27,6 +27,18 @@ pub fn command(path: &Path) -> Option<Vec<String>> {
     })
 }
 
+/// The command that runs a Windows installer (`.exe` or `.msi`) in a prefix.
+/// `.msi` packages run through `msiexec /i` so both Wine and Proton
+/// `waitforexitandrun` start them consistently.
+pub fn installer_command(path: &Path) -> Vec<String> {
+    let file = path.to_string_lossy().into_owned();
+    if extension(path) == Some("msi") {
+        vec!["msiexec".into(), "/i".into(), file]
+    } else {
+        vec![file]
+    }
+}
+
 fn extension(path: &Path) -> Option<&'static str> {
     let ext = path.extension()?.to_str()?;
     EXTENSIONS
@@ -59,5 +71,17 @@ mod tests {
         assert_eq!(argv("/g/patch.MSI"), ["/g/patch.MSI"]);
         assert_eq!(argv("/g/fix.reg"), ["regedit", "/g/fix.reg"]);
         assert_eq!(command(Path::new("/g/notes.txt")), None);
+    }
+
+    #[test]
+    fn msi_installers_run_through_msiexec() {
+        assert_eq!(
+            installer_command(Path::new("/g/setup.exe")),
+            ["/g/setup.exe"]
+        );
+        assert_eq!(
+            installer_command(Path::new("/g/Setup.MSI")),
+            ["msiexec", "/i", "/g/Setup.MSI"]
+        );
     }
 }
