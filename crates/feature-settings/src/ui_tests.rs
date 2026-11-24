@@ -686,9 +686,11 @@ fn settings_subtabs_switch_and_draw(cx: &mut TestAppContext) {
         view.update(cx, |v, cx| v.set_section("game-defaults", window, cx));
     })
     .unwrap();
-    for tab in ["wine", "performance", "gpu", "launch", "saves"] {
+    let defaults_tabs = crate::layout::supported_defaults_tabs();
+    assert!(!defaults_tabs.is_empty());
+    for tab in defaults_tabs {
         cx.update_window(handle, |_, window, cx| {
-            view.update(cx, |v, cx| v.set_subtab_for_test(tab, window, cx));
+            view.update(cx, |v, cx| v.set_subtab_for_test(tab.id, window, cx));
             window.refresh();
             let _ = window.draw(cx);
         })
@@ -701,7 +703,8 @@ fn settings_subtabs_switch_and_draw(cx: &mut TestAppContext) {
                     .read(cx)
                     .visible_paths()
                     .is_empty(),
-                "{tab}"
+                "{}",
+                tab.id
             );
         });
     }

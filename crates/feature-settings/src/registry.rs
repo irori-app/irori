@@ -4272,6 +4272,10 @@ mod tests {
         let speed = find("maxDownloadSpeed").expect("maxDownloadSpeed");
         assert!(!speed.tooltip_text().is_empty());
         assert!(search("voice calls").any(|f| f.path == "maxDownloadSpeed"));
-        assert!(search("laptop fans").any(|f| f.path == "enableDXVKFpsLimit"));
+        assert!(search("stale metadata").any(|f| f.path == "action.clear-caches"));
+        assert_eq!(
+            search("laptop fans").any(|f| f.path == "enableDXVKFpsLimit"),
+            !cfg!(windows)
+        );
     }
 }

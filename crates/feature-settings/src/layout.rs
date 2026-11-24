@@ -148,6 +148,24 @@ pub(crate) fn defaults_section_for_tab(tab: &str) -> FieldSection {
     }
 }
 
+/// Sub-tabs of `Settings -> Game defaults` that have at least one supported
+/// shared field on the current host (for example, Wine and Performance have no
+/// game defaults on Windows).
+pub(crate) fn supported_defaults_tabs() -> Vec<SubTab> {
+    DEFAULTS_TABS
+        .iter()
+        .copied()
+        .filter(|tab| {
+            let section = defaults_section_for_tab(tab.id);
+            crate::registry::FIELDS.iter().any(|f| {
+                f.section == section
+                    && f.scope == crate::registry::Scope::Shared
+                    && f.supported_on_host()
+            })
+        })
+        .collect()
+}
+
 /// Which sub-tab a registry field belongs to in compact App Settings mode.
 pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
     match spec.section {

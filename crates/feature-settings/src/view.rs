@@ -269,10 +269,14 @@ impl SettingsView {
         let log =
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
         let storage = cx.new(StoragePanel::new);
+        let default_defaults_tab = crate::layout::supported_defaults_tabs()
+            .first()
+            .map(|tab| tab.id)
+            .unwrap_or("launch");
         let mut this = Self {
             section: SettingsSection::General,
             general_tab: "basics",
-            defaults_tab: "wine",
+            defaults_tab: default_defaults_tab,
             appearance_tab: "theme",
             search,
             query: String::new(),
@@ -519,25 +523,30 @@ impl SettingsView {
     }
 
     fn render_subtabs(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (id, tabs, current) = match self.section {
-            SettingsSection::General => (
-                "settings-general-tabs",
-                crate::layout::GENERAL_TABS,
-                self.general_tab,
-            ),
-            SettingsSection::GameDefaults => (
-                "settings-defaults-tabs",
-                crate::layout::DEFAULTS_TABS,
-                self.defaults_tab,
-            ),
-            SettingsSection::Appearance => (
-                "settings-appearance-tabs",
-                crate::layout::APPEARANCE_TABS,
-                self.appearance_tab,
-            ),
-            _ => return None,
-        };
+        let (id, tabs, current): (&'static str, Vec<crate::layout::SubTab>, &'static str) =
+            match self.section {
+                SettingsSection::General => (
+                    "settings-general-tabs",
+                    crate::layout::GENERAL_TABS.to_vec(),
+                    self.general_tab,
+                ),
+                SettingsSection::GameDefaults => (
+                    "settings-defaults-tabs",
+                    crate::layout::supported_defaults_tabs(),
+                    self.defaults_tab,
+                ),
+                SettingsSection::Appearance => (
+                    "settings-appearance-tabs",
+                    crate::layout::APPEARANCE_TABS.to_vec(),
+                    self.appearance_tab,
+                ),
+                _ => return None,
+            };
+        if tabs.len() <= 1 {
+            return None;
+        }
         let selected = tabs.iter().position(|tab| tab.id == current).unwrap_or(0);
+        let tab_ids: Vec<&'static str> = tabs.iter().map(|tab| tab.id).collect();
         Some(
             div()
                 .pb_2()
@@ -547,8 +556,8 @@ impl SettingsView {
                         .selected_index(selected)
                         .children(tabs.iter().map(|tab| Tab::new().label(t(tab.label_key))))
                         .on_click(cx.listener(move |this, ix: &usize, window, cx| {
-                            if let Some(tab) = tabs.get(*ix) {
-                                this.set_subtab(tab.id, window, cx);
+                            if let Some(&tab_id) = tab_ids.get(*ix) {
+                                this.set_subtab(tab_id, window, cx);
                             }
                         })),
                 )
