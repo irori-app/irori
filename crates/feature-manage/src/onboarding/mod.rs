@@ -1,5 +1,12 @@
 //! First-run onboarding: welcome (with the interface language), import from
-//! Heroic, connect stores, choose the install folder.
+//! Heroic and the other launchers found here ([`launchers`]), connect
+//! stores, choose the install folder. Getting started ([`hub`]) picks up
+//! from its last page, and the empty library shows what was found on this
+//! computer ([`found`]).
+
+pub(crate) mod found;
+pub(crate) mod hub;
+pub(crate) mod launchers;
 
 use std::path::PathBuf;
 
@@ -27,6 +34,7 @@ use irori_ui::{Route, models, navigate};
 use crate::accounts::{StoreCard, store_cards, store_icon};
 use crate::common::{backend_op, card};
 use crate::login::open_login_dialog;
+use launchers::{Imports, Launcher, import_status};
 
 fn marker_file() -> PathBuf {
     Paths::get().state_dir().join("onboarding-done")
@@ -79,13 +87,6 @@ enum ImportState {
     Idle,
     Running,
     Done(ImportSummary),
-    Failed(SharedString),
-}
-
-enum LutrisState {
-    Idle,
-    Running,
-    Done(irori_ui::hooks::LutrisSummary),
     Failed(SharedString),
 }
 
@@ -162,9 +163,8 @@ pub struct OnboardingView {
     import: ImportState,
     /// Heroic data exists (its import section shows).
     heroic: bool,
-    /// A Lutris library exists (its import section shows).
-    lutris: bool,
-    lutris_import: LutrisState,
+    /// The other launchers with data here, each with its import.
+    launchers: Imports,
     stores: Vec<StoreCard>,
     install_path: String,
     language: Entity<LanguageSelect>,
@@ -175,92 +175,78 @@ impl EventEmitter<OnboardingEvent> for OnboardingView {}
 
 impl OnboardingView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut this = Self::with_heroic(hooks::heroic_detected(), window, cx);
-        this.set_lutris(hooks::lutris_detected());
+        let this = Self::with_heroic(hooks::heroic_detected(), window, cx);
+        // Looking for the other launchers reads their folders (and on
+        // Windows the registry): off the UI thread, while the welcome shows.
+        let found = launchers::detect_in_background(cx);
+        cx.spawn_in(window, async move |this, cx| {
+            let found = found.await.unwrap_or_default();
+            let _ = this.update(cx, |this, cx| {
+                this.set_launchers(&found);
+                cx.notify();
+            });
+        })
+        .detach();
         this
     }
 
-    /// Show the Lutris import section (and the import step) or not.
-    pub(crate) fn set_lutris(&mut self, lutris: bool) {
-        self.lutris = lutris;
-        self.steps = onboarding_steps(self.heroic || lutris);
+    /// Show the import sections of `found` (and the import step) or not,
+    /// staying on the page shown.
+    pub(crate) fn set_launchers(&mut self, found: &[Launcher]) {
+        let current = self.step();
+        self.launchers = Imports::new(found);
+        self.steps = onboarding_steps(self.heroic || !found.is_empty());
+        self.ix = self
+            .steps
+            .iter()
+            .position(|s| *s == current)
+            .unwrap_or(self.ix.min(self.steps.len() - 1));
     }
 
-    fn run_lutris_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if matches!(self.lutris_import, LutrisState::Running) {
+    fn run_launcher_import(
+        &mut self,
+        launcher: Launcher,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(task) = self.launchers.start(launcher, cx) else {
             return;
-        }
-        self.lutris_import = LutrisState::Running;
+        };
         cx.notify();
-        let task = hooks::import_from_lutris(cx);
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
-                this.lutris_import = match result {
-                    Ok(summary) => {
-                        irori_ui::models::refresh_library(false, cx);
-                        irori_ui::lutris_summary::open_lutris_summary(summary.clone(), window, cx);
-                        LutrisState::Done(summary)
-                    }
-                    Err(e) => LutrisState::Failed(format!("{e:#}").into()),
-                };
+                if let Ok(summary) = &result {
+                    irori_ui::models::refresh_library(false, cx);
+                    irori_ui::lutris_summary::open_lutris_summary(summary.clone(), window, cx);
+                }
+                this.launchers.finish(launcher, result);
                 cx.notify();
             });
         })
         .detach();
     }
 
-    fn render_lutris(&self, cx: &mut Context<Self>) -> AnyElement {
-        let status: AnyElement = match &self.lutris_import {
-            LutrisState::Idle | LutrisState::Running => Button::new("lutris-import")
-                .primary()
-                .icon(IconName::Import)
-                .label(t("manage.onboarding.lutris.run"))
-                .loading(matches!(self.lutris_import, LutrisState::Running))
-                .on_click(cx.listener(|this, _, window, cx| this.run_lutris_import(window, cx)))
-                .into_any_element(),
-            LutrisState::Done(summary) => {
-                let summary = summary.clone();
-                v_flex()
-                    .gap_2()
-                    .child(
-                        Alert::success(
-                            "lutris-done",
-                            irori_ui::lutris_summary::summary_lines(&summary).join("\n"),
-                        )
-                        .title(t("manage.onboarding.lutris.done")),
-                    )
-                    .child(
-                        div().child(
-                            Button::new("lutris-details")
-                                .label(t("manage.onboarding.lutris.details"))
-                                .on_click(move |_, window, cx| {
-                                    irori_ui::lutris_summary::open_lutris_summary(
-                                        summary.clone(),
-                                        window,
-                                        cx,
-                                    )
-                                }),
-                        ),
-                    )
-                    .into_any_element()
-            }
-            LutrisState::Failed(message) => Alert::error("lutris-failed", message.clone())
-                .title(t("manage.onboarding.lutris.failed"))
-                .into_any_element(),
+    fn render_launcher(&self, launcher: Launcher, cx: &mut Context<Self>) -> AnyElement {
+        let Some(state) = self.launchers.state(launcher) else {
+            return div().into_any_element();
         };
+        let view = cx.entity().downgrade();
+        let status = import_status(launcher, state, move |window, cx| {
+            let _ = view.update(cx, |this, cx| {
+                this.run_launcher_import(launcher, window, cx)
+            });
+        });
         v_flex()
             .gap_3()
-            .child(
-                div()
-                    .text_xl()
-                    .font_semibold()
-                    .child(t("manage.onboarding.lutris.title")),
-            )
+            .child(div().text_xl().font_semibold().child(t_args(
+                "manage.onboarding.launcher.title",
+                &[("launcher", launcher.name())],
+            )))
             .child(
                 div()
                     .text_color(cx.theme().muted_foreground)
-                    .child(t("manage.onboarding.lutris.description")),
+                    .child(launcher.description()),
             )
             .child(div().child(status))
             .into_any_element()
@@ -306,8 +292,7 @@ impl OnboardingView {
             ix: 0,
             import: ImportState::Idle,
             heroic,
-            lutris: false,
-            lutris_import: LutrisState::Idle,
+            launchers: Imports::default(),
             stores: store_cards(cx),
             install_path: m.settings.read(cx).app.default_install_path.clone(),
             language,
@@ -492,7 +477,7 @@ impl OnboardingView {
                 h_flex()
                     .gap_3()
                     .py_2()
-                    .child(Icon::new(store_icon(runner)).text_color(muted))
+                    .child(store_icon(runner).text_color(muted))
                     .child(
                         v_flex()
                             .flex_1()
@@ -589,7 +574,7 @@ impl OnboardingView {
             .into_any_element()
     }
 
-    fn render_done(&self, cx: &App) -> AnyElement {
+    fn render_done(&self, cx: &mut Context<Self>) -> AnyElement {
         let signed_in: Vec<&str> = self
             .stores
             .iter()
@@ -613,6 +598,17 @@ impl OnboardingView {
                     .child(t("manage.onboarding.done.title")),
             )
             .child(div().text_color(cx.theme().muted_foreground).child(text))
+            .child(
+                div().child(
+                    Button::new("onboarding-getting-started")
+                        .icon(IconName::Sparkles)
+                        .label(t("manage.onboarding.done.getting_started"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.finish(cx);
+                            hub::open_getting_started(window, cx);
+                        })),
+                ),
+            )
             .into_any_element()
     }
 }
@@ -622,11 +618,14 @@ impl Render for OnboardingView {
         let step = self.step();
         let content = match step {
             OnboardingStep::Welcome => self.render_welcome(cx),
-            OnboardingStep::Import => v_flex()
-                .gap_8()
-                .when(self.heroic, |d| d.child(self.render_import(window, cx)))
-                .when(self.lutris, |d| d.child(self.render_lutris(cx)))
-                .into_any_element(),
+            OnboardingStep::Import => {
+                let found: Vec<Launcher> = self.launchers.entries.iter().map(|(l, _)| *l).collect();
+                v_flex()
+                    .gap_8()
+                    .when(self.heroic, |d| d.child(self.render_import(window, cx)))
+                    .children(found.into_iter().map(|l| self.render_launcher(l, cx)))
+                    .into_any_element()
+            }
             OnboardingStep::Stores => self.render_stores(cx),
             OnboardingStep::InstallFolder => self.render_folder(cx),
             OnboardingStep::Done => self.render_done(cx),

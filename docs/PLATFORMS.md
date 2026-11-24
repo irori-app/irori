@@ -16,7 +16,13 @@ different native OS is rejected before launch.
 
 The GPTK tab is shown on macOS, but its builds are compatible only with Apple
 silicon on macOS 14 or later. Intel Wine on Apple silicon requires Rosetta 2;
-Irori checks it before initializing a prefix and reports a missing prerequisite.
+Irori checks it before initializing a prefix. Native Mac games built only for
+Intel (their program's Mach-O header has no arm64 slice) start through
+`arch -x86_64`, since an Intel-only program spawned from Irori's arm64 process
+hangs; a game's Launch › "Run with Rosetta" does the same for a universal
+program. When Rosetta is missing, the launch asks to install it and, after the
+user agrees (which accepts Apple's licence for it), runs
+`softwareupdate --install-rosetta --agree-to-license` and starts the game.
 Runtime availability does not guarantee game compatibility. DRM, anticheat,
 graphics APIs, CPU instructions, and the selected runtime still matter.
 
@@ -31,16 +37,47 @@ The manager downloads the same three macOS source families used by Heroic:
 Wine-Crossover is a downloadable Wine distribution. It is distinct from the
 commercial CrossOver application and does not create CrossOver bottles.
 
-Discovery includes Irori/Heroic downloads, Wine app bundles, Homebrew paths,
-CrossOver and CrossOver Preview in `/Applications` and `~/Applications`, and
-Whisky's Wine installation. Custom paths may point to a runtime executable.
+Discovery includes Irori/Heroic downloads, Wine app bundles, Homebrew paths
+(Apple silicon's `/opt/homebrew` and Intel's `/usr/local`, named apart),
+CrossOver and CrossOver Preview in `/Applications` and `~/Applications`,
+Whisky's Wine installation, and the engines of Sikarugir, Kegworks and Wineskin
+wrappers in `~/Applications/<maker>` and `/Applications/<maker>` (listed as
+`<wrapper> (<maker>)`; `SharedSupport/wine`, else the older
+`Frameworks/wswine.bundle`, `wine64` or only `wine`). A wrapper's own prefix
+stays its own. A `…-latest` build from the manager shows the version its bundle
+holds (`Wine-Crossover-latest (23.7.1)`). Custom paths may point to a runtime
+executable.
 CrossOver uses the bottle named in a game's Wine settings ("CrossOver bottle"),
-located under `~/Library/Application Support/CrossOver/Bottles` unless General ›
-Folders › "CrossOver bottles folder" points elsewhere (for bottles moved to another
-drive in CrossOver's preferences). Create the bottle in CrossOver first. Irori uses
+located in the folder CrossOver's own preferences name (`BottleDir` in
+`~/Library/Preferences/com.codeweavers.CrossOver.plist`), else
+`~/Library/Application Support/CrossOver/Bottles`, unless General › Folders ›
+"CrossOver bottles folder" points elsewhere. Create the bottle in CrossOver first. Irori uses
 `CX_BOTTLE` and `CX_BOTTLE_PATH`, including for setup and wineserver commands, and
 does not initialize an external bottle. Uninstall refuses to delete a shared CrossOver bottle; keep the prefix and manage it in CrossOver. Whisky uses its runtime with an Irori
 prefix; existing Whisky bottles are not imported automatically.
+
+Winetricks runs with the Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`) and
+MacPorts (`/opt/local/bin`) folders added to `PATH`, which an app started from
+Finder doesn't get; Homebrew's 7-Zip is `7zz`, so a `7z` link to it is made in
+`<data>/tools/winetricks-bin` when no `7z` is there.
+
+After a Mac account is renamed, saved paths under the old `/Users/<old>` home
+(settings, install records, library data: whatever Irori reads through its JSON
+store) read as the current home when that old home no longer exists, and the
+next save keeps them. Other users' homes, `/Users/Shared` and other disks are
+left alone (`irori_core::home_rename`, turned on by `main.rs` only).
+
+DLSS through MetalFX (a game's Wine › Display, `iroriMetalFxDlss`) works with
+builds that ship the translation: D3DMetal 3's `nvngx-on-metalfx.dll` (Game
+Porting Toolkit 3, recent CrossOver) or DXMT's `nvngx.dll` beside
+`winemetal.dll`. Before launch Irori copies the build's NGX DLL (as `nvngx.dll`
+and `_nvngx.dll`) and `nvapi64.dll` into the prefix's `system32` (a file there
+before is set aside), sets `HKLM\Software\NVIDIA Corporation\Global\NGXCore\FullPath`,
+prefers those copies in `WINEDLLOVERRIDES` and sets `D3DM_ENABLE_METALFX=1` or
+`DXMT_ENABLE_NVEXT=1`. What it wrote is recorded in the prefix
+(`.irori-metalfx.json`); turning the setting off, or a build without the
+translation (which the game's log and status then name), takes exactly that
+back out. The build itself is never changed.
 
 macOS settings include Msync, Metal HUD, Rosetta AVX advertisement and Retina mode.
 Retina mode sets `HKCU\Software\Wine\Mac Driver\RetinaMode` in the prefix before
@@ -59,6 +96,13 @@ and wrappers remain user overrides.
 Native `.app` launches read `CFBundleExecutable` from XML or binary Info.plist
 and spawn that executable with the game's arguments and environment. This keeps
 the process attached for exit status, logs, cancellation, and playtime.
+
+ZOOM Platform's Mac builds install on a Mac: a disk image is mounted read-only
+with `hdiutil attach -nobrowse -readonly -noautoopen` (a disk image that asks to
+accept a licence isn't agreed to, so it fails), its apps (else its visible
+folders) are copied out with `ditto`, and it is always detached again; zips and
+tarballs are extracted. Installer packages (`.pkg`) are refused. The game is the
+shallowest `.app` that isn't an installer, the one named like the game first.
 
 ## Build and package
 
@@ -79,7 +123,8 @@ Both binaries are required, so a package never silently omits store sign-in.
   sign-in. `packaging/install.sh` retains the per-user Linux installation flow.
   `--appimage` also writes `Irori-X.Y.Z-x86_64.AppImage` (`-aarch64` on arm64) and its `.zsync` (see
   [AppImage](#appimage)). It needs [appimagetool](https://github.com/AppImage/appimagetool)
-  (`IRORI_APPIMAGETOOL`, else on `PATH`) and `zsyncmake`; `IRORI_APPIMAGE_RUNTIME`
+  (`IRORI_APPIMAGETOOL`, else on `PATH`), `zsyncmake` and patchelf (`IRORI_PATCHELF`,
+  else on `PATH`); `IRORI_APPIMAGE_RUNTIME`
   names the AppImage runtime to use instead of the one appimagetool downloads.
 - macOS needs Xcode Command Line Tools. The package includes an `.app` with the
   helper and `irori://` URL declaration. XZ support links statically; packaging rejects
@@ -188,8 +233,38 @@ and `<data>/tools/proton`, or into `wine` and `proton` folders inside the folder
 `compatibilitytools.d`. For `-latest` Proton builds, Irori rewrites `compatibilitytool.vdf`
 to keep the stable `<type>-latest` name so Steam games pinned to it keep their selection
 across updates and rollbacks. Builds stay where they were installed when the folder changes,
-and Irori reads both places. A Wine or Proton update is dropped as soon as its build is
+and Irori reads both places.
+
+With that setting on, builds already in Irori's own folder are registered with Steam too:
+`compatibilitytools.d/irori-<build>` holds only a `compatibilitytool.vdf` whose
+`install_path` points at the build, and a marker file. Registrations follow the builds
+(at start, after installs and removals, and when the setting changes), all of them leave
+when it is turned off, and only marked folders are ever touched. A Flatpak or Snap Steam
+can't read Irori's folders, so nothing is registered there.
+
+Proton-CachyOS and Proton-Wineland publish an x86-64-v3 build (AVX2 and the rest of
+that level) beside the baseline one. `iroriProtonCpuLevel` (`auto`, `baseline`, `v3`)
+picks which one installs and updates; `auto` takes v3 when the processor runs it.
+
+Wine and Proton builds are also found in every native, Flatpak or Snap Steam that lists
+its libraries (Valve's Proton in each of their libraries when shown), in each Steam's
+`compatibilitytools.d`, and in the folders `STEAM_EXTRA_COMPAT_TOOLS_PATHS` names
+(colon-separated; a folder of tools or one tool), as NixOS packages them. A Wine or Proton update is dropped as soon as its build is
 on the computer, wherever it came from (the Wine manager, ProtonUp-Qt, Steam).
+
+The Steam Linux Runtime (`steamRuntime`, run through umu) can be set in the game defaults
+as well as per game. A default reaches every native Linux build except the ROM library's,
+whose emulators are this computer's programs; a ROM's own choice still applies.
+
+A store game's Windows build starts without Wine when its program (the game's own
+program setting, else the store's) is one of this system's, by its first bytes: ELF on
+Linux, Mach-O or an app bundle on macOS, a `#!` script on either. That covers native
+replacements put in the game folder (OpenJK, fallout2-ce). "Don't use Wine"
+(`iroriNoWine`, per game, Wine & Proton section) does the same for a program Irori can't
+recognise and hides the Wine fields; a Windows program is never started that way. Cloud
+saves keep their Windows paths. An AppImage program gets `APPIMAGE_EXTRACT_AND_RUN=1`
+where FUSE can't mount it (inside Irori's Flatpak, or without `/dev/fuse` and
+`fusermount`), unless the game's variables set it.
 
 On Linux, games start with room for 10 GiB of shader cache (`iroriShaderCacheSize`, per
 game or as a default; 0 keeps the drivers' limits): `__GL_SHADER_DISK_CACHE_SIZE` for
@@ -215,6 +290,23 @@ when Irori created it, and a choice the user changed in Windows meanwhile is lef
 is. A game that starts through a launcher that hands over to another program gets the
 preference on the program Irori starts only. Steam and the third-party launchers start
 their own games, so their games don't show it.
+
+For a game that still picks the wrong card, its settings can **hide a graphics card**
+(`iroriHideGpu`, one game at a time; Windows only). Windows has no per-program way to
+hide one, so Irori disables the card while the game runs and enables it again when the
+session ends, when the launch fails or is cancelled, and when Irori itself goes away.
+Disabling a device needs an administrator: at each launch Windows' own permission prompt
+starts `irori --gpu-helper …` elevated, which disables the card (`CM_Disable_DevNode`,
+never persistently: a restart always brings it back), waits on two named events and on
+Irori's process, and enables the card again. Nothing is installed and no password is
+kept. The list offers only cards that may go: never one showing a display (matched with
+`EnumDisplayDevicesW`'s hardware ids, so identical twin cards both count as showing it),
+never when Windows can't say which cards show displays, never the last enabled card, and
+never a card the user disabled. Every card is written to `<state>/gpu-hidden.json` before
+it is disabled; should the helper be killed too, the next start enables what is still
+disabled (asking for permission again) or says which card to enable in Device Manager.
+The game's log says what was hidden, or why not. Declining the prompt starts the game
+with every card.
 
 - **Graphics card** (`iroriGpu`, a PCI address): cards come from `/sys/class/drm`,
   named from `pci.ids`. A Mesa card gets `DRI_PRIME=pci-…` and
@@ -337,7 +429,11 @@ protontricks only knows Steam app IDs, so games Irori runs itself keep using win
 
 Each configuration root has one running Irori instance, protected by an OS file
 lock. Subsequent invocations forward arguments over authenticated loopback IPC.
-The tray uses the desktop's native integration. macOS uses Command shortcuts and a native app menu; Windows/Linux retain Control shortcuts. Games inhibit sleep through the
+The tray uses the desktop's native integration. With "Minimize when a game starts" and
+"Close to tray" both on and a tray icon running (not in Steam's Game Mode), a game
+starting closes the window to the tray instead of minimizing it, and the window opens
+again where it was once the games it closed for have ended, unless the user opened it
+meanwhile; Big Picture stays open behind the game. macOS uses Command shortcuts and a native app menu; Windows/Linux retain Control shortcuts. Games inhibit sleep through the
 Linux portal, macOS caffeinate, or Windows thread execution state. Desktop/menu
 shortcuts use `.desktop`, Finder app bundles, or Windows shell links respectively.
 Windows cancellation uses `taskkill /T /F`; games that deliberately escape their
@@ -453,8 +549,24 @@ game) and from the screenshot folders in the table above, where a file counts fo
 the play session it was taken in. Irori never moves, renames or removes them.
 gamescope's own screenshots land in `/tmp` and are not read; in Steam's Game Mode
 Steam saves them instead. Videos (mp4, mkv, webm, mov) in those folders and in the
-replay buffer's clip folders show with a play badge over their game's art and open in
-the system's player.
+replay buffer's clip folders show with a play badge and open in the system's player.
+With ffmpeg on the computer (on `PATH`, Homebrew's or MacPorts' folders on macOS, or
+the host's inside the Flatpak; never bundled) a clip shows a poster frame from about
+two thirds in and its length, in the Album and in journal notes; without it, its
+game's art.
+
+### Trailers
+
+A game page shows its Steam trailers (also for games of other stores linked to a Steam
+app) above the screenshots, played through the computer's ffmpeg, found as for clip
+posters. Sound plays through ffmpeg's PulseAudio output (PipeWire answers it too), else
+ALSA, on Linux and AudioToolbox on macOS, when the ffmpeg was built with them; ffmpeg has
+no sound output for Windows, where trailers stay muted. Without ffmpeg the page says so:
+on Linux and macOS install it from the system's packages (`ffmpeg`; Homebrew's or
+MacPorts' on macOS) and choose "Look again"; on Windows Irori offers to download the LGPL
+build from github.com/BtbN/FFmpeg-Builds (linked from ffmpeg.org), asks first, and uses it
+only when it matches the release's published SHA-256. Inside the Flatpak the host's
+ffmpeg is used when the sandbox has none.
 
 ### Replay buffer
 
@@ -469,9 +581,17 @@ Distribution packages exist for Arch, Fedora (Copr), Nobara, openSUSE, Debian/Ub
 and others.
 
 The recorder is started as
-`gpu-screen-recorder -w screen -c mp4 -f 60 -r <seconds> -bm cbr -q <kbit/s> -v no -a default_output -o <clips>/<game>`
+`gpu-screen-recorder -w screen -c mp4 -f <fps> -r <seconds> -bm cbr -q <kbit/s> -v no -a default_output -o <clips>/<game>`
 (`-w portal -restore-portal-session yes` when the desktop should be asked once what to
-record; `default_output|default_input` mixes in the microphone; no `-a` without sound).
+record; `-w <connector>` for a chosen monitor; `default_output|default_input` mixes in
+the microphone; `app:<program>` records only the game's sound, named after its
+program, which needs PipeWire; no `-a` without sound; `-k h264|hevc|av1` for a chosen
+codec and `-s <W>x<H>` for a size limit). The frame rate is 30, 60, 120 or 144. The
+settings run `gpu-screen-recorder --info` once when shown and list its version, the
+codecs the GPU encodes and the monitors it can record, and say which game records now.
+A recorder that stops by itself during the session is started again after 2, 10 and
+30 seconds (a run of a minute or more starts the count over), unless
+`iroriReplay.restart` is off; then the buffer stops with a notice.
 Quality presets are constant bitrates (10, 20, 35 and 60 Mbit/s) because a constant
 bitrate keeps the buffer the same size whatever is on screen, as the recorder advises
 for replays; the settings show the resulting memory, about bitrate × length (35 Mbit/s
@@ -482,8 +602,9 @@ install set up; a user Flatpak install asks for a password or needs portal captu
 A clip is saved by sending the recorder SIGUSR1. The recorder process is found by its
 `-o` folder, so the Flatpak's process inside its sandbox is found like a native one.
 It prints the saved `Replay_<date>_<time>.mp4`, which Irori renames to
-`<game> <date> <time>.mp4` and confirms with a notice (a desktop notification while the
-game has focus). The session's end sends SIGINT, which stops the recorder without
+`<game> <date> <time>.mp4`, links in that day's journal note of the game (unless
+`iroriReplay.journal` is off), and confirms with a notice (a desktop notification while
+the game has focus). The session's end sends SIGINT, which stops the recorder without
 saving. Ways to save:
 
 - a controller: hold Guide and press X (Square on PlayStation, X on Nintendo layouts),
@@ -532,6 +653,17 @@ set up only while the replay buffer is on, so Alt+F10 and Alt+F12 stay free othe
 macOS and Windows have no replay buffer; there the commands still work, and the in-game
 overlay's Ctrl+Shift+O and its screenshot button take screenshots.
 
+The same session asks for a third shortcut, "quick-launch" (Ctrl+Alt+K suggested; the
+X11 grab takes it when it is free, else its command is offered alone), which opens the
+quick launcher: the command palette in a window of its own. General → Tray and window →
+"Open the quick launcher with a shortcut" sets the session up when Irori starts without
+waiting for the replay buffer, and shows its keys, or the line that binds
+`irori --quick-launch` (for example `bindsym Ctrl+Mod1+k exec irori --quick-launch` for
+Sway). On macOS and Windows the setting registers ⌃⌥K / Ctrl+Alt+K itself
+(`RegisterEventHotKey`, `RegisterHotKey`, the in-game overlay's registration with a key
+id of its own), which needs no permission; another program holding the keys leaves the
+command to bind. `irori://quick-launch` opens it as well.
+
 Clips land in `Videos/Irori/<game>/` (or the chosen folder), one folder per game named
 after its title, which is how the Album finds the game; a folder whose game left the
 library is matched to sessions by time like screenshots.
@@ -566,29 +698,82 @@ after a click on it the keyboard works too (arrows, Enter, Escape, Page Up/Down)
   with Left/Right or A (Linux: `pactl set-default-sink`, the game's streams moved
   along; macOS: Core Audio's default output device; Windows: the default device for
   every role through the undocumented `IPolicyConfig` Windows' own sound settings use);
-  a screenshot; Back to Irori
+  with a microphone, its level (Left/Right) and mute (A), and the microphone in use,
+  switched the same way (Linux: `pactl`'s default source, the outputs' monitors left
+  out; macOS: Core Audio's default input device, muted through its mute switch, else
+  by its level; Windows: the default capture device, through `IPolicyConfig`);
+  a screenshot; saving a clip while the replay buffer records the session; the game's
+  play status (Left/Right or A step through them); Back to the game (closes the overlay
+  and brings the game's window to the front, see below); Back to Irori
   (the main window, reopened from the tray if it was closed); quitting the game, which
   asks first with Cancel focused and then stops it as the game page's Stop does.
+
+"Back to the game" (the overlay, and the command palette while a game runs) looks for a
+window owned by the session's processes (the process Irori started, what descends from
+it, on Linux its process group too): Hyprland's `hyprctl clients -j` and
+`dispatch focuswindow`, sway's `get_tree` and `[con_id=…] focus`, else X11's
+`_NET_CLIENT_LIST`/`_NET_WM_PID` and a pager's `_NET_ACTIVE_WINDOW` request (Xwayland
+games on other Wayland desktops too). GNOME and KDE Plasma on Wayland let no program
+raise another's native Wayland window: there the palette says so and the overlay only
+closes. Windows: `EnumWindows` and `SetForegroundWindow`, attached to the foreground
+window's input thread for that call when Windows refuses it. macOS: System Events makes
+the game's process frontmost.
 - **Screenshots**: what was taken during this session (the screenshot index, with the
   running session counted), shown large with A.
-- **Achievements**: unlocked out of total, what this session unlocked and what is next
-  (furthest progress first, then the most common). Opening the overlay asks the store
-  afresh, at most once a minute per game.
+- **Achievements**: unlocked out of total, the game's achievement sets (the base game,
+  each DLC) with their progress, what this session unlocked and what is next (furthest
+  progress first, then the most common; never from a DLC the player doesn't own).
+  Opening the overlay asks the store afresh, at most once a minute per game.
 - **Journal**: today's note for the game, written or edited in the usual editor. Typing
   needs the keyboard, so click the overlay first.
+- **Controllers**: each connected controller, its family and battery. On Linux a
+  Bluetooth controller (its input device on the Bluetooth bus, the address in its
+  `uniq`) can be turned off with A pressed twice: BlueZ's `Device1.Disconnect` on the
+  system bus, which needs no extra rights. Windows and macOS leave that to their
+  Bluetooth settings.
 
 Unlocks the session made are announced one after another in the overlay's corner, with
-their picture, when it opens (each once per run of Irori). With "Announce new
-achievements" on (`iroriAchievementNotices`), unlocks are also announced while the
-overlay is closed: during the session Irori reads the game's achievements every minute
-when the game keeps them in its own files (`iroriFileAchievements`) and asks its store
-every three minutes otherwise, and each new unlock raises a notice, which the desktop
-shows as a notification over the game while Irori is in the background. The wheel and
-the touchpad move through the overlay's rows too (sideways only in Screenshots).
+their picture, when it opens (each once per run of Irori). The wheel and the touchpad
+move through the overlay's rows too (sideways only in Screenshots).
+
+### Unlocks over the game
+
+With "Announce new achievements" on (`iroriAchievementNotices`), unlocks show while the
+game runs, whether or not the in-game overlay is on. Irori follows the store's own
+report where it has one: GOG games tell the Galaxy service Irori hosts (comet) of each
+unlock, and Steam writes the game's stats file in `appcache/stats`, which Irori watches.
+Nothing is asked in between then. For other games it reads the game's own files every
+minute (`iroriFileAchievements`) or asks its store every three minutes, only while the
+game runs. On Windows, while GOG Galaxy's own communication service runs it holds port
+9977 and comet doesn't start, so GOG games are asked every three minutes.
+
+Each unlock shows as a card in the top right corner of the screen (Settings › General ›
+Library, "Show unlocks over the game", `iroriAchievementToast.overGame`), with the
+lines chosen there: the game's title, the description, how rare it is, the game's
+progress and the points. The overlay's corner notices use the same lines and the same
+queue, so an unlock shows once. The card never takes the game's focus: on Wayland
+desktops with layer-shell it is a layer surface without keyboard, on X11 an
+override-redirect window, on macOS a non-activating panel, on Windows a topmost tool
+window. GNOME (no layer-shell) and a game in exclusive fullscreen on Windows can't
+have anything above them, and while Irori's own window is in front the card isn't
+needed: unlocks are notices there, shown on the desktop while Irori is in the
+background.
 
 Shortcuts that work without opening it, also while the game has the window: Guide + RB
-(R1) takes a screenshot, Guide + Up/Down change the system's volume by 5%, and Guide + X
-still saves a clip of the replay buffer.
+(R1) takes a screenshot, Guide + Up/Down change the system's volume by one volume step (5%
+unless changed), and Guide + X
+still saves a clip of the replay buffer. After Guide + Up/Down the new level shows at the
+top of the screen for a second and a half (`iroriOverlay.levelNotice`): a small surface
+of its own, a layer surface that never takes the keyboard on Wayland with layer-shell
+(nothing shows on GNOME, where only a window that takes the focus could come above the
+game) and a pop-up window elsewhere; it exists only while it shows.
+
+Settings › General › In-game overlay also places the panel (centred, or at the left or
+right edge, `iroriOverlay.side`), turns the screenshot and volume chords off one by one
+(`screenshotChord`, `volumeChords`), sets how far one volume press goes (`volumeStep`,
+1–25%, for the panel and the chords), and says what the overlay can do on this computer:
+its surface on this desktop, whether the controllers connected are held from the game,
+whether a game's own volume can be changed, and its keyboard shortcut.
 
 The surface on Linux. On Wayland desktops with the wlr layer-shell protocol (KDE Plasma, sway,
 Hyprland, COSMIC, niri, labwc) the overlay is a layer surface on the overlay layer,
@@ -630,11 +815,12 @@ Per system (`irori_bigpicture::overlay::support` holds the same table):
 | --- | --- | --- | --- |
 | Surface | layer-shell surface, else a pop-up window | non-activating panel above fullscreen apps | topmost tool window, shown without activating |
 | Over a fullscreen game | yes (GNOME may keep it behind) | yes, in the game's fullscreen Space | borderless and windowed: yes; exclusive fullscreen: no, a notice says so |
-| Opens with | Guide | Guide, ⌃⇧O | Guide (not on Xbox pads), Ctrl+Shift+O |
-| Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no: the game sees the presses too |
+| Opens with | Guide | Guide, ⌃⇧O | Guide (not on Xbox pads), Back + Start, Ctrl+Shift+O |
+| Controller held from the game | yes (`EVIOCGRAB`) | no: the game sees the presses too | no, but the overlay takes the foreground |
 | System volume | default output (`pactl`) | default output (`osascript`) | default output (Core Audio) |
 | Game volume | its streams | not available | its audio sessions (Core Audio) |
-| Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | GDI copy of the game's monitor |
+| Screenshot | portal, else `grim` | `screencapture`, Screen Recording permission | Desktop Duplication of the game's monitor (HDR tone mapped to SDR), else a GDI copy |
+| Screenshot key | `irori --screenshot` bound in the desktop (see "Clip and screenshot keys") | ⌃⇧S while a game runs | Ctrl+Shift+S while a game runs |
 
 On macOS the overlay is GPUI's pop-up window: a non-activating `NSPanel` at the pop-up
 menu level that joins every Space and may sit over fullscreen apps, so it shows over a
@@ -659,14 +845,61 @@ notice asks to switch the game to borderless. Windows keeps the Xbox controller'
 button for the Xbox Game Bar and neither XInput nor Windows.Gaming.Input reports it to
 other programs, so with Xbox pads use Ctrl+Shift+O (`RegisterHotKey`, registered only
 while a game Irori started runs); PlayStation and other pads read as raw controllers may
-report their Guide button. There is no supported way to hold an XInput or
-Windows.Gaming.Input controller from a game, so the game sees the presses too. Volumes
+report their Guide button. Windows.Gaming.Input also says nothing to a program in the
+background, so while a game Irori started runs (and the overlay is on) a thread reads
+XInput, which answers whichever window is in front, for Back + Start (View + Menu)
+pressed together, which opens and closes the overlay (`iroriOverlay.backStart`); it
+reads every 50 ms while a controller is connected, every second while none is, and waits
+without reading when no game runs. There is no supported way to hold an XInput or
+Windows.Gaming.Input controller from a game, so the overlay takes the foreground from the
+game when it opens (`SetForegroundWindow`, attached to the game's input thread for that
+one call when Windows refuses) and gives it back when it closes, unless the user moved to
+another program meanwhile: SDL, Unity and Unreal games stop reading the controller in the
+background, so they don't see the presses made in the overlay; games that read XInput
+regardless still do. Volumes
 are Core Audio's: the system volume is the default output's endpoint volume, and the
 game's are its audio sessions (as in the volume mixer) on every active output, matched to
 the process Irori started and its descendants started since the session began (Windows
-reuses process ids and has no process groups). Screenshots copy the monitor of the
-foreground window with GDI into `Videos\Captures`, next to the Game Bar's; that is what
-the desktop composes, so a game in exclusive fullscreen or with HDR may come out black.
+reuses process ids and has no process groups). Screenshots read the monitor of the
+foreground window through DXGI Desktop Duplication into `Videos\Captures`, next to the
+Game Bar's: what the compositor shows, flip-model and most fullscreen games included. On
+an HDR display the picture is asked for in half floats (scRGB) and tone mapped to SDR at
+the display's SDR content brightness (`DISPLAYCONFIG_SDR_WHITE_LEVEL`): up to 80 % of
+SDR white nothing changes, brighter highlights roll off so the brightest lands on white
+(`irori_services::capture::tone_map_scrgb`, pure and tested). Where duplication isn't
+available (a remote session, a rotated display, a driver that refuses) GDI copies the
+desktop instead, and a game in exclusive fullscreen may come out black there.
+
+The screenshot key, Ctrl+Shift+S on Windows and ⌃⇧S on macOS
+(`iroriOverlay.screenshotKey`, on by default), is registered like the overlay's
+shortcut, only while a game Irori started runs, and works with the overlay off; it
+takes the same screenshot as the overlay's row and Guide + RB. Linux binds
+`irori --screenshot` in the desktop instead.
+
+### Frame rate limit and MangoHud
+
+A game's frame limit is Heroic's "Limit frame rate" and its value (`enableDXVKFpsLimit`,
+`DXVKFpsCap`), so a cap imported from Heroic stays. On Linux one limiter applies it per
+launch (`iroriFpsLimiter`, `irori_runtime::frame_limit`): Automatic picks gamescope when
+the game runs in it (its `-r`, unless gamescope's own limit is set), else MangoHud when it
+shows, else DXVK (`DXVK_FRAME_RATE`) for a Windows game, else MangoHud loaded hidden, the
+only limiter a native game has; a limiter chosen that can't apply falls back to
+Automatic. The other limiters stay off, so one limit never goes through two. On Windows
+and macOS DXVK is the only limiter.
+
+A game launched with MangoHud gets a configuration file of its own for the session,
+`<state>/mangohud/<runner>-<app>.conf`, named by `MANGOHUD_CONFIGFILE`: the user's own
+configuration (their `MANGOHUD_CONFIGFILE`, else `MangoHud/MangoHud.conf` in the
+configuration folder; per-program files aren't read) and then Irori's `fps_limit` and
+`no_display`. MangoHud watches that file, so the in-game overlay's "Show MangoHud" and
+"Frame rate limit" rows change it while the game runs; the file is rewritten in place
+(MangoHud watches the file itself) and removed when the session ends. "Start MangoHud
+hidden" (`iroriMangohudHidden`) loads it without drawing until the overlay shows it. The
+limit row shows only while MangoHud is the session's limiter or nothing limits it. A
+`MANGOHUD_CONFIG` variable without `read_cfg` keeps MangoHud from reading any file: then
+the limit and the hidden start go into that variable and can't change during play, and
+the overlay offers no MangoHud rows. In a sandboxed game the file's folder is bound
+read-only. Games Steam starts aren't covered: Irori doesn't start their MangoHud.
 
 ### Mods
 
@@ -818,7 +1051,7 @@ how it was installed when it starts:
 | Homebrew | `Caskroom/irori` under `/opt/homebrew` or `/usr/local` | Checks; offers `brew upgrade --cask irori` |
 | Scoop | `scoop/apps/irori` in the program's path, or `apps/irori` with Scoop's `manifest.json` and `install.json` beside the program (a moved `SCOOP` root) | Checks; offers `scoop update irori` |
 | winget | `install.ini` beside the program says `Channel=winget` (the `/CHANNEL=winget` switch in Irori's winget manifest) | Checks; offers `winget upgrade Irori.Irori` |
-| Windows setup, zip or portable zip, disk image, macOS zip, tarball, AppImage | none of the above | Checks; links to the release page |
+| Windows setup, zip or portable zip, disk image, macOS zip, tarball, AppImage | none of the above | Checks; installs the update at the next restart, or links to the release page |
 
 The check asks GitHub's `releases/latest` for `irori-app/irori` (which leaves out drafts
 and pre-releases) at most once a day, only while online and only in the app, never in the
@@ -828,7 +1061,31 @@ version that ran last. A newer release shows a notice that stays until closed; c
 it, or using its button, dismisses that version. Settings › About shows the state and
 "Check now", and Settings › General › Updates turns the check off
 (`iroriCheckForAppUpdates`). The first start of a new version says so, with a link to its
-release notes. Irori never downloads or installs itself.
+release notes.
+
+The installs no package manager updates (the last row) can also install the update:
+"Install update" in Settings › About, the notice's Install button or the palette. Irori
+asks GitHub for that release's assets and installs only what it can check: the release's
+`SHA256SUMS` (which `release.yml` writes over every file it publishes) must list the
+package for this install and computer (`Irori-X.Y.Z-linux.tar.gz`, `…-x86_64.AppImage`,
+`…-macos-arm64.zip`, `…-windows.zip`, `…-windows-portable.zip`, `…-windows-setup.exe`,
+and the arm64 ones), GitHub's own digest of the asset must agree with it, and the
+download must match. On macOS the new app's signature must verify, and come from the
+same team as the running app when that one is signed by a team. A release without
+checksums is never installed; the release page stays offered.
+
+The check passed, the package is unpacked into `.irori-update` beside the install (the
+AppImage's folder, the program's folder, or the folder holding `Irori.app`), and nothing
+of the install changes until a restart: "Restart to update" starts `irori --apply-update`
+(from the AppImage itself, or for the setup from a copy in `.irori-update`) and quits.
+Once Irori has quit, it renames each replaced file to `<name>.irori-old` (kept until the
+next update, to go back by hand) and moves the new one in: the AppImage file, the
+tarball's `irori` and `irori-sign-in`, the zip's programs and libraries, or the whole
+`Irori.app`. Then it starts the new Irori; if that one exits with an error within 15
+seconds, the old files go back, the old Irori starts and Settings › About says so. The
+Windows setup is run silently instead (`/VERYSILENT`), keeping its channel, and Irori
+starts again after it. A folder Irori can't write to (an app in a protected place)
+keeps the release page as the way to update.
 
 Packagers who build Irori themselves set `IRORI_UPDATE_EXPLANATION` (for example
 "Update Irori with your distribution's package manager.") when building.
@@ -855,13 +1112,25 @@ program called `portable`.
 ### AppImage
 
 `Irori-X.Y.Z-x86_64.AppImage` (and `Irori-X.Y.Z-aarch64.AppImage` for arm64) holds `irori`, `irori-sign-in`, the desktop entry, the icon
-and the AppStream metainfo, and nothing else: no libraries. It is built on Ubuntu 22.04
-from the same binaries as the tarball and the `.deb`, so it runs where they run (glibc
-2.35 or newer) and uses the system's graphics, Vulkan, Wayland, X11 and font libraries.
-Bundling none keeps the download small (about 32 MB for Irori 0.3.0, against 34 MB for
-the tarball) and keeps `LD_LIBRARY_PATH` out of the Wine, Proton and native games Irori
-starts. It is compressed with zstd in 128 KiB blocks, appimagetool's default: its xz
-setting came out larger (34 MB), and larger blocks start slower.
+and the AppStream metainfo. It is built on Ubuntu 22.04 from the same binaries as the
+tarball and the `.deb`, so it runs where they run (glibc 2.35 or newer) and uses the
+system's graphics, Vulkan, Wayland, X11 and font libraries. It sets no `LD_LIBRARY_PATH`,
+so nothing of it reaches the Wine, Proton and native games Irori starts. It is compressed
+with zstd in 128 KiB blocks, appimagetool's default: its xz setting came out larger
+(34 MB), and larger blocks start slower.
+
+- **Libraries.** `irori` links a few libraries that AppImage's
+  [excludelist](https://github.com/AppImageCommunity/pkg2appimage/blob/master/excludelist)
+  doesn't expect on every system: libxkbcommon, libxkbcommon-x11 (and its libxcb-xkb)
+  and libudev. A minimal system without one (a Wayland-only install, a container, an
+  immutable image) would stop Irori in the dynamic loader, before it can say anything, so
+  the AppImage carries those in `usr/lib` and finds them through `irori`'s `RUNPATH`
+  (`$ORIGIN/../lib`, set with patchelf), which the programs Irori starts don't inherit.
+  `package.py` follows what `irori` and those libraries link and fails the build on a
+  library on neither list (`APPIMAGE_BUNDLED`, `APPIMAGE_EXCLUDED`), so a new native
+  dependency is a decision. The release's container test runs the AppImage with only the
+  excludelist's libraries installed. Building it needs `patchelf` (`IRORI_PATCHELF`, else
+  on `PATH`).
 
 - **Sign-in.** `irori-sign-in` uses the system's WebKitGTK 4.1 and GTK 3. Where they are
   missing the window can't start, and Irori opens the store's page in the browser instead
@@ -977,6 +1246,15 @@ mounted) fails the backup instead of being created. `state/backups.json` keeps t
 result and the version that ran last. Store sign-ins never go in, nor do the backup and
 sync settings, which belong to each computer.
 
+A backup records where the computer that made it kept its home folder and Irori's
+folders, and where store games were installed. Restored on another computer, another
+user, another system, or between the Flatpak (`~/.var/app/…`) and a native install, its
+paths are moved to this computer's; a path that can only belong to another system (a drive
+letter on Linux and macOS, `/home/…` on Windows) is left out so the default applies. The
+restore panel checks install folders, prefixes and Wine builds here first and lets the user
+locate a moved folder, which moves everything beside it too; installed games found again
+are attached to their stores.
+
 Sync shares favourites, hidden games, ratings, play statuses, categories, custom titles
 and web art, yearly goals, playtime and the play history between computers. Each
 computer writes one file, `Irori sync/<device id>.json`, into a folder another program
@@ -1040,6 +1318,19 @@ presses that echo a controller press within 150 ms are dropped. Steam
 shortcuts carry an "Irori" collection tag and may point at games that aren't
 installed; `--launch` then shows the install options instead of failing.
 
+**Steam's overlay** (per game, "Steam overlay from Steam shortcuts",
+`iroriSteamOverlay`, off by default, Linux only). A Steam shortcut runs
+`irori --launch <game> --wait`, which hands the game to the running Irori, so
+the game isn't Steam's child and would miss the overlay Steam preloads into the
+shortcut. With the setting on, the waiting invocation passes on what Steam set
+for it: the `gameoverlayrenderer.so` entries of its `LD_PRELOAD` (absolute paths
+only, nothing else preloaded) and `SteamOverlayGameId`; the game gets Steam's
+libraries before any `LD_PRELOAD` of the user's. Irori never looks for the
+overlay itself, so the overlay comes only from Steam's own launch of the
+shortcut, while that Steam runs; started from Irori, the game runs without it.
+Games in gamescope (whose nested session hides it) or the sandbox (which keeps
+the game from Steam) and Steam's own games don't get it.
+
 ### Sound output (Big Picture)
 
 Outside a game, Big Picture switches the sound output too: the quick menu's
@@ -1050,6 +1341,24 @@ same systems; a running game's sound moves along. The outputs are read when Big
 Picture and its menu open, never polled. Where outputs can't be switched or read
 (`pactl` missing, another system), the entry says "Not available" and A explains
 why; with one output it says there is nothing to switch to.
+
+### Turning the screen off while downloading
+
+The Downloads page and the palette offer "Turn the screen off" while downloads run. The
+desktop's own display power interface does it, and turns the screen on again at the next
+key press or mouse move; nothing needs root (`irori_services::screen`):
+
+| System | Done with |
+| --- | --- |
+| KDE Plasma | `kscreen-doctor --dpms off` |
+| GNOME | Mutter's `org.gnome.Mutter.DisplayConfig` `PowerSaveMode` set to 3 (`gdbus`) |
+| Other X11 desktops | `xset dpms force off` |
+| macOS | `pmset displaysleepnow` |
+| Windows | the `SC_MONITORPOWER` broadcast |
+
+sway, Hyprland and gamescope keep an output off until told otherwise, so the button isn't
+offered there. Inside the Flatpak the program runs on the host. While the screen is off and
+downloads run, the computer is kept from sleeping (the display isn't) until they are done.
 
 ### Power off, restart, sleep and log out (Big Picture)
 

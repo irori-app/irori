@@ -12,6 +12,10 @@
 //! game runs, and wait longer after each failure. Store sign-ins never go:
 //! Irori's backups leave them out.
 //!
+//! [`Backend::cloud_copy_sizes`] says how much each kind holds on this
+//! computer and how much of it hasn't reached the current target yet, for
+//! the Sync page's sizes and space bar.
+//!
 //! Bringing back never overwrites: backups land in the backup folder (the
 //! Backups list then offers to restore them), saves in Ludusavi's backup
 //! folder (only games it has no backups of), screenshots in
@@ -97,6 +101,30 @@ struct State {
     /// Target key → kind → relative path → what was sent.
     sent: BTreeMap<String, BTreeMap<CopyKind, BTreeMap<String, Sent>>>,
     last: BTreeMap<CopyKind, CopyReport>,
+}
+
+/// How much one kind of cloud copy holds on this computer, and how much of
+/// it waits to be sent to the current target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CopySize {
+    pub kind: CopyKind,
+    pub files: usize,
+    pub bytes: u64,
+    pub waiting_files: usize,
+    pub waiting_bytes: u64,
+}
+
+/// [`CopySize`] of `local` files of `kind`, `sent` being what the target
+/// already has.
+pub fn size_of(kind: CopyKind, local: &[LocalFile], sent: &BTreeMap<String, Sent>) -> CopySize {
+    let waiting = to_send(local, sent);
+    CopySize {
+        kind,
+        files: local.len(),
+        bytes: local.iter().map(|f| f.size).sum(),
+        waiting_files: waiting.len(),
+        waiting_bytes: waiting.iter().map(|f| f.size).sum(),
+    }
 }
 
 /// The cloud copies' state.
@@ -300,6 +328,25 @@ impl Backend {
         }
     }
 
+    /// How much each kind holds here and how much waits to be sent, for
+    /// every kind whatever its mode. Reads the disk.
+    pub async fn cloud_copy_sizes(&self) -> Result<Vec<CopySize>> {
+        // Without a target yet (an rclone remote not chosen), everything waits.
+        let key = self.sync_target().await.ok().flatten().map(|t| t.key());
+        let mut sizes = Vec::new();
+        for kind in CopyKind::ALL {
+            let local = self.local_files(kind).await?;
+            let sent = key
+                .as_ref()
+                .and_then(|key| {
+                    service().with(|s| s.sent.get(key).and_then(|k| k.get(&kind)).cloned())
+                })
+                .unwrap_or_default();
+            sizes.push(size_of(kind, &local, &sent));
+        }
+        Ok(sizes)
+    }
+
     /// Send the kinds whose mode is Manual or Automatic (or only `only`)
     /// now. Refused while a game runs.
     pub async fn send_cloud_copies(&self, only: Option<CopyKind>) -> Result<Vec<CopyReport>> {
@@ -402,7 +449,7 @@ impl Backend {
     /// Automatic, no game runs and the wait since the last one is over.
     pub(crate) async fn cloud_copies_when_due(&self) {
         let app = self.settings.app();
-        if app.sync.mode == irori_core::SyncMode::Off {
+        if !super::syncs_now(app.sync.mode, self.working_offline()) {
             return;
         }
         let automatic: Vec<CopyKind> = CopyKind::ALL
@@ -553,6 +600,40 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sizes_count_what_is_here_and_what_waits() {
+        let file = |rel: &str, size: u64, modified: i64| LocalFile {
+            rel: rel.into(),
+            path: rel.into(),
+            size,
+            modified,
+        };
+        let local = [file("a", 10, 1), file("b", 20, 1), file("c", 30, 1)];
+        let sent: BTreeMap<String, Sent> = [
+            (
+                "a".to_string(),
+                Sent {
+                    size: 10,
+                    modified: 1,
+                },
+            ),
+            // Changed since it was sent: waits again.
+            (
+                "b".to_string(),
+                Sent {
+                    size: 5,
+                    modified: 1,
+                },
+            ),
+        ]
+        .into();
+        let size = size_of(CopyKind::Saves, &local, &sent);
+        assert_eq!((size.files, size.bytes), (3, 60));
+        assert_eq!((size.waiting_files, size.waiting_bytes), (2, 50));
+        let none = size_of(CopyKind::Backups, &[], &sent);
+        assert_eq!((none.files, none.bytes, none.waiting_files), (0, 0, 0));
+    }
 
     #[test]
     fn sends_only_new_and_changed_files() {

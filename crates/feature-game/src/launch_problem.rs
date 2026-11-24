@@ -23,6 +23,7 @@ use irori_extras::anticheat::AntiCheatStatus;
 use irori_extras::known_fixes::{self, KnownFix};
 use irori_services::troubleshoot::{
     Detail, Diagnosis, Finding, Fix, LaunchHint, MAP_COUNT_WANTED, map_count_commands,
+    ptrace_scope_commands,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::wine_choice::build_label;
@@ -53,6 +54,7 @@ fn hint_text(hint: LaunchHint) -> SharedString {
         LaunchHint::PermissionDenied => "game.launch_problem.hint.permission",
         LaunchHint::ProgramFailed => "game.launch_problem.hint.program_failed",
         LaunchHint::MapCount => "game.launch_problem.hint.map_count_low",
+        LaunchHint::PtraceScope => "game.launch_problem.hint.ptrace_scope_low",
         LaunchHint::Crash => "game.launch_problem.hint.crash",
     })
 }
@@ -97,6 +99,10 @@ fn finding_text(f: &Finding) -> SharedString {
                 ("current", &current.to_string()),
                 ("wanted", &MAP_COUNT_WANTED.to_string()),
             ],
+        ),
+        (LaunchHint::PtraceScope, Some(Detail::PtraceScope { current })) => t_args(
+            "game.launch_problem.hint.ptrace_scope",
+            &[("current", &current.to_string())],
         ),
         _ => hint_text(f.hint),
     }
@@ -342,6 +348,12 @@ impl LaunchProblem {
                 cx.write_to_clipboard(ClipboardItem::new_string(map_count_commands().join("\n")));
                 ops::notify_success(window, cx, t("game.launch_problem.map_count_copied"));
             }
+            Fix::PtraceScope(current) => {
+                cx.write_to_clipboard(ClipboardItem::new_string(
+                    ptrace_scope_commands(*current).join("\n"),
+                ));
+                ops::notify_success(window, cx, t("game.launch_problem.ptrace_scope_copied"));
+            }
             Fix::VulkanDriver(command) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(command.clone()));
                 ops::notify_success(window, cx, t("game.launch_problem.vulkan_copied"));
@@ -423,6 +435,7 @@ impl LaunchProblem {
             Fix::SteamRuntime => t("game.launch_problem.fix.steam_runtime"),
             Fix::ProgramSettings => t("game.launch_problem.fix.programs"),
             Fix::MapCount => t("game.launch_problem.fix.map_count"),
+            Fix::PtraceScope(_) => t("game.launch_problem.fix.ptrace_scope"),
             Fix::EnableDxvk => t("game.launch_problem.fix.dxvk"),
             Fix::EnableVkd3d => t("game.launch_problem.fix.vkd3d"),
             Fix::UseFsync => t("game.launch_problem.fix.fsync"),
@@ -531,6 +544,26 @@ impl LaunchProblem {
                             .child(t("game.launch_problem.map_count_how")),
                     )
                     .children(map_count_commands().map(|c| mono(c.into())));
+            }
+            Some(Detail::PtraceScope { current }) => {
+                // At 3 the kernel keeps the value until a restart.
+                let how = if *current >= 3 {
+                    "game.launch_problem.ptrace_scope_locked_how"
+                } else {
+                    "game.launch_problem.ptrace_scope_how"
+                };
+                col = col
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(t(how)),
+                    )
+                    .children(
+                        ptrace_scope_commands(*current)
+                            .into_iter()
+                            .map(|c| mono(c.into())),
+                    );
             }
             Some(Detail::VulkanDriver {
                 command: Some(command),
@@ -820,6 +853,12 @@ mod tests {
             Some(Detail::MapCount { current: 65_530 }),
         );
         assert!(finding_text(&maps).contains("65530"));
+        let ptrace = finding(
+            LaunchHint::PtraceScope,
+            Some(Detail::PtraceScope { current: 2 }),
+        );
+        assert!(finding_text(&ptrace).contains('2'));
+        assert!(!hint_text(LaunchHint::PtraceScope).is_empty());
         let denied = finding(
             LaunchHint::AntiCheat,
             Some(Detail::AntiCheat {
@@ -855,6 +894,7 @@ mod tests {
             Fix::SteamRuntime,
             Fix::ProgramSettings,
             Fix::MapCount,
+            Fix::PtraceScope(3),
             Fix::EnableDxvk,
             Fix::EnableVkd3d,
             Fix::UseFsync,

@@ -50,10 +50,15 @@ pub fn run(args: &[String]) -> i32 {
 }
 
 /// Hand `args` to the running Irori, starting it when none runs, with the
-/// Moonlight client Sunshine started this for.
+/// Moonlight client Sunshine started this for and what Steam set when one of
+/// its shortcuts started it.
 fn forward(args: &[String]) -> Result<std::net::TcpStream> {
-    let client = irori_services::StreamClient::from_env(|name| std::env::var(name).ok());
-    match instance::acquire_waiting(args, client.clone())? {
+    let var = |name: &str| std::env::var(name).ok();
+    let caller = instance::Caller {
+        stream: irori_services::StreamClient::from_env(var),
+        steam: irori_services::SteamLaunch::from_env(var),
+    };
+    match instance::acquire_waiting(args, caller.clone())? {
         Ok(stream) => return Ok(stream),
         // Let go at once: the Irori started next takes the lock.
         Err(primary) => drop(primary),
@@ -62,7 +67,7 @@ fn forward(args: &[String]) -> Result<std::net::TcpStream> {
     let deadline = Instant::now() + STARTUP;
     loop {
         std::thread::sleep(Duration::from_millis(500));
-        match instance::acquire_waiting(args, client.clone())? {
+        match instance::acquire_waiting(args, caller.clone())? {
             Ok(stream) => return Ok(stream),
             Err(primary) => drop(primary),
         }
@@ -217,6 +222,7 @@ fn game(id: GameId, wait: Arc<Wait>, app: &Arc<Mutex<AppHandles>>, cx: &mut App)
     let window = app.lock().window;
     let params = irori_services::LaunchParams {
         stream: wait.waiter.client().cloned(),
+        steam: wait.waiter.steam().cloned(),
         ..Default::default()
     };
     let task = irori_ui::run(cx, {

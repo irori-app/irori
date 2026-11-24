@@ -19,11 +19,26 @@
 //! Values set before sync was turned on count as older than any change
 //! made with sync (time 0), except play statuses, which carry their date.
 //!
+//! A game's own links are a register of their own, apart from its custom
+//! title and art, so editing one on a computer and the other elsewhere
+//! keeps both.
+//!
+//! Where the user left off in a game is a register per game, dated by when
+//! it was written.
+//!
+//! Every journal note is a register of its own, by its game and id, so notes
+//! written on two computers on the same day are both kept; a note edited on
+//! both keeps the later edit. Notes written before sync was turned on carry
+//! the time they were written, like play statuses.
+//!
 //! A smart category is one register holding the whole category. It is read
 //! the way it was written, with whatever this version doesn't know kept in
 //! it ([`crate::smart_categories`]), and compared as read: a computer that
 //! can't read part of a category keeps it as it came and never notes it as
 //! changed (or gone), so it can't publish an older copy or a deletion.
+//!
+//! Play status changes (the history behind each status) are merged as a
+//! set, like sessions: every change made anywhere is kept once.
 //!
 //! Playtime is never summed twice. Sessions are merged as a set (a session
 //! is its game and start time). Each computer also publishes, per game, the
@@ -31,18 +46,25 @@
 //! minus its sessions. The merged total is the largest of those plus every
 //! session, so time played anywhere counts once.
 //!
+//! The user's own edit of a game's playtime is a register of its own: the
+//! seconds added or taken away. Shares and the merged total are counted
+//! without it, and the merged edit is applied after, so a game whose time
+//! was set to five hours shows five hours (plus what is played later) on
+//! every computer instead of adding up.
+//!
 //! A computer set to send only playtime ([`Scope::PlaytimeOnly`]) reads and
 //! publishes only the playtime part of every file.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use irori_core::game::{GameOverrides, PlaytimeRecord};
+use irori_core::game::{GameLink, GameOverrides, PlaytimeRecord};
 use serde::{Deserialize, Serialize};
 
+use crate::journal::{JournalEntry, LeftOff};
 use crate::play_status::PlayStatusRecord;
 use crate::sessions::Session;
 use crate::smart_categories::{CategoryLook, SmartCategory};
-use crate::userdata::{MAX_RATING, UserData};
+use crate::userdata::{MAX_RATING, UserData, adjusted, record_seconds};
 
 /// Milliseconds since the Unix epoch.
 pub type Millis = i64;
@@ -117,6 +139,41 @@ pub struct Registers {
     /// Pins and colours of manual categories, by name.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub category_looks: Lww<String, Option<CategoryLook>>,
+    /// Each game's own links, whole, by game key.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub links: Lww<String, Option<Vec<GameLink>>>,
+    /// Journal notes, by [`note_key`].
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub journal: Lww<String, Option<SharedNote>>,
+    /// Where the user left off, by game key.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub left_off: Lww<String, Option<LeftOff>>,
+    /// The user's playtime edits: seconds added (or taken away), by game
+    /// key.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub playtime_adjust: Lww<String, Option<i64>>,
+    /// The library's field rules, by `<field>:<value>`; the replacement,
+    /// empty for "remove".
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub field_rules: Lww<String, Option<String>>,
+}
+
+/// A journal note with the game and day it belongs to.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SharedNote {
+    pub game: String,
+    pub day: chrono::NaiveDate,
+    pub note: JournalEntry,
+}
+
+/// The register key of a game's note: note ids are unique per game only.
+fn note_key(game: &str, id: &str) -> String {
+    format!("{game}#{id}")
+}
+
+/// The game a [`note_key`] names.
+fn note_game(key: &str) -> &str {
+    key.rsplit_once('#').map_or(key, |(game, _)| game)
 }
 
 impl Registers {
@@ -137,6 +194,11 @@ impl Registers {
             max(&self.playtime_removed),
             max(&self.smart_categories),
             max(&self.category_looks),
+            max(&self.links),
+            max(&self.journal),
+            max(&self.left_off),
+            max(&self.playtime_adjust),
+            max(&self.field_rules),
         ]
         .into_iter()
         .max()
@@ -161,6 +223,9 @@ pub struct Shared {
     pub registers: Registers,
     pub playtime: BTreeMap<String, PlaytimeShare>,
     pub sessions: Vec<Session>,
+    /// Every real play status change, by game.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub status_history: crate::StatusHistory,
 }
 
 /// What a computer exchanges with the others.
@@ -185,10 +250,12 @@ impl Scope {
             Scope::PlaytimeOnly => Shared {
                 registers: Registers {
                     playtime_removed: shared.registers.playtime_removed.clone(),
+                    playtime_adjust: shared.registers.playtime_adjust.clone(),
                     ..Default::default()
                 },
                 playtime: shared.playtime.clone(),
                 sessions: shared.sessions.clone(),
+                status_history: Default::default(),
             },
         }
     }
@@ -207,6 +274,8 @@ pub enum ConflictField {
     Custom,
     Goal,
     Playtime,
+    /// A journal note.
+    Journal,
 }
 
 /// A change made here that lost to one made on another computer at about
@@ -332,6 +401,21 @@ pub fn record(
     changed += note(&mut regs.category_looks, &view.category_looks, me, |_| {
         plain
     });
+    changed += note(&mut regs.links, &view.links, me, |_| plain);
+    changed += note(
+        &mut regs.journal,
+        &view.journal,
+        me,
+        |v: &Option<SharedNote>| dating.at(v.as_ref().map(|n| n.note.updated.as_str())),
+    );
+    changed += note(
+        &mut regs.left_off,
+        &view.left_off,
+        me,
+        |v: &Option<LeftOff>| dating.at(v.as_ref().map(|l| l.updated.as_str())),
+    );
+    changed += note(&mut regs.playtime_adjust, &adjust_view(data), me, |_| plain);
+    changed += note(&mut regs.field_rules, &rules_view(data), me, |_| plain);
     // Playtime removed here since the last sync, or back after a removal.
     for key in known_playtime {
         let removed = regs.playtime_removed.get(key).is_some_and(|r| r.value);
@@ -393,6 +477,10 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
     take_all!(backlog_goals, ConflictField::Goal);
     take_all!(playtime_removed, ConflictField::Playtime);
     take_all!(category_looks, ConflictField::Category);
+    take_all!(links, ConflictField::Custom);
+    take_all!(left_off, ConflictField::Journal);
+    take_all!(playtime_adjust, ConflictField::Playtime);
+    take_all!(field_rules, ConflictField::Custom);
     for remote in remotes {
         take(
             &mut regs.smart_categories,
@@ -408,6 +496,21 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
                     ConflictField::Category,
                     id.clone(),
                     name,
+                    ours.seen(),
+                    theirs.seen(),
+                )
+            },
+        );
+    }
+    for remote in remotes {
+        take(
+            &mut regs.journal,
+            &remote.registers.journal,
+            |key, ours, theirs| {
+                lost(
+                    ConflictField::Journal,
+                    note_game(key).to_string(),
+                    None,
                     ours.seen(),
                     theirs.seen(),
                 )
@@ -431,13 +534,32 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
 
     // Sessions and playtime.
     let (sessions, sessions_added) = union_sessions(local.sessions, remotes);
-    let (playtime, shares) = merge_playtime(local.data, local.sessions, &sessions, remotes, &regs);
+    let adjust: BTreeMap<String, i64> = values(&regs.playtime_adjust)
+        .into_iter()
+        .filter_map(|(key, seconds)| Some((key, seconds.filter(|s| *s != 0)?)))
+        .collect();
+    let (playtime, shares) = merge_playtime(
+        local.data,
+        local.sessions,
+        &sessions,
+        remotes,
+        &regs,
+        &adjust,
+    );
 
     // The merged values, applied to this device's data.
     let mut data = local.data.clone();
     let changed = View::from_registers(&regs).apply(&mut data, &before);
     let playtime_changed = differing(&playtime, &local.data.playtime);
     data.playtime = playtime;
+    let history_added: usize = remotes
+        .iter()
+        .map(|r| crate::play_status::merge_history(&mut data.status_history, &r.status_history))
+        .sum();
+    data.playtime_adjust = adjust;
+    let rules = rules_from(&regs.field_rules);
+    let rules_changed = usize::from(rules != local.data.field_rules);
+    data.field_rules = rules;
 
     // A value the data can't hold as merged (a category kept for a game
     // added to it after it was deleted, a rating out of range) is recorded
@@ -464,7 +586,7 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
         playtime: shares,
         sessions,
         sessions_added,
-        changed: changed + playtime_changed,
+        changed: changed + playtime_changed + history_added + rules_changed,
         conflicts,
         clock,
     }
@@ -544,6 +666,9 @@ struct View {
     backlog_goals: BTreeMap<i32, Option<u32>>,
     smart_categories: BTreeMap<String, Option<SmartCategory>>,
     category_looks: BTreeMap<String, Option<CategoryLook>>,
+    links: BTreeMap<String, Option<Vec<GameLink>>>,
+    journal: BTreeMap<String, Option<SharedNote>>,
+    left_off: BTreeMap<String, Option<LeftOff>>,
 }
 
 fn on(keys: &BTreeSet<String>) -> BTreeMap<String, bool> {
@@ -601,6 +726,33 @@ impl View {
                 .filter(|(name, look)| !look.is_empty() && d.categories.contains_key(*name))
                 .map(|(name, look)| (name.clone(), Some(look.clone())))
                 .collect(),
+            links: d
+                .overrides
+                .iter()
+                .filter(|(_, o)| !o.links.is_empty())
+                .map(|(k, o)| (k.clone(), Some(o.links.clone())))
+                .collect(),
+            journal: d
+                .journal
+                .iter()
+                .flat_map(|(game, days)| {
+                    days.iter().flat_map(move |(day, notes)| {
+                        notes.iter().map(move |n| {
+                            let shared = SharedNote {
+                                game: game.clone(),
+                                day: *day,
+                                note: n.clone(),
+                            };
+                            (note_key(game, &n.id), Some(shared))
+                        })
+                    })
+                })
+                .collect(),
+            left_off: d
+                .left_off
+                .iter()
+                .map(|(k, l)| (k.clone(), Some(l.clone())))
+                .collect(),
         }
     }
 
@@ -639,6 +791,9 @@ impl View {
             backlog_goals: values(&regs.backlog_goals),
             smart_categories: values(&regs.smart_categories),
             category_looks: values(&regs.category_looks),
+            links: values(&regs.links),
+            journal: values(&regs.journal),
+            left_off: values(&regs.left_off),
         }
     }
 
@@ -665,6 +820,9 @@ impl View {
             + differing(&self.backlog_goals, &other.backlog_goals)
             + differing(&self.smart_categories, &other.smart_categories)
             + differing(&self.category_looks, &other.category_looks)
+            + differing(&self.links, &other.links)
+            + differing(&self.journal, &other.journal)
+            + differing(&self.left_off, &other.left_off)
     }
 
     /// Put these values into `d`, whose values were `before`. Returns how
@@ -689,11 +847,17 @@ impl View {
             .map(|(name, games)| (name.clone(), games.keys().cloned().collect()))
             .collect();
         let mut overrides = BTreeMap::new();
-        let keys: BTreeSet<&String> = d.overrides.keys().chain(self.overrides.keys()).collect();
+        let keys: BTreeSet<&String> = d
+            .overrides
+            .keys()
+            .chain(self.overrides.keys())
+            .chain(self.links.keys())
+            .collect();
         for key in keys {
             let local = d.overrides.get(key).cloned().unwrap_or_default();
             let shared = self.overrides.get(key).cloned().flatten();
-            let o = with_local_art(shared.unwrap_or_default(), &local);
+            let mut o = with_local_art(shared.unwrap_or_default(), &local);
+            o.links = self.links.get(key).cloned().flatten().unwrap_or_default();
             if !o.is_empty() {
                 overrides.insert(key.clone(), o);
             }
@@ -716,6 +880,17 @@ impl View {
             .filter(|(name, _)| d.categories.contains_key(*name))
             .filter_map(|(name, look)| Some((name.clone(), look.clone()?)))
             .collect();
+        d.left_off = self
+            .left_off
+            .iter()
+            .filter_map(|(k, l)| Some((k.clone(), l.clone()?)))
+            .collect();
+        d.journal = crate::journal::from_notes(
+            self.journal
+                .values()
+                .flatten()
+                .map(|n| (n.game.clone(), n.day, n.note.clone())),
+        );
         changed
     }
 }
@@ -746,6 +921,11 @@ pub fn shared_overrides(o: &GameOverrides) -> Option<GameOverrides> {
         game_modes: o.game_modes.clone(),
         copy_of: o.copy_of.clone(),
         default_copy: o.default_copy,
+        // A register of their own.
+        links: Vec::new(),
+        developer: o.developer.clone(),
+        publisher: o.publisher.clone(),
+        genres: o.genres.clone(),
     };
     (!shared.is_empty()).then_some(shared)
 }
@@ -766,6 +946,10 @@ fn with_local_art(shared: GameOverrides, local: &GameOverrides) -> GameOverrides
         game_modes: shared.game_modes,
         copy_of: shared.copy_of,
         default_copy: shared.default_copy,
+        links: Vec::new(),
+        developer: shared.developer,
+        publisher: shared.publisher,
+        genres: shared.genres,
     }
 }
 
@@ -812,17 +996,57 @@ fn seconds_by_game(sessions: &[Session]) -> BTreeMap<&str, u64> {
     out
 }
 
-fn record_seconds(r: &PlaytimeRecord) -> u64 {
-    r.total_minutes * 60 + r.extra_seconds
+/// The field rules in `data`, as the registers hold them.
+fn rules_view(data: &UserData) -> BTreeMap<String, Option<String>> {
+    use crate::field_rules::Field;
+    [Field::Genre, Field::Company]
+        .into_iter()
+        .flat_map(|field| {
+            data.field_rules
+                .of(field)
+                .iter()
+                .map(move |(from, to)| (format!("{}:{from}", field.id()), Some(to.clone())))
+        })
+        .collect()
+}
+
+/// The field rules the registers hold. A rule of a field this version
+/// doesn't know stays in the registers only.
+fn rules_from(regs: &Lww<String, Option<String>>) -> crate::field_rules::FieldRules {
+    let mut rules = crate::field_rules::FieldRules::default();
+    for (key, reg) in regs {
+        let (Some(to), Some((field, from))) = (&reg.value, key.split_once(':')) else {
+            continue;
+        };
+        let map = match field {
+            "genre" => &mut rules.genres,
+            "company" => &mut rules.companies,
+            _ => continue,
+        };
+        map.insert(from.to_string(), to.clone());
+    }
+    rules
+}
+
+/// The user's playtime edits in `data`, as the register holds them.
+fn adjust_view(data: &UserData) -> BTreeMap<String, Option<i64>> {
+    data.playtime_adjust
+        .iter()
+        .filter(|(_, s)| **s != 0)
+        .map(|(k, s)| (k.clone(), Some(*s)))
+        .collect()
 }
 
 /// The merged playtime records, and the shares this device publishes.
+/// Shares and totals count without the user's edits; `adjust`, the merged
+/// edits, is applied to the merged totals.
 fn merge_playtime(
     local: &UserData,
     local_sessions: &[Session],
     all_sessions: &[Session],
     remotes: &[&Shared],
     regs: &Registers,
+    adjust: &BTreeMap<String, i64>,
 ) -> (
     BTreeMap<String, PlaytimeRecord>,
     BTreeMap<String, PlaytimeShare>,
@@ -842,7 +1066,7 @@ fn merge_playtime(
         shares.insert(
             key.clone(),
             PlaytimeShare {
-                floor_seconds: record_seconds(r).saturating_sub(covered),
+                floor_seconds: local.counted_seconds(key).saturating_sub(covered),
                 first_played: r.first_played.clone(),
                 last_played: r.last_played.clone(),
             },
@@ -856,17 +1080,22 @@ fn merge_playtime(
             share.last_played = latest(share.last_played.take(), theirs.last_played.clone());
         }
     }
-    // A game played only through sessions another device sent.
+    // A game played only through sessions another device sent, or whose
+    // time was only ever set by hand.
     for key in all.keys() {
         shares.entry((*key).to_string()).or_default();
+    }
+    for key in adjust.keys() {
+        shares.entry(key.clone()).or_default();
     }
     shares.retain(|key, _| !regs.playtime_removed.get(key).is_some_and(|r| r.value));
 
     let mut records = BTreeMap::new();
     for (key, share) in &shares {
         let local_record = local.playtime.get(key);
-        let seconds = (share.floor_seconds + all.get(key.as_str()).copied().unwrap_or(0))
-            .max(local_record.map_or(0, record_seconds));
+        let counted = (share.floor_seconds + all.get(key.as_str()).copied().unwrap_or(0))
+            .max(local.counted_seconds(key));
+        let seconds = adjusted(counted, adjust.get(key).copied().unwrap_or(0));
         let (first_session, last_session) = span
             .get(key.as_str())
             .map(|(f, l)| (Some(f.to_string()), Some(l.to_string())))

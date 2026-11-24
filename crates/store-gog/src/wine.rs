@@ -187,6 +187,7 @@ mod tests {
         env.insert("STEAM_COMPAT_DATA_PATH".into(), "/p".into());
         env.insert("MANGOHUD".into(), "1".into());
         LaunchEnvironment {
+            without_wine: false,
             env,
             env_remove: Vec::new(),
             wrappers: vec![vec!["gamemoderun".into()]],

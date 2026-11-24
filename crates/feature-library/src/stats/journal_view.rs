@@ -1,14 +1,16 @@
 //! The journal tab: the period's notes over the art of the latest one's
-//! game, each a card with the game's cover, the day and its play time, the
-//! note and the screenshots it links. A card opens the note to read or
-//! edit; its game opens from the button beside it. The page is one list that
-//! draws only the cards on screen.
+//! game, a search field, then each note as a card with the game's cover,
+//! the day, the note's time and the day's play time, the note and the
+//! pictures it shows (a moment marked in game says it waits for words). A
+//! card opens the note to read or edit; its game opens from the button
+//! beside it. The page is one list that draws only the cards on screen.
 
 use std::ops::Range;
 use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::Input;
 use gpui_kit::component::{
     ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex, v_virtual_list,
 };
@@ -19,7 +21,7 @@ use gpui_kit::{
     Window, div, px, rems, size,
 };
 use irori_services::LibrarySnapshot;
-use irori_ui::components::{EmptyState, GameCover, art_img, physical_width};
+use irori_ui::components::{EmptyState, GameCover, art_img, clip_mark, is_clip, physical_width};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::journal::shot_url;
 use irori_ui::style::KeyboardFocusable as _;
@@ -32,6 +34,8 @@ use super::{StatsView, text};
 
 /// The page's padding, in rem.
 const PAD_REM: f32 = 1.5;
+/// Height of the search row, in rem.
+const SEARCH_REM: f32 = 3.25;
 /// Height of a note's card with the space below it, in rem.
 const NOTE_REM: f32 = 8.75;
 /// Extra height of a card that shows screenshots, in rem.
@@ -47,6 +51,7 @@ const COVER_REM: f32 = 4.5;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum JournalItem {
     Hero,
+    Search,
     Note(usize),
     End,
 }
@@ -55,8 +60,9 @@ impl JournalItem {
     fn height_rem(&self, page: &JournalPage) -> f32 {
         match self {
             JournalItem::Hero => PAD_REM + HERO_REM + PAD_REM,
+            JournalItem::Search => SEARCH_REM,
             JournalItem::Note(ix) => match page.notes.get(*ix) {
-                Some(n) if !n.entry.screenshots.is_empty() => NOTE_REM + SHOTS_REM,
+                Some(n) if n.entry.pictures().next().is_some() => NOTE_REM + SHOTS_REM,
                 _ => NOTE_REM,
             },
             JournalItem::End => PAD_REM,
@@ -66,7 +72,8 @@ impl JournalItem {
 
 /// The list's entries for `page`.
 pub(super) fn items(page: &JournalPage) -> Vec<JournalItem> {
-    std::iter::once(JournalItem::Hero)
+    [JournalItem::Hero, JournalItem::Search]
+        .into_iter()
         .chain((0..page.notes.len()).map(JournalItem::Note))
         .chain(std::iter::once(JournalItem::End))
         .collect()
@@ -83,13 +90,20 @@ impl StatsView {
         let Some(page) = self.journal.clone() else {
             return div().into_any_element();
         };
+        let searched = !page.query.trim().is_empty();
         v_flex()
             .gap_6()
             .child(self.render_journal_hero(&page, window, cx))
+            .when(searched, |c| c.child(self.render_journal_search()))
             .child(
                 EmptyState::new(
                     IconName::NotebookPen,
-                    if page.period.span == Span::All {
+                    if searched {
+                        t_args(
+                            "library.stats.journal.no_match",
+                            &[("query", page.query.trim())],
+                        )
+                    } else if page.period.span == Span::All {
                         t("library.stats.journal.empty.title_all")
                     } else {
                         t_args(
@@ -147,6 +161,7 @@ impl StatsView {
                 let item = list.get(ix)?;
                 let content = match item {
                     JournalItem::Hero => self.render_journal_hero(&page, window, cx),
+                    JournalItem::Search => self.render_journal_search(),
                     JournalItem::Note(n) => {
                         self.render_note(*n, page.notes.get(*n)?, &library, window, cx)
                     }
@@ -163,6 +178,21 @@ impl StatsView {
                 )
             })
             .collect()
+    }
+
+    /// The field that searches the period's notes.
+    fn render_journal_search(&self) -> AnyElement {
+        h_flex()
+            .w_full()
+            .child(
+                div().w(rems(20.)).max_w_full().child(
+                    Input::new(&self.journal_query)
+                        .small()
+                        .prefix(Icon::new(IconName::Search).small())
+                        .cleanable(true),
+                ),
+            )
+            .into_any_element()
     }
 
     /// The art frame over the latest note's game, with the period's count.
@@ -242,6 +272,9 @@ impl StatsView {
             .as_ref()
             .map_or_else(|| note.id.app_name.to_string(), |g| g.title.clone());
         let mut facts = vec![text::long_date(note.day)];
+        if let Some(time) = irori_ui::journal::time_label(note.entry.time) {
+            facts.push(time);
+        }
         if note.seconds > 0 {
             facts.push(t_args(
                 "library.stats.journal.played",
@@ -251,27 +284,29 @@ impl StatsView {
         let width = physical_width(rems(SHOT_REM), window);
         let shots: Vec<AnyElement> = note
             .entry
-            .screenshots
-            .iter()
+            .pictures()
             .take(CARD_SHOTS)
             .map(|path| {
-                let frame = div()
+                let image = art_img(&shot_url(path), width, false, cx)
+                    .map(|img| img.size_full().object_fit(ObjectFit::Cover));
+                let clip = std::path::Path::new(path.as_str());
+                div()
+                    .relative()
                     .w(rems(SHOT_REM))
                     .h(rems(SHOT_REM * 9. / 16.))
                     .flex_shrink_0()
                     .rounded(radius)
                     .overflow_hidden()
-                    .bg(fill);
-                match art_img(&shot_url(path), width, false, cx) {
-                    Some(img) => frame
-                        .child(img.size_full().object_fit(ObjectFit::Cover))
-                        .into_any_element(),
-                    None => frame.into_any_element(),
-                }
+                    .bg(fill)
+                    .children(image)
+                    .when(is_clip(clip), |d| d.child(clip_mark(clip, cx)))
+                    .into_any_element()
             })
             .collect();
         let heading = (!note.entry.title.is_empty()).then(|| note.entry.title.clone());
         let id = note.id.clone();
+        let note_id = note.entry.id.clone();
+        let waiting = note.entry.is_waiting();
         let day = note.day;
         let date = text::long_date(day);
         let open_title = title.clone();
@@ -299,7 +334,15 @@ impl StatsView {
             .cursor_pointer()
             .hover(move |s| s.bg(hover))
             .on_click(cx.listener(move |_, _, window, cx| {
-                irori_ui::journal::open_editor(id.clone(), day, &open_title, &date, window, cx)
+                irori_ui::journal::open_editor(
+                    id.clone(),
+                    day,
+                    Some(note_id.clone()),
+                    &open_title,
+                    &date,
+                    window,
+                    cx,
+                )
             }))
             .children(game.map(|g| GameCover::new(g).width(rems(COVER_REM)).into_any_element()))
             .child(
@@ -332,6 +375,17 @@ impl StatsView {
                     )
                     .when_some(heading, |c, h| {
                         c.child(div().w_full().truncate().font_semibold().child(h))
+                    })
+                    .when(waiting, |c| {
+                        c.child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .text_xs()
+                                .text_color(theme.warning)
+                                .child(Icon::new(IconName::Bookmark).xsmall())
+                                .child(t("library.stats.journal.marked")),
+                        )
                     })
                     .child(
                         div()

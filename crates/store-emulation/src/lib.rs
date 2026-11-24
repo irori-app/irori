@@ -3,7 +3,9 @@
 //! `irori-engines`.
 //!
 //! The store's optional account is a RetroAchievements one ([`retro`]),
-//! which adds the games' achievements. The library is `<store config>/library.json`;
+//! which adds the games' achievements. Covers are LaunchBox's box of the
+//! game's region where its games database has the game ([`launchbox`]),
+//! else libretro's thumbnail. The library is `<store config>/library.json`;
 //! [`Store::refresh`] rescans the folders (incrementally: unchanged files are
 //! not looked at again) and a file watcher rescans after changes while Irori
 //! runs. Removing a game from the library never deletes its files; it is
@@ -14,6 +16,7 @@
 //! RetroArch core on the way, checks the system's BIOS files and hands back
 //! the emulator's command for the services layer to run like any game.
 
+pub mod launchbox;
 mod names;
 pub mod retro;
 mod scan;
@@ -40,6 +43,7 @@ use irori_engines::{
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
+pub use launchbox::LaunchBoxStatus;
 pub use names::{RomName, parse as parse_name};
 pub use scan::{RomEntry, dos_program};
 
@@ -49,6 +53,9 @@ const SETTLE: Duration = Duration::from_secs(2);
 const AVAILABILITY_TIMEOUT: Duration = Duration::from_secs(3);
 /// The `/dev/udmabuf` warning is shown once per run.
 static UDMABUF_WARNED: AtomicBool = AtomicBool::new(false);
+
+/// LaunchBox games a search lists at most.
+const LAUNCHBOX_RESULTS: usize = 30;
 
 const NOT_INSTALLABLE: &str =
     "Games in your ROM folders are not installed by Irori; add the folder that holds them";
@@ -86,29 +93,46 @@ pub struct EmulationStore {
     watcher: Mutex<Option<(Vec<PathBuf>, notify::RecommendedWatcher)>>,
     runtime: Mutex<Option<tokio::runtime::Handle>>,
     retro: retro::Retro,
+    launchbox: launchbox::Covers,
 }
 
 impl EmulationStore {
     pub fn new(bus: EventBus, settings: SettingsFn) -> Arc<Self> {
         let paths = Paths::get();
-        Self::with_dirs(
+        Self::with_parts(
             bus,
             settings,
             paths.store_config_dir(Runner::Emulation),
             paths.store_cache_dir(Runner::Emulation),
+            Some(irori_extras::launchbox::METADATA_URL.into()),
         )
     }
 
-    /// A store keeping its files in the given folders (tests).
+    /// A store keeping its files in the given folders (tests). It never
+    /// downloads LaunchBox's database.
     pub fn with_dirs(
         bus: EventBus,
         settings: SettingsFn,
         config_dir: PathBuf,
         cache_dir: PathBuf,
     ) -> Arc<Self> {
+        Self::with_parts(bus, settings, config_dir, cache_dir, None)
+    }
+
+    /// A store downloading LaunchBox's database from `launchbox_url`, when
+    /// given (the app's store, or a test's own server).
+    pub fn with_parts(
+        bus: EventBus,
+        settings: SettingsFn,
+        config_dir: PathBuf,
+        cache_dir: PathBuf,
+        launchbox_url: Option<String>,
+    ) -> Arc<Self> {
         let retro = retro::Retro::new(&config_dir, &cache_dir, Default::default());
+        let launchbox = launchbox::Covers::new(cache_dir.join("launchbox"), launchbox_url);
         Arc::new_cyclic(|me| Self {
             retro,
+            launchbox,
             me: me.clone(),
             bus,
             settings,
@@ -232,6 +256,8 @@ impl EmulationStore {
         }
         self.publish(entries, added, removed);
         self.save().await?;
+        self.update_covers().await;
+        self.launchbox_when_due();
         Ok(id)
     }
 
@@ -250,7 +276,7 @@ impl EmulationStore {
             .iter()
             .chain(&added)
             .filter(|e| !removed.contains(&e.path) && seen.insert(e.app_name.clone()))
-            .map(|e| Arc::new(game_info(e)))
+            .map(|e| Arc::new(game_info(e, self.launchbox.cover(e))))
             .collect();
         *self.state.write() = State {
             entries,
@@ -307,7 +333,130 @@ impl EmulationStore {
         self.publish(scanned.entries, added, removed);
         self.save().await?;
         self.watch();
+        self.update_covers().await;
+        self.launchbox_when_due();
         Ok(())
+    }
+
+    /// The entries the library shows.
+    fn shown_entries(&self) -> Vec<RomEntry> {
+        let s = self.state.read();
+        s.entries
+            .iter()
+            .chain(&s.added)
+            .filter(|e| !s.removed.contains(&e.path))
+            .cloned()
+            .collect()
+    }
+
+    /// Look the games up in LaunchBox's index (only those not looked up
+    /// yet) and publish the covers that changed.
+    async fn update_covers(&self) {
+        let Some(me) = self.me.upgrade() else { return };
+        let entries = self.shown_entries();
+        let changed = tokio::task::spawn_blocking(move || me.launchbox.match_entries(&entries))
+            .await
+            .unwrap_or(false);
+        if changed {
+            let (entries, added, removed) = {
+                let s = self.state.read();
+                (s.entries.clone(), s.added.clone(), s.removed.clone())
+            };
+            self.publish(entries, added, removed);
+        }
+    }
+
+    /// Download LaunchBox's database in the background when the user turned
+    /// it on (`iroriLaunchBox`), the library has games and the index is due
+    /// (weekly); never otherwise.
+    fn launchbox_when_due(&self) {
+        if !(self.settings)().launchbox || self.state.read().games.is_empty() {
+            return;
+        }
+        let Some(runtime) = self.runtime.lock().clone() else {
+            return;
+        };
+        let me = self.me.clone();
+        runtime.spawn(async move {
+            let Some(store) = me.upgrade() else { return };
+            let due = {
+                let store = store.clone();
+                tokio::task::spawn_blocking(move || store.launchbox.is_due())
+                    .await
+                    .unwrap_or(false)
+            };
+            if !due {
+                return;
+            }
+            match store.launchbox.refresh(false).await {
+                Ok(launchbox::Refreshed::Updated { games }) => {
+                    tracing::info!("LaunchBox's games database: {games} games with box art");
+                    store.update_covers().await;
+                }
+                Ok(_) => store.update_covers().await,
+                Err(e) => tracing::warn!("downloading LaunchBox's games database: {e:#}"),
+            }
+        });
+    }
+
+    /// Whether LaunchBox's box art can be looked up.
+    pub fn launchbox_status(&self) -> LaunchBoxStatus {
+        self.launchbox.status()
+    }
+
+    /// Download LaunchBox's games database now (the user asked), then look
+    /// the library's games up in it.
+    pub async fn download_launchbox(&self) -> Result<()> {
+        self.launchbox.refresh(true).await?;
+        self.update_covers().await;
+        Ok(())
+    }
+
+    /// The bytes LaunchBox's stored game list takes, if there is one.
+    pub async fn launchbox_stored(&self) -> Option<u64> {
+        let me = self.me.upgrade()?;
+        tokio::task::spawn_blocking(move || me.launchbox.stored())
+            .await
+            .ok()
+            .flatten()
+    }
+
+    /// Delete LaunchBox's stored game list; covers go back to libretro's
+    /// thumbnails.
+    pub async fn remove_launchbox(&self) -> Result<()> {
+        let app = (self.settings)();
+        self.launchbox.remove(&app).await?;
+        self.update_covers().await;
+        Ok(())
+    }
+
+    /// The LaunchBox game `app_name` was matched to, its boxes in the order
+    /// the game's region wants them.
+    pub fn launchbox_game(&self, app_name: &str) -> Option<launchbox::LaunchBoxGame> {
+        let entry = self.entry(app_name)?;
+        let game = self.launchbox.game(&entry)?;
+        Some(ranked(&game, &entry.tags))
+    }
+
+    /// LaunchBox's games of `app_name`'s system whose names hold `query`,
+    /// each with its boxes in the order the game's region wants them.
+    pub async fn search_launchbox(
+        &self,
+        app_name: &str,
+        query: &str,
+    ) -> Result<Vec<launchbox::LaunchBoxGame>> {
+        let entry = self
+            .entry(app_name)
+            .context("This game is not in the library")?;
+        let me = self.me.upgrade().context("the store is shutting down")?;
+        let query = query.to_string();
+        let system = entry.system.clone();
+        let found = tokio::task::spawn_blocking(move || {
+            me.launchbox.search(&system, &query, LAUNCHBOX_RESULTS)
+        })
+        .await
+        .context("searching LaunchBox's games stopped")?;
+        Ok(found.iter().map(|g| ranked(g, &entry.tags)).collect())
     }
 
     /// Watch the ROM folders and rescan after changes settle. Re-armed when
@@ -383,8 +532,20 @@ impl EmulationStore {
     }
 }
 
-/// What the library shows for an entry.
-fn game_info(e: &RomEntry) -> GameInfo {
+/// `game` with its boxes in the order a ROM with `tags` wants them.
+fn ranked(game: &launchbox::LaunchBoxGame, tags: &[String]) -> launchbox::LaunchBoxGame {
+    launchbox::LaunchBoxGame {
+        boxes: irori_extras::launchbox::rank(&game.boxes, tags)
+            .into_iter()
+            .cloned()
+            .collect(),
+        ..game.clone()
+    }
+}
+
+/// What the library shows for an entry; `cover` is LaunchBox's box, when
+/// its database has the game.
+fn game_info(e: &RomEntry, cover: Option<String>) -> GameInfo {
     let native = HostPlatform::current().native();
     // ScummVM games are their folder; everything else is a file in one.
     let install_dir = if e.system == "scummvm" {
@@ -402,9 +563,11 @@ fn game_info(e: &RomEntry) -> GameInfo {
         runner: Some(Runner::Emulation),
         app_name: e.app_name.clone(),
         title: e.title.clone(),
-        art_cover: system
-            .filter(|s| !s.libretro.is_empty())
-            .and_then(|s| thumbnail_url(&s.libretro, &e.stem)),
+        art_cover: cover.or_else(|| {
+            system
+                .filter(|s| !s.libretro.is_empty())
+                .and_then(|s| thumbnail_url(&s.libretro, &e.stem))
+        }),
         is_installed: true,
         install: Some(InstalledInfo {
             install_path: install_dir.display().to_string(),
@@ -455,6 +618,16 @@ impl Store for EmulationStore {
         self.publish(file.entries, file.added, file.removed);
         self.retro.load().await;
         self.watch();
+        // Reading LaunchBox's index is disk only, but needn't hold up the
+        // first render: the covers follow when it is read.
+        if let Some(runtime) = self.runtime.lock().clone() {
+            let me = self.me.clone();
+            runtime.spawn(async move {
+                if let Some(store) = me.upgrade() {
+                    store.update_covers().await;
+                }
+            });
+        }
         Ok(())
     }
 

@@ -445,3 +445,41 @@ async fn expired_token_logs_out() {
     assert!(!store.is_logged_in());
     assert!(!store.layout().auth_file().exists());
 }
+
+/// A store against a fake whose library pages count from 0 and refuses the
+/// page after the last one (#154).
+#[tokio::test]
+async fn reads_every_page_of_a_library_counted_from_zero() {
+    let dir = tempfile::tempdir().unwrap();
+    let game = |id: u32, name: &str| json!({"id": id, "slug": name, "name": name, "operating_systems": ["windows"]});
+    let server = TestServer::start(move |req: &Req| match req.path.as_str() {
+        "/li/loggedin" => Resp::json(json!({"name": "player"})),
+        "/li/games" => Resp::json(
+            json!({"current_page": 0, "total_pages": 2, "games": [game(1, "Alien Trilogy")]}),
+        ),
+        "/li/games?page=1" => Resp::json(
+            json!({"current_page": 1, "total_pages": 2, "games": [game(2, "Hatred"), game(1, "Alien Trilogy")]}),
+        ),
+        _ => Resp::status(404),
+    });
+    let app = Arc::new(AppSettings {
+        default_install_path: dir.path().join("Games").to_string_lossy().into_owned(),
+        ..Default::default()
+    });
+    let settings: SettingsFn = Arc::new(move || app.clone());
+    let opts = ZoomOptions {
+        api_base: server.base(),
+        layout: Layout {
+            config_dir: dir.path().join("config"),
+            cache_dir: dir.path().join("cache"),
+        },
+        page_delay: Duration::from_millis(1),
+    };
+    let store = ZoomStore::with_options(EventBus::new(), settings, opts);
+    store.init().await.unwrap();
+    store.login("li_token=good-token-123456").await.unwrap();
+    store.refresh(false).await.unwrap();
+    let mut titles: Vec<String> = store.games().iter().map(|g| g.title.clone()).collect();
+    titles.sort();
+    assert_eq!(titles, ["Alien Trilogy", "Hatred"]);
+}

@@ -1,11 +1,21 @@
 //! Programs started alongside a game (`iroriLaunchPrograms`): trainers,
 //! overlays, voice chat, scripts. [`plan`] turns the settings into commands;
-//! [`Programs`] starts them after the game, writes what happens to the game
-//! log, and at the end of the session stops the ones that stop with it.
+//! [`Programs`] starts them before or after the game, writes what happens to
+//! the game log, and at the end of the session (or of a launch that failed)
+//! stops the ones that stop with it.
 //!
 //! Windows programs run with the game's own Wine or Proton build and prefix,
 //! prepared for the game, so they see the same `C:` drive. Steam games run
 //! in Steam's Proton prefix, which only `protontricks-launch` can reach.
+//!
+//! Under umu every `umu-run` starts a Steam runtime container of its own,
+//! and a program in another container can't see the game's processes (a
+//! trainer can't attach to it). So the game and the programs started with
+//! it carry `UMU_CONTAINER_NSENTER=1`: the game's container then offers
+//! Steam's launcher service, and the programs enter that container instead
+//! of starting one. A program started before the game has no container to
+//! enter yet, and the game doesn't enter the program's: a program that
+//! exits would take the game's container down with it.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -22,9 +32,13 @@ use tokio::task::JoinHandle;
 pub(crate) struct Planned {
     pub label: String,
     pub spec: CommandSpec,
+    /// After the game starts, or (`before_game`) how long the game waits
+    /// for it.
     pub delay: Duration,
     pub stop_with_game: bool,
     pub in_prefix: bool,
+    /// Started before the game.
+    pub before_game: bool,
 }
 
 /// Why a program in the list doesn't start this time.
@@ -66,6 +80,26 @@ pub(crate) struct PlanInput<'a> {
     /// For a Steam game with a Proton prefix: `protontricks-launch` and its
     /// arguments up to the program (`… --appid <id>`).
     pub steam_launch: Option<Vec<String>>,
+}
+
+/// Variable that sends a `umu-run` into the running Steam runtime container
+/// of its prefix, and makes the container it starts offer that.
+pub(crate) const UMU_NSENTER: &str = "UMU_CONTAINER_NSENTER";
+
+/// Whether the game should run in a umu container that the programs started
+/// with it can enter ([`UMU_NSENTER`] on the game too): it runs under umu
+/// and one of them runs in its prefix. Costs the game a few seconds at start,
+/// while umu looks for a container to enter first.
+pub(crate) fn shares_container(
+    programs: &[LaunchProgram],
+    environment: &LaunchEnvironment,
+    host: HostPlatform,
+) -> bool {
+    host != HostPlatform::Windows
+        && environment.wine.as_ref().is_some_and(|w| w.uses_umu)
+        && programs
+            .iter()
+            .any(|p| p.enabled && p.in_prefix && !p.start_before_game && !p.path.trim().is_empty())
 }
 
 /// The programs to start and the ones skipped, with why.
@@ -111,6 +145,10 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
             irori_runtime::hud::launch_env::strip_hud_env_vars(&mut env);
             if wine.uses_umu {
                 env.insert("PROTON_VERB".into(), "run".into());
+                // Into the game's container; see the module's header.
+                if !program.start_before_game {
+                    env.insert(UMU_NSENTER.into(), "1".into());
+                }
             } else if wine.kind == WineKind::Proton {
                 argv.push("run".into());
             }
@@ -146,6 +184,7 @@ pub(crate) fn plan(input: &PlanInput<'_>) -> Plan {
             delay: Duration::from_secs(program.delay_seconds.min(LaunchProgram::MAX_DELAY).into()),
             stop_with_game: program.stop_with_game,
             in_prefix,
+            before_game: program.start_before_game,
         });
     }
     out
@@ -163,6 +202,7 @@ pub(crate) fn script_alongside(script: &str, game: &GameInfo) -> Plan {
             delay: Duration::ZERO,
             stop_with_game: true,
             in_prefix: false,
+            before_game: false,
         }],
         skipped: Vec::new(),
     }
@@ -241,39 +281,92 @@ pub(crate) struct Programs {
     /// Tasks of programs that stop with the game, awaited at the end so
     /// they are gone before the after-launch script runs.
     stopping: Vec<JoinHandle<()>>,
+    /// Planned programs not started yet.
+    pending: Vec<Planned>,
+    log_file: PathBuf,
 }
 
 impl Programs {
-    /// Start the planned programs (each after its delay; those without one
-    /// before this returns) and log the skipped. Call from inside the backend
-    /// runtime.
+    /// Start every planned program at once (each after its delay; those
+    /// without one before this returns) and log the skipped. Call from
+    /// inside the backend runtime.
     pub(crate) fn start(plan: Plan, log_file: &Path) -> Self {
+        let mut programs = Self::prepare(plan, log_file);
+        programs.start_with_game();
+        programs
+    }
+
+    /// Hold the planned programs without starting any, and log the skipped.
+    pub(crate) fn prepare(plan: Plan, log_file: &Path) -> Self {
         for (label, skip) in &plan.skipped {
             append_log(
                 log_file,
                 &format!("Not starting {label}: {}\n", skip.reason()),
             );
         }
-        let end = CancellationToken::new();
-        let in_prefix = Arc::new(AtomicUsize::new(0));
-        let mut stopping = Vec::new();
-        for planned in plan.start {
-            let started = planned.delay.is_zero().then(|| launch(&planned, log_file));
-            let task = tokio::spawn(run(
-                planned.clone(),
-                log_file.to_path_buf(),
-                end.clone(),
-                in_prefix.clone(),
-                started,
-            ));
-            if stops_at_end(planned.stop_with_game) {
-                stopping.push(task);
+        Self {
+            end: CancellationToken::new(),
+            in_prefix: Arc::new(AtomicUsize::new(0)),
+            stopping: Vec::new(),
+            pending: plan.start,
+            log_file: log_file.to_path_buf(),
+        }
+    }
+
+    /// Start the programs that start before the game, in their order, each
+    /// followed by its wait. Returns early when `cancel` fires (the launch
+    /// was cancelled; dropping `self` then stops what started).
+    pub(crate) async fn start_before(&mut self, cancel: &CancellationToken) {
+        let (before, rest) = std::mem::take(&mut self.pending)
+            .into_iter()
+            .partition::<Vec<_>, _>(|p| p.before_game);
+        self.pending = rest;
+        for planned in before {
+            if cancel.is_cancelled() {
+                return;
+            }
+            let started = launch(&planned, &self.log_file);
+            let ran = started.is_some();
+            let delay = planned.delay;
+            let label = planned.label.clone();
+            self.follow(planned, Some(started));
+            if ran && !delay.is_zero() {
+                append_log(
+                    &self.log_file,
+                    &format!(
+                        "Waiting {} s for {label} before starting the game\n",
+                        delay.as_secs()
+                    ),
+                );
+                tokio::select! {
+                    _ = tokio::time::sleep(delay) => {}
+                    _ = cancel.cancelled() => return,
+                }
             }
         }
-        Self {
-            end,
-            in_prefix,
-            stopping,
+    }
+
+    /// Start the programs that start with the game (each after its delay;
+    /// those without one before this returns), and any not started yet.
+    pub(crate) fn start_with_game(&mut self) {
+        for planned in std::mem::take(&mut self.pending) {
+            let started = (planned.before_game || planned.delay.is_zero())
+                .then(|| launch(&planned, &self.log_file));
+            self.follow(planned, started);
+        }
+    }
+
+    fn follow(&mut self, planned: Planned, started: Option<Option<tokio::process::Child>>) {
+        let stops = stops_at_end(planned.stop_with_game);
+        let task = tokio::spawn(run(
+            planned,
+            self.log_file.clone(),
+            self.end.clone(),
+            self.in_prefix.clone(),
+            started,
+        ));
+        if stops {
+            self.stopping.push(task);
         }
     }
 
@@ -341,7 +434,12 @@ async fn run(
         in_prefix.fetch_add(1, Ordering::SeqCst);
     }
     let pid = child.id().unwrap_or_default();
-    tracing::info!("started {label} with the game (pid {pid})");
+    let when = if planned.before_game {
+        "before"
+    } else {
+        "with"
+    };
+    tracing::info!("started {label} {when} the game (pid {pid})");
     let status = tokio::select! {
         status = child.wait() => status.ok(),
         _ = end.cancelled(), if planned.stop_with_game => {
@@ -382,6 +480,7 @@ mod tests {
 
     fn wine(kind: WineKind, uses_umu: bool) -> LaunchEnvironment {
         LaunchEnvironment {
+            without_wine: false,
             env: [("WINEPREFIX".to_string(), "/p".to_string())].into(),
             env_remove: Vec::new(),
             wrappers: vec![vec!["gamescope".into(), "--".into()]],
@@ -457,12 +556,15 @@ mod tests {
         let started = &plan(&input(&programs, &env)).start[0];
         assert_eq!(argv(&started.spec), ["/umu-run", "/games/Trainer.exe"]);
         assert_eq!(started.spec.env["PROTON_VERB"], "run");
+        // Into the game's container, where it sees the game's processes.
+        assert_eq!(started.spec.env[UMU_NSENTER], "1");
 
         let mut env = wine(WineKind::Wine, false);
         env.wine.as_mut().unwrap().bin = PathBuf::from("/usr/bin/wine");
         let started = &plan(&input(&programs, &env)).start[0];
         assert_eq!(argv(&started.spec), ["/usr/bin/wine", "/games/Trainer.exe"]);
         assert!(!started.spec.env.contains_key("PROTON_VERB"));
+        assert!(!started.spec.env.contains_key(UMU_NSENTER));
 
         let mut p = programs[0].clone();
         p.args = r"-config C:\Users\me\trainer.ini".into();
@@ -476,6 +578,50 @@ mod tests {
                 r"C:\Users\me\trainer.ini"
             ]
         );
+    }
+
+    #[test]
+    fn programs_before_the_game_start_a_container_of_their_own() {
+        let mut p = program("/games/Server.exe");
+        p.in_prefix = true;
+        p.start_before_game = true;
+        p.delay_seconds = 3;
+        let env = wine(WineKind::Proton, true);
+        let started = &plan(&input(std::slice::from_ref(&p), &env)).start[0];
+        assert!(started.before_game);
+        assert_eq!(started.delay, Duration::from_secs(3));
+        // No container to enter yet.
+        assert!(!started.spec.env.contains_key(UMU_NSENTER));
+        assert_eq!(started.spec.env["PROTON_VERB"], "run");
+    }
+
+    #[test]
+    fn the_game_offers_its_container_only_to_programs_started_with_it() {
+        let mut with = program("/games/Trainer.exe");
+        with.in_prefix = true;
+        let umu = wine(WineKind::Proton, true);
+        let host = HostPlatform::Linux;
+        assert!(shares_container(std::slice::from_ref(&with), &umu, host));
+        // Not without umu, on Windows, or for programs it can't share with.
+        assert!(!shares_container(
+            std::slice::from_ref(&with),
+            &wine(WineKind::Proton, false),
+            host
+        ));
+        assert!(!shares_container(
+            std::slice::from_ref(&with),
+            &umu,
+            HostPlatform::Windows
+        ));
+        let mut before = with.clone();
+        before.start_before_game = true;
+        let mut off = with.clone();
+        off.enabled = false;
+        let mut native = with.clone();
+        native.in_prefix = false;
+        let mut empty = with.clone();
+        empty.path = " ".into();
+        assert!(!shares_container(&[before, off, native, empty], &umu, host));
     }
 
     #[test]
@@ -614,6 +760,82 @@ mod tests {
             text.contains("Not starting Late: the game ended first"),
             "{text}"
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_game_waits_for_programs_started_before_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("game.log");
+        std::fs::write(&log, "").unwrap();
+        let mut server = program("sleep");
+        server.name = "Server".into();
+        server.args = "30".into();
+        server.start_before_game = true;
+        server.delay_seconds = 1;
+        let mut later = program("sleep");
+        later.name = "Later".into();
+        later.args = "30".into();
+        let programs = [later, server];
+        let env = LaunchEnvironment::default();
+        let mut session = Programs::prepare(plan(&input(&programs, &env)), &log);
+        let waited = std::time::Instant::now();
+        session.start_before(&CancellationToken::new()).await;
+        assert!(waited.elapsed() >= Duration::from_secs(1));
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(text.contains("Starting Server"), "{text}");
+        assert!(
+            text.contains("Waiting 1 s for Server before starting the game"),
+            "{text}"
+        );
+        assert!(!text.contains("Starting Later"), "{text}");
+        session.start_with_game();
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(text.contains("Starting Later"), "{text}");
+        assert_eq!(text.matches("Starting Server").count(), 1, "{text}");
+        session.end().await;
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(text.contains("Stopping Server: the game ended"), "{text}");
+        assert!(text.contains("Stopping Later: the game ended"), "{text}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_cancelled_launch_stops_waiting_and_stops_the_programs_before_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("game.log");
+        std::fs::write(&log, "").unwrap();
+        let mut server = program("sleep");
+        server.name = "Server".into();
+        server.args = "30".into();
+        server.start_before_game = true;
+        server.delay_seconds = LaunchProgram::MAX_DELAY;
+        let mut second = server.clone();
+        second.name = "Second".into();
+        let programs = [server, second];
+        let env = LaunchEnvironment::default();
+        let mut session = Programs::prepare(plan(&input(&programs, &env)), &log);
+        let cancel = CancellationToken::new();
+        let fire = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            fire.cancel();
+        });
+        tokio::time::timeout(Duration::from_secs(10), session.start_before(&cancel))
+            .await
+            .expect("the wait ends with the launch");
+        // The launch fails: dropping the programs stops them.
+        drop(session);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let text = std::fs::read_to_string(&log).unwrap();
+            if text.contains("Stopping Server") {
+                assert!(!text.contains("Starting Second"), "{text}");
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline, "{text}");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 
     #[cfg(unix)]

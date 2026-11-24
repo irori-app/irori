@@ -101,6 +101,13 @@ pub enum Event {
     EnginesChanged,
     /// A game's mods were installed, removed, reordered or switched.
     ModsChanged(GameId),
+    /// A store saw a running game unlock an achievement (GOG's Galaxy
+    /// service). Raw store signal: services ask the store again, and UIs
+    /// wait for [`Event::AchievementsUnlocked`].
+    AchievementSignal(GameId),
+    /// A running game unlocked achievements Irori hadn't seen; UIs take
+    /// them with `Backend::take_live_unlocks` and show them over the game.
+    AchievementsUnlocked(GameId),
     SettingsChanged,
     /// Per-game settings changed.
     GameSettingsChanged(GameId),

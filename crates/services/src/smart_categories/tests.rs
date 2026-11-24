@@ -39,13 +39,29 @@ fn members_with(
     user: &UserData,
     hltb: &HashMap<String, u32>,
 ) -> Vec<String> {
+    let inputs = Inputs {
+        hltb: HltbTimes {
+            revision: 1,
+            hours: Arc::new(hltb.clone()),
+        },
+        ..Default::default()
+    };
+    members_in(category, lib, user, &inputs)
+}
+
+fn members_in(
+    category: SmartCategory,
+    lib: &LibrarySnapshot,
+    user: &UserData,
+    inputs: &Inputs,
+) -> Vec<String> {
     let mut user = user.clone();
     user.smart_categories.insert("s".into(), category);
     let key = IndexKey {
         today: Some(day(2026, 11, 10)),
         ..Default::default()
     };
-    let index = CategoryIndex::build(key, lib, &user, hltb, &FixedOffset::east_opt(0).unwrap());
+    let index = CategoryIndex::build(key, lib, &user, inputs, &FixedOffset::east_opt(0).unwrap());
     let mut ids: Vec<String> = lib
         .all_games()
         .map(|g| g.id())
@@ -72,6 +88,24 @@ fn three_games() -> (LibrarySnapshot, UserData) {
     let b = game(Runner::Legendary, "2", "Bravo");
     let c = game(Runner::Steam, "3", "Charlie");
     (library(vec![a, b, c], &user), user)
+}
+
+#[test]
+fn controller_rules_go_by_the_known_support() {
+    use irori_core::ControllerSupport;
+    let user = UserData::default();
+    let mut a = game(Runner::Gog, "1", "Alpha");
+    a.controller_support = Some(ControllerSupport::Full);
+    let mut b = game(Runner::Legendary, "2", "Bravo");
+    b.controller_support = Some(ControllerSupport::Partial);
+    let c = game(Runner::Steam, "3", "Charlie");
+    let lib = library(vec![a, b, c], &user);
+    let any = category(Match::All, vec![Rule::Controller { full: false }], vec![]);
+    assert_eq!(members(any, &lib, &user), ["gog:1", "legendary:2"]);
+    let full = category(Match::All, vec![Rule::Controller { full: true }], vec![]);
+    assert_eq!(members(full, &lib, &user), ["gog:1"]);
+    let text = serde_json::to_string(&Rule::Controller { full: false }).unwrap();
+    assert!(!text.contains("full"));
 }
 
 #[test]
@@ -274,7 +308,7 @@ fn last_played_rules_go_by_the_local_day() {
         key,
         &lib,
         &user,
-        &HashMap::new(),
+        &Inputs::default(),
         &FixedOffset::east_opt(2 * 3600).unwrap(),
     );
     assert!(east.contains("today", &id));
@@ -282,7 +316,7 @@ fn last_played_rules_go_by_the_local_day() {
         key,
         &lib,
         &user,
-        &HashMap::new(),
+        &Inputs::default(),
         &FixedOffset::east_opt(0).unwrap(),
     );
     assert!(!utc.contains("today", &id));
@@ -419,6 +453,19 @@ fn every_rule_kind_reads_its_part_of_the_game() {
         }),
         ["steam:2"]
     );
+    assert_eq!(
+        one(Rule::Query {
+            query: "category:couch".into()
+        }),
+        ["steam:2"]
+    );
+    // Smart categories can't name each other: unknown, so no games.
+    assert!(
+        one(Rule::Query {
+            query: "smart:test".into()
+        })
+        .is_empty()
+    );
     assert_eq!(one(Rule::Favourite {}), ["steam:2"]);
     assert_eq!(
         one(Rule::Genre {
@@ -469,13 +516,275 @@ fn counts_leave_hidden_games_out() {
         IndexKey::default(),
         &lib,
         &user,
-        &HashMap::new(),
+        &Inputs::default(),
         &chrono::Local,
     );
     assert_eq!(index.count(&CategoryRef::Smart("all".into())), 1);
     assert_eq!(index.count(&CategoryRef::Manual("Both".into())), 1);
     // Still in it: the library hides it as it hides it everywhere.
     assert!(index.contains("all", &GameId::new(Runner::Legendary, "2")));
+}
+
+#[test]
+fn rules_on_dates_numbers_and_flags_read_their_part() {
+    use crate::sessions::{Session, SessionStats};
+    let mut user = UserData::default();
+    let mut a = game(Runner::Gog, "1", "Hollow Knight");
+    a.date_added = Some("2026-11-05T10:00:00Z".into());
+    a.release_date = Some("2017-02-24".into());
+    a.rating = Some(87);
+    a.developer = Some("Team Cherry".into());
+    a.publisher = Some("Team Cherry".into());
+    a.can_run_offline = true;
+    a.is_installed = true;
+    a.install = Some(irori_core::InstalledInfo {
+        install_size_bytes: 9 << 30,
+        ..Default::default()
+    });
+    let mut b = game(Runner::Steam, "2", "Portal 2");
+    b.release_date = Some("2011".into());
+    b.developer = Some("Valve Corporation".into());
+    b.publisher = Some("Valve".into());
+    // On Epic too: one entry of two copies.
+    let b_epic = game(Runner::Legendary, "p2", "Portal 2");
+    let c = game(Runner::Emulation, "3", "Chrono Trigger");
+    // Irori listed it a year ago; the store didn't say when it was got.
+    user.first_seen
+        .insert("emulation:3".into(), "2025-11-10T10:00:00Z".into());
+    user.ratings.insert("gog:1".into(), 5);
+    user.ratings.insert("steam:2".into(), 3);
+    user.hidden.insert("emulation:3".into());
+    user.playtime.insert(
+        "gog:1".into(),
+        PlaytimeRecord {
+            total_minutes: 900,
+            first_played: Some("2026-10-01T10:00:00Z".into()),
+            ..Default::default()
+        },
+    );
+    user.journal.insert(
+        "steam:2".into(),
+        [(
+            day(2026, 11, 1),
+            vec![crate::journal::JournalEntry {
+                text: "Wheatley!".into(),
+                ..Default::default()
+            }],
+        )]
+        .into(),
+    );
+    let lib = library(vec![a, b, b_epic, c], &user);
+    let session = |game: &str, seconds: u64| Session {
+        game: game.into(),
+        started: "2026-10-01T10:00:00Z".into(),
+        seconds,
+        crashed: false,
+        exit_code: None,
+    };
+    let inputs = Inputs {
+        hltb: HltbTimes {
+            revision: 1,
+            hours: Arc::new(HashMap::from([("gog:1".to_string(), 30)])),
+        },
+        plays: Arc::new(SessionStats::from_sessions(&[
+            session("gog:1", 3600),
+            session("gog:1", 1800),
+            session("steam:2", 600),
+        ])),
+        updates: Arc::new([GameId::new(Runner::Steam, "2")].into()),
+    };
+    let one = |rule: Rule| {
+        members_in(
+            category(Match::All, vec![rule], vec![]),
+            &lib,
+            &user,
+            &inputs,
+        )
+    };
+
+    assert_eq!(
+        one(Rule::DateAdded {
+            min_days: None,
+            max_days: Some(30)
+        }),
+        ["gog:1"]
+    );
+    assert_eq!(
+        one(Rule::DateAdded {
+            min_days: Some(300),
+            max_days: None
+        }),
+        ["emulation:3"]
+    );
+    assert_eq!(
+        one(Rule::ReleaseYear {
+            min_year: Some(2010),
+            max_year: Some(2015)
+        }),
+        ["legendary:p2", "steam:2"]
+    );
+    assert_eq!(
+        one(Rule::Rating {
+            min_stars: Some(4),
+            max_stars: None
+        }),
+        ["gog:1"]
+    );
+    assert_eq!(
+        one(Rule::Score {
+            min_score: Some(80),
+            max_score: Some(100)
+        }),
+        ["gog:1"]
+    );
+    assert_eq!(
+        one(Rule::Size {
+            min_gib: Some(5),
+            max_gib: Some(9)
+        }),
+        ["gog:1"]
+    );
+    assert!(
+        one(Rule::Size {
+            min_gib: Some(10),
+            max_gib: None
+        })
+        .is_empty()
+    );
+    assert_eq!(one(Rule::Update {}), ["legendary:p2", "steam:2"]);
+    assert_eq!(one(Rule::Offline {}), ["gog:1"]);
+    assert_eq!(
+        one(Rule::TimesPlayed {
+            min: Some(2),
+            max: None
+        }),
+        ["gog:1"]
+    );
+    // Never played: no session, on any copy.
+    assert_eq!(
+        one(Rule::TimesPlayed {
+            min: None,
+            max: Some(0)
+        }),
+        ["emulation:3", "legendary:p2", "steam:2"]
+    );
+    assert_eq!(
+        one(Rule::AverageSession {
+            min_minutes: Some(30),
+            max_minutes: None
+        }),
+        ["gog:1"]
+    );
+    assert_eq!(
+        one(Rule::FirstPlayed {
+            min_days: Some(30),
+            max_days: Some(60)
+        }),
+        ["gog:1"]
+    );
+    // 900 minutes of 30 hours is 50%.
+    assert_eq!(
+        one(Rule::HltbProgress {
+            min_percent: Some(50),
+            max_percent: Some(50)
+        }),
+        ["gog:1"]
+    );
+    assert_eq!(one(Rule::Hidden {}), ["emulation:3"]);
+    assert_eq!(one(Rule::Notes {}), ["legendary:p2", "steam:2"]);
+    assert_eq!(
+        one(Rule::Developer {
+            names: vec!["team-cherry".into()]
+        }),
+        ["gog:1"]
+    );
+    assert_eq!(
+        one(Rule::Publisher {
+            names: vec!["VALVE".into(), "".into()]
+        }),
+        ["legendary:p2", "steam:2"]
+    );
+    assert_eq!(one(Rule::Copies {}), ["legendary:p2", "steam:2"]);
+
+    // Before the play history is read, plays are unknown: no games, and
+    // leaving them out shows none either.
+    let unread = Inputs {
+        plays: Arc::default(),
+        ..inputs.clone()
+    };
+    let times = Rule::TimesPlayed {
+        min: Some(1),
+        max: None,
+    };
+    assert!(
+        members_in(
+            category(Match::All, vec![times.clone()], vec![]),
+            &lib,
+            &user,
+            &unread
+        )
+        .is_empty()
+    );
+    assert!(
+        members_in(
+            category(Match::All, vec![], vec![times]),
+            &lib,
+            &user,
+            &unread
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn new_rule_kinds_are_written_so_an_older_irori_keeps_them() {
+    let category = category(
+        Match::All,
+        vec![
+            Rule::TimesPlayed {
+                min: Some(2),
+                max: None,
+            },
+            Rule::Developer {
+                names: vec!["Valve".into()],
+            },
+            Rule::Copies {},
+        ],
+        vec![],
+    );
+    let written = serde_json::to_value(&category).unwrap();
+    assert_eq!(
+        written["rules"],
+        json!([
+            {"rule": "timesPlayed", "min": 2},
+            {"rule": "developer", "names": ["Valve"]},
+            {"rule": "copies"}
+        ])
+    );
+    // Read back as they were; an older Irori keeps them as rows it can't
+    // read (see `unknown_keys_stay_on_the_category_and_on_every_condition`).
+    let back: SmartCategory = serde_json::from_value(written).unwrap();
+    assert_eq!(back, category);
+    for rule in &back.rules {
+        let kind = rule.rule.as_ref().unwrap().kind();
+        assert_eq!(serde_json::to_value(rule).unwrap()["rule"], kind);
+    }
+}
+
+#[test]
+fn names_the_manual_categories_this_computer_lacks() {
+    let mut user = UserData::default();
+    user.categories.insert("Couch".into(), Default::default());
+    let category = category(
+        Match::Any,
+        vec![Rule::Category {
+            names: ["Couch".to_string(), "Synced".to_string()].into(),
+        }],
+        vec![Rule::Category {
+            names: ["Abandoned".to_string()].into(),
+        }],
+    );
+    assert_eq!(category.missing_categories(&user), ["Abandoned", "Synced"]);
 }
 
 #[test]
@@ -530,7 +839,7 @@ fn ten_thousand_games_are_indexed_in_one_quick_pass() {
         IndexKey::default(),
         &lib,
         &user,
-        &HashMap::new(),
+        &Inputs::default(),
         &chrono::Local,
     );
     let took = started.elapsed();

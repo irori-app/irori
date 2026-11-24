@@ -193,6 +193,10 @@ build Irori yourself, see [Building](#building).
   descriptions, genres, release dates and screenshots fill in what store pages leave
   out (added games and ROMs above all), and IGDB's covers and artworks join the art
   picker. Off by default; a game is looked up only when you open it.
+- **Visual novels from VNDB, if you want them:** no account needed; descriptions
+  (spoilers left out), release dates, developers and screenshots fill in what store
+  pages and IGDB leave out, and VNDB's covers join the art picker, never a picture
+  its users flag as explicit. Off by default, with "Change VNDB match" on the game page.
 - **Move in from Heroic or Lutris** in one click: accounts, installs, settings,
   favourites, categories and playtime. Bottles, Faugus Launcher and, on Windows,
   Playnite libraries come along too.
@@ -310,6 +314,10 @@ build Irori yourself, see [Building](#building).
 - **ROM folders** scanned and watched, with each game's system, region and revision
   from its file name, a generated cover, and the BIOS files each system needs checked
   before you play.
+- **Box art of your region** from the LaunchBox Games Database: a European ROM gets
+  the European box, and the cover picker lists every region's box. Off until you ask
+  for it; then its game list (about 110 MB) is refreshed at most once a week while you
+  have ROMs, and Settings → Advanced → Artwork turns it off and removes the list.
 
 <p align="center">
   <picture>
@@ -430,7 +438,7 @@ packaging/install.sh
 | `crates/depot` | Shared download engine: parallel chunked downloads, resume, verify/repair, delta updates |
 | `crates/epic`, `crates/gog`, `crates/amazon` | Store protocols (Rust ports of legendary, gogdl and nile) |
 | `crates/gog-galaxy`, `crates/comet` | GOG Galaxy communication service for games (a small fork of comet, as a library) |
-| `crates/extras` | Shortcuts, wiki/ProtonDB/anticheat info, SteamGridDB, IGDB, Heroic import |
+| `crates/extras` | Shortcuts, wiki/ProtonDB/anticheat info, SteamGridDB, IGDB, VNDB, Heroic import |
 | `crates/services` | Backend facade: library, settings, download queue, launching |
 | `crates/ui` | Shared UI layer: models, navigation, art pipeline, theme, components |
 | `crates/feature-*` | Screens: library, game page, settings, downloads/Wine/accounts, Big Picture |

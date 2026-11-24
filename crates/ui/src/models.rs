@@ -242,7 +242,7 @@ fn accounts_now(cx: &App) -> AccountsNow {
 pub(crate) fn install(cx: &mut App) {
     let b = backend(cx);
     let (snapshot, user) = (b.library(), b.userdata.snapshot());
-    let categories = crate::categories::index_for(None, &snapshot, &user, &b.hltb_times());
+    let categories = crate::categories::index_for(None, &snapshot, &user, &b.category_inputs());
     let library = cx.new(|_| LibraryModel {
         snapshot,
         user,
@@ -399,6 +399,23 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
             Event::WineVersionsChanged | Event::EnginesChanged => settings = true,
             // The mods tab listens on the bus itself.
             Event::ModsChanged(_) => {}
+            // Services follow it; screens wait for what it unlocked.
+            Event::AchievementSignal(_) => {}
+            Event::AchievementsUnlocked(id) => {
+                let unlocks = b.take_live_unlocks(&id);
+                if !unlocks.is_empty()
+                    && !crate::hooks::show_unlocks(id.clone(), unlocks.clone(), cx)
+                {
+                    // Nothing can show over the game: a notice, on the
+                    // desktop while Irori is in the background.
+                    let title = b.game(&id).map(|g| g.title.clone()).unwrap_or_default();
+                    let fresh: Vec<&irori_core::Achievement> = unlocks.iter().collect();
+                    if let Some(n) = irori_services::unlock_notice(&id, &title, &fresh) {
+                        crate::system_notify::notice(&n, cx);
+                        m.notices.update(cx, |model, cx| model.push(n, cx));
+                    }
+                }
+            }
         }
     }
 
@@ -426,10 +443,10 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
     }
     if library {
         let (snapshot, user, updates) = (b.library(), b.userdata.snapshot(), b.updates());
-        let hltb = b.hltb_times();
+        let inputs = b.category_inputs();
         m.library.update(cx, |l, cx| {
             l.categories =
-                crate::categories::index_for(Some(&l.categories), &snapshot, &user, &hltb);
+                crate::categories::index_for(Some(&l.categories), &snapshot, &user, &inputs);
             l.snapshot = snapshot;
             l.user = user;
             l.updates = updates;
@@ -483,6 +500,20 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
             cx.notify();
         });
     }
+}
+
+/// Whether the user asked Irori to work offline (`iroriNetworkMode`).
+pub fn working_offline(cx: &App) -> bool {
+    models(cx).settings.read(cx).app.network_mode == irori_core::net::NetworkMode::Offline
+}
+
+/// Work offline, or follow the connection again. Writing the setting is a
+/// file write, so it runs off the UI thread.
+pub fn set_working_offline(offline: bool, cx: &mut App) {
+    let b = backend(cx);
+    let setter = b.clone();
+    // Detached: the settings event tells every view once it is written.
+    drop(b.spawn_blocking(move || setter.set_working_offline(offline)));
 }
 
 /// Mark the library as refreshing while `refresh_all` runs.

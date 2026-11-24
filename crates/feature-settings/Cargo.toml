@@ -16,6 +16,7 @@ irori-reshade.workspace = true
 irori-extras.workspace = true
 irori-epic.workspace = true
 irori-steam.workspace = true
+irori-emulation.workspace = true
 irori-bigpicture.workspace = true
 gpui-kit.workspace = true
 anyhow.workspace = true
@@ -24,6 +25,7 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 once_cell.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 # gpui-kit/test-support pulls the GPUI Fast crates, which conflict with gpui-pre in the

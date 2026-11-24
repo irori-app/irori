@@ -12,6 +12,8 @@ use irori_ui::i18n::t;
 pub enum GameCommand {
     Play,
     Stop,
+    /// Bring the running game's window to the front.
+    BackToGame,
     /// Open the install sheet (owned by the game feature).
     Install,
     Update,
@@ -24,6 +26,8 @@ pub enum GameCommand {
     ToggleCategory(String),
     NewCategory,
     Edit,
+    /// Change the developer, publisher and genres.
+    EditMetadata,
     RemoveFromRecent,
     AddShortcut,
     RemoveShortcut,
@@ -127,6 +131,9 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
     if let Some(p) = primary(state) {
         main.push(p);
     }
+    if playing {
+        main.push(BackToGame);
+    }
     if state.installed && state.has_update && !busy && !state.is_queued() && !state.sideload {
         main.push(Update);
     }
@@ -144,7 +151,7 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
         }
     }
 
-    let mut library = vec![ToggleFavourite, ToggleHidden, Edit];
+    let mut library = vec![ToggleFavourite, ToggleHidden, Edit, EditMetadata];
     if state.rom && !busy && !playing {
         library.push(PlayAsPcGame);
     }
@@ -191,6 +198,7 @@ impl GameCommand {
             ToggleCategory(name) => return name.clone(),
             Play => "library.command.play",
             Stop => "library.command.stop",
+            BackToGame => "library.command.back_to_game",
             Install => "library.command.install",
             Update => "library.command.update",
             RemoveFromQueue => "library.command.remove_from_queue",
@@ -204,6 +212,7 @@ impl GameCommand {
             NewCategory => "library.command.new_category",
             Edit if state.sideload => "library.command.edit_app",
             Edit => "library.command.edit_details",
+            EditMetadata => "library.command.edit_metadata",
             RemoveFromRecent => "library.command.remove_from_recent",
             AddShortcut => "library.command.add_shortcut",
             RemoveShortcut => "library.command.remove_shortcut",
@@ -224,6 +233,7 @@ impl GameCommand {
         match self {
             Play => IconName::Play,
             Stop => IconName::CircleStop,
+            BackToGame => IconName::AppWindow,
             Install => IconName::Download,
             Update => IconName::CircleArrowDown,
             RemoveFromQueue => IconName::X,
@@ -237,6 +247,7 @@ impl GameCommand {
             ToggleCategory(_) => IconName::Tag,
             NewCategory => IconName::Plus,
             Edit => IconName::Pencil,
+            EditMetadata => IconName::Tags,
             RemoveFromRecent => IconName::Minus,
             AddShortcut => IconName::Link2,
             RemoveShortcut => IconName::Link2Off,
@@ -332,7 +343,7 @@ mod tests {
         };
         assert!(!flat(&s).contains(&Uninstall));
         assert!(!flat(&s).contains(&Verify));
-        assert_eq!(flat(&s)[0], Stop);
+        assert_eq!(flat(&s)[..2], [Stop, BackToGame]);
         s.status = None;
         s.external = true;
         s.has_install_path = true;

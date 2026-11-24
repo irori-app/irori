@@ -34,6 +34,12 @@ Who gets served (`api/handlers.rs`, `handlers/context.rs`):
   first.
 - Topic messages (chat, presence) are forwarded only after sign-in.
 
+Told to the host:
+
+- An unlock also goes out on the overlay channel as `OverlayPeerMessage::Unlocked`
+  with the game's client id, which no overlay pipe reads. Irori shows unlocks over
+  the game as they happen from it.
+
 Nothing a client sends may panic:
 
 - Client and user ids must be decimal numbers before they reach a path or an address.

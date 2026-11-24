@@ -1,8 +1,9 @@
 //! The album tab: the period's screenshots over the latest one, the games
 //! they show as chips that narrow the grid, and the grid itself. The page is
 //! one list that draws only the rows on screen. A screenshot opens in the system's image viewer;
-//! its menu also shows it in its folder or opens its game. A clip is drawn
-//! over its game's art with a play badge and opens in the system's player.
+//! its menu also shows it in its folder or opens its game. A clip shows its
+//! poster frame and length (its game's art without ffmpeg) with a play badge
+//! and opens in the system's player.
 
 use std::ops::Range;
 use std::rc::Rc;
@@ -20,7 +21,9 @@ use gpui_kit::{
 };
 use irori_core::GameId;
 use irori_services::LibrarySnapshot;
-use irori_ui::components::{EmptyState, GameCover, art_img, art_loading};
+use irori_ui::components::{
+    ArtImage, EmptyState, GameCover, art_image, art_img, art_loading, clip_length,
+};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::style::KeyboardFocusable as _;
 use irori_ui::{Route, models, navigate};
@@ -233,7 +236,13 @@ impl StatsView {
             Some(self.render_art_credit(game, why, cx))
         });
         let headline = self.render_album_headline(album, &library, cx);
-        let art = latest.and_then(|s| shot_art(s, &library));
+        let art = latest.and_then(|s| {
+            if s.video {
+                game_art(s, &library)
+            } else {
+                Some(s.url.to_string())
+            }
+        });
         self.render_hero(art, headline, credit, window, cx)
     }
 
@@ -475,25 +484,36 @@ impl StatsView {
             .get(&shot.id)
             .map(|g| g.title.clone().into())
             .unwrap_or_else(|| shot.id.app_name.to_string().into());
-        let picture =
-            match shot_art(shot, library).and_then(|url| art_img(&url, physical, false, cx)) {
-                Some(img) => img
-                    .size_full()
-                    .object_fit(ObjectFit::Cover)
-                    .into_any_element(),
-                None if shot.video => div().size_full().into_any_element(),
-                None => art_loading(),
-            };
+        let cover = |img: gpui_kit::Img| {
+            img.size_full()
+                .object_fit(ObjectFit::Cover)
+                .into_any_element()
+        };
+        let picture = match art_image(&shot.url, physical, false, cx) {
+            ArtImage::Ready(img) => cover(img),
+            ArtImage::Loading => art_loading(),
+            // A clip without a poster (no ffmpeg) shows its game's art.
+            ArtImage::Missing if shot.video => {
+                match game_art(shot, library).and_then(|url| art_img(&url, physical, false, cx)) {
+                    Some(img) => cover(img),
+                    None => div().size_full().into_any_element(),
+                }
+            }
+            ArtImage::Missing => irori_ui::components::art_missing(cx),
+        };
         let picture = if shot.video {
             play_badge(picture, cx)
         } else {
             picture
         };
         let date = text::short_date(shot.day);
-        let caption: SharedString = if shot.video {
-            t_args("library.stats.album.clip_date", &[("date", &date)])
-        } else {
-            date
+        let caption: SharedString = match (shot.video, clip_length(&shot.path)) {
+            (true, Some(length)) => t_args(
+                "library.stats.album.clip_length_date",
+                &[("length", &length), ("date", &date)],
+            ),
+            (true, None) => t_args("library.stats.album.clip_date", &[("date", &date)]),
+            (false, _) => date,
         };
         let path = shot.path.clone();
         let (open, reveal, id) = (path.clone(), path, shot.id.clone());
@@ -580,12 +600,8 @@ impl StatsView {
     }
 }
 
-/// What a shot's tile shows: the screenshot itself, or for a clip its
-/// game's wide art (else its cover).
-fn shot_art(shot: &Shot, library: &LibrarySnapshot) -> Option<String> {
-    if !shot.video {
-        return Some(shot.url.to_string());
-    }
+/// What a clip without a poster shows: its game's wide art (else its cover).
+fn game_art(shot: &Shot, library: &LibrarySnapshot) -> Option<String> {
     let game = library.get(&shot.id)?;
     game.art_background
         .clone()

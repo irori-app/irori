@@ -26,3 +26,9 @@ iconutil -c icns /tmp/irori.iconset -o packaging/irori.icns
 ```
 
 `packaging/irori.ico` holds PNG frames of `irori-mark.svg` at 16, 24, 32, 48, 64, 128 and 256 px.
+
+All of these were drawn for Irori from basic shapes; none is derived from another logo.
+
+`stores/` is different: the marks of the stores, launchers and emulators Irori names,
+copied unchanged from Simple Icons. They belong to their owners; `stores/NOTICE.md` lists
+each one's source and licence.

@@ -200,6 +200,9 @@ pub struct UninstallOptions {
     uses_wine: bool,
     prefix: Option<PathBuf>,
     prefix_is_shared: bool,
+    /// Other installed games playing in the prefix, found after the dialog
+    /// opened; deleting the prefix would take theirs.
+    sharing: Vec<String>,
     remove_prefix: bool,
     delete_files: bool,
     remove_settings: bool,
@@ -209,10 +212,16 @@ impl UninstallOptions {
     /// Arguments for `Backend::uninstall`.
     pub fn args(&self) -> RemoveArgs {
         RemoveArgs {
-            remove_prefix: self.remove_prefix && self.uses_wine && !self.prefix_is_shared,
+            remove_prefix: self.remove_prefix && self.uses_wine && !self.keeps_prefix(),
             delete_files: self.delete_files,
             remove_settings: self.remove_settings && !self.is_dlc,
         }
+    }
+
+    /// Whether the prefix stays whatever is ticked: it is the shared
+    /// default, or other games play in it.
+    fn keeps_prefix(&self) -> bool {
+        self.prefix_is_shared || !self.sharing.is_empty()
     }
 }
 
@@ -245,14 +254,19 @@ impl Render for UninstallOptions {
                     .unwrap_or_default();
                 let help = if self.prefix_is_shared {
                     t_args("game.uninstall.prefix_shared_help", &[("path", &path)])
+                } else if !self.sharing.is_empty() {
+                    t_args(
+                        "game.uninstall.prefix_used_help",
+                        &[("path", &path), ("games", &self.sharing.join(", "))],
+                    )
                 } else {
                     t_args("game.uninstall.prefix_help", &[("path", &path)])
                 };
                 col.child(option(
                     Checkbox::new("uninstall-remove-prefix")
                         .label(t("game.uninstall.delete_prefix"))
-                        .checked(self.remove_prefix && !self.prefix_is_shared)
-                        .disabled(self.prefix_is_shared)
+                        .checked(self.remove_prefix && !self.keeps_prefix())
+                        .disabled(self.keeps_prefix())
                         .on_change(cx.listener(|this, v: &bool, _, cx| {
                             this.remove_prefix = *v;
                             cx.notify();
@@ -309,15 +323,40 @@ pub fn open_uninstall_dialog(id: GameId, window: &mut Window, cx: &mut App) {
         .as_ref()
         .is_some_and(|p| irori_runtime::prefix_is_shared(&app, &game, p));
     let is_dlc = game.is_dlc;
+    let asked = prefix.clone().filter(|_| !prefix_is_shared && !is_dlc);
     let options = cx.new(|_| UninstallOptions {
         is_dlc,
         uses_wine,
         prefix,
         prefix_is_shared,
+        sharing: Vec::new(),
         remove_prefix: false,
         delete_files: true,
         remove_settings: false,
     });
+    // Which other games play in the prefix: their settings are read off
+    // the UI thread, and the box can't be ticked once some are found.
+    if let Some(prefix) = asked {
+        let (finder, game_id) = (b.clone(), id.clone());
+        let task = irori_ui::state::run_infallible(cx, async move {
+            let reader = finder.clone();
+            finder
+                .spawn_blocking(move || reader.games_sharing_prefix(&game_id, &prefix))
+                .await
+                .unwrap_or_default()
+        });
+        let weak = options.downgrade();
+        cx.spawn(async move |cx| {
+            let games = task.await.unwrap_or_default();
+            if !games.is_empty() {
+                let _ = weak.update(cx, |o, cx| {
+                    o.sharing = games;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
     let heading = t_args("game.uninstall.title", &[("title", &title)]);
     let sideload = id.runner == Runner::Sideload;
     window.open_alert_dialog(cx, move |alert, _, _| {

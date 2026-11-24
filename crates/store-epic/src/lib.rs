@@ -220,7 +220,14 @@ impl EpicStore {
     /// publishes (its user agent and label; sign-in always uses the
     /// built-in client so tokens stay valid).
     async fn client(&self) -> Result<Client> {
+        let timeout = irori_core::net::timeout_or(irori_epic_api::DEFAULT_TIMEOUT);
         if let Some(c) = self.client.lock().clone() {
+            // A changed `iroriNetworkTimeout` takes effect on the next call.
+            if c.timeout() == timeout {
+                return Ok(c);
+            }
+            let c = c.with_timeout(timeout)?;
+            *self.client.lock() = Some(c.clone());
             return Ok(c);
         }
         let mut identity = Identity::default();
@@ -229,7 +236,8 @@ impl EpicStore {
             egl.remove("client_secret");
             identity.apply_overrides(&Value::Object(egl));
         }
-        let mut client = Client::with_endpoints(identity, self.endpoints.clone())?;
+        let mut client =
+            Client::with_endpoints(identity, self.endpoints.clone())?.with_timeout(timeout)?;
         let language = (self.settings)().ui_language.clone();
         if let Some((lang, country)) = language.split_once(['-', '_']) {
             client.language = lang.to_string();

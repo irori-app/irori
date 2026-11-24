@@ -21,6 +21,7 @@ use irori_ui::i18n::{t, t_args};
 use crate::layout::HomeLayout;
 use crate::text::store_name;
 use crate::theme::ShelfKind;
+use irori_core::big_picture_prefs::NavSounds;
 
 /// A shelf of games on Home.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -32,6 +33,12 @@ pub enum RowKind {
     PlanToPlay,
     /// Emulated games of one system (a systems catalog id).
     System(&'static str),
+    Playing,
+    MostPlayed,
+    Forgotten,
+    PickOfTheDay,
+    /// The games of one store.
+    Store(Runner),
     /// Every game; only when no other shelf has any.
     All,
     /// A pinned category of either kind, by its id or name, with its name.
@@ -48,6 +55,11 @@ impl RowKind {
             RowKind::RecentlyAdded => t("bigpicture.shelf.recently_added"),
             RowKind::PlanToPlay => t("bigpicture.shelf.plan_to_play"),
             RowKind::All => t("bigpicture.shelf.all"),
+            RowKind::Playing => t("bigpicture.shelf.playing"),
+            RowKind::MostPlayed => t("bigpicture.shelf.most_played"),
+            RowKind::Forgotten => t("bigpicture.shelf.forgotten"),
+            RowKind::PickOfTheDay => t("bigpicture.shelf.pick_of_the_day"),
+            RowKind::Store(runner) => store_name(*runner),
             RowKind::System(id) => irori_engines::systems::get(id)
                 .map_or_else(|| SharedString::new_static(id), |s| s.name.clone().into()),
             RowKind::Category(_, name) => name.clone(),
@@ -63,6 +75,11 @@ impl RowKind {
             RowKind::RecentlyAdded => "recently-added",
             RowKind::PlanToPlay => "plan-to-play",
             RowKind::All => "all",
+            RowKind::Playing => "playing",
+            RowKind::MostPlayed => "most-played",
+            RowKind::Forgotten => "forgotten",
+            RowKind::PickOfTheDay => "pick-of-the-day",
+            RowKind::Store(runner) => return format!("store-{}", runner.id()).into(),
             RowKind::System(id) => id,
             RowKind::Category(CategoryRef::Manual(name), _) => {
                 return format!("category-{name}").into();
@@ -84,8 +101,18 @@ fn parse_key(key: &str) -> Option<GameId> {
     Some(GameId::new(Runner::from_id(runner)?, app))
 }
 
-/// Games on the "Recently added" shelf.
+/// Games on the "Recently added" shelf, and on the others that rank games.
 const RECENTLY_ADDED: usize = 24;
+/// Days without play after which an installed game counts as forgotten.
+const FORGOTTEN_DAYS: i64 = 90;
+
+/// The local day a session started, from its RFC 3339 time.
+fn played_on(record: Option<&irori_core::PlaytimeRecord>) -> Option<chrono::NaiveDate> {
+    let at = record?.last_played.as_deref()?;
+    chrono::DateTime::parse_from_rfc3339(at)
+        .ok()
+        .map(|t| t.with_timezone(&chrono::Local).date_naive())
+}
 
 /// Build Home's shelves of `shelves`, in that order (the systems shelf
 /// becomes one per system with emulated games), then a shelf per pinned
@@ -98,6 +125,20 @@ pub fn build_rows(
     max_recent: usize,
     shelves: &[ShelfKind],
     index: &CategoryIndex,
+) -> Vec<Row> {
+    let today = chrono::Local::now().date_naive();
+    build_rows_on(library, user, max_recent, shelves, index, today)
+}
+
+/// [`build_rows`] as of `today`, which the forgotten games and the pick of
+/// the day depend on.
+pub fn build_rows_on(
+    library: &LibrarySnapshot,
+    user: &UserData,
+    max_recent: usize,
+    shelves: &[ShelfKind],
+    index: &CategoryIndex,
+    today: chrono::NaiveDate,
 ) -> Vec<Row> {
     let visible: Vec<&Arc<GameInfo>> = library
         .games
@@ -158,6 +199,79 @@ pub fn build_rows(
                 kind: RowKind::PlanToPlay,
                 games: pick(&|g| user.play_status(&g.id().key()) == Some(PlayStatus::PlanToPlay)),
             }),
+            ShelfKind::Playing => rows.push(Row {
+                kind: RowKind::Playing,
+                games: pick(&|g| user.play_status(&g.id().key()) == Some(PlayStatus::Playing)),
+            }),
+            ShelfKind::MostPlayed => {
+                let minutes = |g: &GameInfo| {
+                    user.playtime
+                        .get(&g.id().key())
+                        .map_or(0, |p| p.total_minutes)
+                };
+                let mut games = pick(&|g| minutes(g) > 0);
+                games.sort_by(|a, b| {
+                    minutes(b)
+                        .cmp(&minutes(a))
+                        .then_with(|| sort_key(a).cmp(&sort_key(b)))
+                });
+                games.truncate(RECENTLY_ADDED);
+                rows.push(Row {
+                    kind: RowKind::MostPlayed,
+                    games,
+                });
+            }
+            ShelfKind::Forgotten => {
+                let last = |g: &GameInfo| played_on(user.playtime.get(&g.id().key()));
+                let cutoff = today - chrono::Duration::days(FORGOTTEN_DAYS);
+                let mut games = pick(&|g| g.is_installed && last(g).is_none_or(|d| d < cutoff));
+                // Never played first, then the longest untouched.
+                games.sort_by(|a, b| {
+                    last(a)
+                        .cmp(&last(b))
+                        .then_with(|| sort_key(a).cmp(&sort_key(b)))
+                });
+                games.truncate(RECENTLY_ADDED);
+                rows.push(Row {
+                    kind: RowKind::Forgotten,
+                    games,
+                });
+            }
+            ShelfKind::PickOfTheDay => {
+                let mut games = pick(&|g| {
+                    g.is_installed
+                        && !matches!(
+                            user.play_status(&g.id().key()),
+                            Some(PlayStatus::Beaten | PlayStatus::Abandoned)
+                        )
+                });
+                games.sort_by_key(|g| g.id().key());
+                // The same game all day, another the next: a day's number
+                // spread over the list.
+                let day = u64::from(chrono::Datelike::num_days_from_ce(&today).unsigned_abs());
+                let games = match games.len() {
+                    0 => Vec::new(),
+                    len => {
+                        let ix = (day.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32) % len as u64;
+                        vec![games.swap_remove(ix as usize)]
+                    }
+                };
+                rows.push(Row {
+                    kind: RowKind::PickOfTheDay,
+                    games,
+                });
+            }
+            ShelfKind::Stores => {
+                let mut runners: Vec<Runner> = visible.iter().map(|g| g.id().runner).collect();
+                runners.sort_by_key(|r| store_name(*r));
+                runners.dedup();
+                for runner in runners {
+                    rows.push(Row {
+                        kind: RowKind::Store(runner),
+                        games: pick(&|g| g.id().runner == runner),
+                    });
+                }
+            }
             ShelfKind::Systems => {
                 for system in irori_engines::systems::all() {
                     let id = system.id.as_str();
@@ -481,6 +595,8 @@ pub enum GameAction {
     /// Play with verbose Wine/Proton logs for this session, showing the log.
     PlayWithLog,
     Stop,
+    /// Bring the running game's window to the front.
+    BackToGame,
     /// Stop the launch being prepared; the game doesn't start.
     CancelLaunch,
     Install,
@@ -496,6 +612,7 @@ impl GameAction {
             GameAction::Play => "bigpicture.action.play",
             GameAction::PlayWithLog => "bigpicture.action.play_with_log",
             GameAction::Stop => "bigpicture.action.stop",
+            GameAction::BackToGame => "bigpicture.action.back_to_game",
             GameAction::CancelLaunch => "bigpicture.action.cancel_launch",
             GameAction::Install => "bigpicture.action.install",
             GameAction::CancelDownload => "bigpicture.action.cancel_download",
@@ -509,6 +626,7 @@ impl GameAction {
             GameAction::Play => IconName::Play,
             GameAction::PlayWithLog => IconName::ScrollText,
             GameAction::Stop => IconName::CircleStop,
+            GameAction::BackToGame => IconName::AppWindow,
             GameAction::CancelLaunch => IconName::X,
             GameAction::Install => IconName::Download,
             GameAction::CancelDownload => IconName::X,
@@ -560,6 +678,7 @@ impl PageRow {
             PageRow::Action(GameAction::Play) => "bp-row-play",
             PageRow::Action(GameAction::PlayWithLog) => "bp-row-play-with-log",
             PageRow::Action(GameAction::Stop) => "bp-row-stop",
+            PageRow::Action(GameAction::BackToGame) => "bp-row-back-to-game",
             PageRow::Action(GameAction::CancelLaunch) => "bp-row-cancel-launch",
             PageRow::Action(GameAction::Install) => "bp-row-install",
             PageRow::Action(GameAction::CancelDownload) => "bp-row-cancel-download",
@@ -606,6 +725,9 @@ impl PageRow {
 pub fn page_rows(state: GameState, platforms: usize, log_shown: bool) -> Vec<PageRow> {
     let main = main_action(state);
     let mut out = vec![PageRow::Action(main)];
+    if state.playing {
+        out.push(PageRow::Action(GameAction::BackToGame));
+    }
     if main == GameAction::Play {
         out.push(PageRow::Action(GameAction::PlayWithLog));
     }
@@ -691,6 +813,8 @@ pub enum MenuItem {
     InterfaceSize(u32),
     /// Cycles Home's layout; carries the current one.
     Layout(HomeLayout),
+    /// Cycles the navigation sounds; carries the current choice.
+    Sounds(NavSounds),
     /// Opens the theme editor.
     Themes,
     ToggleFullscreen,
@@ -711,6 +835,12 @@ impl MenuItem {
                 &[("percent", percent.to_string().as_str())],
             );
         }
+        if let MenuItem::Sounds(sounds) = self {
+            return t_args(
+                "bigpicture.menu.sounds",
+                &[("sounds", sounds_label(sounds).as_str())],
+            );
+        }
         if let MenuItem::Layout(layout) = self {
             return t_args(
                 "bigpicture.menu.layout",
@@ -718,7 +848,9 @@ impl MenuItem {
             );
         }
         t(match self {
-            MenuItem::InterfaceSize(_) | MenuItem::Layout(_) => unreachable!("handled above"),
+            MenuItem::InterfaceSize(_) | MenuItem::Layout(_) | MenuItem::Sounds(_) => {
+                unreachable!("handled above")
+            }
             MenuItem::Themes => "bigpicture.menu.themes",
             MenuItem::SoundOutput => "bigpicture.overlay.output",
             MenuItem::PauseDownloads => "bigpicture.menu.pause_downloads",
@@ -738,6 +870,7 @@ impl MenuItem {
             MenuItem::SoundOutput => IconName::Volume2,
             MenuItem::InterfaceSize(_) => IconName::ZoomIn,
             MenuItem::Layout(_) => IconName::LayoutDashboard,
+            MenuItem::Sounds(_) => IconName::Music,
             MenuItem::Themes => IconName::Palette,
             MenuItem::ToggleFullscreen => IconName::Maximize,
             MenuItem::SetUpEmulation => IconName::Joystick,
@@ -757,6 +890,7 @@ impl MenuItem {
             MenuItem::SoundOutput => "bp-menu-sound-output",
             MenuItem::InterfaceSize(_) => "bp-menu-size",
             MenuItem::Layout(_) => "bp-menu-layout",
+            MenuItem::Sounds(_) => "bp-menu-sounds",
             MenuItem::Themes => "bp-menu-themes",
             MenuItem::ToggleFullscreen => "bp-menu-fullscreen",
             MenuItem::SetUpEmulation => "bp-menu-emulation",
@@ -781,14 +915,33 @@ pub fn power_label(action: PowerAction) -> &'static str {
     }
 }
 
+/// The name of a navigation sounds choice.
+pub fn sounds_label(sounds: NavSounds) -> SharedString {
+    t(match sounds {
+        NavSounds::Off => "bigpicture.sounds.off",
+        NavSounds::Soft => "bigpicture.sounds.soft",
+        NavSounds::Classic => "bigpicture.sounds.classic",
+    })
+}
+
+/// The navigation sounds after `current`: off, soft, classic, off.
+pub fn next_sounds(current: NavSounds) -> NavSounds {
+    match current {
+        NavSounds::Off => NavSounds::Soft,
+        NavSounds::Soft => NavSounds::Classic,
+        NavSounds::Classic => NavSounds::Off,
+    }
+}
+
 /// Quick menu entries given the download queue state, the interface size
-/// in percent, Home's layout and the power actions the system allows (last,
-/// after leaving Big Picture and quitting Irori).
+/// in percent, Home's layout, the navigation sounds and the power actions
+/// the system allows (last, after leaving Big Picture and quitting Irori).
 pub fn menu_items(
     has_downloads: bool,
     paused: bool,
     scale: u32,
     layout: HomeLayout,
+    sounds: NavSounds,
     power: &[PowerAction],
 ) -> Vec<MenuItem> {
     let mut out = Vec::with_capacity(9 + power.len());
@@ -803,6 +956,7 @@ pub fn menu_items(
         MenuItem::InterfaceSize(scale),
         MenuItem::Layout(layout),
         MenuItem::Themes,
+        MenuItem::Sounds(sounds),
         MenuItem::ToggleFullscreen,
         MenuItem::SoundOutput,
         MenuItem::SetUpEmulation,
@@ -888,7 +1042,7 @@ mod tests {
             Default::default(),
             &lib,
             &user,
-            &HashMap::new(),
+            &irori_services::smart_categories::Inputs::default(),
             &chrono::Local,
         );
         (lib, user, index)
@@ -992,6 +1146,80 @@ mod tests {
         );
         assert_eq!(titles(&rows[0].games), vec!["B"]);
         assert_eq!(titles(&rows[1].games), vec!["A"]);
+    }
+
+    #[test]
+    fn the_new_shelves_rank_and_pick_their_games() {
+        let mut lib = LibrarySnapshot::default();
+        lib.games = vec![
+            game(Runner::Gog, "a", true),
+            game(Runner::Gog, "b", true),
+            game(Runner::Legendary, "c", true),
+            game(Runner::Gog, "d", false),
+        ];
+        let mut user = UserData::default();
+        let played = |minutes, last: &str| irori_core::PlaytimeRecord {
+            total_minutes: minutes,
+            last_played: Some(last.into()),
+            ..Default::default()
+        };
+        user.playtime
+            .insert("gog:a".into(), played(600, "2026-11-20T20:00:00Z"));
+        user.playtime
+            .insert("gog:b".into(), played(30, "2026-01-02T20:00:00Z"));
+        user.playtime
+            .insert("gog:d".into(), played(90, "2026-11-01T20:00:00Z"));
+        user.play_status.insert(
+            "gog:b".into(),
+            irori_services::PlayStatusRecord {
+                status: PlayStatus::Playing,
+                since: "2026-01-01T00:00:00Z".into(),
+            },
+        );
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 22).unwrap();
+        let rows = build_rows_on(
+            &lib,
+            &user,
+            8,
+            &[
+                ShelfKind::Playing,
+                ShelfKind::MostPlayed,
+                ShelfKind::Forgotten,
+                ShelfKind::PickOfTheDay,
+                ShelfKind::Stores,
+            ],
+            &CategoryIndex::default(),
+            today,
+        );
+        let row = |kind: RowKind| {
+            rows.iter()
+                .find(|r| r.kind == kind)
+                .map(|r| titles(&r.games))
+                .unwrap_or_default()
+        };
+        assert_eq!(row(RowKind::Playing), vec!["B"]);
+        assert_eq!(row(RowKind::MostPlayed), vec!["A", "D", "B"]);
+        assert_eq!(
+            row(RowKind::Forgotten),
+            vec!["C", "B"],
+            "never played first"
+        );
+        assert_eq!(row(RowKind::PickOfTheDay).len(), 1);
+        let pick = row(RowKind::PickOfTheDay);
+        let again = build_rows_on(
+            &lib,
+            &user,
+            8,
+            &[ShelfKind::PickOfTheDay],
+            &CategoryIndex::default(),
+            today,
+        );
+        assert_eq!(titles(&again[0].games), pick, "the same all day");
+        assert!(rows.iter().any(|r| r.kind == RowKind::Store(Runner::Gog)));
+        assert!(
+            rows.iter()
+                .any(|r| r.kind == RowKind::Store(Runner::Legendary))
+        );
     }
 
     #[test]
@@ -1248,9 +1476,13 @@ mod tests {
             ..installed
         };
         assert_eq!(
-            page_rows(playing, 1, false)[0],
-            PageRow::Action(GameAction::Stop)
+            page_rows(playing, 1, false)[..2],
+            [
+                PageRow::Action(GameAction::Stop),
+                PageRow::Action(GameAction::BackToGame)
+            ]
         );
+        assert!(!page_rows(installed, 1, false).contains(&PageRow::Action(GameAction::BackToGame)));
         assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::PlayWithLog)));
         assert!(page_rows(playing, 1, false).contains(&PageRow::Log));
         assert!(!page_rows(playing, 1, false).contains(&PageRow::Action(GameAction::Uninstall)));
@@ -1387,22 +1619,25 @@ mod tests {
     #[test]
     fn menu_offers_download_control_only_with_downloads() {
         assert_eq!(
-            menu_items(false, false, 100, HomeLayout::Shelves, &[])[0],
+            menu_items(false, false, 100, HomeLayout::Shelves, NavSounds::Off, &[])[0],
             MenuItem::InterfaceSize(100)
         );
         assert_eq!(
-            menu_items(true, false, 100, HomeLayout::Shelves, &[])[0],
+            menu_items(true, false, 100, HomeLayout::Shelves, NavSounds::Off, &[])[0],
             MenuItem::PauseDownloads
         );
         assert_eq!(
-            menu_items(true, true, 150, HomeLayout::Shelves, &[])[0],
+            menu_items(true, true, 150, HomeLayout::Shelves, NavSounds::Off, &[])[0],
             MenuItem::ResumeDownloads
         );
-        let items = menu_items(true, true, 150, HomeLayout::Wall, &[]);
+        let items = menu_items(true, true, 150, HomeLayout::Wall, NavSounds::Off, &[]);
         assert_eq!(items[1], MenuItem::InterfaceSize(150));
         assert_eq!(items[2], MenuItem::Layout(HomeLayout::Wall));
         assert_eq!(items[3], MenuItem::Themes);
-        assert_eq!(items[5], MenuItem::SoundOutput, "after Toggle fullscreen");
+        assert_eq!(items[4], MenuItem::Sounds(NavSounds::Off));
+        assert_eq!(items[6], MenuItem::SoundOutput, "after Toggle fullscreen");
+        assert_eq!(next_sounds(NavSounds::Off), NavSounds::Soft);
+        assert_eq!(next_sounds(NavSounds::Classic), NavSounds::Off);
         assert_eq!(items.last(), Some(&MenuItem::QuitIrori));
     }
 
@@ -1413,6 +1648,7 @@ mod tests {
             false,
             100,
             HomeLayout::Shelves,
+            NavSounds::Off,
             &[PowerAction::PowerOff, PowerAction::Sleep],
         );
         let quit = items
@@ -1426,7 +1662,7 @@ mod tests {
                 MenuItem::Power(PowerAction::Sleep)
             ]
         );
-        let none = menu_items(false, false, 100, HomeLayout::Shelves, &[]);
+        let none = menu_items(false, false, 100, HomeLayout::Shelves, NavSounds::Off, &[]);
         assert!(!none.iter().any(|i| matches!(i, MenuItem::Power(_))));
         let ids: std::collections::HashSet<_> = PowerAction::ALL
             .map(|a| MenuItem::Power(a).id())

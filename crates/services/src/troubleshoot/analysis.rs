@@ -43,6 +43,10 @@ pub enum LaunchHint {
     ProgramFailed,
     /// `vm.max_map_count` is lower than some games need (Linux).
     MapCount,
+    /// `kernel.yama.ptrace_scope` stops Wine reading another process's
+    /// memory, so the Rockstar Games Launcher can't see that Epic started
+    /// it and offers to buy the game (Linux).
+    PtraceScope,
     /// The game crashed and said so (an unhandled exception, a segfault).
     Crash,
 }
@@ -122,7 +126,7 @@ impl LaunchHint {
             LaunchHint::PermissionDenied => any(&["permission denied"]),
             // Irori's own line when a program alongside fails to start.
             LaunchHint::ProgramFailed => lower.starts_with("could not start "),
-            LaunchHint::MapCount => false,
+            LaunchHint::MapCount | LaunchHint::PtraceScope => false,
             LaunchHint::Crash => any(&[
                 "unhandled exception",
                 "unhandled page fault",
@@ -293,6 +297,37 @@ pub fn parse_map_count(text: &str) -> Option<u64> {
     text.trim().parse().ok()
 }
 
+/// Parse `/proc/sys/kernel/yama/ptrace_scope`.
+pub fn parse_ptrace_scope(text: &str) -> Option<u8> {
+    text.trim().parse().ok()
+}
+
+/// The `ptrace_scope` from which Wine may not read the memory of a process
+/// it didn't start: 2 lets only administrators attach, 3 nobody.
+pub const PTRACE_SCOPE_BLOCKING: u8 = 2;
+
+/// Whether a line of the Rockstar Games Launcher's `launcher.log` says it
+/// couldn't confirm that Epic started it, which ends in "Buy now".
+fn ptrace_evidence(lower: &str) -> bool {
+    lower.contains("not detected as parent process")
+        || lower.contains("could not do openprocess on parent process")
+        || lower.contains("relaunch from third party platform required")
+}
+
+/// The commands that lower `kernel.yama.ptrace_scope` to 1 (Wine traces
+/// only its own processes, the default of most distributions): now, and
+/// after restarts. At 3 the kernel refuses any change until a restart, so
+/// only the second applies, then a restart.
+pub fn ptrace_scope_commands(current: u8) -> Vec<String> {
+    let keep = "echo 'kernel.yama.ptrace_scope = 1' | sudo tee /etc/sysctl.d/99-ptrace-scope.conf"
+        .to_string();
+    if current >= 3 {
+        vec![keep]
+    } else {
+        vec!["sudo sysctl -w kernel.yama.ptrace_scope=1".into(), keep]
+    }
+}
+
 /// What a finding knows besides its log lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Detail {
@@ -314,6 +349,8 @@ pub enum Detail {
     },
     /// `vm.max_map_count`'s value.
     MapCount { current: u64 },
+    /// `kernel.yama.ptrace_scope`'s value.
+    PtraceScope { current: u8 },
     /// The program uses this graphics API (`d3d12.dll`, `d3d11.dll`, …) and
     /// the translation layer that runs it well is off.
     ProgramGraphics { dll: String },
@@ -341,6 +378,9 @@ pub enum Fix {
     /// Show how to raise `vm.max_map_count`. Irori never runs `sudo`; the
     /// user runs the commands.
     MapCount,
+    /// Show how to lower `kernel.yama.ptrace_scope`. Irori never runs
+    /// `sudo`; the user runs the commands.
+    PtraceScope(u8),
     /// Turn on DXVK for the game, then try again.
     EnableDxvk,
     /// Turn on VKD3D-Proton for the game, then try again.
@@ -365,6 +405,7 @@ impl Fix {
             Fix::SteamRuntime => "steam-runtime".into(),
             Fix::ProgramSettings => "programs".into(),
             Fix::MapCount => "map-count".into(),
+            Fix::PtraceScope(_) => "ptrace-scope".into(),
             Fix::EnableDxvk => "dxvk".into(),
             Fix::EnableVkd3d => "vkd3d".into(),
             Fix::UseFsync => "fsync".into(),
@@ -456,6 +497,14 @@ pub struct Facts {
     pub anticheat: Option<AntiCheatInfo>,
     /// `vm.max_map_count` (Linux).
     pub map_count: Option<u64>,
+    /// `kernel.yama.ptrace_scope` (Linux, with Yama).
+    pub ptrace_scope: Option<u8>,
+    /// A Rockstar title bought on Epic, which starts through the Rockstar
+    /// Games Launcher under Wine.
+    pub rockstar_from_epic: bool,
+    /// The end of the Rockstar Games Launcher's `launcher.log` in the
+    /// game's prefix.
+    pub launcher_lines: Vec<String>,
     /// The command that installs the Vulkan driver for this distribution and
     /// GPU ([`vulkan_driver_command`]).
     pub vulkan_command: Option<String>,
@@ -751,6 +800,23 @@ pub fn diagnose(facts: &Facts, tried: &HashSet<String>) -> Diagnosis {
         f.confirmed = !f.evidence.is_empty();
         f.detail = Some(Detail::MapCount { current });
         f.fixes.push(Fix::MapCount);
+        findings.push(f);
+    }
+
+    // Heroic #6046: the launcher reads its parent's memory to tell that the
+    // Epic Games Launcher started it; Yama forbids that from scope 2.
+    if facts.rockstar_from_epic
+        && let Some(current) = facts.ptrace_scope.filter(|s| *s >= PTRACE_SCOPE_BLOCKING)
+    {
+        let mut f = Finding::new(LaunchHint::PtraceScope);
+        for line in &facts.launcher_lines {
+            if ptrace_evidence(&line.to_ascii_lowercase()) {
+                push_evidence(&mut f, line);
+            }
+        }
+        f.confirmed = !f.evidence.is_empty();
+        f.detail = Some(Detail::PtraceScope { current });
+        f.fixes.push(Fix::PtraceScope(current));
         findings.push(f);
     }
 

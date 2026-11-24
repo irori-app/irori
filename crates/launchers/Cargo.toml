@@ -11,6 +11,7 @@ publish.workspace = true
 anyhow.workspace = true
 prost.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 # Only this crate reads XML (EA's installerdata.xml); the version is already in Cargo.lock.
 quick-xml = "0.42"
 sha2.workspace = true
@@ -22,4 +23,3 @@ windows-registry = "0.6"
 
 [dev-dependencies]
 tempfile = "3"
-serde_json.workspace = true

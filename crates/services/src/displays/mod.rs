@@ -29,6 +29,8 @@ mod linux;
 mod macos;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+pub(crate) use windows::sdr_white_scale;
 
 use std::sync::Arc;
 

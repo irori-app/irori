@@ -6,6 +6,10 @@
 //! scans it for games, closes it, and removes it from Irori (its prefix and
 //! games stay on disk).
 //!
+//! An installed launcher's card also adds (or removes) desktop and menu
+//! shortcuts that open it through Irori ([`launcher_shortcut`]), which the
+//! command palette offers too.
+//!
 //! A last card is the Xbox app's: nothing to set up, since Windows lists its
 //! games; it opens the Xbox app and looks for games again, and elsewhere
 //! says it is Windows-only. On every system it also signs in to an Xbox
@@ -20,6 +24,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::select::{Select, SelectItem, SelectState};
 use gpui_kit::component::switch::Switch;
@@ -42,7 +47,7 @@ use irori_launchers::{
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use crate::common::{backend_op, card, notify_error};
+use crate::common::{backend_op, card, notify_error, notify_success};
 
 struct LaunchersHandle(Arc<LaunchersStore>);
 impl Global for LaunchersHandle {}
@@ -57,10 +62,98 @@ pub(crate) fn launchers_store(cx: &App) -> Option<Arc<LaunchersStore>> {
     cx.try_global::<LaunchersHandle>().map(|h| h.0.clone())
 }
 
+/// The launchers set up in a prefix of their own, for the command palette.
+pub fn wine_launchers(cx: &App) -> Vec<Launcher> {
+    launchers_store(cx)
+        .map(|s| s.wine_launchers())
+        .unwrap_or_default()
+}
+
+/// The launchers Irori set up or found games of, for the command palette.
+pub fn known_launchers(cx: &App) -> Vec<Launcher> {
+    launchers_store(cx)
+        .map(|s| s.known_launchers())
+        .unwrap_or_default()
+}
+
+/// Start a launcher, reporting a failure.
+pub fn open_launcher(launcher: Launcher, window: &mut Window, cx: &mut App) {
+    crate::i18n::register();
+    let Some(store) = launchers_store(cx) else {
+        return;
+    };
+    let task = irori_ui::run(cx, async move { store.open(launcher).await });
+    window
+        .spawn(cx, async move |cx| {
+            if let Err(e) = task.await {
+                let _ = cx.update(|window, cx| {
+                    notify_error(
+                        t_args(
+                            "manage.launchers.open_failed",
+                            &[("launcher", launcher.display_name())],
+                        ),
+                        &e,
+                        window,
+                        cx,
+                    )
+                });
+            }
+        })
+        .detach();
+}
+
+/// Add (or with `add` false remove) the desktop and application menu
+/// shortcuts that open `launcher` through Irori, with its program's icon.
+pub fn launcher_shortcut(launcher: Launcher, add: bool, window: &mut Window, cx: &mut App) {
+    crate::i18n::register();
+    let Some(store) = launchers_store(cx) else {
+        return;
+    };
+    let app = backend(cx).settings.app();
+    let name = launcher.display_name();
+    let task = irori_ui::run(cx, async move {
+        use irori_extras::shortcuts;
+        let program = store.program(launcher);
+        let client = shortcuts::launcher_client(launcher.id(), name, program.as_deref());
+        if add {
+            let targets = shortcuts::ShortcutTargets {
+                desktop: true,
+                app_menu: true,
+                steam: false,
+            };
+            shortcuts::add(&client, &app, targets).await.map(|_| ())
+        } else {
+            shortcuts::remove(&client, &app).await
+        }
+    });
+    window
+        .spawn(cx, async move |cx| {
+            let result = task.await;
+            let _ = cx.update(|window, cx| match result {
+                Ok(()) => notify_success(
+                    if add {
+                        t_args("manage.launchers.shortcut_added", &[("launcher", name)])
+                    } else {
+                        t_args("manage.launchers.shortcut_removed", &[("launcher", name)])
+                    },
+                    window,
+                    cx,
+                ),
+                Err(e) => notify_error(
+                    t_args("manage.launchers.shortcut_failed", &[("launcher", name)]),
+                    &e,
+                    window,
+                    cx,
+                ),
+            });
+        })
+        .detach();
+}
+
 #[derive(Debug, Clone, PartialEq)]
-struct WineChoice {
-    value: SharedString,
-    title: SharedString,
+pub(crate) struct WineChoice {
+    pub value: SharedString,
+    pub title: SharedString,
 }
 
 impl SelectItem for WineChoice {
@@ -716,6 +809,8 @@ impl LaunchersSection {
                     this.act(launcher, Action::Forget, window, cx)
                 }))
         });
+        // Windows runs the launchers natively.
+        let wine_settings = !cfg!(windows) && status.setup.is_some();
         let actions: AnyElement = if let Some(live) = &live {
             let progress = live.progress.unwrap_or_default();
             v_flex()
@@ -773,6 +868,44 @@ impl LaunchersSection {
                         ),
                 )
                 .child(
+                    Button::new("launcher-more")
+                        .debug_selector(move || format!("launcher-{}-more", launcher.id()))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Ellipsis)
+                        .accessibility_label(t("manage.launchers.more"))
+                        .tooltip(t("manage.launchers.more"))
+                        .dropdown_menu(move |menu, _, _| {
+                            let menu = if wine_settings {
+                                menu.item(
+                                    PopupMenuItem::new(t("manage.launchers.wine_settings"))
+                                        .icon(IconName::Wine)
+                                        .on_click(move |_, window, cx| {
+                                            crate::launcher_wine::open_launcher_wine_dialog(
+                                                launcher, window, cx,
+                                            )
+                                        }),
+                                )
+                            } else {
+                                menu
+                            };
+                            menu.item(
+                                PopupMenuItem::new(t("manage.launchers.add_shortcut"))
+                                    .icon(IconName::Link)
+                                    .on_click(move |_, window, cx| {
+                                        launcher_shortcut(launcher, true, window, cx)
+                                    }),
+                            )
+                            .item(
+                                PopupMenuItem::new(t("manage.launchers.remove_shortcut")).on_click(
+                                    move |_, window, cx| {
+                                        launcher_shortcut(launcher, false, window, cx)
+                                    },
+                                ),
+                            )
+                        }),
+                )
+                .child(
                     Button::new("launcher-open")
                         .small()
                         .icon(IconName::ExternalLink)
@@ -825,6 +958,10 @@ impl LaunchersSection {
             .child(
                 h_flex()
                     .gap_2()
+                    .children(
+                        irori_ui::components::StoreLogo::of_launcher(launcher.id())
+                            .map(|logo| logo.icon().text_color(muted)),
+                    )
                     .child(
                         div()
                             .flex_1()

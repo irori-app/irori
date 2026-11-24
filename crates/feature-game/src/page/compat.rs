@@ -1,18 +1,24 @@
-//! Compatibility panel: ProtonDB, Steam Deck, anticheat, HowLongToBeat,
-//! review scores and known fixes, from the installed compatibility provider.
+//! Compatibility panel: ProtonDB, Steam Deck, PCGamingWiki's PC facts,
+//! anticheat, HowLongToBeat, review scores and known fixes, from the
+//! installed compatibility provider.
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::link::Link;
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::skeleton::Skeleton;
-use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
+use gpui_kit::component::tag::Tag;
+use gpui_kit::component::{
+    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
+};
 use gpui_kit::{
-    AnyElement, App, Context, InteractiveElement as _, IntoElement, ParentElement, SharedString,
-    Styled, div, rems,
+    AnyElement, App, ClipboardItem, Context, InteractiveElement as _, IntoElement, ParentElement,
+    SharedString, Styled, div, rems,
 };
 use irori_ui::i18n::{t, t_args};
 
 use super::GamePage;
-use crate::hooks::{AnticheatStatus, CompatibilityInfo, SteamDeckStatus};
+use crate::hooks::{AnticheatStatus, CompatibilityInfo, PcFeatures, SteamDeckStatus};
 use crate::load::Load;
 
 fn row(label: SharedString, value: impl IntoElement, cx: &App) -> AnyElement {
@@ -132,6 +138,9 @@ impl GamePage {
                 cx,
             ));
         }
+        if let Some(pc) = &info.pc {
+            rows.extend(self.pc_rows(pc, info.pcgamingwiki_url.as_deref(), cx));
+        }
         if let Some(ac) = &info.anticheat {
             let color = match ac.status {
                 AnticheatStatus::Broken | AnticheatStatus::Denied => cx.theme().danger,
@@ -237,6 +246,74 @@ impl GamePage {
                     )
                     .into_any_element(),
             );
+        }
+        rows
+    }
+
+    /// PCGamingWiki's PC facts: the features as chips, the engines, the
+    /// save folder with a copy button and the page's fixes.
+    fn pc_rows(&self, pc: &PcFeatures, page: Option<&str>, cx: &App) -> Vec<AnyElement> {
+        let mut rows = Vec::new();
+        if !pc.features.is_empty() {
+            rows.push(row(
+                t("game.compat.pc_features"),
+                h_flex().gap_1().flex_wrap().justify_end().children(
+                    pc.features
+                        .iter()
+                        .map(|(f, s)| Tag::secondary().xsmall().child(f.label_with(*s))),
+                ),
+                cx,
+            ));
+        }
+        if !pc.engines.is_empty() {
+            rows.push(row(
+                t("game.compat.engine"),
+                div().truncate().child(pc.engines.join(", ")),
+                cx,
+            ));
+        }
+        if let Some(path) = &pc.save_folder {
+            let copied = path.clone();
+            rows.push(row(
+                t("game.compat.save_folder"),
+                h_flex()
+                    .gap_1()
+                    .min_w_0()
+                    .child(div().min_w_0().truncate().text_xs().child(path.clone()))
+                    .child(
+                        Button::new("compat-copy-save-folder")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Copy)
+                            .tooltip(t("game.compat.copy_path"))
+                            .on_click(move |_, window, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(copied.clone()));
+                                window.push_notification(
+                                    Notification::success(t("game.compat.path_copied")),
+                                    cx,
+                                );
+                            }),
+                    ),
+                cx,
+            ));
+        }
+        if pc.fixes > 0 {
+            let count = pc.fixes.to_string();
+            let text = t_args(
+                if pc.fixes == 1 {
+                    "game.compat.wiki_fixes_one"
+                } else {
+                    "game.compat.wiki_fixes_other"
+                },
+                &[("count", &count)],
+            );
+            rows.push(match page {
+                Some(url) => div()
+                    .text_sm()
+                    .child(link("compat-pcgw-fixes", url, text))
+                    .into_any_element(),
+                None => div().text_sm().child(text).into_any_element(),
+            });
         }
         rows
     }

@@ -5,10 +5,13 @@
 //! The report comes from `Backend::storage_report`, measured off the UI
 //! thread and cached on disk; opening the section reuses the cache and
 //! Rescan measures again. Each cleanup lists what it deletes with a box per
-//! item, and asks before deleting, naming how much goes.
+//! item, and asks before deleting, naming how much goes and whether it goes
+//! to the trash. The game list sorts installed games by size or by when they
+//! were last played, and opens or uninstalls each.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
@@ -24,11 +27,13 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, Context, ElementId, Hsla, InteractiveElement as _, IntoElement, ObjectFit,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledImage as _, Window, div, px, relative, rems,
+    StyledImage as _, Window, div, px, relative, rems, uniform_list,
 };
+use irori_core::GameId;
 use irori_core::util::format_bytes;
 use irori_services::storage::{
-    Cleanup, CleanupItem, CleanupKind, DiskUsage, GameSize, Holding, ItemNote, StorageReport,
+    CleanedUp, Cleanup, CleanupItem, CleanupKind, DiskUsage, GameSize, Holding, ItemNote,
+    StorageReport,
 };
 use irori_ui::art::LruImageCache;
 use irori_ui::components::SectionTitle;
@@ -51,12 +56,86 @@ const LABEL_MIN: (f32, f32) = (0.11, 0.2);
 const TILE_ART_PX: u32 = 480;
 /// Items of a cleanup listed before "and N more".
 const LISTED_ITEMS: usize = 8;
+/// Rows of the game list shown before it scrolls.
+const GAME_ROWS: usize = 8;
+/// Height of a game list row, in rem.
+const GAME_ROW_REM: f32 = 3.25;
+/// A game not played for this many days is marked as one to consider.
+const IDLE_DAYS: i64 = 182;
 
-/// Whether an item is chosen until the user says otherwise. A prefix can hold
-/// saves a game without cloud saves keeps nowhere else, so each is picked by
-/// hand; everything else is made again or downloaded again.
+/// Whether an item is chosen until the user says otherwise. A prefix or a
+/// folder can hold saves or the user's own files, and a shader cache costs
+/// stutter while it is compiled again, so those are picked by hand; the rest
+/// is made again or downloaded again.
 fn chosen_by_default(kind: CleanupKind) -> bool {
-    kind != CleanupKind::OrphanPrefixes
+    matches!(
+        kind,
+        CleanupKind::DownloadLeftovers
+            | CleanupKind::UnusedWineBuilds
+            | CleanupKind::ArtCache
+            | CleanupKind::Logs
+    )
+}
+
+/// How the game list is ordered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum GameSort {
+    /// Largest first.
+    #[default]
+    Size,
+    /// Played longest ago first, never played before all.
+    LastPlayed,
+}
+
+/// Every disk's games in `sort` order.
+pub(crate) fn sorted_games(report: &StorageReport, sort: GameSort) -> Vec<GameSize> {
+    let mut games: Vec<GameSize> = report
+        .disks
+        .iter()
+        .flat_map(|d| d.games.iter().cloned())
+        .collect();
+    let played = |g: &GameSize| {
+        g.last_played
+            .as_deref()
+            .and_then(irori_core::util::parse_rfc3339)
+    };
+    match sort {
+        GameSort::Size => games.sort_by_key(|g| std::cmp::Reverse(g.bytes)),
+        GameSort::LastPlayed => {
+            games.sort_by(|a, b| played(a).cmp(&played(b)).then(b.bytes.cmp(&a.bytes)))
+        }
+    }
+    games
+}
+
+/// Whole days since `last_played` (RFC 3339), if it was ever played.
+pub(crate) fn days_since(last_played: Option<&str>, now: i64) -> Option<i64> {
+    let at = irori_core::util::parse_rfc3339(last_played?)?;
+    Some((now - at).max(0) / 86_400)
+}
+
+/// "Played 3 days ago", "Played 7 months ago", "Never played".
+fn played_label(days: Option<i64>) -> SharedString {
+    let count = |n: i64, one: &str, other: &str| {
+        t_args(
+            if n == 1 { one } else { other },
+            &[("count", &n.to_string())],
+        )
+    };
+    match days {
+        None => t("settings.storage.played_never"),
+        Some(0) => t("settings.storage.played_today"),
+        Some(d) if d < 60 => count(
+            d,
+            "settings.storage.played_days_one",
+            "settings.storage.played_days_other",
+        ),
+        Some(d) => count(
+            d / 30,
+            "settings.storage.played_months_one",
+            "settings.storage.played_months_other",
+        ),
+    }
 }
 
 /// Which cleanup items the user has chosen, kept across rescans.
@@ -120,7 +199,10 @@ fn kind_id(kind: CleanupKind) -> &'static str {
     match kind {
         CleanupKind::DownloadLeftovers => "download_leftovers",
         CleanupKind::OrphanPrefixes => "orphan_prefixes",
+        CleanupKind::SteamLeftovers => "steam_leftovers",
+        CleanupKind::StrayFolders => "stray_folders",
         CleanupKind::UnusedWineBuilds => "unused_wine_builds",
+        CleanupKind::ShaderCaches => "shader_caches",
         CleanupKind::ArtCache => "art_cache",
         CleanupKind::Logs => "logs",
     }
@@ -137,7 +219,10 @@ fn kind_icon(kind: CleanupKind) -> IconName {
     match kind {
         CleanupKind::DownloadLeftovers => IconName::HardDriveDownload,
         CleanupKind::OrphanPrefixes => IconName::FolderX,
+        CleanupKind::SteamLeftovers => IconName::Gamepad2,
+        CleanupKind::StrayFolders => IconName::FolderOpen,
         CleanupKind::UnusedWineBuilds => IconName::Wine,
+        CleanupKind::ShaderCaches => IconName::Cpu,
         CleanupKind::ArtCache => IconName::Image,
         CleanupKind::Logs => IconName::ScrollText,
     }
@@ -176,6 +261,30 @@ fn item_label(item: &CleanupItem) -> SharedString {
             "settings.storage.item.log_files_other",
             &[("count", &count.to_string())],
         ),
+        ItemNote::SteamPrefix(app, title) | ItemNote::SteamShaders(app, title) => {
+            let prefix = matches!(item.note, ItemNote::SteamPrefix(..));
+            let app = app.to_string();
+            match (title, prefix) {
+                (Some(title), true) => t_args(
+                    "settings.storage.item.steam_prefix_of",
+                    &[("title", title), ("app", &app)],
+                ),
+                (Some(title), false) => t_args(
+                    "settings.storage.item.steam_shaders_of",
+                    &[("title", title), ("app", &app)],
+                ),
+                (None, true) => t_args("settings.storage.item.steam_prefix", &[("app", &app)]),
+                (None, false) => t_args("settings.storage.item.steam_shaders", &[("app", &app)]),
+            }
+        }
+        ItemNote::ShadersOf(title) => t_args(
+            "settings.storage.item.shaders_of",
+            &[("file", &item.name()), ("title", title)],
+        ),
+        ItemNote::DriverShaders => t_args(
+            "settings.storage.item.driver_shaders",
+            &[("name", &item.path.display().to_string())],
+        ),
     }
 }
 
@@ -204,6 +313,7 @@ pub(crate) struct StoragePanel {
     selection: Selection,
     cleaning: Option<CleanupKind>,
     expanded: HashSet<CleanupKind>,
+    sort: GameSort,
     images: gpui_kit::Entity<LruImageCache>,
     _subscriptions: Vec<gpui_kit::Subscription>,
 }
@@ -219,6 +329,7 @@ impl StoragePanel {
             selection: Selection::default(),
             cleaning: None,
             expanded: HashSet::new(),
+            sort: GameSort::default(),
             images: LruImageCache::new(TREEMAP_TILES * 2, cx),
             _subscriptions: vec![
                 cx.observe(&art, |_, _, cx| cx.notify()),
@@ -275,6 +386,7 @@ impl StoragePanel {
             return;
         }
         let bytes: u64 = items.iter().map(|i| i.bytes).sum();
+        let trash = items.iter().any(|i| i.goes_to_trash(kind));
         let weak = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, cx| {
             let muted_fg = cx.theme().muted_foreground;
@@ -294,6 +406,14 @@ impl StoragePanel {
             let description = v_flex()
                 .gap_2()
                 .child(div().child(kind_text(kind, "confirm_description")))
+                .when(trash, |v| {
+                    v.child(
+                        div()
+                            .text_sm()
+                            .text_color(muted_fg)
+                            .child(t("settings.storage.trash_note")),
+                    )
+                })
                 .child(v_flex().gap_1().children(listed).when(more > 0, |v| {
                     v.child(div().text_xs().text_color(muted_fg).child(t_args(
                         "settings.storage.and_more",
@@ -308,7 +428,11 @@ impl StoragePanel {
                 .show_cancel(true)
                 .cancel_text(t("settings.common.cancel"))
                 .ok_text(t_args(
-                    "settings.storage.confirm_ok",
+                    if trash {
+                        "settings.storage.confirm_trash"
+                    } else {
+                        "settings.storage.confirm_ok"
+                    },
                     &[("size", &format_bytes(bytes))],
                 ))
                 .ok_variant(ButtonVariant::Danger)
@@ -336,13 +460,9 @@ impl StoragePanel {
             this.update_in(cx, |this, window, cx| {
                 this.cleaning = None;
                 match result {
-                    Ok(freed) => window.push_notification(
-                        Notification::success(t_args(
-                            "settings.storage.freed",
-                            &[("size", &format_bytes(freed))],
-                        )),
-                        cx,
-                    ),
+                    Ok(done) => {
+                        window.push_notification(Notification::success(cleaned_text(done)), cx)
+                    }
                     Err(e) => window.push_notification(
                         Notification::error(format!("{e:#}"))
                             .title(t("settings.storage.clean_failed")),
@@ -601,6 +721,82 @@ impl StoragePanel {
             .into_any_element()
     }
 
+    /// Every installed game with its size and when it was last played, in
+    /// the chosen order, each with Open folder and Uninstall.
+    fn render_games(&self, report: &StorageReport, cx: &mut Context<Self>) -> AnyElement {
+        let games = sorted_games(report, self.sort);
+        let library = models(cx).library.read(cx).snapshot.clone();
+        let now = irori_core::util::unix_now() as i64;
+        let rows: Rc<Vec<GameRow>> = Rc::new(
+            games
+                .into_iter()
+                .map(|g| {
+                    let game = library.get(&g.id);
+                    GameRow {
+                        folder: game
+                            .and_then(|g| g.install.as_ref())
+                            .map(|i| PathBuf::from(&i.install_path))
+                            .filter(|p| !p.as_os_str().is_empty()),
+                        can_uninstall: g.id.runner.manages_installs(),
+                        days: days_since(g.last_played.as_deref(), now),
+                        game: g,
+                    }
+                })
+                .collect(),
+        );
+        let count = rows.len();
+        let sort_button = |id: &'static str, sort: GameSort, label: &str| {
+            Button::new(id)
+                .small()
+                .when(self.sort == sort, |b| b.primary())
+                .when(self.sort != sort, |b| b.ghost())
+                .label(t(label))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.sort = sort;
+                    cx.notify();
+                }))
+        };
+        let list = uniform_list("storage-games", count, move |range, _, cx| {
+            range
+                .filter_map(|ix| rows.get(ix).map(|row| game_row(ix, row, cx)))
+                .collect()
+        })
+        .h(rems(GAME_ROW_REM * count.clamp(1, GAME_ROWS) as f32));
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .justify_between()
+                    .gap_2()
+                    .child(SectionTitle::new(t("settings.storage.game_list")))
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(sort_button(
+                                "storage-sort-size",
+                                GameSort::Size,
+                                "settings.storage.sort_size",
+                            ))
+                            .child(sort_button(
+                                "storage-sort-played",
+                                GameSort::LastPlayed,
+                                "settings.storage.sort_last_played",
+                            )),
+                    ),
+            )
+            .child(
+                div()
+                    .rounded(cx.theme().radius_lg)
+                    .bg(cx.theme().secondary)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .py_1()
+                    .child(list),
+            )
+            .into_any_element()
+    }
+
     fn render_cleanup(&self, cleanup: &Cleanup, cx: &mut Context<Self>) -> AnyElement {
         let kind = cleanup.kind;
         let theme = cx.theme();
@@ -760,12 +956,16 @@ impl StoragePanel {
                     )))
                 })
         });
-        let warning = (kind == CleanupKind::OrphanPrefixes && !empty).then(|| {
-            Alert::warning(
-                "storage-prefix-warning",
-                t("settings.storage.cleanup.orphan_prefixes.warning"),
-            )
-        });
+        let warning = (matches!(
+            kind,
+            CleanupKind::OrphanPrefixes | CleanupKind::StrayFolders | CleanupKind::SteamLeftovers
+        ) && !empty)
+            .then(|| {
+                Alert::warning(
+                    ElementId::Name(format!("storage-warning-{}", kind_id(kind)).into()),
+                    kind_text(kind, "warning"),
+                )
+            });
         v_flex()
             .gap_2()
             .px_4()
@@ -774,6 +974,120 @@ impl StoragePanel {
             .children(warning)
             .children(list)
             .into_any_element()
+    }
+}
+
+/// One game of the game list, ready to draw.
+struct GameRow {
+    game: GameSize,
+    folder: Option<PathBuf>,
+    can_uninstall: bool,
+    days: Option<i64>,
+}
+
+fn game_row(ix: usize, row: &GameRow, cx: &mut App) -> AnyElement {
+    let theme = cx.theme();
+    let (muted_fg, warning, radius, border) = (
+        theme.muted_foreground,
+        theme.warning,
+        theme.radius,
+        theme.border,
+    );
+    let id: GameId = row.game.id.clone();
+    let idle = row.days.is_some_and(|d| d >= IDLE_DAYS);
+    let folder = row.folder.clone();
+    h_flex()
+        .id(ElementId::Name(format!("storage-game-{ix}").into()))
+        .h(rems(GAME_ROW_REM))
+        .px_4()
+        .gap_3()
+        .when(ix > 0, |d| d.border_t_1().border_color(border))
+        .child(
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_medium()
+                        .truncate()
+                        .child(row.game.title.clone()),
+                )
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .min_w_0()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .child(div().truncate().child(played_label(row.days)))
+                        .when(idle, |h| {
+                            h.child(
+                                div()
+                                    .flex_shrink_0()
+                                    .px_1p5()
+                                    .rounded(radius)
+                                    .border_1()
+                                    .border_color(warning)
+                                    .text_color(warning)
+                                    .child(t("settings.storage.idle")),
+                            )
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .flex_shrink_0()
+                .text_sm()
+                .text_color(muted_fg)
+                .child(format_bytes(row.game.bytes)),
+        )
+        .child(
+            Button::new(ElementId::Name(format!("storage-open-{ix}").into()))
+                .ghost()
+                .small()
+                .icon(IconName::FolderOpen)
+                .tooltip(t("settings.storage.open_folder"))
+                .disabled(folder.is_none())
+                .on_click(move |_, _, cx| {
+                    if let Some(folder) = &folder {
+                        cx.open_with_system(folder);
+                    }
+                }),
+        )
+        .when(row.can_uninstall, |h| {
+            let id = id.clone();
+            h.child(
+                Button::new(ElementId::Name(format!("storage-uninstall-{ix}").into()))
+                    .ghost()
+                    .small()
+                    .icon(IconName::Trash)
+                    .tooltip(t("settings.storage.uninstall"))
+                    .on_click(move |_, window, cx| {
+                        irori_ui::hooks::uninstall(id.clone(), window, cx)
+                    }),
+            )
+        })
+        .child(
+            Button::new(ElementId::Name(format!("storage-page-{ix}").into()))
+                .ghost()
+                .small()
+                .icon(IconName::ChevronRight)
+                .tooltip(t("settings.storage.open_game"))
+                .on_click(move |_, _, cx| navigate(Route::Game(id.clone()), cx)),
+        )
+        .into_any_element()
+}
+
+/// What a finished cleanup says.
+fn cleaned_text(done: CleanedUp) -> SharedString {
+    let (freed, trashed) = (format_bytes(done.freed), format_bytes(done.trashed));
+    match (done.freed > 0, done.trashed > 0) {
+        (_, false) => t_args("settings.storage.freed", &[("size", &freed)]),
+        (false, true) => t_args("settings.storage.trashed", &[("size", &trashed)]),
+        (true, true) => t_args(
+            "settings.storage.freed_and_trashed",
+            &[("freed", &freed), ("trashed", &trashed)],
+        ),
     }
 }
 
@@ -867,6 +1181,9 @@ impl Render for StoragePanel {
                 v.child(muted(t("settings.storage.no_disks"), cx))
             })
             .children(disks)
+            .when(report.disks.iter().any(|d| !d.games.is_empty()), |v| {
+                v.child(self.render_games(&report, cx))
+            })
             .child(SectionTitle::new(t("settings.storage.free_up")))
             .child(
                 v_flex()
@@ -923,6 +1240,71 @@ mod tests {
         assert_eq!(selection.bytes(prefixes), 200);
         selection.set_all(prefixes, false);
         assert_eq!(selection.bytes(prefixes), 0);
+    }
+
+    fn sized(app: &str, bytes: u64, played: Option<&str>) -> GameSize {
+        GameSize {
+            id: GameId::new(irori_core::Runner::Gog, app),
+            title: app.into(),
+            bytes,
+            last_played: played.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn games_sort_by_size_or_by_how_long_ago_they_were_played() {
+        let disk = |games| DiskUsage {
+            drive: irori_services::storage::Drive {
+                name: String::new(),
+                mount: "/".into(),
+                total: 1,
+                free: 0,
+            },
+            games,
+            support: Default::default(),
+        };
+        let report = StorageReport {
+            disks: vec![
+                disk(vec![
+                    sized("big", 900, Some("2026-11-01T10:00:00Z")),
+                    sized("old", 100, Some("2025-01-01T10:00:00Z")),
+                ]),
+                disk(vec![sized("never", 50, None)]),
+            ],
+            cleanups: Vec::new(),
+        };
+        let order = |sort| -> Vec<String> {
+            sorted_games(&report, sort)
+                .into_iter()
+                .map(|g| g.title)
+                .collect()
+        };
+        assert_eq!(order(GameSort::Size), ["big", "old", "never"]);
+        assert_eq!(order(GameSort::LastPlayed), ["never", "old", "big"]);
+    }
+
+    #[test]
+    fn days_since_counts_whole_days() {
+        let now = irori_core::util::parse_rfc3339("2026-11-10T12:00:00Z").unwrap();
+        assert_eq!(days_since(Some("2026-11-10T08:00:00Z"), now), Some(0));
+        assert_eq!(days_since(Some("2026-05-01T12:00:00Z"), now), Some(193));
+        assert_eq!(days_since(None, now), None);
+        assert_eq!(days_since(Some("garbage"), now), None);
+        // A clock behind the record never counts backwards.
+        assert_eq!(days_since(Some("2026-12-01T00:00:00Z"), now), Some(0));
+    }
+
+    #[test]
+    fn what_may_hold_saves_waits_to_be_chosen() {
+        for kind in [
+            CleanupKind::OrphanPrefixes,
+            CleanupKind::SteamLeftovers,
+            CleanupKind::StrayFolders,
+            CleanupKind::ShaderCaches,
+        ] {
+            assert!(!chosen_by_default(kind), "{kind:?}");
+        }
+        assert!(chosen_by_default(CleanupKind::Logs));
     }
 
     #[test]

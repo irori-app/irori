@@ -1,7 +1,9 @@
 //! Launch troubleshooting: gathers what the diagnosis reads about a game's
 //! last run (its log, its program's imports, the winetricks components in
 //! its prefix, its anticheat entry, its graphics and sync settings,
-//! `vm.max_map_count`, the distribution and GPU), remembers the fixes tried
+//! `vm.max_map_count`, Yama's `ptrace_scope` and the Rockstar Games
+//! Launcher's log for Rockstar titles from Epic, the distribution and GPU),
+//! remembers the fixes tried
 //! this session, and applies the fixes that need the backend: winetricks
 //! components, and stopping a wineserver of another Wine version.
 
@@ -23,7 +25,8 @@ use parking_lot::Mutex;
 pub use analysis::{
     Detail, Diagnosis, Facts, Finding, Fix, FixContext, GpuVendor, LaunchHint,
     MAP_COUNT_RECOMMENDED, MAP_COUNT_WANTED, OfferedFix, diagnose, distro_ids, game_output_start,
-    launch_hints, map_count_commands, missing_dlls, runtime_verbs, vulkan_driver_command,
+    launch_hints, map_count_commands, missing_dlls, ptrace_scope_commands, runtime_verbs,
+    vulkan_driver_command,
 };
 pub use pe::PeInfo;
 
@@ -158,6 +161,23 @@ impl Backend {
         } else {
             None
         };
+        let rockstar_from_epic = needs_wine && is_rockstar_from_epic(id.runner, game);
+        let (ptrace_scope, launcher_lines) = if rockstar_from_epic && cfg!(target_os = "linux") {
+            let prefix = prefix.clone().flatten();
+            self.spawn_blocking(move || {
+                (
+                    read_ptrace_scope(),
+                    prefix
+                        .as_deref()
+                        .map(rockstar_launcher_log)
+                        .unwrap_or_default(),
+                )
+            })
+            .await
+            .unwrap_or_default()
+        } else {
+            (None, Vec::new())
+        };
         let (lines, target_missing, exe_missing, program, installed_verbs, map_count) = {
             let (target, own_exe) = (target.clone(), own_exe.clone());
             let prefix = prefix.flatten();
@@ -201,6 +221,9 @@ impl Backend {
             installed_verbs,
             anticheat,
             map_count,
+            ptrace_scope,
+            rockstar_from_epic,
+            launcher_lines,
             vulkan_command,
             context: FixContext {
                 needs_wine,
@@ -339,6 +362,45 @@ fn installed_verbs(prefix: &Path) -> Vec<String> {
         }
     }
     verbs
+}
+
+/// Whether `game` is a Rockstar title from Epic: those start through the
+/// Rockstar Games Launcher in the game's prefix, which checks how it was
+/// started.
+fn is_rockstar_from_epic(runner: Runner, game: &GameInfo) -> bool {
+    runner == Runner::Legendary
+        && [&game.developer, &game.publisher]
+            .into_iter()
+            .flatten()
+            .any(|maker| maker.to_ascii_lowercase().contains("rockstar"))
+}
+
+/// Yama's `ptrace_scope`, on Linux kernels that have Yama.
+fn read_ptrace_scope() -> Option<u8> {
+    std::fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope")
+        .ok()
+        .and_then(|t| analysis::parse_ptrace_scope(&t))
+}
+
+/// The end of the Rockstar Games Launcher's `launcher.log` in `prefix`
+/// (any Wine user; Proton keeps `drive_c` in `pfx`).
+fn rockstar_launcher_log(prefix: &Path) -> Vec<String> {
+    const TAIL: u64 = 64 * 1024;
+    let mut lines = Vec::new();
+    for root in [prefix.join("pfx"), prefix.to_path_buf()] {
+        let Ok(users) = std::fs::read_dir(root.join("drive_c/users")) else {
+            continue;
+        };
+        for user in users.flatten() {
+            let log = user
+                .path()
+                .join("Documents/Rockstar Games/Launcher/launcher.log");
+            if let Some(text) = read_tail(&log, TAIL) {
+                lines.extend(text.lines().map(str::to_string));
+            }
+        }
+    }
+    lines
 }
 
 /// `vm.max_map_count`, on Linux.

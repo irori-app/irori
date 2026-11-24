@@ -18,8 +18,8 @@ use irori_core::{GameId, GameInfo};
 use irori_services::LibrarySnapshot;
 use irori_ui::components::{GameCover, SectionTitle};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::models;
 use irori_ui::style::{KeyboardFocusable as _, panel};
-use irori_ui::{Route, models, navigate};
 
 use super::backlog::Verdict;
 use super::hero::chip;
@@ -341,7 +341,9 @@ impl StatsView {
                     .gap_1p5()
                     .rounded(radius)
                     .cursor_pointer()
-                    .on_click(move |_, _, cx| navigate(Route::Game(id.clone()), cx))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_game_sheet(id.clone(), window, cx)
+                    }))
                     .child(
                         div()
                             .relative()
@@ -474,8 +476,8 @@ fn insight(
             d.child(Icon::new(IconName::ChevronRight).small().text_color(muted))
         })
         .when_some(target, |d, target| {
-            d.on_click(cx.listener(move |this, _, _, cx| match &target {
-                Target::Game(id) => navigate(Route::Game(id.clone()), cx),
+            d.on_click(cx.listener(move |this, _, window, cx| match &target {
+                Target::Game(id) => this.open_game_sheet(id.clone(), window, cx),
                 Target::Backlog => this.set_tab(Tab::Backlog, cx),
                 Target::Album => this.set_tab(Tab::Album, cx),
             }))

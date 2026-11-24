@@ -681,6 +681,15 @@ fn maps_emulators_to_systems_and_engines() {
     );
     assert_eq!(target("desmume", "a.nds", None, None), ok("nds", "desmume"));
     assert_eq!(
+        target("reicast", "a.gdi", None, None),
+        ok("dreamcast", "flycast")
+    );
+    assert_eq!(
+        target("libretro", "a.chd", Some("flycast"), None),
+        ok("dreamcast", "retroarch:flycast")
+    );
+    assert_eq!(target("yuzu", "a.nsp", None, None), ok("switch", "ryujinx"));
+    assert_eq!(
         target("libretro", "a.nds", Some("desmume"), None),
         ok("nds", "retroarch:desmume")
     );

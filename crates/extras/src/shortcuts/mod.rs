@@ -4,6 +4,10 @@
 //! (Steam's with `--wait`, so Steam follows the whole session); the
 //! `irori://launch/<runner>/<app>` URL scheme is registered alongside.
 //!
+//! A third-party launcher (Battle.net, the EA app…) gets desktop and menu
+//! shortcuts too ([`launcher_client`]): they open it through Irori with
+//! `irori --open-launcher <id>`, with the icon of the launcher's program.
+//!
 //! [`ShortcutTargets`], [`add`] and [`remove`] are the contract used by
 //! `irori-services`.
 
@@ -13,14 +17,15 @@ pub mod desktop;
 #[path = "desktop_native.rs"]
 pub mod desktop;
 pub mod icon;
+pub mod pe_icon;
 pub mod steam;
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use irori_core::{AppSettings, GameId, GameInfo};
+use irori_core::{AppSettings, GameId, GameInfo, InstalledInfo, Runner};
 
 use crate::util;
 
@@ -86,15 +91,58 @@ impl LauncherCommand {
         }
     }
 
-    /// Full argument list (program first) that launches `id`.
+    /// Full argument list (program first) that launches `id`, or opens the
+    /// launcher of a [`launcher_client`] shortcut.
     pub fn launch_args(&self, id: &GameId) -> Vec<String> {
         let mut v = Vec::with_capacity(self.prefix_args.len() + 3);
         v.push(self.program.clone());
         v.extend(self.prefix_args.iter().cloned());
-        v.push("--launch".into());
-        v.push(launch_target(id));
+        match client_of(id) {
+            Some(launcher) => {
+                v.push("--open-launcher".into());
+                v.push(launcher.to_string());
+            }
+            None => {
+                v.push("--launch".into());
+                v.push(launch_target(id));
+            }
+        }
         v
     }
+}
+
+/// App name prefix of a third-party launcher's own shortcut
+/// (`client:battlenet`, under [`Runner::Launchers`]). No game is called
+/// that: the launchers' games are `<launcher>:<id>`.
+pub const CLIENT_PREFIX: &str = "client:";
+
+/// What a shortcut that opens a third-party launcher is made from: the
+/// launcher's id (`battlenet`), its name and its program, whose icon the
+/// shortcut takes.
+pub fn launcher_client(id: &str, name: &str, program: Option<&Path>) -> GameInfo {
+    GameInfo {
+        runner: Some(Runner::Launchers),
+        app_name: format!("{CLIENT_PREFIX}{id}"),
+        title: name.to_string(),
+        is_installed: true,
+        install: program.map(|p| InstalledInfo {
+            install_path: p
+                .parent()
+                .map(|d| d.display().to_string())
+                .unwrap_or_default(),
+            executable: p.display().to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+/// The launcher a [`launcher_client`] shortcut opens.
+pub fn client_of(id: &GameId) -> Option<&str> {
+    if id.runner != Runner::Launchers {
+        return None;
+    }
+    id.app_name.strip_prefix(CLIENT_PREFIX)
 }
 
 /// `<runner>/<app_name>`, the argument of `--launch`.
@@ -110,19 +158,26 @@ pub struct ShortcutReport {
     pub icon: Option<PathBuf>,
     /// Present when a Steam shortcut was requested.
     pub steam: Option<steam::SteamReport>,
-    /// Steam was running, so its shortcuts could not be changed. Show the
-    /// user "Close Steam and try again".
+    /// Steam was running and the change couldn't be queued either.
     pub steam_running: bool,
+    /// Steam was running, so the Steam shortcut waits for it to close
+    /// ([`steam::queue`]).
+    pub steam_queued: bool,
     /// Non-fatal problems, already logged.
     pub errors: Vec<String>,
 }
 
-/// Create launcher shortcuts that start the game through Irori.
+/// Create launcher shortcuts that start the game through Irori. A Steam
+/// shortcut asked for while Steam runs waits for it to close
+/// ([`ShortcutReport::steam_queued`]).
 ///
-/// Fails when any requested target could not be created (including Steam
-/// being running); the targets that worked are kept. Use
-/// [`add_with_report`] for the details.
-pub async fn add(game: &GameInfo, app: &AppSettings, targets: ShortcutTargets) -> Result<()> {
+/// Fails when any requested target could not be created; the targets that
+/// worked are kept.
+pub async fn add(
+    game: &GameInfo,
+    app: &AppSettings,
+    targets: ShortcutTargets,
+) -> Result<ShortcutReport> {
     let report = add_with_report(game, app, targets).await?;
     if report.steam_running {
         bail!(
@@ -133,7 +188,19 @@ pub async fn add(game: &GameInfo, app: &AppSettings, targets: ShortcutTargets) -
     if !report.errors.is_empty() {
         bail!("{}", report.errors.join("; "));
     }
-    Ok(())
+    Ok(report)
+}
+
+/// Queue a Steam shortcut change that Steam's running kept from being made.
+/// Returns whether it was queued.
+async fn queue_change(f: impl FnOnce(&mut steam::queue::Queue)) -> bool {
+    match steam::queue::change(f).await {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::warn!("queueing a Steam shortcut change: {e:#}");
+            false
+        }
+    }
 }
 
 /// Like [`add`], returning what was created. DLCs are skipped.
@@ -161,7 +228,7 @@ pub async fn add_with_report(
                 .errors
                 .push(format!("registering irori:// links: {e:#}"));
         }
-        match icon::ensure_icon(game).await {
+        match icon::ensure_icon(game, app.shortcut_icon_from_exe).await {
             Ok(p) => report.icon = p,
             Err(e) => report
                 .errors
@@ -190,7 +257,11 @@ pub async fn add_with_report(
         let steam_id = crate::wiki::steam_app_id(game).await;
         match steam::add(game, app, steam_id.as_deref()).await {
             Ok(r) => {
-                report.steam_running = r.steam_running && !r.already_present;
+                if r.steam_running && !r.already_present {
+                    let id = game.id();
+                    report.steam_queued = queue_change(|q| q.add([&id])).await;
+                    report.steam_running = !report.steam_queued;
+                }
                 report.errors.extend(r.errors.iter().cloned());
                 report.steam = Some(r);
             }
@@ -224,13 +295,21 @@ fn steam_games<'a>(list: &'a [(&'a GameInfo, Option<String>)]) -> Vec<steam::Ste
 }
 
 /// Add games to Steam in one pass, installed or not; DLCs are skipped.
-/// Returns how many shortcuts were added. Fails when Steam is running or
-/// no Steam user could be changed.
-pub async fn add_to_steam(games: &[Arc<GameInfo>], app: &AppSettings) -> Result<usize> {
+/// Says how many shortcuts were added, or, while Steam runs, how many wait
+/// for it to close ([`steam::SyncReport::queued`]). Fails when no Steam user
+/// could be changed.
+pub async fn add_to_steam(games: &[Arc<GameInfo>], app: &AppSettings) -> Result<steam::SyncReport> {
     let ids = with_steam_ids(games).await;
     let list = steam_games(&ids);
     let report = steam::add_many(&list, app).await?;
     if report.steam_running {
+        let ids: Vec<GameId> = list.iter().map(|g| g.game.id()).collect();
+        if queue_change(|q| q.add(&ids)).await {
+            return Ok(steam::SyncReport {
+                queued: ids.len(),
+                ..Default::default()
+            });
+        }
         bail!("Steam is running. Close Steam and try again to add games to Steam.");
     }
     if report.users_changed == 0 && !report.already_present {
@@ -239,7 +318,12 @@ pub async fn add_to_steam(games: &[Arc<GameInfo>], app: &AppSettings) -> Result<
     for e in &report.errors {
         tracing::warn!("{e}");
     }
-    Ok(report.added)
+    Ok(steam::SyncReport {
+        added: report.added,
+        users_changed: report.users_changed,
+        errors: report.errors,
+        ..Default::default()
+    })
 }
 
 /// Bring Irori's Steam shortcuts in step with `games` (DLCs skipped): add
@@ -261,20 +345,27 @@ pub async fn sync_steam(
 }
 
 /// Remove Irori's Steam shortcuts of `ids`, or every one of Irori's with
-/// `None`, with their art. Other programs' shortcuts stay. Fails when Steam
-/// is running and there is something to remove.
+/// `None`, with their art. Other programs' shortcuts stay. While Steam runs
+/// the removal waits for it to close ([`steam::SyncReport::queued`]).
 pub async fn remove_from_steam(
     ids: Option<&HashSet<GameId>>,
     app: &AppSettings,
 ) -> Result<steam::SyncReport> {
     let report = steam::remove_games(ids, app).await?;
     if report.steam_running {
+        if queue_change(|q| q.remove(ids)).await {
+            return Ok(steam::SyncReport {
+                queued: ids.map_or(1, HashSet::len),
+                ..Default::default()
+            });
+        }
         bail!("Steam is running. Close Steam and try again to remove games from Steam.");
     }
     Ok(report)
 }
 
-/// Remove every shortcut Irori created for the game.
+/// Remove every shortcut Irori created for the game. Its Steam shortcut's
+/// removal waits for Steam to close when Steam runs.
 pub async fn remove(game: &GameInfo, app: &AppSettings) -> Result<()> {
     let report = remove_with_report(game, app).await?;
     if report.steam_running {
@@ -295,8 +386,10 @@ pub struct RemoveReport {
     pub removed_files: Vec<PathBuf>,
     pub steam: steam::SteamReport,
     /// The game has a Steam shortcut that could not be removed because Steam
-    /// is running.
+    /// is running, nor its removal queued.
     pub steam_running: bool,
+    /// The removal of the game's Steam shortcut waits for Steam to close.
+    pub steam_queued: bool,
     pub errors: Vec<String>,
 }
 
@@ -312,7 +405,11 @@ pub async fn remove_with_report(game: &GameInfo, app: &AppSettings) -> Result<Re
     }
     match steam::remove(game, app).await {
         Ok(r) => {
-            report.steam_running = r.steam_running;
+            if r.steam_running {
+                let ids = HashSet::from([game.id()]);
+                report.steam_queued = queue_change(|q| q.remove(Some(&ids))).await;
+                report.steam_running = !report.steam_queued;
+            }
             report.errors.extend(r.errors.iter().cloned());
             report.steam = r;
         }
@@ -335,6 +432,35 @@ fn is_dlc(game: &GameInfo) -> bool {
 mod tests {
     use super::*;
     use irori_core::Runner;
+
+    #[test]
+    fn launcher_shortcuts_open_the_launcher() {
+        let l = LauncherCommand {
+            program: "/usr/bin/irori".into(),
+            prefix_args: vec![],
+            working_dir: "/".into(),
+        };
+        let client = launcher_client(
+            "battlenet",
+            "Battle.net",
+            Some(Path::new("/p/drive_c/Battle.net/Battle.net Launcher.exe")),
+        );
+        assert_eq!(client_of(&client.id()), Some("battlenet"));
+        assert_eq!(
+            l.launch_args(&client.id()),
+            ["/usr/bin/irori", "--open-launcher", "battlenet"]
+        );
+        assert_eq!(
+            icon::windows_program(&client).as_deref(),
+            Some(Path::new("/p/drive_c/Battle.net/Battle.net Launcher.exe"))
+        );
+        // A launcher's game is a game.
+        assert_eq!(
+            client_of(&GameId::new(Runner::Launchers, "battlenet:wow")),
+            None
+        );
+        assert_eq!(client_of(&GameId::new(Runner::Gog, "client:x")), None);
+    }
 
     #[test]
     fn launch_args() {

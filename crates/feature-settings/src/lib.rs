@@ -20,30 +20,39 @@
 //! (`update_app` / `set_game_value`). Text fields commit on blur or Enter,
 //! never per keystroke.
 
-mod app_update;
+pub mod app_update;
 mod appearance;
 mod artwork;
 mod backup;
+mod controller_map;
 mod controllers;
 mod displays;
 mod epic;
+pub mod feedback;
 mod form;
 mod game_view;
 mod graphics_mods;
+mod how_it_starts;
 pub mod hud;
 mod i18n;
 mod igdb;
 mod launch_presets;
 mod launch_programs;
+mod launchbox;
 mod layout;
+mod library_folders;
 mod logs;
 mod optiscaler;
 mod optiscaler_key;
+mod overlay;
+mod quick_launch;
 pub mod registry;
 mod renodx;
 mod replay;
 mod reshade;
+mod restore_paths;
 mod saves;
+mod setup_card;
 mod steam_compat;
 mod steam_launch;
 mod storage;
@@ -52,6 +61,7 @@ mod sunshine;
 mod sync;
 mod treemap;
 mod umu;
+mod user_actions;
 pub mod value;
 mod view;
 mod widgets;
@@ -61,7 +71,8 @@ pub use form::{FormTarget, GameSettingsForm, SettingsForm};
 pub use game_view::{GameSection, GameSettingsView};
 pub use i18n::CATALOGS;
 pub use logs::LogViewer;
-pub use stores::install_store_handles;
+pub use setup_card::setup_card;
+pub use stores::{install_emulation_store, install_store_handles};
 pub use view::{SettingsSection, SettingsView};
 
 /// Register the settings feature's translations with `irori_ui::i18n`.

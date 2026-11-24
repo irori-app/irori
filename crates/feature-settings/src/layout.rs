@@ -25,6 +25,7 @@ pub(crate) const SIDEBAR_GROUPS: &[SidebarGroup] = &[
         label_key: "settings.sidebar.preferences",
         sections: &[
             SettingsSection::General,
+            SettingsSection::Controller,
             SettingsSection::GameDefaults,
             SettingsSection::PerformanceHud,
             SettingsSection::Appearance,
@@ -73,10 +74,6 @@ pub(crate) const GENERAL_TABS: &[SubTab] = &[
     SubTab {
         id: "integrations",
         label_key: "settings.subtab.general.integrations",
-    },
-    SubTab {
-        id: "controllers",
-        label_key: "settings.subtab.general.controllers",
     },
 ];
 
@@ -176,7 +173,11 @@ pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
         FieldSection::CloudSaves => Some("saves"),
         FieldSection::General => general_subtab(spec.path),
         FieldSection::Appearance => appearance_subtab(spec.path),
-        FieldSection::Advanced | FieldSection::Saves | FieldSection::Artwork => None,
+        // The Controller page is short enough to stay one page.
+        FieldSection::Advanced
+        | FieldSection::Saves
+        | FieldSection::Artwork
+        | FieldSection::Controller => None,
     }
 }
 
@@ -185,6 +186,7 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         "uiLanguage"
         | "defaultInstallPath"
         | "iroriInstallPerStore"
+        | "panel.libraryFolders"
         | "defaultWinePrefixDir"
         | "defaultSteamPath"
         | "iroriCrossoverBottlesPath"
@@ -209,22 +211,35 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         | "hideWindowOnProtocolLaunch"
         | "startInConsoleMode"
         | "iroriUi.bigPictureInGameMode"
-        | "iroriUi.bigPictureOnController" => Some("window"),
+        | "iroriUi.bigPictureOnController"
+        | "iroriUi.bigPictureFullscreen"
+        | "iroriUi.quickLaunchShortcut"
+        | "panel.quick_launch" => Some("window"),
         "libraryTopSection"
         | "maxRecentGames"
         | "iroriAchievementNotices"
+        | "iroriAchievementToast.overGame"
+        | "iroriAchievementToast.showGame"
+        | "iroriAchievementToast.showDescription"
+        | "iroriAchievementToast.showRarity"
+        | "iroriAchievementToast.showProgress"
+        | "iroriAchievementToast.showPoints"
         | "iroriFileAchievements"
         | "iroriUi.stores.epic"
         | "iroriUi.stores.gog"
         | "iroriUi.stores.amazon"
+        | "iroriDeals"
         | "zoomPlatform"
         | "iroriItchIo"
         | "iroriXbox"
         | "iroriXboxMarket"
         | "addDesktopShortcuts"
         | "addStartMenuShortcuts"
-        | "addSteamShortcuts" => Some("library"),
-        "maxWorkers"
+        | "addSteamShortcuts"
+        | "iroriShortcutIconFromExe" => Some("library"),
+        "iroriNetworkMode"
+        | "iroriNetworkTimeout"
+        | "maxWorkers"
         | "maxDownloadSpeed"
         | "downloadNoHttps"
         | "discordRPC"
@@ -239,13 +254,6 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         | "disablePlaytimeSync"
         | "disableGOGPresence"
         | "action.open-windows-files" => Some("integrations"),
-        "panel.controllers"
-        | "disableController"
-        | "gamepadInitialRepeatDelay"
-        | "gamepadRepeatDelay"
-        | "iroriUi.bigPictureHoldButton"
-        | "iroriUi.bigPictureHoldMs"
-        | "iroriOverlay.enabled" => Some("controllers"),
         _ => None,
     }
 }
@@ -266,8 +274,24 @@ fn appearance_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.bigPictureScale"
         | "iroriUi.libraryLayout"
         | "iroriUi.showStoreBadges"
+        | "iroriUi.storeBadgesAlways"
+        | "iroriUi.storeBadgesOneStore"
         | "iroriUi.groupCopies"
+        | "iroriUi.programIconArt"
+        | "iroriUi.showAgeRatings"
+        | "iroriUi.ageRatingBoard"
+        | "iroriUi.trailerAutoplay"
         | "iroriUi.coverCategories"
+        | "iroriUi.coverCorners"
+        | "iroriUi.coverFit"
+        | "iroriUi.coverShape"
+        | "iroriUi.coverCaption"
+        | "iroriUi.coverHover"
+        | "iroriUi.libraryFocusColumns"
+        | "iroriUi.libraryFocusCoverSize"
+        | "iroriUi.libraryOpenDetailsOnSelect"
+        | "iroriUi.libraryAutoLayout"
+        | "iroriUi.coverFavourite"
         | "iroriUi.libraryQuickControls"
         | "iroriUi.libraryBackground"
         | "iroriUi.libraryBackgroundPicture"
@@ -294,20 +318,38 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "startInConsoleMode"
             | "iroriUi.bigPictureInGameMode"
             | "iroriUi.bigPictureOnController"
+            | "iroriUi.bigPictureFullscreen"
             // General -> Library & stores
+            | "iroriAchievementToast.showGame"
+            | "iroriAchievementToast.showDescription"
+            | "iroriAchievementToast.showRarity"
+            | "iroriAchievementToast.showProgress"
+            | "iroriAchievementToast.showPoints"
             | "iroriFileAchievements"
+            | "iroriShortcutIconFromExe"
             // General -> Integrations & downloads
+            | "iroriNetworkTimeout"
             | "downloadNoHttps"
             | "discordClientId"
             | "action.open-windows-files"
-            // General -> Controllers
+            // Controller
             | "gamepadInitialRepeatDelay"
             | "gamepadRepeatDelay"
             | "iroriUi.bigPictureHoldMs"
-            | "iroriOverlay.enabled"
             // Appearance -> Theme & colors
             | "iroriUi.wallpaperColors"
             | "iroriUi.wallpaperColorsFile"
+            // Appearance -> Library
+            | "iroriUi.storeBadgesAlways"
+            | "iroriUi.storeBadgesOneStore"
+            | "iroriUi.programIconArt"
+            | "iroriUi.ageRatingBoard"
+            | "iroriUi.coverHover"
+            | "iroriUi.coverFavourite"
+            | "iroriUi.libraryFocusColumns"
+            | "iroriUi.libraryFocusCoverSize"
+            | "iroriUi.libraryOpenDetailsOnSelect"
+            | "iroriUi.libraryAutoLayout"
             // Game defaults -> Wine & Proton
             | "disableUMU"
             | "iroriProtonPreferSdl"

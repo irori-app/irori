@@ -82,6 +82,8 @@ fn tabs_journal_and_quit_question_follow_the_controller(cx: &mut TestAppContext)
 
     // The keyboard reaches the overlay through its key context.
     cx.simulate_keystrokes(handle, "pagedown");
+    assert_eq!(tab(cx), Tab::Controllers);
+    cx.simulate_keystrokes(handle, "pagedown");
     assert_eq!(tab(cx), Tab::Home);
 
     for _ in 0..10 {

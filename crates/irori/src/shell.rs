@@ -3,21 +3,21 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, TitleBar,
     WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, rems,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Decorations, Entity, FocusHandle,
+    Focusable, InteractiveElement, IntoElement, MouseButton, NavigationDirection,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Task, Window, div, rems,
 };
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
 use irori_ui::components::{BrandMark, BrandWordmark};
 use irori_ui::glass::{self, Glass};
-use irori_ui::i18n::{t, t_args};
+use irori_ui::i18n::t;
 use irori_ui::models::{self, models};
 use irori_ui::nav::{self, Route, navigator};
 
@@ -39,6 +39,10 @@ pub struct AppShell {
     narrow_expanded: bool,
     recent: Entity<sidebar::RecentGames>,
     saved_views: Entity<sidebar::SavedViewsNav>,
+    /// The title bar's downloads pill and the sidebar's Downloads badge,
+    /// each redrawn on its own as progress arrives.
+    downloads_pill: Entity<irori_manage::DownloadsPill>,
+    downloads_badge: Entity<irori_manage::DownloadsBadge>,
     /// "Keep holding to open Big Picture" while a controller button is held.
     hold_hint: Entity<irori_bigpicture::gamepad::HoldHintView>,
     /// The start-with-system choice last written to the system.
@@ -80,7 +84,10 @@ impl AppShell {
                 this.sync_glass(window, cx);
                 cx.notify();
             }),
-            cx.observe(&m.downloads, |_, _, cx| cx.notify()),
+            cx.observe_in(&m.downloads, window, |this, _, window, cx| {
+                this.sync_power_countdown(window, cx);
+                cx.notify();
+            }),
             cx.observe(&m.components, |_, _, cx| cx.notify()),
             cx.observe(&m.library, |_, _, cx| cx.notify()),
             cx.observe(&m.accounts, |this, _, cx| {
@@ -134,6 +141,8 @@ impl AppShell {
                 this.sync_glass(window, cx);
                 this.save_placement(window, cx);
             }),
+            // The desktop moved its window buttons (Linux).
+            cx.observe_button_layout_changed(window, |_, _, cx| cx.notify()),
             // "Follow system" follows the system while Irori runs, too.
             cx.observe_window_appearance(window, |_, window, cx| {
                 let prefs = models(cx).settings.read(cx).app.ui.clone();
@@ -151,18 +160,24 @@ impl AppShell {
             this.show_notices(&m.notices, window, cx);
             this.on_sessions(&m.sessions, window, cx);
             this.app_update.show(window, cx);
+            if *navigator(cx).read(cx).current() == Route::BigPicture {
+                irori_ui::state::run_infallible(cx, irori_services::power::activate_window())
+                    .detach();
+            }
         });
         let collapsed = m.settings.read(cx).app.ui.sidebar_collapsed;
         let reduce = irori_ui::style::reduce_motion(cx);
         cx.set_reduce_motion(reduce);
         Self {
             focus: cx.focus_handle(),
-            palette: Palette::new(window, cx),
+            palette: Palette::default(),
             pages: Pages::default(),
             sidebar_collapsed: collapsed,
             narrow_expanded: false,
             recent: cx.new(sidebar::RecentGames::new),
             saved_views: cx.new(sidebar::SavedViewsNav::new),
+            downloads_pill: cx.new(irori_manage::DownloadsPill::new),
+            downloads_badge: cx.new(irori_manage::DownloadsBadge::new),
             hold_hint: irori_bigpicture::gamepad::HoldHintView::new(window, cx),
             autostart,
             minimized_for: None,
@@ -217,7 +232,32 @@ impl AppShell {
             if let Some(route) = irori_ui::system_notify::notice_route(&n) {
                 note = note.on_click(move |_, _, cx| nav::navigate(route.clone(), cx));
             }
+            if is_power_countdown(&n) {
+                // Stays until the countdown ends or is cancelled, with the
+                // way to cancel it right there.
+                note = note
+                    .id::<PowerCountdownNote>()
+                    .autohide(false)
+                    .on_click(|_, _, cx| nav::navigate(Route::Downloads, cx))
+                    .action(|_, _, _| {
+                        Button::new("power-countdown-keep-on")
+                            .small()
+                            .primary()
+                            .label(t("shell.notice.keep_on"))
+                            .on_click(|_, window, cx| {
+                                irori_manage::keep_on(cx);
+                                window.remove_notification::<PowerCountdownNote>(cx);
+                            })
+                    });
+            }
             window.push_notification(note, cx);
+        }
+    }
+
+    /// Take the countdown's notice away once the countdown is over.
+    fn sync_power_countdown(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if models(cx).downloads.read(cx).queue.countdown.is_none() {
+            window.remove_notification::<PowerCountdownNote>(cx);
         }
     }
 
@@ -232,14 +272,38 @@ impl AppShell {
         self.log_shown_for = playing;
     }
 
+    /// "Minimize when a game starts": close to the tray when "Close to tray"
+    /// can bring the window back, else minimize.
     fn minimize_on_launch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.minimized_for.is_some() || !models(cx).settings.read(cx).app.minimize_on_launch {
-            return;
-        }
-        let playing = models(cx).statuses.read(cx).playing().next().cloned();
-        if let Some(id) = playing {
-            self.minimized_for = Some(id);
-            window.minimize_window();
+        let enabled = models(cx).settings.read(cx).app.minimize_on_launch;
+        let route = navigator(cx).read(cx).current().clone();
+        let action = crate::tray_hide::on_launch(
+            enabled,
+            route == Route::BigPicture,
+            self.minimized_for.is_some(),
+            crate::tray_hide::available(cx),
+        );
+        match action {
+            crate::tray_hide::OnLaunch::Stay => {}
+            crate::tray_hide::OnLaunch::Minimize => {
+                let playing = models(cx).statuses.read(cx).playing().next().cloned();
+                if let Some(id) = playing {
+                    self.minimized_for = Some(id);
+                    window.minimize_window();
+                }
+            }
+            crate::tray_hide::OnLaunch::HideToTray => {
+                let playing: Vec<GameId> =
+                    models(cx).statuses.read(cx).playing().cloned().collect();
+                if playing.is_empty() {
+                    return;
+                }
+                // The window opens again where it is now, even if it moved
+                // within the last second.
+                self.save_placement_now(window, cx);
+                crate::tray_hide::note(playing, route, cx);
+                window.remove_window();
+            }
         }
     }
 
@@ -250,10 +314,16 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let exited: Vec<_> = sessions.update(cx, |s, _| s.exited.drain(..).collect());
+        let route = navigator(cx).read(cx).current().clone();
         for exit in exited {
+            let activate = should_activate_on_exit(self.minimized_for.as_ref(), &exit.id, &route);
             if self.minimized_for.as_ref() == Some(&exit.id) {
                 self.minimized_for = None;
+            }
+            if activate {
                 window.activate_window();
+                irori_ui::state::run_infallible(cx, irori_services::power::activate_window())
+                    .detach();
             }
             if exit.crashed {
                 irori_game::open_launch_problem_sheet(exit.id, exit.exit_code, window, cx);
@@ -346,6 +416,25 @@ impl AppShell {
         }));
     }
 
+    /// Save the window's place at once, for a window about to close.
+    fn save_placement_now(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.placement_save = None;
+        let previous = crate::placement::Saved::from_prefs(&models(cx).settings.read(cx).app.ui);
+        let Some(saved) = crate::placement::current(window, &previous, cx) else {
+            return;
+        };
+        if saved == previous {
+            return;
+        }
+        let backend = irori_ui::backend(cx);
+        cx.background_spawn(async move {
+            backend
+                .settings
+                .update_app(|s| crate::placement::store(&saved, &mut s.ui));
+        })
+        .detach();
+    }
+
     fn set_sidebar_collapsed(&mut self, collapsed: bool, cx: &mut Context<Self>) {
         self.sidebar_collapsed = collapsed;
         let b = irori_ui::backend(cx);
@@ -354,16 +443,37 @@ impl AppShell {
         cx.notify();
     }
 
-    fn render_title_bar(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut title_bar = TitleBar::new();
-        if glass::current(cx).is_translucent() {
-            // One flat tint, like the sidebar, instead of gpui-kit's gradient.
-            title_bar = title_bar.bg(glass::chrome(cx.theme().title_bar, cx));
-        }
+    fn render_title_bar(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        // One flat tint, like the sidebar, instead of the title bar's gradient.
+        let flat = glass::current(cx)
+            .is_translucent()
+            .then(|| glass::chrome(cx.theme().title_bar, cx));
         let open_palette = cx.listener(|this, _, window, cx| {
             this.palette.open(window, cx);
         });
-        title_bar.child(title_bar_content(cx, open_palette))
+        let content = title_bar_content(
+            cx,
+            open_palette,
+            self.downloads_pill.clone().into_any_element(),
+        );
+        // The desktop's own button layout, where Irori draws the buttons.
+        let desktop = cx
+            .button_layout()
+            .filter(|l| !crate::title_bar::is_kits_layout(l))
+            .filter(|_| matches!(window.window_decorations(), Decorations::Client { .. }));
+        if let Some(layout) = desktop {
+            let bar = crate::title_bar::DesktopTitleBar::new(layout, content);
+            return match flat {
+                Some(color) => bar.flat(color),
+                None => bar,
+            }
+            .into_any_element();
+        }
+        let mut title_bar = TitleBar::new();
+        if let Some(color) = flat {
+            title_bar = title_bar.bg(color);
+        }
+        title_bar.child(content).into_any_element()
     }
 
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -401,7 +511,9 @@ impl AppShell {
                     .into_any_element()
             })
         };
-        let download_count = count_badge(downloads);
+        // The running download's percent, else how many are queued.
+        let download_count =
+            (downloads > 0).then(|| self.downloads_badge.clone().into_any_element());
         let update_count = count_badge(updates);
 
         v_flex()
@@ -539,6 +651,7 @@ impl AppShell {
                     .gap_1()
                     .when(collapsed, |d| d.flex_col())
                     .child(sidebar::big_picture_button(collapsed, cx))
+                    .child(irori_ui::tour::mark(irori_ui::tour::anchors::BIG_PICTURE))
                     .child(
                         Button::new("toggle-sidebar")
                             .ghost()
@@ -553,7 +666,22 @@ impl AppShell {
                             ),
                     ),
             )
+            .child(irori_ui::tour::mark(irori_ui::tour::anchors::SIDEBAR))
     }
+}
+
+/// Names the notice of a countdown to sleeping or powering off, so it can be
+/// taken away when the countdown ends.
+struct PowerCountdownNote;
+
+/// The notice the backend raises when a finished queue starts counting down
+/// (not the ones saying the computer was left on).
+fn is_power_countdown(n: &irori_core::Notice) -> bool {
+    n.title_key == Some(irori_services::DOWNLOADS_FINISHED_NOTICE)
+        && matches!(
+            n.message_key,
+            Some("shell.notice.sleep_soon" | "shell.notice.power_off_soon")
+        )
 }
 
 /// The title bar's contents: navigation, the search button and the live status
@@ -567,21 +695,12 @@ impl AppShell {
 fn title_bar_content(
     cx: &mut App,
     open_palette: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    downloads: AnyElement,
 ) -> AnyElement {
     let nav = navigator(cx).read(cx);
     let (can_back, can_forward) = (nav.can_go_back(), nav.can_go_forward());
-    let downloads = &models(cx).downloads.read(cx).queue;
-    let statuses = models(cx).statuses.read(cx);
-    let current = downloads.current().map(|item| {
-        let pct = statuses
-            .get(&item.id)
-            .and_then(|s| s.progress)
-            .and_then(|p| p.percent)
-            .unwrap_or(0.0);
-        (item.title.clone(), pct)
-    });
-    let queued = downloads.active.len();
     let online = models(cx).accounts.read(cx).online;
+    let working_offline = irori_ui::models::working_offline(cx);
     let playing = crate::playing::pill(cx);
 
     h_flex()
@@ -614,19 +733,24 @@ fn title_bar_content(
                 ),
         )
         .child(
-            h_flex().flex_1().min_w_0().justify_center().child(
-                Button::new("open-palette")
-                    .debug_selector(|| "open-palette".into())
-                    .outline()
-                    .small()
-                    .w(rems(22.))
-                    .min_w_0()
-                    .flex_shrink(1.)
-                    .icon(IconName::Search)
-                    .label(t("shell.search.placeholder"))
-                    .tooltip("Ctrl+K")
-                    .on_click(open_palette),
-            ),
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .justify_center()
+                .child(
+                    Button::new("open-palette")
+                        .debug_selector(|| "open-palette".into())
+                        .outline()
+                        .small()
+                        .w(rems(22.))
+                        .min_w_0()
+                        .flex_shrink(1.)
+                        .icon(IconName::Search)
+                        .label(t("shell.search.placeholder"))
+                        .tooltip("Ctrl+K")
+                        .on_click(open_palette),
+                )
+                .child(irori_ui::tour::mark(irori_ui::tour::anchors::PALETTE)),
         )
         .child(
             h_flex()
@@ -637,7 +761,21 @@ fn title_bar_content(
                 .gap_1()
                 .justify_end()
                 .children(playing)
-                .when(!online, |this| {
+                .when(working_offline, |this| {
+                    // The user's choice, so it is a button that undoes it.
+                    this.child(
+                        Button::new("working-offline")
+                            .debug_selector(|| "working-offline".into())
+                            .ghost()
+                            .small()
+                            .min_w_0()
+                            .icon(IconName::WifiOff)
+                            .label(t("shell.working_offline"))
+                            .tooltip(t("shell.working_offline.tooltip"))
+                            .on_click(|_, _, cx| irori_ui::models::set_working_offline(false, cx)),
+                    )
+                })
+                .when(!online && !working_offline, |this| {
                     this.child(
                         h_flex()
                             .id("offline")
@@ -657,28 +795,11 @@ fn title_bar_content(
                     )
                 })
                 .child(
-                    Button::new("title-downloads")
+                    div()
                         .debug_selector(|| "title-downloads".into())
-                        .ghost()
-                        .small()
-                        .map(|b| match &current {
-                            Some((title, pct)) => b
-                                .child(
-                                    ProgressCircle::new("title-download-progress")
-                                        .value(*pct)
-                                        .xsmall(),
-                                )
-                                .tooltip(t_args(
-                                    "shell.downloads.progress",
-                                    &[("title", title), ("percent", &format!("{pct:.0}"))],
-                                )),
-                            None => b.icon(IconName::Download).tooltip(if queued > 0 {
-                                t("shell.downloads.paused")
-                            } else {
-                                t("shell.nav.downloads")
-                            }),
-                        })
-                        .on_click(|_, _, cx| nav::navigate(Route::Downloads, cx)),
+                        .min_w_0()
+                        .flex_shrink(1.)
+                        .child(downloads),
                 ),
         )
         .into_any_element()
@@ -688,6 +809,27 @@ impl Focusable for AppShell {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
     }
+}
+
+/// Bind hardware mouse back/forward buttons to window navigation history.
+fn bind_mouse_navigation<E: InteractiveElement>(el: E, enabled: bool) -> E {
+    if !enabled {
+        return el;
+    }
+    el.on_mouse_down(
+        MouseButton::Navigate(NavigationDirection::Back),
+        |_, _, cx| {
+            nav::go_back(cx);
+            cx.stop_propagation();
+        },
+    )
+    .on_mouse_down(
+        MouseButton::Navigate(NavigationDirection::Forward),
+        |_, _, cx| {
+            nav::go_forward(cx);
+            cx.stop_propagation();
+        },
+    )
 }
 
 impl Render for AppShell {
@@ -727,6 +869,7 @@ impl Render for AppShell {
             .text_color(cx.theme().foreground)
             .on_action(cx.listener(|_, _: &GoBack, _, cx| nav::go_back(cx)))
             .on_action(cx.listener(|_, _: &GoForward, _, cx| nav::go_forward(cx)))
+            .map(|this| bind_mouse_navigation(this, !fullscreen_mode))
             .on_action(cx.listener(|this, _: &OpenPalette, window, cx| {
                 this.palette.open(window, cx);
             }))
@@ -789,6 +932,9 @@ impl Render for AppShell {
             })
             .child(self.hold_hint.clone())
             .child(self.middle_scroll.element(middle_scroll))
+            .when(irori_ui::tour::running(cx), |this| {
+                this.child(irori_ui::tour::tour(cx))
+            })
     }
 }
 
@@ -856,6 +1002,12 @@ fn wants_onboarding(cx: &App) -> bool {
     irori_manage::should_show_onboarding(cx) && !has_sideload
 }
 
+/// Whether a game exiting should bring Irori's window to the front: when
+/// this game minimized it on launch, or while Big Picture is open.
+fn should_activate_on_exit(minimized_for: Option<&GameId>, exited: &GameId, route: &Route) -> bool {
+    minimized_for == Some(exited) || *route == Route::BigPicture
+}
+
 /// Where to go once the stores have loaded, if not where the user is.
 fn route_once_loaded(current: &Route, wants_onboarding: bool) -> Option<Route> {
     (*current == Route::Onboarding && !wants_onboarding).then_some(Route::Library)
@@ -875,12 +1027,55 @@ mod start_tests {
         assert_eq!(route_once_loaded(&Route::Library, false), None);
         assert_eq!(route_once_loaded(&Route::BigPicture, false), None);
     }
+
+    #[test]
+    fn only_the_countdown_notice_offers_to_keep_the_computer_on() {
+        let notice = |message| {
+            irori_core::Notice::new(NoticeLevel::Info, "Downloads finished").keys(
+                irori_services::DOWNLOADS_FINISHED_NOTICE,
+                Some(message),
+                &[],
+            )
+        };
+        assert!(is_power_countdown(&notice("shell.notice.sleep_soon")));
+        assert!(is_power_countdown(&notice("shell.notice.power_off_soon")));
+        assert!(!is_power_countdown(&notice(
+            "shell.notice.power_off_skipped"
+        )));
+        assert!(!is_power_countdown(
+            &irori_core::Notice::new(NoticeLevel::Info, "x").keys(
+                "shell.notice.installed",
+                Some("shell.notice.sleep_soon"),
+                &[]
+            )
+        ));
+    }
+
+    #[test]
+    fn big_picture_activates_on_exit() {
+        let game = GameId::new(Runner::Gog, "123");
+        let other = GameId::new(Runner::Legendary, "other");
+
+        assert!(should_activate_on_exit(Some(&game), &game, &Route::Library));
+        assert!(!should_activate_on_exit(
+            Some(&game),
+            &other,
+            &Route::Library
+        ));
+        assert!(!should_activate_on_exit(None, &game, &Route::Library));
+        assert!(should_activate_on_exit(None, &game, &Route::BigPicture));
+        assert!(should_activate_on_exit(
+            Some(&other),
+            &game,
+            &Route::BigPicture
+        ));
+    }
 }
 
 /// The title bar row laid out in a real window, so a change to the flex tracks
 /// is measured where it ships.
 #[cfg(test)]
-mod title_bar_tests {
+pub(crate) mod title_bar_tests {
     use std::sync::{Arc, Mutex, Once};
     use std::time::{Duration, Instant};
 
@@ -896,11 +1091,13 @@ mod title_bar_tests {
     /// The title bar's right padding, `pr_2` in rems.
     const RIGHT_PADDING: f32 = 8.;
 
-    struct TitleBarHarness;
+    struct TitleBarHarness {
+        downloads: Entity<irori_manage::DownloadsPill>,
+    }
 
     impl Render for TitleBarHarness {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            title_bar_content(cx, |_, _, _| {})
+            title_bar_content(cx, |_, _, _| {}, self.downloads.clone().into_any_element())
         }
     }
 
@@ -929,7 +1126,7 @@ mod title_bar_tests {
     }
 
     /// A real backend over a shelf with one manually added (browser) app.
-    fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
+    pub(crate) fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
         isolate_paths();
         cx.executor().allow_parking();
         let made: Arc<Mutex<Option<Arc<SideloadStore>>>> = Arc::default();
@@ -955,7 +1152,11 @@ mod title_bar_tests {
     }
 
     /// Add the game whose title the pill shows, and wait for the library model.
-    fn add_game(cx: &mut TestAppContext, backend: &Backend, store: &SideloadStore) -> GameId {
+    pub(crate) fn add_game(
+        cx: &mut TestAppContext,
+        backend: &Backend,
+        store: &SideloadStore,
+    ) -> GameId {
         let id = backend
             .runtime()
             .block_on(store.add_app(SideloadApp {
@@ -980,7 +1181,7 @@ mod title_bar_tests {
     }
 
     /// Wait until the status model shows (or stops showing) `id` as playing.
-    fn wait_for_status(cx: &mut TestAppContext, id: &GameId, playing: bool) {
+    pub(crate) fn wait_for_status(cx: &mut TestAppContext, id: &GameId, playing: bool) {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             cx.run_until_parked();
@@ -998,7 +1199,9 @@ mod title_bar_tests {
     /// Draw the production title bar row in a window `width` wide and report
     /// what the layout engine placed.
     fn measure(cx: &mut TestAppContext, width: f32) -> BarLayout {
-        let window = cx.open_window(size(px(width), px(34.)), |_, _| TitleBarHarness);
+        let window = cx.open_window(size(px(width), px(34.)), |_, cx| TitleBarHarness {
+            downloads: cx.new(irori_manage::DownloadsPill::new),
+        });
         let mut cx = VisualTestContext::from_window(window.into(), cx);
         cx.update(|window, cx| {
             window.refresh();
@@ -1094,6 +1297,105 @@ mod title_bar_tests {
             narrow_after.search.size.width > px(120.),
             "the search button stays usable: {:?}",
             narrow_after.search
+        );
+    }
+
+    struct MouseNavHarness {
+        enabled: bool,
+        occluded: bool,
+    }
+
+    impl Render for MouseNavHarness {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            bind_mouse_navigation(
+                div().id("mouse-nav-root").relative().size_full(),
+                self.enabled,
+            )
+            .when(self.occluded, |this| {
+                this.child(
+                    div()
+                        .id("mouse-nav-occluder")
+                        .absolute()
+                        .inset_0()
+                        .occlude(),
+                )
+            })
+        }
+    }
+
+    #[gpui_kit::test]
+    fn mouse_side_buttons_navigate_history_unless_occluded_or_disabled(cx: &mut TestAppContext) {
+        let _ = start(cx);
+        let window = cx.open_window(size(px(400.), px(300.)), |_, _| MouseNavHarness {
+            enabled: true,
+            occluded: false,
+        });
+        let mut vcx = VisualTestContext::from_window(window.into(), cx);
+        vcx.update(|window, cx| {
+            nav::navigate(Route::Updates, cx);
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+
+        let pos = gpui_kit::point(px(100.), px(100.));
+        let mods = gpui_kit::Modifiers::default();
+
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Library
+        );
+
+        vcx.simulate_mouse_down(
+            pos,
+            MouseButton::Navigate(NavigationDirection::Forward),
+            mods,
+        );
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
+        );
+
+        // An occluded overlay (dialog, sheet, palette) must absorb pointer clicks.
+        window
+            .update(&mut vcx, |view, _, cx| {
+                view.occluded = true;
+                cx.notify();
+            })
+            .expect("update mouse nav harness");
+        vcx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
+        );
+
+        // Disabled (Big Picture mode) ignores mouse side buttons.
+        window
+            .update(&mut vcx, |view, _, cx| {
+                view.occluded = false;
+                view.enabled = false;
+                cx.notify();
+            })
+            .expect("disable mouse nav harness");
+        vcx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
         );
     }
 }

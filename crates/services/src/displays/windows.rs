@@ -5,11 +5,12 @@
 use std::mem::size_of;
 
 use windows_sys::Win32::Devices::Display::{
-    DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO, DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
+    DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO,
+    DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL, DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
     DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME, DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO,
-    DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_SOURCE_DEVICE_NAME,
-    DISPLAYCONFIG_TARGET_DEVICE_NAME, DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes,
-    QDC_ONLY_ACTIVE_PATHS, QueryDisplayConfig,
+    DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_SDR_WHITE_LEVEL,
+    DISPLAYCONFIG_SOURCE_DEVICE_NAME, DISPLAYCONFIG_TARGET_DEVICE_NAME, DisplayConfigGetDeviceInfo,
+    GetDisplayConfigBufferSizes, QDC_ONLY_ACTIVE_PATHS, QueryDisplayConfig,
 };
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS};
 use windows_sys::Win32::Graphics::Gdi::{
@@ -152,6 +153,27 @@ fn advanced_color(path: &DISPLAYCONFIG_PATH_INFO) -> Option<(bool, bool)> {
     // SAFETY: both members of the union are the same `u32` of bit fields.
     let bits = unsafe { info.Anonymous.value };
     Some(parse::advanced_color(bits))
+}
+
+/// The SDR white level of the display GDI calls `device` (`\\.\DISPLAY1`) in
+/// scRGB units (1.0 = 80 nits): Windows' "SDR content brightness", which
+/// screenshots of an HDR desktop are tone mapped at.
+pub(crate) fn sdr_white_scale(device: &str) -> Option<f32> {
+    let path = active_paths()?
+        .into_iter()
+        .find(|p| source_name(p).as_deref() == Some(device))?;
+    let mut level = DISPLAYCONFIG_SDR_WHITE_LEVEL::default();
+    level.header.r#type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+    level.header.size = size_of::<DISPLAYCONFIG_SDR_WHITE_LEVEL>() as u32;
+    level.header.adapterId = path.targetInfo.adapterId;
+    level.header.id = path.targetInfo.id;
+    // SAFETY: the header begins a `DISPLAYCONFIG_SDR_WHITE_LEVEL` whose size
+    // it states.
+    if unsafe { DisplayConfigGetDeviceInfo(&mut level.header) } != 0 {
+        return None;
+    }
+    // Thousandths of 80 nits.
+    (level.SDRWhiteLevel > 0).then(|| level.SDRWhiteLevel as f32 / 1000.0)
 }
 
 /// `device` as a NUL-terminated UTF-16 string.

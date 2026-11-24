@@ -97,7 +97,7 @@ impl GamePage {
                 .child(game.title.clone())
                 .into_any_element(),
         };
-        let meta = self.render_meta_line(game);
+        let meta = self.render_meta_line(game, cx);
         let tags = (!game.tags.is_empty()).then(|| {
             h_flex()
                 .gap_2()
@@ -149,26 +149,27 @@ impl GamePage {
     /// Play, Install and the rest act on that copy.
     pub(super) fn render_store_line(&self, store: &str, cx: &mut Context<Self>) -> AnyElement {
         let ink = self.ink;
-        let copies = irori_ui::copies::of(&self.id, cx);
+        // Each copy says what tells it apart: its store, its own title, a
+        // ROM's emulator and file.
+        let copies = irori_ui::copies::labelled(&self.id, cx);
         if copies.len() < 2 {
             return super::caption(store.to_string(), ink.muted).into_any_element();
         }
         h_flex()
             .gap_1()
             .flex_wrap()
-            .children(copies.into_iter().map(|copy| {
+            .children(copies.into_iter().map(|(copy, label)| {
                 let id = copy.id();
                 let current = id == self.id;
+                let text = label.text();
                 Button::new(SharedString::from(format!("game-copy-{}", id.key())))
                     .xsmall()
                     .when(current, |b| b.outline())
                     .when(!current, |b| b.ghost())
                     .selected(current)
                     .when(copy.is_installed, |b| b.icon(IconName::HardDrive))
-                    .label(copy.runner().store_name())
-                    .when(!current, |b| {
-                        b.tooltip(irori_ui::copies::open_label(copy.runner().store_name()))
-                    })
+                    .label(text.clone())
+                    .when(!current, |b| b.tooltip(irori_ui::copies::open_label(&text)))
                     .on_click(move |_, _, cx| {
                         if !current {
                             irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx)
@@ -221,6 +222,7 @@ impl GamePage {
         let game_modes = self.render_game_modes(game, cx);
         let sandbox = self.render_sandbox(cx);
         let tools = self.render_tools(game, cx);
+        let left_off = self.render_left_off(game, cx);
         let rating = self.render_rating(cx);
         let facts = self.render_facts(game, cx);
         // Everything in the column takes the cover's width; long action
@@ -244,13 +246,14 @@ impl GamePage {
             .children(game_modes)
             .children(sandbox)
             .child(tools)
+            .child(left_off)
             .child(rating)
             .children(facts)
             .into_any_element()
     }
 
     /// "Feb 25, 2022 · Windows, Linux · Role-playing · Adventure".
-    pub(super) fn render_meta_line(&self, game: &GameInfo) -> Option<String> {
+    pub(super) fn render_meta_line(&self, game: &GameInfo, cx: &gpui_kit::App) -> Option<String> {
         let date = self.release_date(game);
         let platforms = match &game.install {
             Some(install) if game.is_installed => {
@@ -265,12 +268,7 @@ impl GamePage {
             ),
         }
         .filter(|p| !p.is_empty() && game.runner() != irori_core::Runner::Emulation);
-        let genres = self
-            .extra
-            .ready()
-            .map(|e| e.genres.clone())
-            .filter(|g| !g.is_empty())
-            .unwrap_or_else(|| game.genres.clone());
+        let genres = self.shown_genres(game, cx);
         let parts: Vec<String> = date
             .into_iter()
             .chain(platforms)
@@ -309,10 +307,24 @@ impl GamePage {
         };
         let mut rows = Vec::new();
         let compat = self.compat.ready();
+        // PCGamingWiki's scores, else the store page's (Steam's
+        // Metacritic, IGDB), else the library's: GamesDB's for GOG and
+        // Epic games, a score learned from the store page for the rest.
         let score = compat
             .and_then(|c| c.scores.first())
             .map(|s| (s.source.clone(), s.score))
-            .or_else(|| game.rating.map(|r| ("GOG".to_string(), r)));
+            .or_else(|| {
+                let s = self.extra.ready()?.score.as_ref()?;
+                Some((s.source.clone(), s.score))
+            })
+            .or_else(|| {
+                let gamesdb = matches!(
+                    game.runner(),
+                    irori_core::Runner::Gog | irori_core::Runner::Legendary
+                );
+                game.rating
+                    .map(|r| (if gamesdb { "GOG" } else { "" }.to_string(), r))
+            });
         if let Some((source, score)) = score {
             let tag = match score {
                 75.. => Tag::success(),
@@ -685,6 +697,19 @@ impl GamePage {
                 )
                 .into_any_element(),
             PrimaryAction::Stop => row
+                .child({
+                    let id = id.clone();
+                    Button::new("back-to-game")
+                        .debug_selector(|| "back-to-game".into())
+                        .primary()
+                        .large()
+                        .icon(IconName::AppWindow)
+                        .label(t("game.hero.back_to_game"))
+                        .tooltip(t("game.hero.back_to_game_tooltip"))
+                        .on_click(move |_, window, cx| {
+                            irori_ui::game_window::back_to_game(id.clone(), window, cx)
+                        })
+                })
                 .child(
                     Button::new("primary-action")
                         .large()
@@ -874,7 +899,8 @@ impl GamePage {
     }
 
     /// Play as a split button: launch options (when the store offers
-    /// several) and one-off variants (verbose logs, no update check).
+    /// several), the user's own actions and one-off variants (verbose logs,
+    /// no update check).
     fn render_play_button(&self, cx: &mut Context<Self>) -> AnyElement {
         let play = self.render_play_pill(cx);
         let page = cx.entity();
@@ -883,7 +909,8 @@ impl GamePage {
         } else {
             Vec::new()
         };
-        if options.is_empty() && !self.id.runner.manages_installs() {
+        let has_actions = !irori_ui::user_actions::list(&self.id, cx).is_empty();
+        if options.is_empty() && !has_actions && !self.id.runner.manages_installs() {
             return play;
         }
         let current = self.selected_option.clone();
@@ -896,7 +923,7 @@ impl GamePage {
             .icon(IconName::ChevronDown)
             .accessibility_label(t("game.hero.play_with"))
             .tooltip(t("game.hero.play_with"))
-            .dropdown_menu(move |mut menu, _, _| {
+            .dropdown_menu(move |mut menu, _, cx| {
                 menu = menu.label(t("game.hero.play_with"));
                 for option in &options {
                     let page = page.clone();
@@ -925,6 +952,7 @@ impl GamePage {
                         )
                         .separator();
                 }
+                menu = irori_ui::user_actions::menu_items(menu, &id, true, cx).separator();
                 for (label, icon, params) in super::menu::PLAY_VARIANTS {
                     let page = page.clone();
                     let option = current.clone();

@@ -776,7 +776,12 @@ impl Store for SteamStore {
         let _one = self.refreshing.lock().await;
         let found = self.library.read().found;
         let mut changed = self.scan().await?;
-        let account = self.refresh_account(full).await;
+        // Working offline, the account's library stays as last read.
+        let account = if irori_core::net::working_offline() {
+            Ok(false)
+        } else {
+            self.refresh_account(full).await
+        };
         if matches!(account, Ok(true)) {
             changed |= self.scan().await?;
         }
@@ -958,6 +963,16 @@ impl Store for SteamStore {
 
     async fn forget_achievements(&self, app_name: &str) {
         self.achievement_cache.forget(app_name).await
+    }
+
+    /// Steam writes the game's stats file on every unlock.
+    async fn achievement_signal(&self, app_name: &str) -> irori_core::AchievementSignal {
+        let files = self.achievement_files(app_name).await;
+        if files.is_empty() {
+            irori_core::AchievementSignal::None
+        } else {
+            irori_core::AchievementSignal::Files(files)
+        }
     }
 
     async fn remote_playtime(&self) -> Result<HashMap<String, u64>> {

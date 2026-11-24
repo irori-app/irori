@@ -143,6 +143,22 @@ pub fn game_modes_from_v2(v: &Value) -> Vec<GameMode> {
     irori_core::game_mode::normalized(modes)
 }
 
+/// GOG's "Controller support" feature: GOG says only whether there is
+/// some, so it counts as full only when nothing says otherwise.
+pub fn controller_from_v2(v: &Value) -> Option<irori_core::ControllerSupport> {
+    [
+        "/_embedded/product/features",
+        "/_embedded/features",
+        "/features",
+    ]
+    .into_iter()
+    .filter_map(|path| v.pointer(path).and_then(Value::as_array))
+    .flatten()
+    .filter_map(|f| f.get("id").and_then(Value::as_str))
+    .any(|id| id == "controller_support")
+    .then_some(irori_core::ControllerSupport::Full)
+}
+
 /// Map a raw GOG achievement.
 pub fn map_achievement(v: &Value) -> Achievement {
     let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
@@ -259,7 +275,12 @@ impl GogStore {
             screenshots: product.as_ref().map(screenshots).unwrap_or_default(),
             age_ratings: v2.as_ref().map(age_ratings_from_v2).unwrap_or_default(),
             game_modes: v2.as_ref().map(game_modes_from_v2).unwrap_or_default(),
+            developers: Vec::new(),
+            videos: Vec::new(),
             details_from: None,
+            // GOG's own score is the library entry's (`GameInfo::rating`).
+            score: None,
+            controller_support: v2.as_ref().and_then(controller_from_v2),
         };
         if v2.is_some() || product.is_some() {
             cache.insert(
@@ -308,10 +329,17 @@ impl GogStore {
         let key = format!("{app_name}:{language}");
         let path = self.paths.achievements_cache();
         let mut cache: HashMap<String, Cached<Vec<Achievement>>> = load_json(path.clone()).await;
+        let live = self.live_unlocks.lock().get(app_name).cloned();
+        let with_live = |mut list: Vec<Achievement>| {
+            if let Some(live) = &live {
+                crate::launch::merge_live_unlocks(&mut list, live);
+            }
+            list
+        };
         if let Some(c) = cache.get(&key)
             && util::unix_now().saturating_sub(c.at) < ACHIEVEMENTS_TTL_SECS
         {
-            return Ok(c.value.clone());
+            return Ok(with_live(c.value.clone()));
         }
         if self.user_data().is_none() {
             return Ok(Vec::new());
@@ -320,7 +348,9 @@ impl GogStore {
             Ok(c) => c,
             Err(e) => {
                 tracing::debug!("achievements of {app_name}: {e:#}");
-                return Ok(cache.remove(&key).map(|c| c.value).unwrap_or_default());
+                return Ok(with_live(
+                    cache.remove(&key).map(|c| c.value).unwrap_or_default(),
+                ));
             }
         };
         let mut items = Vec::new();
@@ -341,7 +371,7 @@ impl GogStore {
             },
         );
         let _ = save_json(path, cache).await;
-        Ok(list)
+        Ok(with_live(list))
     }
 
     /// Total minutes GOG recorded for a game (`None` when unavailable or disabled).

@@ -9,6 +9,12 @@
 //! The shortcut is registered only while the overlay is on and a game Irori
 //! started runs, so other programs keep it the rest of the time. A press
 //! opens the overlay, or closes it when it is open.
+//!
+//! The same registration gives the shell the quick launcher's Ctrl+Alt+K
+//! (⌃⌥K) on these systems ([`register_quick_launch`]), and a screenshot key
+//! of its own, Ctrl+Shift+S (⌃⇧S), while a game Irori started runs, with or
+//! without the overlay (`iroriOverlay.screenshotKey`). Each key has an id of
+//! its own, which a press is told apart by.
 
 #[cfg(target_os = "macos")]
 #[path = "macos.rs"]
@@ -23,6 +29,61 @@ use gpui_kit::{App, Global};
 
 use super::support::Support;
 
+/// One global shortcut: its id among Irori's and its keys on each system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Key {
+    pub(crate) id: u32,
+    /// The key's virtual key code on Windows (`VK_*`, letters are ASCII).
+    #[cfg_attr(not(windows), allow(dead_code))] // Read on Windows only.
+    pub(crate) windows_key: u32,
+    /// The key's position on a Mac (`kVK_ANSI_*`): other layouts press the
+    /// key where it is on a US keyboard.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))] // Read on macOS only.
+    pub(crate) mac_key: u32,
+    /// Control and Shift (the overlay) or Control and Alt (the launcher).
+    pub(crate) alt: bool,
+}
+
+/// The overlay's Ctrl+Shift+O.
+const OVERLAY: Key = Key {
+    id: 1,
+    windows_key: super::support::SHORTCUT_KEY as u32,
+    mac_key: 0x1F,
+    alt: false,
+};
+
+/// The quick launcher's Ctrl+Alt+K: K as in the palette's Ctrl+K.
+const QUICK_LAUNCH: Key = Key {
+    id: 2,
+    windows_key: 'K' as u32,
+    mac_key: 0x28,
+    alt: true,
+};
+
+/// The screenshot key, Ctrl+Shift+S: S as in screenshot.
+const SCREENSHOT: Key = Key {
+    id: 3,
+    windows_key: 'S' as u32,
+    mac_key: 0x01,
+    alt: false,
+};
+
+/// The quick launcher's keys as the settings name them.
+pub const QUICK_LAUNCH_LABEL: &str = if cfg!(target_os = "macos") {
+    "⌃⌥K"
+} else {
+    "Ctrl+Alt+K"
+};
+
+/// A global shortcut the shell holds; dropping it gives the keys back.
+pub struct GlobalShortcut(#[allow(dead_code)] platform::Registration); // Held for its drop.
+
+/// Take Ctrl+Alt+K (⌃⌥K) for the whole desktop: each press sends to
+/// `pressed`. Fails when another program has it. Call on the main thread.
+pub fn register_quick_launch(pressed: UnboundedSender<()>) -> anyhow::Result<GlobalShortcut> {
+    platform::register(QUICK_LAUNCH, pressed).map(GlobalShortcut)
+}
+
 #[derive(Default)]
 struct HotkeyState {
     /// Dropping it gives the shortcut back.
@@ -30,6 +91,9 @@ struct HotkeyState {
     /// The last registration failed (another program has the shortcut);
     /// said once in the log, not on every status change.
     failed: bool,
+    /// The screenshot key while a game runs, and whether taking it failed.
+    screenshot: Option<platform::Registration>,
+    screenshot_failed: bool,
 }
 
 impl Global for HotkeyState {}
@@ -52,23 +116,62 @@ pub(crate) fn install(cx: &mut App) {
         }
     })
     .detach();
+    let (shot_tx, mut shot_rx) = futures::channel::mpsc::unbounded::<()>();
+    cx.spawn(async move |cx| {
+        while shot_rx.next().await.is_some() {
+            cx.update(screenshot);
+        }
+    })
+    .detach();
+    let senders = Senders {
+        overlay: tx,
+        screenshot: shot_tx,
+    };
     {
-        let tx = tx.clone();
-        cx.observe(&settings, move |_, cx| sync(&tx, cx)).detach();
+        let senders = senders.clone();
+        cx.observe(&settings, move |_, cx| sync(&senders, cx))
+            .detach();
     }
     {
-        let tx = tx.clone();
-        cx.observe(&statuses, move |_, cx| sync(&tx, cx)).detach();
+        let senders = senders.clone();
+        cx.observe(&statuses, move |_, cx| sync(&senders, cx))
+            .detach();
     }
-    sync(&tx, cx);
+    sync(&senders, cx);
 }
 
-/// Register or give back the shortcut as the overlay is wanted or not.
-fn sync(tx: &UnboundedSender<()>, cx: &mut App) {
+/// Where each shortcut's presses go.
+#[derive(Clone)]
+struct Senders {
+    overlay: UnboundedSender<()>,
+    screenshot: UnboundedSender<()>,
+}
+
+/// Register or give back the shortcuts as the overlay and the screenshot
+/// key are wanted or not.
+fn sync(senders: &Senders, cx: &mut App) {
     let wanted = super::wanted(cx) || super::is_open(cx);
+    let shots = super::running_game(cx).is_some() && super::prefs(cx).screenshot_key;
     let state = cx.default_global::<HotkeyState>();
+    match (shots, state.screenshot.is_some()) {
+        (true, false) => match platform::register(SCREENSHOT, senders.screenshot.clone()) {
+            Ok(registration) => {
+                state.screenshot = Some(registration);
+                state.screenshot_failed = false;
+            }
+            Err(e) => {
+                if !state.screenshot_failed {
+                    tracing::warn!("the screenshot key isn't available: {e:#}");
+                }
+                state.screenshot_failed = true;
+            }
+        },
+        (false, true) => state.screenshot = None,
+        _ => {}
+    }
+    let tx = &senders.overlay;
     match (wanted, state.registration.is_some()) {
-        (true, false) => match platform::register(tx.clone()) {
+        (true, false) => match platform::register(OVERLAY, tx.clone()) {
             Ok(registration) => {
                 state.registration = Some(registration);
                 state.failed = false;
@@ -83,6 +186,18 @@ fn sync(tx: &UnboundedSender<()>, cx: &mut App) {
         (false, true) => state.registration = None,
         _ => {}
     }
+}
+
+/// The screenshot key was pressed: a screenshot of the game Irori started
+/// last (the overlay closes first when it is open, so it isn't in it).
+fn screenshot(cx: &mut App) {
+    let Some(game) = super::running_game(cx) else {
+        return;
+    };
+    if super::is_open(cx) {
+        super::close(cx);
+    }
+    irori_ui::backend(cx).take_screenshot(Some(game));
 }
 
 /// The shortcut was pressed.

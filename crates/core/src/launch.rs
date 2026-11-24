@@ -51,6 +51,11 @@ pub struct LaunchEnvironment {
     pub env_remove: Vec<String>,
     pub wrappers: Vec<Vec<String>>,
     pub wine: Option<WineLaunch>,
+    /// The game's Windows build starts a program of this system (a native
+    /// replacement such as OpenJK), or its settings say not to use Wine
+    /// (`iroriNoWine`): stores start the program directly, and `wine` is
+    /// `None`.
+    pub without_wine: bool,
 }
 
 impl LaunchEnvironment {
@@ -97,6 +102,14 @@ pub trait GameWatch: Send + Sync {
 
     /// Ask the game to quit, never the program that started it.
     fn stop(&self, force: bool);
+
+    /// Block until the tracked game processes exit when the OS provides kernel
+    /// exit notifications (`pidfd_open` on Linux). Returns `true` when it
+    /// waited (or saw a tracked PID already gone) and `false` when the caller
+    /// should sleep for its poll interval instead.
+    fn wait_for_exit(&self, _timeout: std::time::Duration) -> bool {
+        false
+    }
 }
 
 /// An installed game's files weren't there when it was started: a drive not
@@ -116,6 +129,24 @@ pub struct GameFilesMissing {
 impl GameFilesMissing {
     /// The missing files behind `error`, if that is what it is.
     pub fn of(error: &anyhow::Error) -> Option<&GameFilesMissing> {
+        error.downcast_ref()
+    }
+}
+
+/// The game, or the Wine build it runs in, is built for Intel Macs and this
+/// Apple silicon Mac doesn't have Rosetta 2. Irori never installs it on its
+/// own: the UI asks, then runs Apple's `softwareupdate --install-rosetta`
+/// (`Backend::install_rosetta`) and starts the game again.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{what} is built for Intel Macs and needs Rosetta 2, which isn't installed.")]
+pub struct RosettaMissing {
+    /// What needs it: the game's title or the Wine build's name.
+    pub what: String,
+}
+
+impl RosettaMissing {
+    /// The missing Rosetta behind `error`, if that is what it is.
+    pub fn of(error: &anyhow::Error) -> Option<&RosettaMissing> {
         error.downcast_ref()
     }
 }

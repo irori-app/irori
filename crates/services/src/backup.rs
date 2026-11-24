@@ -1,24 +1,33 @@
 //! Backups of what the user set up in Irori, as one JSON file, and exports of
 //! the game list.
 //!
-//! A backup holds up to four parts: the app settings, per-game settings,
+//! A backup holds up to five parts: the app settings, per-game settings,
 //! library data (favourites, hidden games, categories, play statuses,
-//! backlog goals, custom titles and art, journal notes) and playtime with the session history. Store sign-ins are never
-//! included, nor are the backup and sync settings, which belong to each
-//! computer. Restoring replaces settings, but merges library data and
-//! playtime into what is already there, so an older backup never erases
+//! backlog goals, custom titles and art, journal notes), playtime with the
+//! session history, and where store games were installed. Store sign-ins
+//! are never included, nor are the backup and sync settings, which belong
+//! to each computer. Restoring replaces settings, but merges library data
+//! and playtime into what is already there, so an older backup never erases
 //! newer progress.
+//!
+//! A backup also records where the computer that made it kept its folders,
+//! so a restore on another computer, user or system rewrites the paths it
+//! holds (`backup_paths`), checks each one on this computer and attaches
+//! the installed games it finds again.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use irori_core::game::{GameOverrides, PlaytimeRecord};
-use irori_core::{AppSettings, GameId, GameSettingsOverrides, Runner, json_store, util};
+use irori_core::{
+    AppSettings, GameId, GameSettingsOverrides, InstallPlatform, Runner, json_store, util,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::Backend;
+use crate::backup_paths::{self, BackupOrigin, Remap};
 use crate::journal::Journal;
 use crate::play_status::PlayStatusRecord;
 use crate::sessions::{self, Session};
@@ -35,6 +44,8 @@ pub struct BackupParts {
     pub game_settings: bool,
     pub library: bool,
     pub playtime: bool,
+    /// Where store games were installed, to attach them again.
+    pub installs: bool,
 }
 
 impl BackupParts {
@@ -43,11 +54,47 @@ impl BackupParts {
         game_settings: true,
         library: true,
         playtime: true,
+        installs: true,
     };
 
     pub fn any(self) -> bool {
-        self.settings || self.game_settings || self.library || self.playtime
+        self.settings || self.game_settings || self.library || self.playtime || self.installs
     }
+}
+
+/// A store game installed when the backup was made.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InstallRecord {
+    /// `GameId::key()`.
+    pub game: String,
+    pub title: String,
+    pub path: String,
+    pub platform: InstallPlatform,
+}
+
+/// What a path a restore needs is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathKind {
+    /// A game's install folder.
+    Install,
+    /// A game's (or the defaults') Wine prefix.
+    Prefix,
+    /// A game's (or the defaults') Wine or Proton build.
+    WineBuild,
+}
+
+/// One path a restore needs, checked on this computer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PathCheck {
+    pub kind: PathKind,
+    /// The game it belongs to; `None` for the defaults.
+    pub game: Option<GameId>,
+    pub title: String,
+    /// As the backup wrote it.
+    pub original: String,
+    /// After the remaps (for a Wine build, its name).
+    pub path: String,
+    pub found: bool,
 }
 
 /// Favourites, hidden games, categories, play statuses, backlog goals,
@@ -60,15 +107,31 @@ pub struct LibraryBackup {
     pub categories: BTreeMap<String, BTreeSet<String>>,
     pub overrides: BTreeMap<String, GameOverrides>,
     pub play_status: BTreeMap<String, PlayStatusRecord>,
+    /// Every real change of each game's play status.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub status_history: crate::StatusHistory,
     pub backlog_goals: BTreeMap<i32, u32>,
     pub ratings: BTreeMap<String, u8>,
+    /// Journal notes, several a day.
+    #[serde(rename = "journal_notes")]
     pub journal: Journal,
+    /// Where the user left off in each game.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub left_off: BTreeMap<String, crate::LeftOff>,
+    /// One note per day: what backups made before several notes a day
+    /// hold, and in newer ones the notes' mirror for an older Irori.
+    /// Restored as `journal::read` reads a library file.
+    #[serde(rename = "journal", skip_serializing_if = "BTreeMap::is_empty")]
+    pub legacy_journal: crate::journal::LegacyJournal,
     /// Categories filled from rules, by id.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub smart_categories: BTreeMap<String, crate::SmartCategory>,
     /// Pins and colours of manual categories.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub category_looks: BTreeMap<String, crate::CategoryLook>,
+    /// Genres and companies renamed, merged or removed across the library.
+    #[serde(skip_serializing_if = "crate::field_rules::FieldRules::is_empty")]
+    pub field_rules: crate::field_rules::FieldRules,
 }
 
 /// Playtime totals and the session history.
@@ -77,6 +140,9 @@ pub struct LibraryBackup {
 pub struct PlaytimeBackup {
     pub records: BTreeMap<String, PlaytimeRecord>,
     pub sessions: Vec<Session>,
+    /// The user's edits of the records' time (`UserData::playtime_adjust`).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub adjust: BTreeMap<String, i64>,
 }
 
 /// The contents of a backup file.
@@ -98,6 +164,13 @@ pub struct Backup {
     pub merged_lists: bool,
     pub library: Option<LibraryBackup>,
     pub playtime: Option<PlaytimeBackup>,
+    /// Where the computer that made it kept its folders; `None` in backups
+    /// made before Irori recorded it, which restore their paths as written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<BackupOrigin>,
+    /// Store games installed then.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub installs: Vec<InstallRecord>,
 }
 
 impl Backup {
@@ -108,18 +181,58 @@ impl Backup {
             game_settings: !self.game_settings.is_empty(),
             library: self.library.is_some(),
             playtime: self.playtime.is_some(),
+            installs: !self.installs.is_empty(),
         }
+    }
+
+    /// The folders that moved between the computer that made this backup
+    /// and this one, which every restore applies.
+    pub fn automatic_remaps(&self) -> Vec<Remap> {
+        self.origin
+            .as_ref()
+            .map(|origin| backup_paths::automatic_remaps(origin, &BackupOrigin::here()))
+            .unwrap_or_default()
+    }
+
+    /// This backup with every path rewritten through `remaps` and the ones
+    /// that belong to another system left out (`windows` says which this
+    /// one is). Returns how many were left out.
+    pub(crate) fn rewritten(&self, remaps: &[Remap], windows: bool) -> (Backup, usize) {
+        let mut out = self.clone();
+        let mut dropped = 0;
+        if let Some(Value::Object(map)) = &mut out.settings {
+            for value in map.values_mut() {
+                backup_paths::remap_value(value, remaps, windows);
+            }
+            dropped += backup_paths::drop_foreign(map, false, windows).len();
+        }
+        for value in out.game_settings.values_mut() {
+            backup_paths::remap_value(value, remaps, windows);
+            if let Value::Object(map) = value {
+                dropped += backup_paths::drop_foreign(map, true, windows).len();
+            }
+        }
+        for record in &mut out.installs {
+            record.path = backup_paths::remap_path(&record.path, remaps, windows);
+        }
+        (out, dropped)
     }
 }
 
 /// What a restore changed, for telling the user.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RestoreSummary {
     pub settings: bool,
     pub game_settings: usize,
     pub favourites_added: usize,
     pub categories: usize,
     pub playtime_games: usize,
+    /// Installed games attached again from where the backup says they were.
+    pub installs_attached: usize,
+    /// Paths of another system left out, so the defaults apply.
+    pub paths_dropped: usize,
+    /// Paths the restore needs that aren't on this computer.
+    pub missing: Vec<PathCheck>,
 }
 
 /// File format of a game list export.
@@ -150,7 +263,7 @@ pub struct ExportedGame {
 }
 
 /// The game a `GameId::key()` names.
-fn game_id(key: &str) -> Option<GameId> {
+pub(crate) fn game_id(key: &str) -> Option<GameId> {
     let (runner, app) = key.split_once(':')?;
     Some(GameId::new(Runner::from_id(runner)?, app))
 }
@@ -195,20 +308,31 @@ impl Backend {
             settings: parts.settings.then(|| self.backup_settings()).transpose()?,
             game_settings,
             merged_lists: true,
+            origin: Some(BackupOrigin::here()),
+            installs: if parts.installs {
+                self.install_records()
+            } else {
+                Vec::new()
+            },
             library: parts.library.then(|| LibraryBackup {
                 favourites: user.favourites.clone(),
                 hidden: user.hidden.clone(),
                 categories: user.categories.clone(),
                 overrides: user.overrides.clone(),
                 play_status: user.play_status.clone(),
+                status_history: user.status_history.clone(),
                 backlog_goals: user.backlog_goals.clone(),
                 ratings: user.ratings.clone(),
                 journal: user.journal.clone(),
+                left_off: user.left_off.clone(),
+                legacy_journal: crate::journal::mirror(&user.journal),
                 smart_categories: user.smart_categories.clone(),
                 category_looks: user.category_looks.clone(),
+                field_rules: user.field_rules.clone(),
             }),
             playtime: parts.playtime.then(|| PlaytimeBackup {
                 records: user.playtime.clone(),
+                adjust: user.playtime_adjust.clone(),
                 sessions: sessions::read_all(),
             }),
         })
@@ -254,9 +378,40 @@ impl Backend {
         Ok(backup)
     }
 
+    /// The store games installed now, for a backup. Steam's and the
+    /// launchers' games are their clients', ROMs are found by the folder
+    /// scan, and added games keep their own records.
+    pub(crate) fn install_records(&self) -> Vec<InstallRecord> {
+        self.library()
+            .all_games()
+            .filter(|g| !g.is_dlc && crate::backup_restore::reattachable(g.runner()))
+            .filter_map(|g| {
+                let install = g.install.as_ref().filter(|_| g.is_installed)?;
+                Some(InstallRecord {
+                    game: g.id().key(),
+                    title: g.title.clone(),
+                    path: install.install_path.clone(),
+                    platform: install.platform,
+                })
+            })
+            .collect()
+    }
+
     /// Restore the chosen parts of `backup` (see the module notes on what is
-    /// replaced and what is merged).
+    /// replaced and what is merged), with its paths moved to this computer
+    /// by the automatic remaps.
     pub fn restore_backup(&self, backup: &Backup, parts: BackupParts) -> Result<RestoreSummary> {
+        let (rewritten, dropped) = backup.rewritten(&backup.automatic_remaps(), cfg!(windows));
+        let mut summary = self.restore_rewritten(&rewritten, parts)?;
+        summary.paths_dropped = dropped;
+        Ok(summary)
+    }
+
+    pub(crate) fn restore_rewritten(
+        &self,
+        backup: &Backup,
+        parts: BackupParts,
+    ) -> Result<RestoreSummary> {
         let mut summary = RestoreSummary::default();
         if parts.settings
             && let Some(value) = &backup.settings
@@ -301,8 +456,7 @@ impl Backend {
             && let Some(pt) = &backup.playtime
         {
             let _playtime = self.sync.playtime_guard();
-            self.userdata
-                .update(None, |d| merge_playtime(&mut d.playtime, &pt.records));
+            self.userdata.update(None, |d| merge_playtime(d, pt));
             summary.playtime_games = pt.records.len();
             let merged = merge_sessions(sessions::read_all(), &pt.sessions);
             sessions::replace_all(&merged)?;
@@ -382,8 +536,8 @@ impl Backend {
 /// members are added to what is there; custom titles, art and ratings from
 /// the backup replace the current ones of the same game. A play status is
 /// taken when it was set later than the current one, and a goal only for a
-/// year without one. A day's journal note is taken when it was written later
-/// than the current one. Smart categories and the looks of manual ones come
+/// year without one. A journal note is taken when it was written later than
+/// the current one of its id. Smart categories and the looks of manual ones come
 /// back where none of that id or name is left; ones edited since are kept.
 fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
     d.favourites.extend(lib.favourites.iter().cloned());
@@ -408,6 +562,7 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
             d.play_status.insert(key.clone(), record.clone());
         }
     }
+    crate::play_status::merge_history(&mut d.status_history, &lib.status_history);
     for (year, goal) in &lib.backlog_goals {
         d.backlog_goals.entry(*year).or_insert(*goal);
     }
@@ -417,7 +572,17 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
                 .insert(key.clone(), (*stars).min(crate::userdata::MAX_RATING));
         }
     }
-    crate::journal::merge(&mut d.journal, &lib.journal);
+    let notes = crate::journal::read(lib.journal.clone(), lib.legacy_journal.clone());
+    crate::journal::merge(&mut d.journal, &notes);
+    for (key, left) in &lib.left_off {
+        let newer = d
+            .left_off
+            .get(key)
+            .is_none_or(|current| later(&left.updated, &current.updated));
+        if newer && !left.text.trim().is_empty() {
+            d.left_off.insert(key.clone(), left.clone());
+        }
+    }
     for (id, smart) in &lib.smart_categories {
         d.smart_categories
             .entry(id.clone())
@@ -430,6 +595,8 @@ fn merge_library(d: &mut crate::UserData, lib: &LibraryBackup) {
                 .or_insert_with(|| look.clone());
         }
     }
+    // A rule made since the backup stays as it is now.
+    d.field_rules.merge_missing(&lib.field_rules);
 }
 
 /// Whether RFC 3339 time `a` is after `b`; unreadable times are never later.
@@ -442,17 +609,27 @@ pub(crate) fn later(a: &str, b: &str) -> bool {
     }
 }
 
-/// Keep, per game, the larger total and the widest first/last played span.
-fn merge_playtime(
-    current: &mut BTreeMap<String, PlaytimeRecord>,
-    backup: &BTreeMap<String, PlaytimeRecord>,
-) {
-    for (key, b) in backup {
-        let c = current.entry(key.clone()).or_default();
-        if (b.total_minutes, b.extra_seconds) > (c.total_minutes, c.extra_seconds) {
-            c.total_minutes = b.total_minutes;
-            c.extra_seconds = b.extra_seconds;
+/// Keep, per game, the larger counted time and the widest first/last
+/// played span. The user's own edit of a game's time stays as it is here,
+/// else the backup's comes back; it is applied to the counted time, so it
+/// never counts twice.
+fn merge_playtime(user: &mut crate::userdata::UserData, backup: &PlaytimeBackup) {
+    use crate::userdata::{adjusted, record_seconds};
+    for (key, b) in &backup.records {
+        let backup_adjust = backup.adjust.get(key).copied().unwrap_or(0);
+        let counted_backup = adjusted(record_seconds(b), -backup_adjust);
+        let counted = user.counted_seconds(key).max(counted_backup);
+        let adjust = *user
+            .playtime_adjust
+            .entry(key.clone())
+            .or_insert(backup_adjust);
+        if adjust == 0 {
+            user.playtime_adjust.remove(key);
         }
+        let c = user.playtime.entry(key.clone()).or_default();
+        let seconds = adjusted(counted, adjust);
+        c.total_minutes = seconds / 60;
+        c.extra_seconds = seconds % 60;
         c.last_played = c.last_played.clone().max(b.last_played.clone());
         c.first_played = match (c.first_played.clone(), b.first_played.clone()) {
             (Some(x), Some(y)) => Some(x.min(y)),
@@ -611,16 +788,44 @@ mod tests {
     }
 
     #[test]
+    fn field_rules_survive_a_backup_and_restore() {
+        use crate::field_rules::Field;
+        let mut user = crate::UserData::default();
+        user.field_rules
+            .set(Field::Genre, "Role-playing (RPG)", Some("RPG"));
+        user.field_rules.set(Field::Company, "Unknown", Some(""));
+        let lib = LibraryBackup {
+            field_rules: user.field_rules.clone(),
+            ..Default::default()
+        };
+        let back: LibraryBackup =
+            serde_json::from_str(&serde_json::to_string(&lib).unwrap()).unwrap();
+        assert_eq!(back, lib);
+
+        let mut d = crate::UserData::default();
+        // A rule changed since the backup keeps its current value.
+        d.field_rules
+            .set(Field::Genre, "Role-playing (RPG)", Some("Role-playing"));
+        merge_library(&mut d, &back);
+        assert_eq!(
+            d.field_rules.rule(Field::Genre, "Role-playing (RPG)"),
+            Some("Role-playing")
+        );
+        assert_eq!(d.field_rules.rule(Field::Company, "unknown"), Some(""));
+    }
+
+    #[test]
     fn journal_notes_travel_with_the_library_part() {
         let day = chrono::NaiveDate::from_ymd_opt(2026, 11, 2).unwrap();
         let mut journal = Journal::new();
         journal.entry("gog:1".into()).or_default().insert(
             day,
-            crate::JournalEntry {
+            vec![crate::JournalEntry {
+                id: "n1".into(),
                 text: "Found the hidden lift".into(),
                 updated: "2026-11-02T20:00:00Z".into(),
                 ..Default::default()
-            },
+            }],
         );
         let backup = Backup {
             library: Some(LibraryBackup {
@@ -637,6 +842,19 @@ mod tests {
         // Backups from before the journal restore without notes.
         let old: LibraryBackup = serde_json::from_str(r#"{"favourites":["gog:1"]}"#).unwrap();
         assert!(old.journal.is_empty());
+        // Backups from before several notes a day restore their day notes.
+        let old: LibraryBackup = serde_json::from_str(
+            r#"{"journal":{"gog:2":{"2026-11-01":{"text":"Old note","updated":"2026-11-01T20:00:00Z"}}}}"#,
+        )
+        .unwrap();
+        merge_library(&mut d, &old);
+        let notes = d.journal_day(
+            "gog:2",
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 1).unwrap(),
+        );
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].text, "Old note");
+        assert_eq!(d.journal["gog:1"], journal["gog:1"]);
     }
 
     #[test]
@@ -684,7 +902,7 @@ mod tests {
 
     #[test]
     fn playtime_keeps_the_larger_total_and_the_full_span() {
-        let mut current = BTreeMap::from([(
+        let current = BTreeMap::from([(
             "gog:1".to_string(),
             PlaytimeRecord {
                 total_minutes: 120,
@@ -711,12 +929,56 @@ mod tests {
                 },
             ),
         ]);
-        merge_playtime(&mut current, &backup);
-        let one = &current["gog:1"];
+        let mut user = crate::userdata::UserData {
+            playtime: current,
+            ..Default::default()
+        };
+        merge_playtime(
+            &mut user,
+            &PlaytimeBackup {
+                records: backup,
+                ..Default::default()
+            },
+        );
+        let one = &user.playtime["gog:1"];
         assert_eq!(one.total_minutes, 120);
         assert_eq!(one.last_played.as_deref(), Some("2026-10-23T10:00:00Z"));
         assert_eq!(one.first_played.as_deref(), Some("2025-01-01T10:00:00Z"));
-        assert_eq!(current["gog:2"].total_minutes, 5);
+        assert_eq!(user.playtime["gog:2"].total_minutes, 5);
+    }
+
+    #[test]
+    fn an_edited_playtime_restores_without_counting_twice() {
+        // The backup: 60 counted minutes the user set to 600.
+        let mut saved = crate::userdata::UserData::default();
+        saved.playtime.insert(
+            "gog:1".into(),
+            PlaytimeRecord {
+                total_minutes: 60,
+                ..Default::default()
+            },
+        );
+        saved.set_playtime("gog:1", Some(600 * 60));
+        let backup = PlaytimeBackup {
+            records: saved.playtime.clone(),
+            adjust: saved.playtime_adjust.clone(),
+            ..Default::default()
+        };
+        // Restored on a computer that counted 90 minutes itself.
+        let mut user = crate::userdata::UserData::default();
+        user.playtime.insert(
+            "gog:1".into(),
+            PlaytimeRecord {
+                total_minutes: 90,
+                ..Default::default()
+            },
+        );
+        merge_playtime(&mut user, &backup);
+        assert_eq!(user.playtime["gog:1"].total_minutes, 90 + 540);
+        assert_eq!(user.counted_seconds("gog:1"), 90 * 60);
+        // Restoring twice changes nothing.
+        merge_playtime(&mut user, &backup);
+        assert_eq!(user.playtime["gog:1"].total_minutes, 90 + 540);
     }
 
     #[test]

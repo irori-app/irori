@@ -7,9 +7,10 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, Background, ElementId, Hsla, Img, IntoElement, ObjectFit, ParentElement,
     Pixels, Rems, RenderOnce, SharedString, Styled, StyledImage as _, Window, div, img,
-    linear_color_stop, linear_gradient, rems, rgb,
+    linear_color_stop, linear_gradient, px, rems, rgb,
 };
 use irori_core::GameInfo;
+use irori_core::settings::{CoverCorners, CoverShape};
 
 use crate::art::{Art, art_store};
 use crate::motion::fade_in;
@@ -93,6 +94,82 @@ pub fn art_missing(cx: &App) -> AnyElement {
         .into_any_element()
 }
 
+/// The icon of the game's own program, when it has one, it is ready and
+/// the game has no cover art, for a stand-in cover `width` wide and `ratio`
+/// times as tall. Starts producing the thumbnail when it isn't on disk yet.
+pub fn program_icon_img(
+    game: &GameInfo,
+    width: Rems,
+    ratio: f32,
+    window: &Window,
+    cx: &mut App,
+) -> Option<Img> {
+    if game.cover_art().is_some() {
+        return None;
+    }
+    let url = game.program_icon.as_deref()?;
+    let px = physical_width(icon_side(width, ratio), window);
+    art_img(url, px, true, cx)
+}
+
+/// Side of a program icon on a stand-in cover `width` wide and `ratio`
+/// times as tall: about half the cover, most of it on a thumbnail too small
+/// for a title.
+fn icon_side(width: Rems, ratio: f32) -> Rems {
+    let short = width.0.min(width.0 * ratio);
+    if width.0 < 5. {
+        rems(short * 0.75)
+    } else {
+        rems((short * 0.45).min(8.))
+    }
+}
+
+/// A stand-in cover `width` wide and `ratio` times as tall with the game's
+/// program icon centred on the quiet wash, whole and never stretched (icons
+/// are small), and the title, in `text`, under it when there is room.
+pub fn program_icon_cover(
+    icon: Img,
+    title: &SharedString,
+    width: Rems,
+    ratio: f32,
+    text: Hsla,
+    cx: &App,
+) -> AnyElement {
+    let side = icon_side(width, ratio);
+    let icon = icon.w(side).h(side).object_fit(ObjectFit::Contain);
+    if width.0 < 5. {
+        return v_flex()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .bg(missing_art_fill(cx))
+            .child(icon)
+            .into_any_element();
+    }
+    v_flex()
+        .size_full()
+        .p_3()
+        .gap_2()
+        .bg(missing_art_fill(cx))
+        .child(
+            v_flex()
+                .flex_1()
+                .min_h_0()
+                .items_center()
+                .justify_center()
+                .child(icon),
+        )
+        .child(
+            div()
+                .when_else(width.0 < 9., |d| d.text_sm(), |d| d.text_lg())
+                .font_bold()
+                .line_clamp(3)
+                .text_color(text)
+                .child(title.clone()),
+        )
+        .into_any_element()
+}
+
 /// A `#rrggbb` colour of the systems catalog.
 fn catalog_color(hex: &str) -> Option<Hsla> {
     let v = u32::from_str_radix(hex.strip_prefix('#')?, 16).ok()?;
@@ -148,12 +225,42 @@ pub fn physical_width(width: Rems, window: &Window) -> u32 {
     (logical * window.scale_factor()).ceil() as u32
 }
 
+/// The corner radius of library covers in the user's `coverCorners`.
+pub fn cover_radius(corners: CoverCorners, cx: &App) -> Pixels {
+    let large = cx.theme().radius_lg;
+    match corners {
+        CoverCorners::Square => Pixels::ZERO,
+        CoverCorners::Rounded => large,
+        // At least a little rounder than the theme's, which may be square.
+        CoverCorners::Round => (large * 2.).max(px(12.)),
+    }
+}
+
+/// The art a cover of `shape` shows: box art for the usual 2:3 cover, the
+/// store's square art for a square one, the wide hero art for a banner,
+/// each falling back through the others the game has.
+pub fn cover_art_for(game: &GameInfo, shape: CoverShape) -> Option<&str> {
+    match shape {
+        CoverShape::Portrait => game.cover_art(),
+        CoverShape::Square => game
+            .art_square
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .or_else(|| game.cover_art()),
+        CoverShape::Banner => game.hero_art(),
+    }
+}
+
 /// A 2:3 cover tile. Pulses while its art loads; a game without cover art
-/// gets its title on a quiet wash instead.
+/// gets its title on a quiet wash instead, under its program's icon when it
+/// has one ([`program_icon_cover`]).
 #[derive(IntoElement)]
 pub struct GameCover {
     game: Arc<GameInfo>,
     width: Rems,
+    shape: CoverShape,
+    /// Set for art drawn whole in its own shape; 2:3 otherwise.
+    height: Option<Rems>,
     radius: Option<Pixels>,
 }
 
@@ -162,6 +269,8 @@ impl GameCover {
         Self {
             game,
             width: rems(11.),
+            shape: CoverShape::Portrait,
+            height: None,
             radius: None,
         }
     }
@@ -169,6 +278,19 @@ impl GameCover {
     /// Tile width; height follows the 2:3 cover ratio.
     pub fn width(mut self, width: Rems) -> Self {
         self.width = width;
+        self
+    }
+
+    /// The cover's shape: which art it shows, and its height for its width.
+    pub fn shape(mut self, shape: CoverShape) -> Self {
+        self.shape = shape;
+        self
+    }
+
+    /// Tile height, for art drawn whole in its own shape (sized to it by the
+    /// caller); the 2:3 cover ratio otherwise.
+    pub fn height(mut self, height: Rems) -> Self {
+        self.height = Some(height);
         self
     }
 
@@ -183,18 +305,23 @@ impl GameCover {
 impl RenderOnce for GameCover {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let px = physical_width(self.width, window);
-        let (image, fresh) = match self.game.cover_art() {
+        let (image, fresh) = match cover_art_for(&self.game, self.shape) {
             Some(url) => (
                 art_image(url, px, false, cx),
                 art_is_fresh(url, px, false, cx),
             ),
             None => (ArtImage::Missing, false),
         };
+        let icon = matches!(image, ArtImage::Missing)
+            .then(|| program_icon_img(&self.game, self.width, 1.5, window, cx))
+            .flatten();
         let theme = cx.theme();
         let radius = self.radius.unwrap_or(theme.radius_lg);
         let base = div()
             .w(self.width)
-            .h(rems(self.width.0 * 1.5))
+            .h(self
+                .height
+                .unwrap_or(rems(self.width.0 * self.shape.ratio())))
             .flex_shrink_0()
             .overflow_hidden()
             .rounded(radius)
@@ -210,6 +337,14 @@ impl RenderOnce for GameCover {
                     .object_fit(ObjectFit::Cover),
             )),
             ArtImage::Loading => base.child(art_loading()),
+            ArtImage::Missing if let Some(icon) = icon => base.child(program_icon_cover(
+                icon,
+                &self.game.title.clone().into(),
+                self.width,
+                1.5,
+                theme.foreground,
+                cx,
+            )),
             // Tiny thumbnails (download rows, sidebar) have no room for a title.
             ArtImage::Missing if self.width.0 < 5. => base.child(art_missing(cx)),
             ArtImage::Missing
@@ -240,5 +375,31 @@ impl RenderOnce for GameCover {
                     ),
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_shape_shows_its_own_art_and_falls_back() {
+        let mut game = GameInfo {
+            art_cover: Some("box".into()),
+            art_square: Some("square".into()),
+            art_background: Some("hero".into()),
+            ..Default::default()
+        };
+        assert_eq!(cover_art_for(&game, CoverShape::Portrait), Some("box"));
+        assert_eq!(cover_art_for(&game, CoverShape::Square), Some("square"));
+        assert_eq!(cover_art_for(&game, CoverShape::Banner), Some("hero"));
+        game.art_square = None;
+        game.art_background = None;
+        assert_eq!(cover_art_for(&game, CoverShape::Square), Some("box"));
+        assert_eq!(cover_art_for(&game, CoverShape::Banner), Some("box"));
+        game.art_square = Some(String::new());
+        assert_eq!(cover_art_for(&game, CoverShape::Square), Some("box"));
+        game.art_cover = None;
+        assert_eq!(cover_art_for(&game, CoverShape::Portrait), None);
     }
 }

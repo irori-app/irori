@@ -6,7 +6,6 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-#[cfg(any(unix, test))]
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
@@ -744,6 +743,21 @@ pub fn spawn(spec: &CommandSpec, log_file: Option<&Path>) -> Result<Child> {
         .with_context(|| format!("failed to start {}", spec.program.display()))
 }
 
+/// Start a tool whose output Irori reads as a stream of bytes (a decoder
+/// writing frames), with its standard output and error piped and no
+/// console window. Killed when the returned child is dropped, so a reader
+/// that stops never leaves it behind.
+pub fn spawn_piped(spec: &CommandSpec) -> Result<Child> {
+    tracing::debug!(command = %spec, "spawn piped");
+    let mut cmd = spec.to_command(Start::Run)?;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    cmd.spawn()
+        .with_context(|| format!("failed to start {}", spec.program.display()))
+}
+
 /// SIGTERM the child's process group, escalating to SIGKILL after 5 s.
 #[cfg(unix)]
 pub async fn terminate(child: &mut Child) {
@@ -780,6 +794,94 @@ pub fn kill_group(pid: u32, force: bool) {
         Signal::SIGTERM
     };
     let _ = killpg(Pid::from_raw(pid as i32), sig);
+}
+
+/// Block in the kernel until every process in `pids` has exited (or `timeout`
+/// elapses) using `pidfd_open(2)` and `poll(2)`, with zero user-space polling.
+/// Returns `false` when `pids` is empty or `pidfd_open` is unavailable so the
+/// caller can fall back to a timer sleep.
+#[cfg(target_os = "linux")]
+pub fn wait_pids_exit(pids: &[u32], timeout: Duration) -> bool {
+    use nix::errno::Errno;
+    use nix::libc::{
+        POLLERR, POLLHUP, POLLIN, POLLNVAL, SYS_pidfd_open, c_uint, close, nfds_t, pid_t, poll,
+        pollfd, syscall,
+    };
+
+    if pids.is_empty() {
+        return false;
+    }
+    struct PidFds(Vec<pollfd>);
+    impl Drop for PidFds {
+        fn drop(&mut self) {
+            for pfd in &mut self.0 {
+                if pfd.fd >= 0 {
+                    // SAFETY: each fd in this vector was returned by `pidfd_open` and has not been closed yet.
+                    unsafe {
+                        close(pfd.fd);
+                    }
+                    pfd.fd = -1;
+                }
+            }
+        }
+    }
+
+    let mut fds = PidFds(Vec::with_capacity(pids.len()));
+    for &pid in pids {
+        let Ok(raw_pid) = pid_t::try_from(pid) else {
+            return false;
+        };
+        // SAFETY: `SYS_pidfd_open` takes `(pid_t, unsigned int)` and returns an owned file descriptor or -1 on error.
+        let fd = unsafe { syscall(SYS_pidfd_open, raw_pid, 0 as c_uint) };
+        if fd < 0 {
+            // ESRCH means a tracked PID already exited before `pidfd_open`;
+            // return true so the caller re-checks immediately.
+            return Errno::last() == Errno::ESRCH;
+        }
+        fds.0.push(pollfd {
+            fd: fd as i32,
+            events: POLLIN,
+            revents: 0,
+        });
+    }
+
+    let deadline = std::time::Instant::now() + timeout;
+    while fds.0.iter().any(|pfd| pfd.fd >= 0) {
+        let remaining_ms = deadline
+            .saturating_duration_since(std::time::Instant::now())
+            .as_millis()
+            .min(i32::MAX as u128) as i32;
+        if remaining_ms <= 0 {
+            break;
+        }
+        // SAFETY: `fds.0` holds valid open pollfds for `poll` with matching length.
+        let rc = unsafe { poll(fds.0.as_mut_ptr(), fds.0.len() as nfds_t, remaining_ms) };
+        if rc < 0 {
+            if Errno::last() == Errno::EINTR {
+                continue;
+            }
+            break;
+        }
+        if rc == 0 {
+            break;
+        }
+        for pfd in &mut fds.0 {
+            if pfd.fd >= 0 && (pfd.revents & (POLLIN | POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                // SAFETY: `pfd.fd` is an open pidfd owned by `fds` and is marked closed immediately.
+                unsafe {
+                    close(pfd.fd);
+                }
+                pfd.fd = -1;
+                pfd.revents = 0;
+            }
+        }
+    }
+    true
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn wait_pids_exit(_pids: &[u32], _timeout: Duration) -> bool {
+    false
 }
 
 #[cfg(windows)]
@@ -1379,6 +1481,22 @@ mod tests {
             .unwrap();
         assert!(res.aborted);
     }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wait_pids_exit_wakes_when_process_terminates() {
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.05"])
+            .spawn()
+            .unwrap();
+        let started = std::time::Instant::now();
+        let waited = wait_pids_exit(&[child.id()], Duration::from_secs(5));
+        let elapsed = started.elapsed();
+        let _ = child.wait();
+        assert!(waited);
+        assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+    }
+
     /// What an opener starts may outlive it and hold whatever it was given:
     /// Irori neither waits for that nor hands it a pipe, and it runs in a
     /// process group of its own.

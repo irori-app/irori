@@ -26,6 +26,7 @@ pub mod ea;
 pub mod registry;
 pub mod rockstar;
 pub mod ubisoft;
+pub mod wine_config;
 pub mod xbox;
 mod yaml;
 

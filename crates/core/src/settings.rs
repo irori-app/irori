@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 
 use crate::Runner;
-use crate::game::{CloudSaveLocation, LaunchOption};
+use crate::game::{CloudSaveLocation, LaunchOption, SavesPathFound};
 use crate::merged_lists;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -181,6 +181,11 @@ pub struct GameSettings {
     /// Irori-only; set per game.
     #[serde(rename = "iroriDiscordPresence")]
     pub discord_presence: bool,
+    /// Linux: when Steam starts the game through its non-Steam shortcut,
+    /// pass Steam's overlay on to the game (off under gamescope and the
+    /// sandbox). Irori-only; set per game.
+    #[serde(rename = "iroriSteamOverlay")]
+    pub steam_overlay: bool,
     pub ignore_game_updates: bool,
     pub language: String,
     pub launcher_args: String,
@@ -191,11 +196,14 @@ pub struct GameSettings {
     pub prefer_system_libs: bool,
     pub show_fps: bool,
     pub show_mangohud: bool,
-    /// MangoHud's frame rate limit (`fps_limit` in `MANGOHUD_CONFIG`), for
-    /// games of every kind while MangoHud is on; empty for none. Linux only;
-    /// Irori-only.
-    #[serde(rename = "iroriMangohudFpsLimit")]
-    pub mangohud_fps_limit: String,
+    /// MangoHud loads with the game without drawing, until the in-game
+    /// overlay shows it. Linux only; Irori-only.
+    #[serde(rename = "iroriMangohudHidden")]
+    pub mangohud_hidden: bool,
+    /// What applies the frame limit (`enableDXVKFpsLimit`, `DXVKFpsCap`):
+    /// see `irori_runtime::frame_limit`. Linux only; Irori-only.
+    #[serde(rename = "iroriFpsLimiter")]
+    pub fps_limiter: FpsLimiter,
     pub target_exe: String,
     pub use_game_mode: bool,
     /// Steam runtime name (`"soldier"`, `"sniper"`, …) or none. Heroic writes
@@ -210,6 +218,13 @@ pub struct GameSettings {
     pub wine_version: WineInstallation,
     pub wrapper_options: Vec<Wrapper>,
     pub saves_path: String,
+    /// What Irori found `saves_path` for when it worked the folder out
+    /// itself; `None` when the user chose it. Per game; Irori-only.
+    #[serde(
+        rename = "iroriSavesPathFound",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub saves_path_found: Option<SavesPathFound>,
     pub gog_saves: Vec<CloudSaveLocation>,
     pub before_launch_script_path: String,
     /// Start the game without waiting for the before-launch script, which
@@ -220,6 +235,13 @@ pub struct GameSettings {
     pub after_launch_script_path: String,
     #[serde(rename = "disableUMU")]
     pub disable_umu: bool,
+    /// Start the game's program directly, without Wine or Proton, though
+    /// its build is Windows': for a native replacement (OpenJK,
+    /// fallout2-ce) set as its program that Irori can't recognise as one.
+    /// Programs of this system run without Wine anyway. Per game;
+    /// Irori-only.
+    #[serde(rename = "iroriNoWine")]
+    pub no_wine: bool,
     pub verbose_logs: bool,
     pub advertise_avx_for_rosetta: bool,
     pub enable_quick_saves_menu: bool,
@@ -227,6 +249,17 @@ pub struct GameSettings {
     /// `RetinaMode`). Irori-only.
     #[serde(rename = "iroriRetinaMode", alias = "emberRetinaMode")]
     pub retina_mode: bool,
+    /// macOS on Apple silicon: start a native Mac game's Intel code under
+    /// Rosetta even when the program also has Apple silicon code (a game
+    /// whose arm64 build misbehaves). Intel-only programs always run under
+    /// Rosetta. Irori-only.
+    #[serde(rename = "iroriRosetta")]
+    pub rosetta: bool,
+    /// macOS: NVIDIA DLSS translated to MetalFX, where the Wine build ships
+    /// the translation (Game Porting Toolkit 3's D3DMetal, CrossOver, DXMT).
+    /// Irori-only.
+    #[serde(rename = "iroriMetalFxDlss")]
+    pub metal_fx_dlss: bool,
     /// The emulator that plays this game (`duckstation`,
     /// `retroarch:<core>`); empty for the system's default. Irori-only.
     #[serde(rename = "iroriEngine", alias = "emberEngine")]
@@ -287,6 +320,12 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriWindowsGpu")]
     pub windows_gpu: String,
+    /// PnP instance id (`PCI\VEN_…&DEV_…\…`) of a graphics card Windows
+    /// hides from the game while it runs: disabled for the session through
+    /// Windows' own permission prompt and enabled again when it ends, never
+    /// one driving a display. Empty hides nothing. Windows only; Irori-only.
+    #[serde(rename = "iroriHideGpu")]
+    pub hide_gpu: String,
     /// NVIDIA Smooth Motion frame generation
     /// (`NVPRESENT_ENABLE_SMOOTH_MOTION`). Linux only; Irori-only.
     #[serde(rename = "iroriSmoothMotion")]
@@ -316,6 +355,10 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriLaunchPrograms")]
     pub launch_programs: Vec<crate::launch_extras::LaunchProgram>,
+    /// Actions beside the game's Play button: programs and links. Per game;
+    /// Irori-only.
+    #[serde(rename = "iroriActions")]
+    pub actions: Vec<crate::user_actions::UserAction>,
     /// Back up the game's saves with Ludusavi after every session.
     /// Irori-only.
     #[serde(rename = "iroriLudusaviAutoBackup")]
@@ -338,9 +381,17 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriIgdbId")]
     pub igdb_id: String,
-    /// The game's Steam app id for its achievements read from game files,
-    /// when the user chose one; empty finds it in the game's files and
-    /// variables. Per game only. Irori-only.
+    /// The game's VNDB id (`v17`), when the user chose its match ("Change
+    /// VNDB match"), or `none` for no match; empty finds one by title. Per
+    /// game only. Irori-only.
+    #[serde(rename = "iroriVndbId")]
+    pub vndb_id: String,
+    /// The Steam app the game is linked to, when the user chose one, or
+    /// `none` for none: Steam's tags, store details, ProtonDB and the
+    /// achievements read from game files follow it, and umu names the game
+    /// by it. Empty finds it (wikis, the exact title; the game's files for
+    /// achievements). It never changes how the game itself starts. Per game
+    /// only. Irori-only.
     #[serde(rename = "iroriSteamAppId")]
     pub steam_app_id: String,
     /// The umu database id (`GAMEID`) the game runs with under umu, when the
@@ -451,13 +502,29 @@ pub struct ReplaySettings {
     /// gpu-screen-recorder's quality preset: `medium`, `high`, `very_high`
     /// or `ultra`.
     pub quality: String,
-    /// `desktop` (what the speakers play), `desktop_and_mic` or `none`.
+    /// `desktop` (what the speakers play), `desktop_and_mic`, `game` (only
+    /// the game's own sound, through PipeWire) or `none`.
     pub audio: String,
-    /// `screen` (the first monitor) or `portal` (the desktop asks once
-    /// what to record).
+    /// `screen` (a monitor: [`ReplaySettings::monitor`], else the first) or
+    /// `portal` (the desktop asks once what to record).
     pub capture: String,
     /// Where clips go, in a folder per game; empty for Videos/Irori.
     pub folder: String,
+    /// Frames a second the clip records.
+    pub fps: u32,
+    /// The video codec: `auto` (the recorder picks what the GPU encodes),
+    /// `h264`, `hevc` or `av1`.
+    pub codec: String,
+    /// The largest size a clip is recorded at (`1920x1080`), scaled down
+    /// from the screen; `native` keeps the screen's.
+    pub resolution: String,
+    /// The monitor recorded with `screen` capture, by connector name
+    /// (`DP-1`); empty for the first one.
+    pub monitor: String,
+    /// Start the recorder again when it stops by itself during the session.
+    pub restart: bool,
+    /// Link each saved clip in that day's journal note of the game.
+    pub journal: bool,
 }
 
 impl Default for ReplaySettings {
@@ -469,6 +536,12 @@ impl Default for ReplaySettings {
             audio: "desktop".into(),
             capture: "screen".into(),
             folder: String::new(),
+            fps: 60,
+            codec: "auto".into(),
+            resolution: "native".into(),
+            monitor: String::new(),
+            restart: true,
+            journal: true,
         }
     }
 }
@@ -517,6 +590,7 @@ impl Default for GameSettings {
             dll_overrides: Vec::new(),
             in_sunshine: true,
             discord_presence: true,
+            steam_overlay: false,
             ignore_game_updates: false,
             language: String::new(),
             launcher_args: String::new(),
@@ -527,7 +601,8 @@ impl Default for GameSettings {
             prefer_system_libs: false,
             show_fps: false,
             show_mangohud: false,
-            mangohud_fps_limit: String::new(),
+            mangohud_hidden: false,
+            fps_limiter: FpsLimiter::Auto,
             target_exe: String::new(),
             use_game_mode: false,
             steam_runtime: None,
@@ -536,11 +611,13 @@ impl Default for GameSettings {
             wine_version: WineInstallation::default(),
             wrapper_options: Vec::new(),
             saves_path: String::new(),
+            saves_path_found: None,
             gog_saves: Vec::new(),
             before_launch_script_path: String::new(),
             before_launch_script_alongside: false,
             after_launch_script_path: String::new(),
             disable_umu: false,
+            no_wine: false,
             verbose_logs: true,
             advertise_avx_for_rosetta: false,
             dxvk_version: String::new(),
@@ -553,11 +630,14 @@ impl Default for GameSettings {
             xess_upgrade: false,
             gpu: String::new(),
             windows_gpu: String::new(),
+            hide_gpu: String::new(),
             smooth_motion: false,
             nvidia_reflex: false,
             lsfg: LsfgSettings::default(),
             enable_quick_saves_menu: false,
             retina_mode: false,
+            rosetta: false,
+            metal_fx_dlss: false,
             engine: String::new(),
             engine_version: String::new(),
             engine_options: BTreeMap::new(),
@@ -565,11 +645,13 @@ impl Default for GameSettings {
             lutris_script: None,
             sandbox: SandboxSettings::default(),
             launch_programs: Vec::new(),
+            actions: Vec::new(),
             ludusavi_auto_backup: false,
             ludusavi_interval: 0,
             ludusavi_title: String::new(),
             hltb_id: String::new(),
             igdb_id: String::new(),
+            vndb_id: String::new(),
             steam_app_id: String::new(),
             umu_id: String::new(),
             replay: ReplaySettings::default(),
@@ -719,6 +801,26 @@ pub enum LibraryTopSection {
     Favourites,
 }
 
+/// Snapshots of each game's saves kept by default (`iroriSaveSnapshots`).
+pub const DEFAULT_SAVE_SNAPSHOTS: u32 = 5;
+
+/// Other launchers Irori keeps in sync with (`iroriLauncherImports`): read
+/// again at start and every quarter of an hour, and only the games not seen
+/// before are imported. Their own files are only read.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LauncherImports {
+    pub lutris: bool,
+    pub bottles: bool,
+    pub faugus: bool,
+}
+
+impl LauncherImports {
+    pub fn any(&self) -> bool {
+        self.lutris || self.bottles || self.faugus
+    }
+}
+
 /// Application-wide settings. Heroic stores these next to the default game
 /// settings in one object; `game` is flattened to keep that shape.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -740,9 +842,19 @@ pub struct AppSettings {
     /// `defaultInstallPath` (`Games/Irori/GOG/<game>`). Irori-only.
     #[serde(rename = "iroriInstallPerStore")]
     pub install_per_store: bool,
+    /// More folders games install into beside `defaultInstallPath`, each
+    /// with a name (another drive, an SD card). Irori-only.
+    #[serde(rename = "iroriLibraryFolders")]
+    pub library_folders: Vec<LibraryFolder>,
     pub default_steam_path: String,
     pub default_wine_prefix_dir: String,
     pub disable_controller: bool,
+    /// How controller input behaves (`iroriController`). Irori-only.
+    #[serde(rename = "iroriController")]
+    pub controller: crate::controller_prefs::ControllerPrefs,
+    /// Big Picture's sounds and idle screen (`iroriBigPicture`). Irori-only.
+    #[serde(rename = "iroriBigPicture")]
+    pub big_picture: crate::big_picture_prefs::BigPicturePrefs,
     pub disable_playtime_sync: bool,
     pub disable_logs: bool,
     pub disable_animations: bool,
@@ -755,6 +867,10 @@ pub struct AppSettings {
     pub disable_gog_presence: bool,
     pub download_no_https: bool,
     pub download_proton_to_steam: bool,
+    /// Proton-CachyOS and Proton-Wineland builds for x86-64-v3 processors.
+    /// Linux only; Irori-only.
+    #[serde(rename = "iroriProtonCpuLevel")]
+    pub proton_cpu_level: ProtonCpuLevel,
     pub egs_linked_path: String,
     pub exit_to_tray: bool,
     pub gamepad_repeat_delay: u32,
@@ -855,6 +971,22 @@ pub struct AppSettings {
     /// itself, where `checkForUpdatesOnStartup` is about games.
     #[serde(rename = "iroriCheckForAppUpdates")]
     pub check_for_app_updates: bool,
+    /// Show deals from GOG and other stores on the Stores page; off, they
+    /// are neither shown nor asked for. Irori-only.
+    #[serde(rename = "iroriDeals")]
+    pub deals: bool,
+    /// Whether Irori probes the connection, takes it as working, or works
+    /// offline and never reaches the internet. Irori-only.
+    #[serde(rename = "iroriNetworkMode")]
+    pub network_mode: crate::net::NetworkMode,
+    /// Seconds a network request may take (10–600), for slow or unreliable
+    /// connections; 0 keeps Irori's own timeouts. Irori-only.
+    #[serde(rename = "iroriNetworkTimeout")]
+    pub network_timeout: u32,
+    /// Snapshots of a game's saves kept from before cloud syncs that could
+    /// replace them (0–50); 0 takes none. Irori-only.
+    #[serde(rename = "iroriSaveSnapshots")]
+    pub save_snapshots: u32,
     /// Open a game's log when it starts. Irori-only.
     #[serde(rename = "iroriShowLogOnLaunch")]
     pub show_log_on_launch: bool,
@@ -862,6 +994,10 @@ pub struct AppSettings {
     /// Irori-only.
     #[serde(rename = "iroriAchievementNotices")]
     pub achievement_notices: bool,
+    /// How unlocks show while the game runs: over the game, and with which
+    /// lines. Irori-only.
+    #[serde(rename = "iroriAchievementToast")]
+    pub achievement_toast: AchievementToastPrefs,
     /// Read the achievements that Steam API emulators (Goldberg, gbe_fork,
     /// CODEX-style) keep in a game's own files, for games Irori starts from
     /// their own executable. Irori-only.
@@ -873,6 +1009,28 @@ pub struct AppSettings {
     /// off by default. Irori-only.
     #[serde(rename = "iroriIgdb")]
     pub igdb: bool,
+    /// Fill what store pages and IGDB leave out of visual novels
+    /// (descriptions, release dates, developers, covers, screenshots) from
+    /// VNDB, and offer its covers in the art picker. VNDB's public API
+    /// needs no account; off by default. Irori-only.
+    #[serde(rename = "iroriVndb")]
+    pub vndb: bool,
+    /// Box art for the ROM library from the LaunchBox Games Database: its
+    /// game list (about 110 MB) is downloaded, and again once a week while
+    /// the ROM library has games. Off by default; the art picker's and the
+    /// palette's download turn it on. Irori-only.
+    #[serde(rename = "iroriLaunchBox", default)]
+    pub launchbox: bool,
+    /// Link games of other stores to the Steam app of their exact title
+    /// (edition words aside, and a release year apart at most), for
+    /// Steam's tags, ProtonDB and screenshots, when no source names their
+    /// Steam app. Off by default. Irori-only.
+    #[serde(rename = "iroriSteamTitleMatch")]
+    pub steam_title_match: bool,
+    /// Steam tags each game keeps, strongest first (5–20); tags far fewer
+    /// players gave than the strongest are left out too. Irori-only.
+    #[serde(rename = "iroriSteamTagLimit")]
+    pub steam_tag_limit: u32,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -897,6 +1055,13 @@ pub struct AppSettings {
     /// 0 = no cap. Irori-only.
     #[serde(rename = "iroriArtCacheLimit")]
     pub art_cache_limit: u32,
+    /// Other launchers whose new games Irori keeps importing. Irori-only.
+    #[serde(rename = "iroriLauncherImports")]
+    pub launcher_imports: LauncherImports,
+    /// Shortcuts of a Windows program take the program's own icon, before
+    /// the store's art. Irori-only.
+    #[serde(rename = "iroriShortcutIconFromExe")]
+    pub shortcut_icon_from_exe: bool,
     /// Scheduled backups. Irori-only; stays on this computer (backups and
     /// restores leave it alone).
     #[serde(rename = "iroriBackups")]
@@ -939,10 +1104,19 @@ impl Default for AppSettings {
             auto_update_until: String::new(),
             auto_update_unmetered: false,
             check_for_app_updates: true,
+            deals: true,
+            network_mode: crate::net::NetworkMode::Auto,
+            network_timeout: 0,
+            save_snapshots: DEFAULT_SAVE_SNAPSHOTS,
             show_log_on_launch: false,
             achievement_notices: false,
+            achievement_toast: AchievementToastPrefs::default(),
             file_achievements: false,
             igdb: false,
+            vndb: false,
+            launchbox: false,
+            steam_title_match: false,
+            steam_tag_limit: DEFAULT_STEAM_TAG_LIMIT,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),
@@ -958,6 +1132,8 @@ impl Default for AppSettings {
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
             add_steam_shortcuts: false,
+            launcher_imports: LauncherImports::default(),
+            shortcut_icon_from_exe: false,
             auto_update_games: false,
             check_for_updates_on_startup: true,
             check_updates_interval: 10,
@@ -965,9 +1141,12 @@ impl Default for AppSettings {
             dark_tray_icon: false,
             default_install_path: games.to_string_lossy().into_owned(),
             install_per_store: false,
+            library_folders: Vec::new(),
             default_steam_path: crate::platform::steam_dir().to_string_lossy().into_owned(),
             default_wine_prefix_dir: games.join("Prefixes").to_string_lossy().into_owned(),
             disable_controller: false,
+            controller: Default::default(),
+            big_picture: Default::default(),
             disable_playtime_sync: false,
             disable_logs: false,
             disable_animations: false,
@@ -976,6 +1155,7 @@ impl Default for AppSettings {
             disable_gog_presence: false,
             download_no_https: false,
             download_proton_to_steam: false,
+            proton_cpu_level: ProtonCpuLevel::Auto,
             egs_linked_path: String::new(),
             exit_to_tray: false,
             gamepad_repeat_delay: 50,
@@ -1104,8 +1284,107 @@ impl Density {
     }
 }
 
+/// The corners of the library's covers (`coverCorners`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverCorners {
+    Square,
+    /// The theme's large radius.
+    #[default]
+    Rounded,
+    /// Twice the theme's large radius.
+    Round,
+}
+
+/// What the library writes under each cover (`coverCaption`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverCaption {
+    /// The title and a line about the game (install state, size, playtime).
+    #[default]
+    Full,
+    /// Only the title.
+    Title,
+    /// Nothing: the covers alone.
+    None,
+}
+
+/// How the library draws box art (`coverFit`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverFit {
+    /// Every cover filled to 2:3, cut where its shape differs.
+    #[default]
+    Crop,
+    /// Each picture whole in its own shape (tall, square, wide), standing
+    /// on its row; tall boxes of one row share a height.
+    Whole,
+}
+
+/// The shape of the library grid's covers (`coverShape`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverShape {
+    /// Square art: the store's square capsule, else the box art cropped.
+    Square,
+    /// A wide banner of the game's hero art, 16:9.
+    Banner,
+    /// Box art, 2:3. Last, so a shape a newer Irori writes reads as this.
+    #[default]
+    #[serde(other)]
+    Portrait,
+}
+
+impl CoverShape {
+    /// Height over width.
+    pub fn ratio(self) -> f32 {
+        match self {
+            CoverShape::Portrait => 1.5,
+            CoverShape::Square => 1.0,
+            CoverShape::Banner => 9.0 / 16.0,
+        }
+    }
+
+    /// How much wider than a box a cover of this shape is drawn at one
+    /// cover size, so the size slider keeps covers of about one weight.
+    pub fn width_scale(self) -> f32 {
+        match self {
+            CoverShape::Portrait => 1.0,
+            CoverShape::Square => 1.2,
+            CoverShape::Banner => 1.75,
+        }
+    }
+}
+
+/// How large the covers in the Focus view's column are
+/// (`libraryFocusCoverSize`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FocusCoverSize {
+    Small,
+    Large,
+    /// Last, so a size a newer Irori writes reads as this one.
+    #[default]
+    #[serde(other)]
+    Medium,
+}
+
+/// How a cover answers the pointer and the keyboard focus (`coverHover`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverHover {
+    /// It rises a little, with a shadow and a ring.
+    #[default]
+    Lift,
+    /// Only the ring.
+    Outline,
+}
+
 /// The art cache's default cap in MiB.
 pub const DEFAULT_ART_CACHE_LIMIT: u32 = 2048;
+
+/// [`AppSettings::steam_tag_limit`] by default: every tag Steam names.
+pub const DEFAULT_STEAM_TAG_LIMIT: u32 = 20;
 
 /// How often Irori backs up on its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -1133,6 +1412,8 @@ pub struct BackupPrefs {
     pub game_settings: bool,
     pub library: bool,
     pub playtime: bool,
+    /// Where store games are installed, so a restore attaches them again.
+    pub installs: bool,
     /// Copy the downloaded game art too (large; it can be downloaded again).
     pub art: bool,
 }
@@ -1148,6 +1429,7 @@ impl Default for BackupPrefs {
             game_settings: true,
             library: true,
             playtime: true,
+            installs: true,
             art: false,
         }
     }
@@ -1238,12 +1520,162 @@ pub enum SunshineGames {
     Favourites,
 }
 
+/// How unlocks show while a game runs (`iroriAchievementToast`), with
+/// `iroriAchievementNotices` on: a card in a corner above the game, with
+/// the achievement's name and the lines chosen here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AchievementToastPrefs {
+    /// Show the card above the game. Off, or where nothing can show above
+    /// it, unlocks are announced as a notice (on the desktop while Irori is
+    /// in the background).
+    pub over_game: bool,
+    /// The game's title.
+    pub show_game: bool,
+    pub show_description: bool,
+    /// The share of players who have it.
+    pub show_rarity: bool,
+    /// How many of the game's achievements are unlocked now.
+    pub show_progress: bool,
+    /// What it is worth, for stores whose achievements have points.
+    pub show_points: bool,
+}
+
+impl Default for AchievementToastPrefs {
+    fn default() -> Self {
+        Self {
+            over_game: true,
+            show_game: false,
+            show_description: true,
+            show_rarity: true,
+            show_progress: true,
+            show_points: false,
+        }
+    }
+}
+
 /// The in-game overlay (`iroriOverlay`): Guide over a game Irori started
 /// opens it instead of Big Picture. Off by default while it is in beta.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct OverlayPrefs {
     pub enabled: bool,
+    /// Where the panel sits on the screen.
+    pub side: OverlaySide,
+    /// Guide + RB (R1) takes a screenshot.
+    pub screenshot_chord: bool,
+    /// Windows and macOS: Ctrl+Shift+S (⌃⇧S) takes a screenshot while a game
+    /// Irori started runs, with or without the overlay.
+    pub screenshot_key: bool,
+    /// Guide + Up/Down change the system's volume.
+    pub volume_chords: bool,
+    /// Guide + Y (Triangle) marks the moment: a screenshot and a journal
+    /// note to write later (`momentChord`).
+    pub moment_chord: bool,
+    /// How far one press of a volume control moves a volume, in percent
+    /// (see [`Self::volume_step`]).
+    pub volume_step: u32,
+    /// After Guide + Up/Down the new level shows over the game for a moment.
+    pub level_notice: bool,
+    /// Back + Start (View + Menu) together open and close the overlay where
+    /// Guide can't be read while a game has the focus (Windows' XInput).
+    pub back_start: bool,
+}
+
+impl Default for OverlayPrefs {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            side: OverlaySide::Center,
+            screenshot_chord: true,
+            screenshot_key: true,
+            volume_chords: true,
+            moment_chord: true,
+            volume_step: 5,
+            level_notice: true,
+            back_start: true,
+        }
+    }
+}
+
+impl OverlayPrefs {
+    /// [`Self::volume_step`] within the offered range, 1 to 25 percent.
+    pub fn volume_step(&self) -> i32 {
+        self.volume_step.clamp(1, 25) as i32
+    }
+}
+
+/// What applies a game's frame limit (`iroriFpsLimiter`). Values a newer
+/// Irori writes read as [`FpsLimiter::Auto`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FpsLimiter {
+    /// gamescope, else a shown MangoHud, else DXVK, else a hidden MangoHud.
+    #[default]
+    Auto,
+    Gamescope,
+    #[serde(rename = "mangohud")]
+    MangoHud,
+    Dxvk,
+}
+
+impl<'de> Deserialize<'de> for FpsLimiter {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "gamescope" => FpsLimiter::Gamescope,
+            "mangohud" => FpsLimiter::MangoHud,
+            "dxvk" => FpsLimiter::Dxvk,
+            _ => FpsLimiter::Auto,
+        })
+    }
+}
+
+/// Which build the Wine manager installs where a source publishes one for
+/// x86-64-v3 processors beside the baseline one (`iroriProtonCpuLevel`).
+/// Values a newer Irori writes read as [`ProtonCpuLevel::Auto`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProtonCpuLevel {
+    /// The x86-64-v3 build when this processor runs it.
+    #[default]
+    Auto,
+    /// Always the baseline x86-64 build.
+    Baseline,
+    /// Always the x86-64-v3 build.
+    V3,
+}
+
+impl<'de> Deserialize<'de> for ProtonCpuLevel {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "baseline" => ProtonCpuLevel::Baseline,
+            "v3" => ProtonCpuLevel::V3,
+            _ => ProtonCpuLevel::Auto,
+        })
+    }
+}
+
+/// Where the in-game overlay's panel sits. Values a newer Irori writes read
+/// as [`OverlaySide::Center`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OverlaySide {
+    #[default]
+    Center,
+    /// Along the left edge, the height of the screen.
+    Left,
+    /// Along the right edge, the height of the screen.
+    Right,
+}
+
+impl<'de> Deserialize<'de> for OverlaySide {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "left" => OverlaySide::Left,
+            "right" => OverlaySide::Right,
+            _ => OverlaySide::Center,
+        })
+    }
 }
 
 /// Irori's games in Sunshine (`iroriSunshine`). Sunshine's own login is
@@ -1317,6 +1749,12 @@ pub struct UiPrefs {
     /// Copies of one game from several stores are one library entry
     /// (`groupCopies`, on unless turned off).
     pub group_copies: bool,
+    /// A game without cover art shows the icon of its Windows program on its
+    /// stand-in cover (`programIconArt`, on unless turned off).
+    pub program_icon_art: bool,
+    /// A game page's first trailer starts on its own, muted
+    /// (`trailerAutoplay`, off unless turned on).
+    pub trailer_autoplay: bool,
     /// Quick sort, install, favourites and grouping controls in the
     /// library's header, shown as far as its width allows
     /// (`libraryQuickControls`, on unless turned off).
@@ -1350,6 +1788,10 @@ pub struct UiPrefs {
     /// Open Big Picture when a controller connects while Irori runs, or
     /// is connected when it starts.
     pub big_picture_on_controller: bool,
+    /// Ask the desktop for a shortcut that opens the quick launcher (the
+    /// command palette in a window of its own) from anywhere
+    /// (`quickLaunchShortcut`); off, `irori --quick-launch` still opens it.
+    pub quick_launch_shortcut: bool,
     /// The controller button held to open Big Picture from anywhere in
     /// Irori (`bigPictureHoldButton`).
     pub big_picture_hold_button: HoldButton,
@@ -1369,6 +1811,48 @@ pub struct UiPrefs {
     pub library_background_strength: u32,
     /// How much of the theme's background is laid over it, in percent.
     pub library_background_dim: u32,
+    /// Big Picture fills the screen (`bigPictureFullscreen`, on unless
+    /// turned off); off, it shows in the window as it is.
+    pub big_picture_fullscreen: bool,
+    pub cover_corners: CoverCorners,
+    pub cover_caption: CoverCaption,
+    pub cover_hover: CoverHover,
+    pub cover_fit: CoverFit,
+    /// The shape of the grid's covers (`coverShape`).
+    pub cover_shape: CoverShape,
+    /// The star on favourites' covers (`coverFavourite`, on unless turned
+    /// off).
+    pub cover_favourite: bool,
+    /// Covers to a row in the Focus view's column (`libraryFocusColumns`,
+    /// 1 to 3); 0 fits as many as the window allows.
+    pub library_focus_columns: u32,
+    /// How large the Focus view's covers are (`libraryFocusCoverSize`).
+    pub library_focus_cover_size: FocusCoverSize,
+    /// The library switches to Focus when the window grows wide enough for
+    /// its page beside the covers, and to the grid when it shrinks below
+    /// that (`libraryAutoLayout`, off unless turned on).
+    pub library_auto_layout: bool,
+    /// A click on a cover in the grid opens the drawer about the game
+    /// (`libraryOpenDetailsOnSelect`, on unless turned off); off, it only
+    /// selects it, and `I`, Enter or a double click go further.
+    pub library_open_details_on_select: bool,
+    /// Store badges stay on every cover (`storeBadgesAlways`); off, they
+    /// show on the cover pointed at or focused.
+    pub store_badges_always: bool,
+    /// Store badges show while the library lists one store too
+    /// (`storeBadgesOneStore`, off unless turned on), where they all say the
+    /// same.
+    pub store_badges_one_store: bool,
+    /// Game pages show the age-rating card (`showAgeRatings`, on unless
+    /// turned off). The library's age filter works either way.
+    pub show_age_ratings: bool,
+    /// The board whose rating shows first (`ageRatingBoard`): its name
+    /// ("PEGI", as [`crate::RatingSystem::from_key`] reads it), or empty for
+    /// the board of the user's region.
+    pub age_rating_board: String,
+    /// Kinds of rows the game page's Details leave out (`hiddenDetailRows`,
+    /// ids such as `publisher`); ids a later Irori adds stay as written.
+    pub hidden_detail_rows: Vec<String>,
 }
 
 /// Which stores Irori shows. A hidden store keeps its sign-in and installed
@@ -1469,7 +1953,14 @@ impl AppSettings {
     /// store is (`Epic Games`, `GOG`). Stores whose games Irori doesn't
     /// install, and added games, keep `defaultInstallPath`.
     pub fn install_folder(&self, runner: Runner) -> String {
-        let base = self.default_install_path.as_str();
+        self.install_folder_in(&self.default_install_path, runner)
+    }
+
+    /// The folder new installs of a store's games go to inside the library
+    /// folder `base`: `base` itself, or with `iroriInstallPerStore` the
+    /// store's own folder inside it, as [`Self::install_folder`] does for the
+    /// default one.
+    pub fn install_folder_in(&self, base: &str, runner: Runner) -> String {
         if !self.install_per_store || base.trim().is_empty() || !installs_per_store(runner) {
             return base.to_string();
         }
@@ -1481,6 +1972,81 @@ impl AppSettings {
         let base = base.trim_end_matches(['/', '\\']);
         format!("{base}{separator}{}", runner.store_name())
     }
+
+    /// Every library folder: the default install folder first (unnamed),
+    /// then the user's named ones with a folder, each folder once.
+    pub fn library_folders(&self) -> Vec<LibraryFolder> {
+        let mut out = vec![LibraryFolder {
+            name: String::new(),
+            path: self.default_install_path.clone(),
+        }];
+        for folder in &self.library_folders {
+            if folder.path.trim().is_empty()
+                || out.iter().any(|f| same_folder(&f.path, &folder.path))
+            {
+                continue;
+            }
+            let mut folder = folder.clone();
+            if folder.name.trim().is_empty() {
+                // An unnamed folder would read as the default one.
+                folder.name = folder_name(&folder.path);
+            }
+            out.push(folder);
+        }
+        out
+    }
+}
+
+/// A named folder games can be installed into (`iroriLibraryFolders`)
+/// beside the default install folder: another drive, an SD card.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LibraryFolder {
+    /// What the user calls it; empty only for the default install folder.
+    pub name: String,
+    /// As the user chose it (`~` unexpanded).
+    pub path: String,
+}
+
+impl LibraryFolder {
+    /// Whether this is the default install folder (`defaultInstallPath`).
+    pub fn is_default(&self) -> bool {
+        self.name.is_empty()
+    }
+}
+
+/// Whether two folders as the user wrote them are one folder.
+pub fn same_folder(a: &str, b: &str) -> bool {
+    let normal = |p: &str| {
+        crate::paths::expand_home(p.trim())
+            .components()
+            .collect::<PathBuf>()
+    };
+    normal(a) == normal(b)
+}
+
+/// A folder's own name (`SD card` for `/run/media/me/SD card`), for a
+/// library folder the user gave no name.
+pub fn folder_name(path: &str) -> String {
+    let path = path.trim().trim_end_matches(['/', '\\']);
+    path.rsplit(['/', '\\'])
+        .next()
+        .filter(|n| !n.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
+/// The library folder holding `install` (an installed game's folder): the
+/// one whose folder is the longest start of it.
+pub fn library_folder_of(folders: &[LibraryFolder], install: &std::path::Path) -> Option<usize> {
+    folders
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| !f.path.trim().is_empty())
+        .map(|(i, f)| (i, crate::paths::expand_home(f.path.trim())))
+        .filter(|(_, root)| install.starts_with(root))
+        .max_by_key(|(_, root)| root.components().count())
+        .map(|(i, _)| i)
 }
 
 /// Whether a store's games get a folder of the store's own with
@@ -1538,6 +2104,8 @@ impl Default for UiPrefs {
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,
+            program_icon_art: true,
+            trailer_autoplay: false,
             library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,
@@ -1553,6 +2121,7 @@ impl Default for UiPrefs {
             big_picture_layout: String::new(),
             big_picture_theme: String::new(),
             big_picture_on_controller: false,
+            quick_launch_shortcut: false,
             big_picture_hold_button: HoldButton::Start,
             big_picture_hold_ms: 1000,
             accent_color: String::new(),
@@ -1562,6 +2131,22 @@ impl Default for UiPrefs {
             library_background_picture: String::new(),
             library_background_strength: 70,
             library_background_dim: 20,
+            big_picture_fullscreen: true,
+            cover_corners: CoverCorners::Rounded,
+            cover_caption: CoverCaption::Full,
+            cover_hover: CoverHover::Lift,
+            cover_fit: CoverFit::Crop,
+            cover_shape: CoverShape::Portrait,
+            cover_favourite: true,
+            library_focus_columns: 0,
+            library_focus_cover_size: FocusCoverSize::Medium,
+            library_auto_layout: false,
+            library_open_details_on_select: true,
+            store_badges_always: false,
+            store_badges_one_store: false,
+            show_age_ratings: true,
+            age_rating_board: String::new(),
+            hidden_detail_rows: Vec::new(),
         }
     }
 }
@@ -1604,6 +2189,7 @@ mod tests {
         assert!(ui.library_quick_controls);
         assert!(!ui.cover_categories);
         assert!(ui.group_copies);
+        assert!(ui.program_icon_art);
         assert!(!ui.wallpaper_colors);
         assert!(ui.wallpaper_colors_file.is_empty());
         let json = serde_json::to_value(UiPrefs {
@@ -1677,6 +2263,52 @@ mod tests {
     }
 
     #[test]
+    fn library_folders_list_the_default_first_and_each_folder_once() {
+        let mut app: AppSettings = serde_json::from_str(
+            r#"{"defaultInstallPath": "/games", "iroriLibraryFolders": [
+                {"name": "SD card", "path": "/run/media/me/SD"},
+                {"name": "Again", "path": "/games/"},
+                {"name": "", "path": "/mnt/Big Disk/"},
+                {"name": "Nowhere", "path": " "}
+            ]}"#,
+        )
+        .unwrap();
+        let folders = app.library_folders();
+        let names: Vec<&str> = folders.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["", "SD card", "Big Disk"]);
+        assert!(folders[0].is_default() && !folders[2].is_default());
+        assert_eq!(folders[0].path, "/games");
+
+        // A game belongs to the deepest folder holding it.
+        app.library_folders.push(LibraryFolder {
+            name: "Inner".into(),
+            path: "/games/inner".into(),
+        });
+        let folders = app.library_folders();
+        let of = |p: &str| library_folder_of(&folders, std::path::Path::new(p));
+        assert_eq!(of("/games/Hades"), Some(0));
+        assert_eq!(of("/games/inner/GOG/Hades"), Some(3));
+        assert_eq!(of("/run/media/me/SD/Celeste"), Some(1));
+        assert_eq!(of("/elsewhere/Celeste"), None);
+        // `/games2` is not inside `/games`.
+        assert_eq!(of("/games2/Hades"), None);
+
+        // Each folder gets the stores' own folders like the default one.
+        app.install_per_store = true;
+        assert_eq!(
+            app.install_folder_in("/run/media/me/SD", Runner::Gog),
+            "/run/media/me/SD/GOG"
+        );
+        assert_eq!(
+            app.install_folder_in("/run/media/me/SD", Runner::Sideload),
+            "/run/media/me/SD"
+        );
+        // Older settings without the list read as before.
+        let old: AppSettings = serde_json::from_str(r#"{"defaultInstallPath": "/g"}"#).unwrap();
+        assert_eq!(old.library_folders().len(), 1);
+    }
+
+    #[test]
     fn stores_can_install_in_folders_of_their_own() {
         let mut app: AppSettings =
             serde_json::from_str(r#"{"defaultInstallPath": "~/Games/Irori/"}"#).unwrap();
@@ -1729,6 +2361,10 @@ mod tests {
         let gs: GameSettings =
             serde_json::from_str(r#"{"iroriWindowsGpu": "highPerformance"}"#).unwrap();
         assert_eq!(gs.windows_gpu, "highPerformance");
+        assert_eq!(json["iroriHideGpu"], "");
+        let gs: GameSettings =
+            serde_json::from_str(r#"{"iroriHideGpu": "PCI\\VEN_10DE&DEV_2484\\4&1"}"#).unwrap();
+        assert_eq!(gs.hide_gpu, r"PCI\VEN_10DE&DEV_2484\4&1");
         assert_eq!(json["iroriLsfg"]["multiplier"], 2);
         assert_eq!(json["iroriLsfg"]["performanceMode"], false);
     }
@@ -1740,6 +2376,34 @@ mod tests {
         let app: AppSettings =
             serde_json::from_str(r#"{"iroriCheckForAppUpdates": false}"#).unwrap();
         assert!(!app.check_for_app_updates);
+    }
+
+    #[test]
+    fn network_policy_reads_and_defaults() {
+        let app: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(app.network_mode, crate::net::NetworkMode::Auto);
+        assert_eq!(app.network_timeout, 0);
+        let app: AppSettings =
+            serde_json::from_str(r#"{"iroriNetworkMode": "offline", "iroriNetworkTimeout": 180}"#)
+                .unwrap();
+        assert_eq!(app.network_mode, crate::net::NetworkMode::Offline);
+        assert_eq!(app.network_timeout, 180);
+    }
+
+    #[test]
+    fn save_snapshots_are_kept_unless_turned_off() {
+        let app: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(app.save_snapshots, DEFAULT_SAVE_SNAPSHOTS);
+        let app: AppSettings = serde_json::from_str(r#"{"iroriSaveSnapshots": 0}"#).unwrap();
+        assert_eq!(app.save_snapshots, 0);
+    }
+
+    #[test]
+    fn deals_show_unless_turned_off() {
+        let app: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(app.deals);
+        let app: AppSettings = serde_json::from_str(r#"{"iroriDeals": false}"#).unwrap();
+        assert!(!app.deals);
     }
 
     #[test]
@@ -1769,6 +2433,84 @@ mod tests {
         assert_eq!(ui.big_picture_theme, "user:x");
         assert!(ui.big_picture_on_controller);
         assert!(!UiPrefs::default().big_picture_on_controller);
+        assert!(ui.big_picture_fullscreen, "fullscreen unless turned off");
+        let ui: UiPrefs = serde_json::from_str(r#"{"bigPictureFullscreen":false}"#).unwrap();
+        assert!(!ui.big_picture_fullscreen);
+    }
+
+    #[test]
+    fn a_click_opens_the_drawer_unless_turned_off() {
+        assert!(UiPrefs::default().library_open_details_on_select);
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryOpenDetailsOnSelect":false}"#).unwrap();
+        assert!(!ui.library_open_details_on_select);
+    }
+
+    #[test]
+    fn focus_covers_are_medium_unless_chosen() {
+        assert_eq!(
+            UiPrefs::default().library_focus_cover_size,
+            FocusCoverSize::Medium
+        );
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryFocusCoverSize":"large"}"#).unwrap();
+        assert_eq!(ui.library_focus_cover_size, FocusCoverSize::Large);
+        // A size a newer Irori writes doesn't lose the other settings.
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"libraryFocusCoverSize":"huge","tileSize":9.0}"#).unwrap();
+        assert_eq!(ui.library_focus_cover_size, FocusCoverSize::Medium);
+        assert_eq!(ui.tile_size, 9.0);
+    }
+
+    #[test]
+    fn the_layout_follows_the_window_only_when_asked() {
+        assert!(!UiPrefs::default().library_auto_layout);
+        let ui: UiPrefs = serde_json::from_str(r#"{"libraryAutoLayout":true}"#).unwrap();
+        assert!(ui.library_auto_layout);
+    }
+
+    #[test]
+    fn covers_are_boxes_unless_another_shape_is_chosen() {
+        assert_eq!(UiPrefs::default().cover_shape, CoverShape::Portrait);
+        let ui: UiPrefs = serde_json::from_str(r#"{"coverShape":"banner"}"#).unwrap();
+        assert_eq!(ui.cover_shape, CoverShape::Banner);
+        assert!(CoverShape::Banner.ratio() < 1.0 && CoverShape::Square.ratio() == 1.0);
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"coverShape":"hexagon","tileSize":9.0}"#).unwrap();
+        assert_eq!(ui.cover_shape, CoverShape::Portrait);
+        assert_eq!(ui.tile_size, 9.0);
+    }
+
+    #[test]
+    fn covers_are_cropped_unless_drawn_whole() {
+        assert_eq!(UiPrefs::default().cover_fit, CoverFit::Crop);
+        let ui: UiPrefs = serde_json::from_str(r#"{"coverFit":"whole"}"#).unwrap();
+        assert_eq!(ui.cover_fit, CoverFit::Whole);
+    }
+
+    #[test]
+    fn store_badges_show_on_hover_and_not_for_one_store_by_default() {
+        let ui = UiPrefs::default();
+        assert!(ui.show_store_badges && !ui.store_badges_always && !ui.store_badges_one_store);
+        let ui: UiPrefs =
+            serde_json::from_str(r#"{"storeBadgesAlways":true,"storeBadgesOneStore":true}"#)
+                .unwrap();
+        assert!(ui.store_badges_always && ui.store_badges_one_store);
+    }
+
+    #[test]
+    fn cover_options_read_their_keys_and_default_to_todays_look() {
+        let ui = UiPrefs::default();
+        assert_eq!(ui.cover_corners, CoverCorners::Rounded);
+        assert_eq!(ui.cover_caption, CoverCaption::Full);
+        assert_eq!(ui.cover_hover, CoverHover::Lift);
+        assert!(ui.cover_favourite);
+        let ui: UiPrefs = serde_json::from_str(
+            r#"{"coverCorners":"square","coverCaption":"title","coverHover":"outline","coverFavourite":false}"#,
+        )
+        .unwrap();
+        assert_eq!(ui.cover_corners, CoverCorners::Square);
+        assert_eq!(ui.cover_caption, CoverCaption::Title);
+        assert_eq!(ui.cover_hover, CoverHover::Outline);
+        assert!(!ui.cover_favourite);
     }
 
     #[test]
@@ -1796,6 +2538,56 @@ mod tests {
         assert_eq!(json["bigPictureHoldMs"], 1000);
         let back: UiPrefs = serde_json::from_value(json).unwrap();
         assert_eq!(back.big_picture_hold_button, HoldButton::Off);
+    }
+
+    #[test]
+    fn the_frame_limiter_reads_leniently() {
+        let gs: GameSettings =
+            serde_json::from_str(r#"{"iroriFpsLimiter":"mangohud","iroriMangohudHidden":true}"#)
+                .unwrap();
+        assert_eq!(gs.fps_limiter, FpsLimiter::MangoHud);
+        assert!(gs.mangohud_hidden);
+        let gs: GameSettings = serde_json::from_str(r#"{"iroriFpsLimiter":"vsync"}"#).unwrap();
+        assert_eq!(gs.fps_limiter, FpsLimiter::Auto, "unknown");
+        let json = serde_json::to_value(GameSettings::default()).unwrap();
+        assert_eq!(json["iroriFpsLimiter"], "auto");
+        let back = serde_json::to_value(GameSettings {
+            fps_limiter: FpsLimiter::MangoHud,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(back["iroriFpsLimiter"], "mangohud");
+    }
+
+    #[test]
+    fn overlay_options_default_on_and_read_leniently() {
+        // Settings written before the options existed keep the overlay as it
+        // was: on or off, chords and the notice on, a 5% step, centred.
+        let old: OverlayPrefs = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        assert_eq!(
+            old,
+            OverlayPrefs {
+                enabled: true,
+                ..OverlayPrefs::default()
+            }
+        );
+        assert!(old.screenshot_chord && old.volume_chords && old.level_notice && old.back_start);
+        assert_eq!(old.volume_step(), 5);
+        let set: OverlayPrefs = serde_json::from_str(
+            r#"{"side":"right","volumeStep":0,"volumeChords":false,"levelNotice":false}"#,
+        )
+        .unwrap();
+        assert_eq!(set.side, OverlaySide::Right);
+        assert_eq!(set.volume_step(), 1, "at least 1%");
+        assert!(!set.volume_chords && !set.level_notice);
+        let newer: OverlayPrefs =
+            serde_json::from_str(r#"{"side":"top","volumeStep":90}"#).unwrap();
+        assert_eq!(newer.side, OverlaySide::Center, "unknown side");
+        assert_eq!(newer.volume_step(), 25);
+        let json = serde_json::to_value(OverlayPrefs::default()).unwrap();
+        assert_eq!(json["side"], "center");
+        assert_eq!(json["volumeStep"], 5);
+        assert_eq!(json["backStart"], true);
     }
 
     #[test]

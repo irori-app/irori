@@ -20,24 +20,32 @@
 use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::form::{field, v_form};
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_kit::component::list::ListItem;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
-    Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _,
+    WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    App, AppContext as _, Context, ElementId, Entity, Focusable as _, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, Window, div,
 };
+use irori_core::process::CancellationToken;
 use irori_core::{GameId, GameInfo, GameMode, Runner, Store as _};
 use irori_extras::shortcuts::{self, ShortcutTargets};
+use irori_sideload::scan::{
+    DetectionOutcome, InstalledCandidate, PrefixSnapshot, detect_installed_executables,
+};
 use irori_sideload::{SideloadApp, SideloadPlatform};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::wine_choice::{WineChoice, WineSetup};
@@ -73,12 +81,49 @@ fn platform_label(platform: SideloadPlatform) -> SharedString {
 }
 
 /// Title suggested from an executable's file name (`/x/Hollow_Knight.exe` →
-/// `Hollow Knight`).
+/// `Hollow Knight`), or from its parent folder when the executable has a
+/// generic installer name (`/x/Void Reaver [FitGirl Repack]/setup.exe` →
+/// `Void Reaver`).
 pub fn title_from_executable(path: &Path) -> Option<String> {
     let stem = path.file_stem()?.to_str()?;
-    let title = stem.replace(['_', '.'], " ");
+    let lower = stem.trim().to_ascii_lowercase();
+    let generic = matches!(
+        lower.as_str(),
+        "setup" | "install" | "installer" | "autorun"
+    );
+    let raw = if generic {
+        path.parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or(stem)
+    } else {
+        stem
+    };
+    let stripped = strip_bracket_tags(raw);
+    let source = if stripped.trim().is_empty() {
+        raw
+    } else {
+        &stripped
+    };
+    let title = source.replace(['_', '.'], " ");
     let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
     (!title.is_empty()).then_some(title)
+}
+
+/// Remove `[FitGirl Repack]`-style bracketed tags from a folder name.
+fn strip_bracket_tags(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut depth = 0usize;
+    for ch in s.chars() {
+        match ch {
+            '[' => depth += 1,
+            ']' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The add/edit form.
@@ -132,13 +177,47 @@ pub struct SideloadDialog {
     _subscriptions: Vec<Subscription>,
 }
 
+/// Prefix and baseline snapshot for an installer started from this dialog.
+#[derive(Debug, Clone)]
+pub(crate) struct InstallerRun {
+    pub(crate) prefix: PathBuf,
+    pub(crate) snapshot: Arc<PrefixSnapshot>,
+    pub(crate) installer: PathBuf,
+    pub(crate) extra_dir: Option<PathBuf>,
+}
+
 /// Progress of "Run installer…".
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 enum InstallerState {
     Idle,
+    /// Preparing the prefix and starting the setup program.
     Starting,
-    /// The installer started; the app's Wine prefix is at this path.
-    Started(SharedString),
+    /// The installer is running; Irori waits for it to exit and then scans.
+    Running {
+        run: InstallerRun,
+        cancel: CancellationToken,
+    },
+    /// One executable was auto-filled (or chosen by the user from a list).
+    Picked {
+        run: InstallerRun,
+        picked: InstalledCandidate,
+        alternatives: Vec<InstalledCandidate>,
+    },
+    /// Multiple executables were found; ask the user to choose one.
+    Choose {
+        run: InstallerRun,
+        candidates: Vec<InstalledCandidate>,
+    },
+    /// No executable was detected; show the manual Browse… guidance.
+    Manual {
+        run: InstallerRun,
+    },
+}
+
+impl InstallerState {
+    fn is_busy(&self) -> bool {
+        matches!(self, Self::Starting | Self::Running { .. })
+    }
 }
 
 /// How saving the form applies to the sideload store.
@@ -373,6 +452,9 @@ impl SideloadDialog {
 
     /// Remove the entry created for an installer when the app was not saved.
     fn discard_provisional(&mut self, cx: &mut App) {
+        if let InstallerState::Running { cancel, .. } = &self.installer {
+            cancel.cancel();
+        }
         let Some(name) = self.provisional.take().filter(|_| !self.saved) else {
             return;
         };
@@ -419,12 +501,7 @@ impl SideloadDialog {
 
     /// Pick a Windows installer and run it in the app's prefix.
     fn run_installer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.installer == InstallerState::Starting {
-            return;
-        }
-        if text(&self.title, cx).is_empty() {
-            self.error = Some(t("library.sideload.error.title_first"));
-            cx.notify();
+        if self.installer.is_busy() {
             return;
         }
         let picked = pick_path(false, t("library.sideload.picker.run_installer"), cx);
@@ -441,6 +518,22 @@ impl SideloadDialog {
     }
 
     fn start_installer(&mut self, installer: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let current_title = text(&self.title, cx);
+        if (current_title.is_empty()
+            || matches!(
+                current_title.to_ascii_lowercase().as_str(),
+                "setup" | "install" | "installer"
+            ))
+            && let Some(suggested) = title_from_executable(&installer)
+        {
+            self.title
+                .update(cx, |s, cx| s.set_value(suggested, window, cx));
+        }
+        if text(&self.title, cx).is_empty() {
+            self.error = Some(t("library.sideload.error.title_first"));
+            cx.notify();
+            return;
+        }
         let Some(store) = crate::sideload_store(cx) else {
             self.error = Some(t("library.sideload.error.unavailable"));
             cx.notify();
@@ -448,6 +541,7 @@ impl SideloadDialog {
         };
         let existing = self.editing.clone().or_else(|| self.provisional.clone());
         let mut app = self.collect(cx);
+        let extra_dir = app.install_folder.clone();
         app.platform = SideloadPlatform::Windows;
         if app.executable.is_none() {
             app.executable = Some(installer.clone());
@@ -458,7 +552,8 @@ impl SideloadDialog {
         cx.notify();
 
         let b = backend(cx);
-        let task = irori_ui::run(cx, async move {
+        let extra_for_snap = extra_dir.clone();
+        let prep = irori_ui::run(cx, async move {
             let (id, created) = match existing {
                 Some(name) => (GameId::new(Runner::Sideload, name.as_str()), None),
                 None => {
@@ -473,9 +568,15 @@ impl SideloadDialog {
             if let Some(setup) = &setup {
                 setup.apply(&b, &id, &game);
             }
-            let settings = b.settings.game(&id);
-            let prefix = irori_runtime::prefix_path(&b.settings.app(), &settings, &game);
-            if created.is_some() && settings.wine_prefix.is_empty() {
+            let custom_prefix = setup
+                .as_ref()
+                .map(|s| s.prefix.trim())
+                .filter(|p| !p.is_empty());
+            let prefix = match custom_prefix {
+                Some(p) => irori_core::paths::expand_home(p),
+                None => irori_runtime::default_prefix(&b.settings.app(), &game),
+            };
+            if created.is_some() {
                 b.settings.set_game_value(
                     &id,
                     "winePrefix",
@@ -484,15 +585,19 @@ impl SideloadDialog {
                     )),
                 );
             }
-            let argv = vec![installer.to_string_lossy().into_owned()];
-            let run = b.run_in_prefix(&id, argv).await.map(|_| ());
-            Ok((created, prefix, run))
+            let snap_prefix = prefix.clone();
+            let snapshot = b
+                .spawn_blocking(move || {
+                    PrefixSnapshot::capture(&snap_prefix, extra_for_snap.as_deref())
+                })
+                .await?;
+            Ok((id, created, prefix, Arc::new(snapshot)))
         });
         cx.spawn_in(window, async move |this, cx| {
-            let result = task.await;
-            this.update_in(cx, |this, window, cx| {
-                match result {
-                    Ok((created, prefix, run)) => {
+            let prepared = prep.await;
+            let Some((run_info, cancel, run_task)) = this
+                .update_in(cx, |this, window, cx| match prepared {
+                    Ok((id, created, prefix, snapshot)) => {
                         if created.is_some() {
                             this.provisional = created;
                         }
@@ -500,28 +605,205 @@ impl SideloadDialog {
                         if let Some(wine) = &this.wine {
                             wine.update(cx, |w, cx| w.set_prefix(&prefix, window, cx));
                         }
-                        match run {
-                            Ok(()) => {
-                                this.installer = InstallerState::Started(
-                                    prefix.to_string_lossy().into_owned().into(),
-                                );
-                            }
-                            Err(e) => {
-                                this.installer = InstallerState::Idle;
-                                this.error = Some(installer_error(&e));
-                            }
-                        }
+                        let cancel = CancellationToken::new();
+                        let run_info = InstallerRun {
+                            prefix,
+                            snapshot,
+                            installer: installer.clone(),
+                            extra_dir: extra_dir.clone(),
+                        };
+                        this.installer = InstallerState::Running {
+                            run: run_info.clone(),
+                            cancel: cancel.clone(),
+                        };
+                        let b = backend(cx);
+                        let installer_for_run = installer.clone();
+                        let cancel_for_run = cancel.clone();
+                        let run_task = irori_ui::run(cx, async move {
+                            b.run_installer_in_prefix(&id, &installer_for_run, cancel_for_run)
+                                .await
+                        });
+                        cx.notify();
+                        Some((run_info, cancel, run_task))
                     }
                     Err(e) => {
                         this.installer = InstallerState::Idle;
                         this.error = Some(installer_error(&e));
+                        cx.notify();
+                        None
+                    }
+                })
+                .ok()
+                .flatten()
+            else {
+                return;
+            };
+
+            let run = run_task.await;
+
+            this.update_in(cx, |this, window, cx| {
+                if cancel.is_cancelled() {
+                    return;
+                }
+                match run {
+                    Ok(_) => {
+                        this.scan_prefix_after_installer(run_info, window, cx);
+                    }
+                    Err(e) => {
+                        this.installer = InstallerState::Idle;
+                        this.error = Some(installer_error(&e));
+                        cx.notify();
                     }
                 }
-                cx.notify();
             })
             .ok();
         })
         .detach();
+    }
+
+    /// Scan the prefix now for executables installed since `snapshot`.
+    fn scan_prefix_after_installer(
+        &mut self,
+        run_info: InstallerRun,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let title = text(&self.title, cx);
+        let scan_info = run_info.clone();
+        let scan = backend(cx).spawn_blocking(move || {
+            detect_installed_executables(
+                &scan_info.prefix,
+                &title,
+                &scan_info.installer,
+                scan_info.extra_dir.as_deref(),
+                &scan_info.snapshot,
+            )
+        });
+        let task = irori_ui::run(cx, async move { Ok(scan.await?) });
+        cx.spawn_in(window, async move |this, cx| {
+            let outcome = task.await.unwrap_or(DetectionOutcome::None);
+            this.update_in(cx, |this, window, cx| {
+                this.apply_detection(run_info, outcome, window, cx);
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Apply the outcome of a post-installer scan to the form.
+    pub(crate) fn apply_detection(
+        &mut self,
+        run: InstallerRun,
+        outcome: DetectionOutcome,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match outcome {
+            DetectionOutcome::Picked(picked) => {
+                self.apply_candidate(&picked, window, cx);
+                self.installer = InstallerState::Picked {
+                    run,
+                    picked,
+                    alternatives: Vec::new(),
+                };
+            }
+            DetectionOutcome::Ambiguous(candidates) => {
+                self.installer = InstallerState::Choose { run, candidates };
+            }
+            DetectionOutcome::None => {
+                self.installer = InstallerState::Manual { run };
+            }
+        }
+        cx.notify();
+    }
+
+    /// Fill the form from a detected or user-chosen installed executable.
+    fn apply_candidate(
+        &mut self,
+        candidate: &InstalledCandidate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let exe = candidate.executable.to_string_lossy().into_owned();
+        self.executable
+            .update(cx, |s, cx| s.set_value(exe, window, cx));
+        if text(&self.arguments, cx).is_empty() && !candidate.args.is_empty() {
+            let args = candidate.args.clone();
+            self.arguments
+                .update(cx, |s, cx| s.set_value(args, window, cx));
+        }
+        if text(&self.install_folder, cx).is_empty()
+            && let Some(folder) = &candidate.install_folder
+        {
+            let folder = folder.to_string_lossy().into_owned();
+            self.install_folder
+                .update(cx, |s, cx| s.set_value(folder, window, cx));
+        }
+        self.error = None;
+    }
+
+    /// Choose candidate `ix` from [`InstallerState::Choose`].
+    pub(crate) fn choose_installer_candidate(
+        &mut self,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let InstallerState::Choose { run, candidates } = &self.installer else {
+            return;
+        };
+        let Some(picked) = candidates.get(ix).cloned() else {
+            return;
+        };
+        let (run, alternatives) = (run.clone(), candidates.clone());
+        self.apply_candidate(&picked, window, cx);
+        self.installer = InstallerState::Picked {
+            run,
+            picked,
+            alternatives,
+        };
+        cx.notify();
+    }
+
+    /// Re-open the candidate list when more than one executable was found.
+    fn reopen_candidate_chooser(&mut self, cx: &mut Context<Self>) {
+        if let InstallerState::Picked {
+            run, alternatives, ..
+        } = &self.installer
+            && alternatives.len() > 1
+        {
+            self.installer = InstallerState::Choose {
+                run: run.clone(),
+                candidates: alternatives.clone(),
+            };
+            cx.notify();
+        }
+    }
+
+    /// Stop waiting for the installer process and scan immediately.
+    fn scan_installer_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let run = match &self.installer {
+            InstallerState::Running { run, cancel } => {
+                cancel.cancel();
+                Some(run.clone())
+            }
+            InstallerState::Manual { run } | InstallerState::Choose { run, .. } => {
+                Some(run.clone())
+            }
+            _ => None,
+        };
+        if let Some(run) = run {
+            self.scan_prefix_after_installer(run, window, cx);
+        }
+    }
+
+    /// Stop waiting for the installer process and fall back to manual Browse….
+    fn stop_waiting_installer(&mut self, cx: &mut Context<Self>) {
+        if let InstallerState::Running { run, cancel } = &self.installer {
+            cancel.cancel();
+            self.installer = InstallerState::Manual { run: run.clone() };
+            cx.notify();
+        }
     }
 
     pub(crate) fn collect(&self, cx: &App) -> SideloadApp {
@@ -581,6 +863,18 @@ impl SideloadDialog {
         cx.notify();
 
         let task = irori_ui::run(cx, async move {
+            let mut app = app;
+            if matches!(mode, SaveMode::Add | SaveMode::Finish(_))
+                && app.cover_art.is_none()
+                && !cfg!(test)
+                && let Some((cover, hero)) =
+                    irori_extras::wiki::steam_art_for_title(&app.title).await
+            {
+                app.cover_art = Some(cover);
+                if app.background_art.is_none() {
+                    app.background_art = Some(hero);
+                }
+            }
             let (id, added) = match mode {
                 SaveMode::Edit(name) => {
                     store.edit_app(&name, app).await?;
@@ -666,12 +960,19 @@ impl SideloadDialog {
                 let input = target(this).clone();
                 input.update(cx, |s, cx| s.set_value(value, window, cx));
                 // Suggest a title from the executable when none was entered.
-                if std::ptr::eq(target(this), &this.executable)
-                    && text(&this.title, cx).is_empty()
-                    && let Some(title) = title_from_executable(&path)
-                {
-                    this.title
-                        .update(cx, |s, cx| s.set_value(title, window, cx));
+                if std::ptr::eq(target(this), &this.executable) {
+                    if text(&this.title, cx).is_empty()
+                        && let Some(title) = title_from_executable(&path)
+                    {
+                        this.title
+                            .update(cx, |s, cx| s.set_value(title, window, cx));
+                    }
+                    if matches!(
+                        this.installer,
+                        InstallerState::Choose { .. } | InstallerState::Manual { .. }
+                    ) {
+                        this.installer = InstallerState::Idle;
+                    }
                 }
                 this.error = None;
                 cx.notify();
@@ -857,6 +1158,17 @@ impl SideloadDialog {
                             }),
                     )
                     .child(
+                        Button::new("sideload-duplicates")
+                            .small()
+                            .ghost()
+                            .icon(IconName::Copy)
+                            .label(t("library.duplicates.open"))
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                                super::duplicates::open_duplicates_dialog(window, cx);
+                            }),
+                    )
+                    .child(
                         Button::new("sideload-accounts")
                             .small()
                             .ghost()
@@ -975,6 +1287,176 @@ impl SideloadDialog {
             )
             .into_any_element()
     }
+
+    /// Status banner or executable selector shown below the Executable row
+    /// while or after running a Windows installer.
+    fn render_installer_state(&self, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
+        let muted = cx.theme().muted_foreground;
+        match &self.installer {
+            InstallerState::Idle | InstallerState::Starting => None,
+            InstallerState::Running { .. } => Some(
+                v_flex()
+                    .gap_2()
+                    .child(
+                        Alert::info(
+                            "sideload-installer-running",
+                            t("library.sideload.installer_running.body"),
+                        )
+                        .title(t("library.sideload.installer_running.title")),
+                    )
+                    .child(
+                        h_flex()
+                            .justify_end()
+                            .gap_2()
+                            .child(
+                                Button::new("sideload-installer-stop")
+                                    .small()
+                                    .ghost()
+                                    .label(t("library.sideload.installer_running.stop"))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.stop_waiting_installer(cx);
+                                    })),
+                            )
+                            .child(
+                                Button::new("sideload-installer-scan-now")
+                                    .small()
+                                    .outline()
+                                    .label(t("library.sideload.installer_running.scan_now"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.scan_installer_now(window, cx);
+                                    })),
+                            ),
+                    )
+                    .into_any_element(),
+            ),
+            InstallerState::Picked {
+                run,
+                picked,
+                alternatives,
+            } => {
+                let program = candidate_display(&picked.executable, &run.prefix);
+                let has_more = alternatives.len() > 1;
+                Some(
+                    v_flex()
+                        .gap_2()
+                        .child(
+                            Alert::info(
+                                "sideload-installer-picked",
+                                t_args(
+                                    "library.sideload.installer_picked.body",
+                                    &[("program", &program)],
+                                ),
+                            )
+                            .title(t("library.sideload.installer_picked.title")),
+                        )
+                        .when(has_more, |d| {
+                            d.child(
+                                h_flex().justify_end().child(
+                                    Button::new("sideload-installer-change")
+                                        .small()
+                                        .ghost()
+                                        .label(t("library.sideload.installer_picked.change"))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.reopen_candidate_chooser(cx);
+                                        })),
+                                ),
+                            )
+                        })
+                        .into_any_element(),
+                )
+            }
+            InstallerState::Choose { run, candidates } => {
+                let rows = candidates.iter().enumerate().map(|(ix, c)| {
+                    let name = c
+                        .executable
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| c.executable.display().to_string());
+                    let detail = candidate_display(&c.executable, &run.prefix);
+                    ListItem::new(ElementId::Name(
+                        format!("sideload-installer-candidate-{ix}").into(),
+                    ))
+                    .py_2()
+                    .accessibility_label(name.clone())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.choose_installer_candidate(ix, window, cx);
+                    }))
+                    .child(
+                        v_flex()
+                            .w_full()
+                            .min_w_0()
+                            .child(div().text_sm().font_medium().truncate().child(name))
+                            .child(div().text_xs().text_color(muted).truncate().child(detail)),
+                    )
+                });
+                Some(
+                    v_flex()
+                        .id("sideload-installer-choose")
+                        .gap_2()
+                        .child(
+                            Alert::info(
+                                "sideload-installer-choose-alert",
+                                t("library.sideload.installer_choose.body"),
+                            )
+                            .title(t("library.sideload.installer_choose.title")),
+                        )
+                        .child(
+                            v_flex()
+                                .id("sideload-installer-candidates")
+                                .max_h_48()
+                                .overflow_y_scroll()
+                                .gap_1()
+                                .children(rows),
+                        )
+                        .into_any_element(),
+                )
+            }
+            InstallerState::Manual { run } => {
+                let prefix_str = run.prefix.to_string_lossy().into_owned();
+                Some(
+                    v_flex()
+                        .gap_2()
+                        .child(
+                            Alert::info(
+                                "sideload-installer-started",
+                                t_args(
+                                    "library.sideload.installer_started.body",
+                                    &[("prefix", &prefix_str)],
+                                ),
+                            )
+                            .title(t("library.sideload.installer_started.title")),
+                        )
+                        .child(
+                            h_flex().justify_end().child(
+                                Button::new("sideload-installer-scan-again")
+                                    .small()
+                                    .outline()
+                                    .label(t("library.sideload.installer_scan_again"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.scan_installer_now(window, cx);
+                                    })),
+                            ),
+                        )
+                        .into_any_element(),
+                )
+            }
+        }
+    }
+}
+
+/// Human-friendly path of an installed executable, relative to the prefix's
+/// `drive_c` when inside it.
+fn candidate_display(executable: &Path, prefix: &Path) -> String {
+    for base in [
+        prefix.join("pfx/drive_c"),
+        prefix.join("drive_c"),
+        prefix.to_path_buf(),
+    ] {
+        if let Ok(rel) = executable.strip_prefix(&base) {
+            return rel.display().to_string();
+        }
+    }
+    executable.display().to_string()
 }
 
 impl Render for SideloadDialog {
@@ -986,7 +1468,8 @@ impl Render for SideloadDialog {
         let hints = self.render_hints(rom_system, cx);
         let browser = self.platform == SideloadPlatform::Browser;
         let windows = self.platform == SideloadPlatform::Windows;
-        let installer = self.installer.clone();
+        let installer_busy = self.installer.is_busy();
+        let installer_panel = windows.then(|| self.render_installer_state(cx)).flatten();
         let platform = self.platform;
         let wine = self.wine.clone().filter(|_| windows);
         let more = self.more;
@@ -1048,8 +1531,8 @@ impl Render for SideloadDialog {
                                                 .tooltip(t(
                                                     "library.sideload.run_installer_tooltip",
                                                 ))
-                                                .loading(installer == InstallerState::Starting)
-                                                .disabled(installer == InstallerState::Starting)
+                                                .loading(installer_busy)
+                                                .disabled(installer_busy)
                                                 .on_click(cx.listener(|this, _, window, cx| {
                                                     this.run_installer(window, cx)
                                                 })),
@@ -1057,26 +1540,9 @@ impl Render for SideloadDialog {
                                     }),
                                 ),
                         )
-                        .when_some(
-                            match &installer {
-                                InstallerState::Started(prefix) if windows => Some(prefix.clone()),
-                                _ => None,
-                            },
-                            |form, prefix| {
-                                form.child(
-                                    field().label_indent(false).child(
-                                        Alert::info(
-                                            "sideload-installer-started",
-                                            t_args(
-                                                "library.sideload.installer_started.body",
-                                                &[("prefix", &prefix)],
-                                            ),
-                                        )
-                                        .title(t("library.sideload.installer_started.title")),
-                                    ),
-                                )
-                            },
-                        )
+                        .when_some(installer_panel, |form, panel| {
+                            form.child(field().label_indent(false).child(panel))
+                        })
                     })
                     .when_some(wine, |form, wine| {
                         form.child(field().label_indent(false).child(wine))
@@ -1360,6 +1826,7 @@ mod tests {
                 install_folder: None,
                 icon: Some("/icons/tux.png".into()),
                 kind: FoundKind::DesktopEntry,
+                others: Vec::new(),
             }),
         );
         assert_eq!(entry.title, "SuperTux");
@@ -1415,6 +1882,13 @@ mod tests {
         assert_eq!(
             title_from_executable(Path::new("/opt/celeste/Celeste.bin.x86_64")).as_deref(),
             Some("Celeste bin")
+        );
+        assert_eq!(
+            title_from_executable(Path::new(
+                "/home/edward/Downloads/Void Reaver [FitGirl Repack]/setup.exe"
+            ))
+            .as_deref(),
+            Some("Void Reaver")
         );
         assert_eq!(title_from_executable(Path::new("/")), None);
     }

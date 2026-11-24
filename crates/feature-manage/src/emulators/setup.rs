@@ -1,7 +1,8 @@
 //! "Set up emulation": a short guide from a ROM folder to playing. Pick the
-//! folders, see what was found, install the recommended emulators in one
-//! go, point Irori at the BIOS folder, done. Every step can be skipped and
-//! everything it does is also on the Emulators page.
+//! folders (or add the usual ones Irori found, see [`super::found`]), see
+//! what was found, install the recommended emulators in one go, point
+//! Irori at the BIOS folder, done. Every step can be skipped and everything
+//! it does is also on the Emulators page.
 
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
@@ -22,7 +23,7 @@ use gpui_kit::{
 };
 use irori_engines::bios::SystemBios;
 use irori_engines::{EngineRef, systems};
-use irori_services::EngineStatus;
+use irori_services::{EngineStatus, RomPlan};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, backend, models, navigate};
 
@@ -78,6 +79,10 @@ struct SetupGuide {
     scanning: bool,
     statuses: Option<Vec<EngineStatus>>,
     bios: HashMap<String, SystemBios>,
+    /// The usual ROM folders found and not yet added.
+    found: Option<RomPlan>,
+    /// How many ROM folders the settings name, to notice additions.
+    rom_folders: usize,
     ops: Entity<EngineOps>,
     _ticker: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
@@ -89,7 +94,15 @@ impl SetupGuide {
         let m = models(cx).clone();
         let subscriptions = vec![
             cx.observe(&m.library, |_, _, cx| cx.notify()),
-            cx.observe(&m.settings, |_, _, cx| cx.notify()),
+            // Added ROM folders change what is still found to add.
+            cx.observe_in(&m.settings, window, |this, settings, window, cx| {
+                let folders = settings.read(cx).app.rom_folders.len();
+                if folders != this.rom_folders {
+                    this.rom_folders = folders;
+                    this.load(window, cx);
+                }
+                cx.notify();
+            }),
             cx.observe_in(&ops, window, |this, _, window, cx| this.load(window, cx)),
         ];
         let mut this = Self {
@@ -97,6 +110,8 @@ impl SetupGuide {
             scanning: false,
             statuses: None,
             bios: HashMap::new(),
+            found: None,
+            rom_folders: m.settings.read(cx).app.rom_folders.len(),
             ops,
             _ticker: None,
             _subscriptions: subscriptions,
@@ -108,13 +123,18 @@ impl SetupGuide {
     fn load(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let b = backend(cx);
         let task = irori_ui::run(cx, async move {
-            Ok((b.engine_statuses().await, b.bios_statuses().await))
+            Ok((
+                b.engine_statuses().await,
+                b.bios_statuses().await,
+                b.rom_sources().await.1,
+            ))
         });
         cx.spawn_in(window, async move |this, cx| {
-            let Ok((statuses, bios)) = task.await else {
+            let Ok((statuses, bios, found)) = task.await else {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
+                this.found = Some(found);
                 this.statuses = Some(statuses);
                 this.bios = bios.into_iter().map(|b| (b.system.clone(), b)).collect();
                 cx.notify();
@@ -272,9 +292,39 @@ impl SetupGuide {
         let folders = models(cx).settings.read(cx).app.rom_folders.clone();
         let counts = self.counts(cx);
         let games: usize = counts.values().sum();
+        let found = self.found.as_ref().map(|f| f.add.len()).filter(|n| *n > 0);
         v_flex()
             .gap_3()
             .child(div().text_sm().child(t("manage.setup.folders.intro")))
+            .when_some(found, |d, systems| {
+                d.child(
+                    h_flex()
+                        .gap_3()
+                        .p_3()
+                        .rounded(cx.theme().radius)
+                        .border_1()
+                        .border_color(cx.theme().border)
+                        .child(Icon::new(IconName::Search).small().text_color(muted))
+                        .child(div().flex_1().min_w_0().text_sm().child(if systems == 1 {
+                            t("manage.rom_sources.found_one")
+                        } else {
+                            t_args(
+                                "manage.rom_sources.found_other",
+                                &[("count", &systems.to_string())],
+                            )
+                        }))
+                        .child(
+                            Button::new("setup-found")
+                                .small()
+                                .primary()
+                                .label(t("manage.rom_sources.review"))
+                                .disabled(self.scanning)
+                                .on_click(|_, window, cx| {
+                                    super::found::open_rom_sources_dialog(window, cx)
+                                }),
+                        ),
+                )
+            })
             .children(folders.into_iter().map(|f| {
                 h_flex()
                     .gap_2()

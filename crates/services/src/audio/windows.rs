@@ -7,8 +7,9 @@ use super::*;
 use anyhow::{Context as _, bail};
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
-    AudioSessionStateExpired, DEVICE_STATE_ACTIVE, IAudioSessionControl2, IAudioSessionManager2,
-    IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator, eConsole, eRender,
+    AudioSessionStateExpired, DEVICE_STATE_ACTIVE, EDataFlow, IAudioSessionControl2,
+    IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator, eCapture,
+    eConsole, eRender,
 };
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
@@ -44,20 +45,30 @@ fn enumerator() -> Result<IMMDeviceEnumerator> {
         .context("Windows' audio service didn't answer")
 }
 
-fn endpoint(devices: &IMMDeviceEnumerator) -> Result<IAudioEndpointVolume> {
+/// The default output (`eRender`) or microphone (`eCapture`).
+fn endpoint(devices: &IMMDeviceEnumerator, flow: EDataFlow) -> Result<IAudioEndpointVolume> {
+    let (missing, no_volume) = if flow == eCapture {
+        ("There is no microphone", "The microphone has no level")
+    } else {
+        ("There is no sound output", "The sound output has no volume")
+    };
     // SAFETY: COM calls on live interfaces, on the thread that made them.
     unsafe {
         let device = devices
-            .GetDefaultAudioEndpoint(eRender, eConsole)
-            .context("There is no sound output")?;
+            .GetDefaultAudioEndpoint(flow, eConsole)
+            .context(missing)?;
         device
             .Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)
-            .context("The sound output has no volume")
+            .context(no_volume)
     }
 }
 
 fn system(devices: &IMMDeviceEnumerator) -> Result<Volume> {
-    let endpoint = endpoint(devices)?;
+    level(devices, eRender)
+}
+
+fn level(devices: &IMMDeviceEnumerator, flow: EDataFlow) -> Result<Volume> {
+    let endpoint = endpoint(devices, flow)?;
     // SAFETY: COM calls on a live interface, on the thread that made it.
     let (level, muted) = unsafe {
         (
@@ -167,6 +178,8 @@ fn read(game: Option<&GameProcess>) -> Result<GameAudio> {
     Ok(GameAudio {
         system: system.ok(),
         game: combine(sessions.iter().map(|(_, v)| *v)),
+        // No microphone is no error: many computers have none.
+        microphone: level(&devices, eCapture).ok(),
     })
 }
 
@@ -175,9 +188,14 @@ fn apply(game: Option<&GameProcess>, target: VolumeTarget, change: Change) -> Re
     let devices = enumerator()?;
     let quiet = std::ptr::null();
     match target {
-        VolumeTarget::System => {
-            let endpoint = endpoint(&devices)?;
-            let now = system(&devices)?;
+        VolumeTarget::System | VolumeTarget::Microphone => {
+            let flow = if target == VolumeTarget::Microphone {
+                eCapture
+            } else {
+                eRender
+            };
+            let endpoint = endpoint(&devices, flow)?;
+            let now = level(&devices, flow)?;
             // SAFETY: COM calls on a live interface, on the thread that made
             // it; a null event context is allowed.
             unsafe {
@@ -278,6 +296,11 @@ fn device_id(device: &windows::Win32::Media::Audio::IMMDevice) -> Option<String>
 }
 
 fn list_outputs() -> Result<Vec<AudioOutput>> {
+    list_endpoints(eRender)
+}
+
+/// The active outputs (`eRender`) or microphones (`eCapture`).
+fn list_endpoints(flow: EDataFlow) -> Result<Vec<AudioOutput>> {
     use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
     use windows::Win32::System::Com::STGM_READ;
     let _com = Com::init();
@@ -285,10 +308,10 @@ fn list_outputs() -> Result<Vec<AudioOutput>> {
     // SAFETY: COM calls on live interfaces, on the thread that made them.
     unsafe {
         let current = devices
-            .GetDefaultAudioEndpoint(eRender, eConsole)
+            .GetDefaultAudioEndpoint(flow, eConsole)
             .ok()
             .and_then(|d| device_id(&d));
-        let outputs = devices.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)?;
+        let outputs = devices.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
         let mut out = Vec::new();
         for i in 0..outputs.GetCount()? {
             let Ok(device) = outputs.Item(i) else {
@@ -340,6 +363,15 @@ pub(super) async fn outputs() -> Result<Vec<AudioOutput>> {
 pub(super) async fn set_output(_game: Option<GameProcess>, id: String) -> Result<()> {
     // A program's sound follows the default output unless the user gave it
     // one in Windows' settings, so the game moves along.
+    blocking(move || switch_output(&id)).await
+}
+
+pub(super) async fn inputs() -> Result<Vec<AudioOutput>> {
+    blocking(|| list_endpoints(eCapture)).await
+}
+
+pub(super) async fn set_input(id: String) -> Result<()> {
+    // The policy object sets capture endpoints the same way, by their id.
     blocking(move || switch_output(&id)).await
 }
 

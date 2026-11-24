@@ -19,6 +19,7 @@
 
 mod choice;
 mod compat_source;
+mod detail_rows;
 mod dlc;
 mod hltb_match;
 mod hooks;
@@ -28,6 +29,7 @@ mod import_installers;
 mod install;
 mod launch_options;
 mod launch_problem;
+mod links;
 mod load;
 mod logs;
 mod manage;
@@ -35,17 +37,22 @@ mod mods;
 pub mod ops;
 mod page;
 mod play_with;
+mod playtime_edit;
 mod redmod;
+mod save_snapshots;
 mod saves;
 pub mod sizes;
 pub mod state;
+mod steam_match;
 mod sync_saves;
 #[cfg(test)]
 mod ui_tests;
+mod vndb_match;
 mod windows_file;
 
 use gpui_kit::{App, KeyBinding};
 
+pub use detail_rows::open_detail_rows_dialog;
 pub use hooks::{
     AnticheatReport, AnticheatStatus, BranchPasswordFn, CompatibilityFn, CompatibilityInfo,
     GameHooks, HowLongToBeat, ReviewScore, SteamDeckStatus, install_hooks, install_store_handles,
@@ -59,6 +66,7 @@ pub use install::{
 pub use irori_services::troubleshoot::{LaunchHint, game_output_start, launch_hints};
 pub use launch_options::open_launch_options_dialog;
 pub use launch_problem::{open_launch_problem_sheet, open_troubleshooter};
+pub use links::open_links_dialog;
 pub use logs::{LineLevel, LogTail, LogViewer, open_log_sheet, parse_tail};
 pub use manage::{
     ImportForm, UninstallOptions, open_cancel_download_dialog, open_import_dialog,
@@ -67,9 +75,11 @@ pub use manage::{
 pub use mods::{ModsPanel, open_mods_sheet, open_nxm_dialog, open_thunderstore_link_dialog};
 pub use page::{AchievementFilter, GAME_PAGE_CONTEXT, GamePage, GamePageEvent, InfoTab, game_menu};
 pub use play_with::open_play_with_dialog;
+pub use playtime_edit::open_playtime_dialog;
 pub use redmod::{RedmodPanel, open_redmod_sheet};
 pub use saves::{CloudSavesPanel, CloudSupport, open_cloud_saves_sheet};
 pub use state::PrimaryAction;
+pub use steam_match::open_steam_link_dialog;
 pub use sync_saves::{offers_sync, sync_saves_now};
 pub use windows_file::{open_windows_file_dialog, open_windows_uri_dialog};
 
@@ -88,6 +98,10 @@ gpui_kit::actions!(
         TroubleshootLaunch,
         /// Cancel the launch being prepared (Escape while "Launching…").
         CancelLaunch,
+        /// Bring the running game's window to the front.
+        BackToGame,
+        /// Play or pause the game's trailer.
+        ToggleTrailer,
     ]
 );
 
@@ -103,5 +117,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-shift-s", OpenGameSettingsAction, ctx),
         KeyBinding::new("ctrl-shift-t", TroubleshootLaunch, ctx),
         KeyBinding::new("escape", CancelLaunch, ctx),
+        KeyBinding::new("ctrl-shift-enter", BackToGame, ctx),
+        KeyBinding::new("ctrl-alt-p", ToggleTrailer, ctx),
     ]);
 }

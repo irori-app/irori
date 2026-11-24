@@ -7,6 +7,7 @@ fn targets(install: Option<InstallFilter>, favourites: Option<bool>, quick: bool
         grouped_by_mode: install.map(|_| true),
         grouped_by_genre: None,
         grouped_by_category: None,
+        grouping: None,
         categories: &[],
         views: &[],
         layout: LibraryLayout::Grid,
@@ -16,7 +17,6 @@ fn targets(install: Option<InstallFilter>, favourites: Option<bool>, quick: bool
         hidden_pin: None,
     };
     Palette::items(
-        &[],
         None,
         None,
         library,
@@ -58,6 +58,7 @@ fn every_category_of_both_kinds_is_offered() {
         grouped_by_mode: Some(false),
         grouped_by_genre: Some(false),
         grouped_by_category: Some(false),
+        grouping: None,
         categories: &categories,
         views: &[],
         layout: LibraryLayout::Grid,
@@ -67,7 +68,6 @@ fn every_category_of_both_kinds_is_offered() {
         hidden_pin: None,
     };
     Palette::items(
-        &[],
         None,
         None,
         library,
@@ -100,6 +100,7 @@ fn the_hidden_games_pin_is_offered_only_while_unlocked() {
             grouped_by_mode: None,
             grouped_by_genre: None,
             grouped_by_category: None,
+            grouping: None,
             categories: &[],
             views: &[],
             layout: LibraryLayout::Grid,
@@ -109,7 +110,6 @@ fn the_hidden_games_pin_is_offered_only_while_unlocked() {
             hidden_pin,
         };
         Palette::items(
-            &[],
             None,
             None,
             library,
@@ -184,13 +184,353 @@ fn installed_windows_games_offer_reshade_and_renodx() {
         ..Default::default()
     };
     let offers = |g: GameInfo| {
-        game::rows(&g, None)
+        game::rows(&g, None, &[])
             .into_iter()
             .any(|(_, target)| matches!(target, PaletteTarget::GraphicsMods(_)))
     };
     assert!(offers(game(true, irori_core::InstallPlatform::Windows)));
     assert!(!offers(game(true, irori_core::InstallPlatform::Linux)));
     assert!(!offers(game(false, irori_core::InstallPlatform::Windows)));
+}
+
+/// What `level_rows` offers, as short names in order.
+fn level(game: &GameInfo, facts: &game::GameFacts) -> Vec<&'static str> {
+    game::level_rows(game, facts)
+        .into_iter()
+        .filter_map(|(_, target)| {
+            Some(match target {
+                PaletteTarget::Play(_) => "play",
+                PaletteTarget::InstallCopy(_) => "install copy",
+                PaletteTarget::BackToGame(_) => "back to game",
+                PaletteTarget::CancelLaunch(_) => "cancel",
+                PaletteTarget::Open(_) => "show",
+                PaletteTarget::StorePage(..) => "store",
+                PaletteTarget::Favourite(_, on) => {
+                    if on {
+                        "favourite"
+                    } else {
+                        "unfavourite"
+                    }
+                }
+                PaletteTarget::OpenFolder(_) => "folder",
+                PaletteTarget::Hide(_, on) => {
+                    if on {
+                        "hide"
+                    } else {
+                        "unhide"
+                    }
+                }
+                PaletteTarget::Stop(_) => "stop",
+                PaletteTarget::Back => "back",
+                _ => return None,
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn a_games_actions_follow_what_it_is_doing() {
+    use irori_core::StatusKind;
+    let installed = GameInfo {
+        runner: Some(Runner::Gog),
+        app_name: "1".into(),
+        title: "Hades".into(),
+        is_installed: true,
+        store_url: Some("https://www.gog.com/game/hades".into()),
+        install: Some(irori_core::InstalledInfo {
+            install_path: "/games/hades".into(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let idle = game::GameFacts::default();
+    assert_eq!(
+        level(&installed, &idle),
+        [
+            "play",
+            "show",
+            "store",
+            "favourite",
+            "folder",
+            "hide",
+            "back"
+        ]
+    );
+    // Running: back to it first, Stop low, never Play.
+    let playing = game::GameFacts {
+        kind: Some(StatusKind::Playing),
+        favourite: true,
+        hidden: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        level(&installed, &playing),
+        [
+            "back to game",
+            "show",
+            "store",
+            "unfavourite",
+            "folder",
+            "unhide",
+            "stop",
+            "back"
+        ]
+    );
+    let launching = game::GameFacts {
+        kind: Some(StatusKind::Launching),
+        ..Default::default()
+    };
+    assert_eq!(level(&installed, &launching)[0], "cancel");
+    // Not installed and without a store page: nothing to play or open.
+    let owned = GameInfo {
+        is_installed: false,
+        install: None,
+        store_url: None,
+        ..installed.clone()
+    };
+    assert_eq!(level(&owned, &idle), ["show", "favourite", "hide", "back"]);
+    // Its other copies come right after its own Play.
+    let copy = |app: &str, action| game::CopyRow {
+        id: irori_core::GameId::new(Runner::Steam, app),
+        label: "Play with Steam".into(),
+        action,
+    };
+    let with_copies = game::GameFacts {
+        copies: vec![
+            copy("2", irori_ui::copies::CopyAction::Play),
+            copy("3", irori_ui::copies::CopyAction::Install),
+        ],
+        ..Default::default()
+    };
+    assert_eq!(
+        level(&installed, &with_copies)[..4],
+        ["play", "play", "install copy", "show"]
+    );
+}
+
+/// The palette drawn over a real backend, typed into as a user would.
+mod ui {
+    use super::super::view::Level;
+    use super::*;
+    use crate::shell::title_bar_tests::{add_game, start, wait_for_status};
+    use gpui_kit::{Entity, TestAppContext, VisualTestContext};
+    use irori_core::StatusKind;
+
+    /// What the game rows the palette lists now do, in order.
+    fn shown(view: &Entity<PaletteView>, cx: &mut VisualTestContext) -> Vec<String> {
+        cx.read(|cx| {
+            view.read(cx)
+                .shown_rows()
+                .iter()
+                .filter_map(|row| match (&row.target, &row.game) {
+                    (PaletteTarget::Open(id), Some(_)) => Some(format!("game {}", id.key())),
+                    (PaletteTarget::Play(id), _) => Some(format!("play {}", id.key())),
+                    (PaletteTarget::BackToGame(id), _) => Some(format!("back {}", id.key())),
+                    _ => None,
+                })
+                .collect()
+        })
+    }
+
+    #[gpui_kit::test]
+    fn finds_games_by_search_and_follows_the_running_ones(cx: &mut TestAppContext) {
+        let (backend, store) = start(cx);
+        let id = add_game(cx, &backend, &store);
+        let (view, cx) =
+            cx.add_window_view(|window, cx| PaletteView::new(Host::Dialog, window, cx));
+        cx.run_until_parked();
+        cx.update(|window, cx| PaletteView::focus(&view, window, cx));
+        // A typo still finds it, as the library's search does.
+        cx.simulate_input("deliberatly");
+        let key = id.key();
+        assert_eq!(
+            shown(&view, cx),
+            [format!("play {key}"), format!("game {key}")],
+            "an installed game is offered to play, then as a game row"
+        );
+
+        backend.statuses.set(&id, StatusKind::Playing);
+        wait_for_status(cx, &id, true);
+        assert_eq!(
+            shown(&view, cx).first(),
+            Some(&format!("back {key}")),
+            "a game that starts while the palette is open comes first"
+        );
+        backend.statuses.clear(&id);
+        wait_for_status(cx, &id, false);
+        assert!(!shown(&view, cx).iter().any(|s| s.starts_with("back")));
+
+        // → on the highlighted game lists its actions; Escape comes back.
+        cx.simulate_keystrokes("down");
+        cx.simulate_keystrokes("right");
+        assert_eq!(
+            cx.read(|cx| view.read(cx).level().clone()),
+            Level::Game(id.clone())
+        );
+        let first = cx.read(|cx| view.read(cx).shown_rows()[0].target.clone());
+        assert!(
+            matches!(first, PaletteTarget::Play(_)),
+            "Play leads an idle game's actions"
+        );
+        cx.simulate_keystrokes("escape");
+        assert_eq!(cx.read(|cx| view.read(cx).level().clone()), Level::Root);
+
+        // A random pick from the installed games stays on the pick, with
+        // "Pick another".
+        let confirm = |target: PaletteTarget, cx: &mut VisualTestContext| {
+            let row = cx
+                .read(|cx| {
+                    view.read(cx)
+                        .shown_rows()
+                        .iter()
+                        .find(|r| same(&r.target, &target))
+                        .cloned()
+                })
+                .expect("the row is listed");
+            cx.update(|window, cx| PaletteView::confirm(&view, Host::Dialog, row, window, cx));
+            cx.run_until_parked();
+        };
+        let random = cx.read(|cx| {
+            view.read(cx)
+                .shown_rows()
+                .iter()
+                .any(|r| matches!(r.target, PaletteTarget::Random))
+        });
+        assert!(random, "the first level offers a random pick");
+        confirm(PaletteTarget::Random, cx);
+        assert_eq!(cx.read(|cx| view.read(cx).level().clone()), Level::Random);
+        let pool = irori_library::RandomPool::Installed;
+        confirm(PaletteTarget::RandomFrom(pool.clone()), cx);
+        assert_eq!(
+            cx.read(|cx| view.read(cx).level().clone()),
+            Level::Picked(pool.clone(), id.clone()),
+            "the only installed game is picked"
+        );
+        // With one game, "Pick another" picks it again rather than nothing.
+        confirm(PaletteTarget::RandomFrom(pool.clone()), cx);
+        assert_eq!(
+            cx.read(|cx| view.read(cx).level().clone()),
+            Level::Picked(pool, id.clone())
+        );
+
+        // The quick launcher plays from the game row itself, and goes back
+        // to the game while it runs.
+        let launcher =
+            cx.update(|window, cx| cx.new(|cx| PaletteView::new(Host::Window, window, cx)));
+        launcher.update(cx, |v, cx| v.set_query("deliberatly", cx));
+        let game_target = |cx: &mut VisualTestContext| {
+            cx.read(|cx| {
+                launcher
+                    .read(cx)
+                    .shown_rows()
+                    .iter()
+                    .filter(|r| r.game.is_some())
+                    .map(|r| match &r.target {
+                        PaletteTarget::Play(_) => "play",
+                        PaletteTarget::BackToGame(_) => "back",
+                        PaletteTarget::Open(_) => "open",
+                        _ => "other",
+                    })
+                    .collect::<Vec<_>>()
+            })
+        };
+        assert_eq!(game_target(cx), ["play"], "and no separate Play rows");
+        backend.statuses.set(&id, StatusKind::Playing);
+        wait_for_status(cx, &id, true);
+        assert_eq!(game_target(cx), ["back"]);
+        backend.statuses.clear(&id);
+        wait_for_status(cx, &id, false);
+    }
+
+    /// Whether two rows do the same thing, for the targets this test uses.
+    fn same(a: &PaletteTarget, b: &PaletteTarget) -> bool {
+        match (a, b) {
+            (PaletteTarget::Random, PaletteTarget::Random) => true,
+            (PaletteTarget::RandomFrom(a), PaletteTarget::RandomFrom(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+#[test]
+fn games_of_other_stores_offer_a_steam_link_in_their_level() {
+    let offers = |runner: Runner| {
+        let g = GameInfo {
+            runner: Some(runner),
+            app_name: "1".into(),
+            title: "Hades".into(),
+            ..Default::default()
+        };
+        game::level_rows(&g, &game::GameFacts::default())
+            .into_iter()
+            .any(|(_, target)| matches!(target, PaletteTarget::SteamLink(_)))
+    };
+    assert!(offers(Runner::Gog));
+    assert!(offers(Runner::Sideload));
+    assert!(!offers(Runner::Steam), "a Steam game is its own app");
+    assert!(!offers(Runner::Emulation));
+}
+
+#[test]
+fn every_game_offers_its_links_in_its_level() {
+    for runner in [Runner::Gog, Runner::Steam, Runner::Emulation] {
+        let g = GameInfo {
+            runner: Some(runner),
+            app_name: "1".into(),
+            title: "Hades".into(),
+            ..Default::default()
+        };
+        assert!(
+            game::level_rows(&g, &game::GameFacts::default())
+                .into_iter()
+                .any(|(_, target)| matches!(target, PaletteTarget::GameLinks(_))),
+            "{runner:?}"
+        );
+    }
+}
+
+#[test]
+fn groupings_by_a_games_facts_are_offered_and_undone() {
+    let offered = |grouping: Option<Grouping>| {
+        let mut targets = Vec::new();
+        let library = LibraryCommands {
+            grouped: None,
+            grouped_by_mode: None,
+            grouped_by_genre: None,
+            grouped_by_category: None,
+            grouping,
+            categories: &[],
+            views: &[],
+            layout: LibraryLayout::Grid,
+            install: None,
+            favourites: None,
+            quick_controls: false,
+            hidden_pin: None,
+        };
+        Palette::items(
+            None,
+            None,
+            library,
+            false,
+            &[],
+            (false, false),
+            &mut targets,
+        );
+        targets
+            .into_iter()
+            .filter_map(|t| match t {
+                PaletteTarget::GroupBy(g) => Some(g),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    // Without a library view, nothing to group.
+    assert!(offered(None).is_empty());
+    assert_eq!(offered(Some(Grouping::None)), Grouping::BY_FACT);
+    // The grouping in use is offered as its undoing.
+    let grouped = offered(Some(Grouping::Year));
+    assert_eq!(grouped.len(), Grouping::BY_FACT.len());
+    assert!(grouped.contains(&Grouping::None) && !grouped.contains(&Grouping::Year));
 }
 
 #[test]
@@ -201,6 +541,7 @@ fn performance_hud_palette_entry_follows_host_support() {
         grouped_by_mode: None,
         grouped_by_genre: None,
         grouped_by_category: None,
+        grouping: None,
         categories: &[],
         views: &[],
         layout: LibraryLayout::Grid,
@@ -210,7 +551,6 @@ fn performance_hud_palette_entry_follows_host_support() {
         hidden_pin: None,
     };
     Palette::items(
-        &[],
         None,
         None,
         library,

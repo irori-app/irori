@@ -34,7 +34,9 @@ impl EpicStore {
         let installed = self
             .installed_entry(&launch_app)
             .with_context(|| format!("{} is not installed", game.title))?;
-        let needs_wine = installed.install_platform().needs_wine();
+        // A native replacement program set for the game runs directly.
+        let needs_wine =
+            installed.install_platform().needs_wine() && !request.environment.without_wine;
         launch::require_wine(&request.environment, needs_wine)?;
         let offline = request.offline || self.epic_service_offline().await;
 

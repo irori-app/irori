@@ -1,7 +1,7 @@
 //! Management screens of Irori: the download queue, the Wine/Proton manager,
 //! store accounts (with the browser login flow), store websites (in the store
-//! window or the browser) and deals, and the
-//! first-run onboarding.
+//! window or the browser) and deals, the first-run onboarding, Getting
+//! started, and what the empty library found on this computer.
 //!
 //! The shell owns routing and mounts these views for [`irori_ui::Route::Downloads`],
 //! [`irori_ui::Route::WineManager`], [`irori_ui::Route::Accounts`] and
@@ -18,6 +18,7 @@ mod emulators;
 mod format;
 mod friends;
 mod i18n;
+mod launcher_wine;
 mod launchers;
 mod login;
 mod onboarding;
@@ -44,17 +45,27 @@ mod xbox {
 }
 
 pub use accounts::AccountsView;
-pub use downloads::DownloadsView;
+pub use deals::set_deals_shown;
+pub use downloads::{
+    DownloadCommand, DownloadsBadge, DownloadsPanel, DownloadsPill, DownloadsView,
+    download_command_keywords, download_commands, keep_on, run_download_command,
+};
 pub use emulators::{
-    EmulatorsView, InstallTarget, choice_name, open_custom_engine_dialog, open_emulation_setup,
-    open_engine_settings, start_install,
+    EmulatorsView, InstallTarget, OpenableEngine, choice_name, open_custom_engine_dialog,
+    open_emulation_setup, open_engine, open_engine_settings, open_rom_sources_dialog,
+    openable_engines, start_install,
 };
 pub use friends::{
     FriendsSource, friends_available, install_steam_store, open_friends_dialog,
     open_steam_friends_dialog, steam_friends_available, xbox_friends_available,
 };
-pub use launchers::install_launchers_store;
+pub use launcher_wine::open_launcher_wine_dialog;
+pub use launchers::{
+    install_launchers_store, known_launchers, launcher_shortcut, open_launcher, wine_launchers,
+};
 pub use login::{open_account_login_dialog, open_login_dialog};
+pub use onboarding::found::{FoundSourcesView, found_sources_view};
+pub use onboarding::hub::open_getting_started;
 pub use onboarding::{
     OnboardingEvent, OnboardingView, mark_onboarding_done, should_show_onboarding,
 };

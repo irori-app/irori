@@ -9,10 +9,13 @@ use anyhow::{Context as _, Result};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-/// Read and decode; `Ok(None)` when the file does not exist.
+/// Read and decode; `Ok(None)` when the file does not exist. On a Mac whose
+/// account was renamed, paths under the old home read as the current one
+/// ([`crate::home_rename`]).
 pub fn read<T: DeserializeOwned>(path: &Path) -> Result<Option<T>> {
     match std::fs::read(path) {
         Ok(bytes) => {
+            let bytes = crate::home_rename::remap_loaded(&bytes, path).unwrap_or(bytes);
             Ok(Some(serde_json::from_slice(&bytes).with_context(|| {
                 format!("invalid JSON in {}", path.display())
             })?))

@@ -1,6 +1,8 @@
-//! Which board's age rating the interface shows: the one of the user's
-//! region, told by the interface language and the system's locale (an
-//! English interface on an Australian system shows ACB), else another.
+//! Which board's age rating the interface shows: the one the user chose
+//! (`iroriUi.ageRatingBoard`), else the one of the user's region, told by
+//! the interface language and the system's locale (an English interface on
+//! an Australian system shows ACB), else another. `iroriUi.showAgeRatings`
+//! turns the ratings off on game pages.
 
 use irori_core::{AgeRating, RatingSystem, age_rating};
 use once_cell::sync::Lazy;
@@ -9,10 +11,24 @@ use once_cell::sync::Lazy;
 /// of most programs anyway.
 static SYSTEM_LOCALE: Lazy<Option<String>> = Lazy::new(sys_locale::get_locale);
 
-/// The boards to show first, best first, for the current interface
-/// language.
-pub fn preferred_systems() -> Vec<RatingSystem> {
-    age_rating::preferred_systems(&crate::i18n::language(), SYSTEM_LOCALE.as_deref())
+/// The boards to show first, best first: the user's choice, then those of
+/// the current interface language's region.
+pub fn preferred_systems(cx: &gpui_kit::App) -> Vec<RatingSystem> {
+    let regional =
+        age_rating::preferred_systems(&crate::i18n::language(), SYSTEM_LOCALE.as_deref());
+    let board = crate::models(cx)
+        .settings
+        .read(cx)
+        .app
+        .ui
+        .age_rating_board
+        .clone();
+    age_rating::lead_with(regional, &board)
+}
+
+/// Whether game pages show age ratings.
+pub fn shown(cx: &gpui_kit::App) -> bool {
+    crate::models(cx).settings.read(cx).app.ui.show_age_ratings
 }
 
 /// The rating to show first and the game's other boards' ratings, in
