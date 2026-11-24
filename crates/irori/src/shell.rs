@@ -237,16 +237,38 @@ impl AppShell {
         self.log_shown_for = playing;
     }
 
+    /// "Minimize when a game starts": close to the tray when "Close to tray"
+    /// can bring the window back, else minimize.
     fn minimize_on_launch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let enabled = models(cx).settings.read(cx).app.minimize_on_launch;
-        let route = navigator(cx).read(cx).current();
-        if !should_minimize_on_launch(enabled, route, self.minimized_for.is_some()) {
-            return;
-        }
-        let playing = models(cx).statuses.read(cx).playing().next().cloned();
-        if let Some(id) = playing {
-            self.minimized_for = Some(id);
-            window.minimize_window();
+        let route = navigator(cx).read(cx).current().clone();
+        let action = crate::tray_hide::on_launch(
+            enabled,
+            route == Route::BigPicture,
+            self.minimized_for.is_some(),
+            crate::tray_hide::available(cx),
+        );
+        match action {
+            crate::tray_hide::OnLaunch::Stay => {}
+            crate::tray_hide::OnLaunch::Minimize => {
+                let playing = models(cx).statuses.read(cx).playing().next().cloned();
+                if let Some(id) = playing {
+                    self.minimized_for = Some(id);
+                    window.minimize_window();
+                }
+            }
+            crate::tray_hide::OnLaunch::HideToTray => {
+                let playing: Vec<GameId> =
+                    models(cx).statuses.read(cx).playing().cloned().collect();
+                if playing.is_empty() {
+                    return;
+                }
+                // The window opens again where it is now, even if it moved
+                // within the last second.
+                self.save_placement_now(window, cx);
+                crate::tray_hide::note(playing, route, cx);
+                window.remove_window();
+            }
         }
     }
 
@@ -357,6 +379,25 @@ impl AppShell {
                     .update_app(|s| crate::placement::store(&saved, &mut s.ui));
             }
         }));
+    }
+
+    /// Save the window's place at once, for a window about to close.
+    fn save_placement_now(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.placement_save = None;
+        let previous = crate::placement::Saved::from_prefs(&models(cx).settings.read(cx).app.ui);
+        let Some(saved) = crate::placement::current(window, &previous, cx) else {
+            return;
+        };
+        if saved == previous {
+            return;
+        }
+        let backend = irori_ui::backend(cx);
+        cx.background_spawn(async move {
+            backend
+                .settings
+                .update_app(|s| crate::placement::store(&saved, &mut s.ui));
+        })
+        .detach();
     }
 
     fn set_sidebar_collapsed(&mut self, collapsed: bool, cx: &mut Context<Self>) {
@@ -891,14 +932,6 @@ fn wants_onboarding(cx: &App) -> bool {
     irori_manage::should_show_onboarding(cx) && !has_sideload
 }
 
-/// Whether starting a game should minimize the window: only when the user
-/// enabled the setting, no game already minimized it, and Irori is not in
-/// Big Picture (which stays fullscreen behind the game so the compositor
-/// returns focus to it when the game exits).
-fn should_minimize_on_launch(enabled: bool, route: &Route, already_minimized: bool) -> bool {
-    enabled && !already_minimized && *route != Route::BigPicture
-}
-
 /// Whether a game exiting should bring Irori's window to the front: when
 /// this game minimized it on launch, or while Big Picture is open.
 fn should_activate_on_exit(minimized_for: Option<&GameId>, exited: &GameId, route: &Route) -> bool {
@@ -926,14 +959,9 @@ mod start_tests {
     }
 
     #[test]
-    fn big_picture_skips_minimize_on_launch_and_activates_on_exit() {
+    fn big_picture_activates_on_exit() {
         let game = GameId::new(Runner::Gog, "123");
         let other = GameId::new(Runner::Legendary, "other");
-
-        assert!(should_minimize_on_launch(true, &Route::Library, false));
-        assert!(!should_minimize_on_launch(true, &Route::Library, true));
-        assert!(!should_minimize_on_launch(false, &Route::Library, false));
-        assert!(!should_minimize_on_launch(true, &Route::BigPicture, false));
 
         assert!(should_activate_on_exit(Some(&game), &game, &Route::Library));
         assert!(!should_activate_on_exit(

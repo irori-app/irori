@@ -26,6 +26,7 @@ mod tray;
 #[cfg(not(target_os = "linux"))]
 #[path = "tray_native.rs"]
 mod tray;
+mod tray_hide;
 mod waiting;
 
 use std::sync::Arc;
@@ -188,6 +189,7 @@ fn main() -> Result<()> {
 
         let app = Arc::new(Mutex::new(AppHandles::default()));
         start_tray(&backend, tx.clone(), app.clone(), cx);
+        tray_hide::install(app.clone(), cx);
         {
             // The in-game overlay's "Back to Irori".
             let app = app.clone();
@@ -257,6 +259,8 @@ fn limit_malloc_arenas() {
 struct AppHandles {
     window: Option<WindowHandle<Root>>,
     tray: Option<tray::TrayHandle>,
+    /// The window closed to the tray while these games play.
+    hidden: Option<tray_hide::Hidden>,
 }
 
 /// Log to stderr and the launcher log file. Headless commands (`gui = false`)
@@ -314,6 +318,9 @@ fn restrict_logs_dir() {
 fn open_main_window(app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
     #[cfg(target_os = "macos")]
     cx.activate(true);
+    // Opened for any reason, the window is no longer waiting in the tray
+    // for a game to end.
+    app.lock().hidden = None;
     let existing = app.lock().window;
     if let Some(handle) = existing
         && handle

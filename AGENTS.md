@@ -1102,7 +1102,12 @@ Other parts:
   gets a native menu.
 - `palette.rs` is the Ctrl/Cmd+K command palette.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
-  (`tray-icon`, kept on the main thread).
+  (`tray-icon`, kept on the main thread). `tray_hide.rs`: with
+  `minimizeOnLaunch` and `exitToTray` on and a tray running, a game starting
+  closes the main window to the tray (`AppHandles::hidden` keeps the games it
+  closed for) and the app reopens it, on the route it showed, once none of them
+  plays; opening the window any other way forgets that. Without a tray, or in
+  Big Picture, it minimizes or stays as before (`tray_hide::on_launch`).
 
 ### 4.6 Store sign-in
 
