@@ -40,9 +40,9 @@ const FEATURED_ACCENTS: [u32; 10] = [
 /// Covers the preview shows.
 const PREVIEW_COVERS: usize = 5;
 /// Width of a preview cover at comfortable density, in rem.
-const PREVIEW_COVER_REM: f32 = 4.5;
+const PREVIEW_COVER_REM: f32 = 3.75;
 /// Space between preview covers at comfortable density, in rem.
-const PREVIEW_GAP_REM: f32 = 0.75;
+const PREVIEW_GAP_REM: f32 = 0.65;
 
 /// Persist a change to the interface preferences and show it right away.
 fn set_ui(window: &mut Window, cx: &mut App, f: impl FnOnce(&mut UiPrefs)) {
@@ -384,8 +384,8 @@ impl Render for AppearancePreview {
                 .collect()
         };
         v_flex()
-            .gap_2()
-            .mb_4()
+            .gap_1p5()
+            .mb_2()
             .child(
                 div()
                     .relative()
@@ -399,7 +399,7 @@ impl Render for AppearancePreview {
                     .child(
                         v_flex()
                             .relative()
-                            .p_4()
+                            .p_3()
                             .gap(gap)
                             .child(
                                 h_flex()

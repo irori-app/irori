@@ -767,9 +767,9 @@ impl StoragePanel {
             )
         });
         v_flex()
-            .gap_3()
+            .gap_2()
             .px_4()
-            .py_3()
+            .py_2()
             .child(header)
             .children(warning)
             .children(list)
@@ -860,7 +860,7 @@ impl Render for StoragePanel {
             })
             .collect();
         v_flex()
-            .gap_4()
+            .gap_3()
             .children(error)
             .child(self.render_summary(&report, cx))
             .when(disks.is_empty(), |v| {

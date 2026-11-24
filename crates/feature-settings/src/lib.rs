@@ -35,6 +35,7 @@ mod i18n;
 mod igdb;
 mod launch_presets;
 mod launch_programs;
+mod layout;
 mod logs;
 mod optiscaler;
 mod optiscaler_key;
