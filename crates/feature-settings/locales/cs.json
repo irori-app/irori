@@ -1407,6 +1407,8 @@
   "settings.field.ui_cover_categories.help": "Kategorie každé hry při spodním okraji jejího obalu v mřížce: první dvě a kolik dalších.",
   "settings.field.ui_group_copies.label": "Zobrazovat kopie z více obchodů jako jednu hru",
   "settings.field.ui_group_copies.help": "Hra vlastněná na Steamu, v Epic Games a na GOG se zobrazí jednou a spouští nainstalovanou kopii. Na její stránce lze přepínat mezi kopiemi; každá si ponechává vlastní herní čas i úspěchy.",
+  "settings.field.ui_program_icon_art.label": "Zobrazit ikonu programu u her bez obrázků",
+  "settings.field.ui_program_icon_art.help": "Hra bez obalu, třeba ta, kterou jste přidali sami, ukáže na náhradním obalu ikonu svého programu pro Windows. Vlastní obrázky a obrázky obchodu mají vždy přednost.",
   "settings.field.umu_id.label": "ID hry v umu",
   "settings.field.umu_id.help": "umu při spuštění hry přes Proton použije opravy zveřejněné pro toto ID. Ponechte prázdné, aby se našlo podle obchodu, ID aplikace Steam nebo názvu.",
   "settings.field.xbox.label": "Obchod Xbox",

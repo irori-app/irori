@@ -38,6 +38,7 @@ mod network;
 pub mod optiscaler;
 pub mod play_status;
 pub mod power;
+mod program_icons;
 mod programs;
 pub mod related;
 pub mod renodx;
@@ -135,6 +136,7 @@ pub struct Inner {
     facts: facts::FactsService,
     store_facts: store_facts::StoreFactsService,
     steam_tags: steam_tags::SteamTagsService,
+    program_icons: program_icons::ProgramIcons,
     hidden_lock: hidden_lock::HiddenLock,
     pub statuses: StatusRegistry,
     stores: BTreeMap<Runner, DynStore>,
@@ -253,6 +255,7 @@ impl Backend {
             facts: facts::FactsService::load(),
             store_facts: store_facts::StoreFactsService::load(),
             steam_tags: steam_tags::SteamTagsService::load(),
+            program_icons: program_icons::ProgramIcons::load(),
             hidden_lock: hidden_lock::HiddenLock::load(),
             statuses: StatusRegistry::new(bus.clone()),
             stores: stores.into_iter().map(|s| (s.runner(), s)).collect(),
@@ -414,7 +417,8 @@ impl Backend {
         });
 
         // Rebuild the aggregated library when stores or user data change, the
-        // user shows or hides a store, or turns grouping copies on or off.
+        // user shows or hides a store, or turns grouping copies or program
+        // icons on or off.
         let b = self.clone();
         self.spawn(async move {
             let mut rx = b.subscribe();
@@ -423,6 +427,7 @@ impl Backend {
             let switches = |a: &irori_core::AppSettings| [a.zoom_platform, a.itch_io];
             let mut on = switches(&b.settings.app());
             let mut copies = b.settings.app().ui.group_copies;
+            let mut icons = b.settings.app().ui.program_icon_art;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -447,10 +452,15 @@ impl Backend {
                                 b.bus.emit(Event::AccountChanged(runner));
                             }
                         }
-                        if app.ui.stores != shown || now != on || app.ui.group_copies != copies {
+                        if app.ui.stores != shown
+                            || now != on
+                            || app.ui.group_copies != copies
+                            || app.ui.program_icon_art != icons
+                        {
                             shown = app.ui.stores;
                             on = now;
                             copies = app.ui.group_copies;
+                            icons = app.ui.program_icon_art;
                             b.rebuild_library();
                         }
                     }

@@ -1407,6 +1407,8 @@
   "settings.field.ui_cover_categories.help": "在网格中每个游戏封面的底部显示其分类：前两个以及其余的数量。",
   "settings.field.ui_group_copies.label": "将多个商店的副本显示为一个游戏",
   "settings.field.ui_group_copies.help": "在 Steam、Epic Games 和 GOG 上都拥有的游戏只显示一次，并启动已安装的副本。其页面可在各副本之间切换；每个副本保留各自的游戏时间和成就。",
+  "settings.field.ui_program_icon_art.label": "为没有图片的游戏显示程序图标",
+  "settings.field.ui_program_icon_art.help": "没有封面的游戏（例如你自己添加的游戏）会在替代封面上显示其 Windows 程序的图标。你自己的图片和商店的图片始终优先。",
   "settings.field.umu_id.label": "umu 游戏 ID",
   "settings.field.umu_id.help": "umu 用 Proton 运行游戏时会应用为此 ID 发布的修复。留空则根据商店、Steam 应用 ID 或标题查找。",
   "settings.field.xbox.label": "Xbox 商店",

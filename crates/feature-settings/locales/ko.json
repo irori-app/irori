@@ -1407,6 +1407,8 @@
   "settings.field.ui_cover_categories.help": "그리드에서 각 게임 표지 아래쪽에 카테고리를 처음 두 개와 나머지 개수로 표시합니다.",
   "settings.field.ui_group_copies.label": "여러 스토어의 사본을 하나의 게임으로 표시",
   "settings.field.ui_group_copies.help": "Steam, Epic Games, GOG에서 보유한 게임이 한 번만 표시되고 설치된 사본으로 실행됩니다. 게임 페이지에서 사본을 바꿀 수 있으며, 플레이 시간과 도전 과제는 사본마다 따로 유지됩니다.",
+  "settings.field.ui_program_icon_art.label": "아트가 없는 게임에 프로그램 아이콘 표시",
+  "settings.field.ui_program_icon_art.help": "직접 추가한 게임처럼 커버 아트가 없는 게임은 대체 커버에 Windows 프로그램의 아이콘을 표시합니다. 직접 지정한 아트와 스토어의 아트가 항상 우선합니다.",
   "settings.field.umu_id.label": "umu 게임 ID",
   "settings.field.umu_id.help": "umu는 Proton으로 게임을 실행할 때 이 ID에 공개된 수정 사항을 적용합니다. 비워 두면 스토어, Steam 앱 ID 또는 제목으로 찾습니다.",
   "settings.field.xbox.label": "Xbox 스토어",

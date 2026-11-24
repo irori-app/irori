@@ -410,6 +410,7 @@ impl Backend {
         let user = self.userdata.snapshot();
         let tag_language =
             irori_steam_api::achievements::steam_language(&self.settings.app().ui_language);
+        let program_icons = self.settings.app().ui.program_icon_art;
         let mut games: Vec<Arc<GameInfo>> = self
             .stores
             .values()
@@ -442,6 +443,9 @@ impl Backend {
                     if let Some(modes) = &o.game_modes {
                         g.game_modes = irori_core::game_mode::normalized(modes.clone());
                     }
+                    if program_icons {
+                        self.program_icons.complete(&mut g);
+                    }
                     Arc::new(g.finalize())
                 }
                 None => {
@@ -449,6 +453,9 @@ impl Backend {
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
                     self.steam_tags.complete(&mut g, tag_language);
+                    if program_icons {
+                        self.program_icons.complete(&mut g);
+                    }
                     Arc::new(if g.sort_title.is_empty() {
                         g.finalize()
                     } else {
@@ -469,6 +476,16 @@ impl Backend {
                 let facts = b.facts.refresh(&list).await;
                 let tags = b.steam_tags.refresh(&list, tag_language).await;
                 if facts || tags {
+                    b.rebuild_library();
+                }
+            });
+        }
+        // Read the icons of programs new or changed since the last rebuild;
+        // the library is rebuilt once they are there.
+        if program_icons {
+            let (b, list) = (self.clone(), games.clone());
+            self.spawn_blocking(move || {
+                if b.program_icons.refresh(&list) {
                     b.rebuild_library();
                 }
             });

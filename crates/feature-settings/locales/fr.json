@@ -1407,6 +1407,8 @@
   "settings.field.ui_cover_categories.help": "Les catégories de chaque jeu au bas de sa jaquette dans la grille : les deux premières et le nombre des autres.",
   "settings.field.ui_group_copies.label": "Afficher les copies de plusieurs boutiques comme un seul jeu",
   "settings.field.ui_group_copies.help": "Un jeu possédé sur Steam, Epic Games et GOG n’apparaît qu’une fois et lance la copie installée. Sa page passe d’une copie à l’autre ; chacune garde son temps de jeu et ses succès.",
+  "settings.field.ui_program_icon_art.label": "Afficher l’icône du programme pour les jeux sans visuels",
+  "settings.field.ui_program_icon_art.help": "Un jeu sans jaquette, comme un jeu que vous avez ajouté vous-même, affiche l’icône de son programme Windows sur sa jaquette de remplacement. Vos propres visuels et ceux de la boutique passent toujours en premier.",
   "settings.field.umu_id.label": "Identifiant de jeu umu",
   "settings.field.umu_id.help": "umu applique les correctifs publiés pour cet identifiant quand il lance le jeu avec Proton. Laissez vide pour le trouver d’après la boutique, l’identifiant d’application Steam ou le titre.",
   "settings.field.xbox.label": "Boutique Xbox",

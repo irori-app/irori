@@ -1407,6 +1407,8 @@
   "settings.field.ui_cover_categories.help": "Kategorie każdej gry u dołu jej okładki w siatce: pierwsze dwie i liczba pozostałych.",
   "settings.field.ui_group_copies.label": "Pokazuj kopie z kilku sklepów jako jedną grę",
   "settings.field.ui_group_copies.help": "Gra posiadana na Steamie, w Epic Games i na GOG pojawia się raz i uruchamia zainstalowaną kopię. Na jej stronie można przełączać kopie; każda zachowuje własny czas gry i osiągnięcia.",
+  "settings.field.ui_program_icon_art.label": "Pokazuj ikonę programu w grach bez grafik",
+  "settings.field.ui_program_icon_art.help": "Gra bez okładki, na przykład dodana przez Ciebie, pokazuje na zastępczej okładce ikonę swojego programu dla Windows. Twoje własne grafiki i grafiki sklepu zawsze mają pierwszeństwo.",
   "settings.field.umu_id.label": "Identyfikator gry w umu",
   "settings.field.umu_id.help": "umu stosuje poprawki opublikowane dla tego identyfikatora, gdy uruchamia grę przez Proton. Zostaw puste, aby znaleźć go po sklepie, identyfikatorze aplikacji Steam lub tytule.",
   "settings.field.xbox.label": "Sklep Xbox",

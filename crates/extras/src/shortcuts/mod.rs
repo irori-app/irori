@@ -13,6 +13,7 @@ pub mod desktop;
 #[path = "desktop_native.rs"]
 pub mod desktop;
 pub mod icon;
+pub mod pe_icon;
 pub mod steam;
 
 use std::collections::HashSet;

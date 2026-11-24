@@ -19,6 +19,7 @@ pub mod known_fixes;
 pub mod logs;
 pub mod lutris_import;
 pub mod playnite;
+pub mod program_icon;
 pub mod protocol;
 pub mod releases;
 pub mod shortcuts;

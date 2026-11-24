@@ -1407,6 +1407,8 @@
   "settings.field.ui_cover_categories.help": "Her oyunun kategorileri ızgaradaki kapağının altında: ilk ikisi ve kaç tane daha olduğu.",
   "settings.field.ui_group_copies.label": "Birden çok mağazadaki kopyaları tek oyun olarak göster",
   "settings.field.ui_group_copies.help": "Steam, Epic Games ve GOG’da sahip olunan bir oyun bir kez görünür ve kurulu kopyayı başlatır. Sayfası kopyalar arasında geçiş yapar; her biri kendi oynama süresini ve başarımlarını korur.",
+  "settings.field.ui_program_icon_art.label": "Görseli olmayan oyunlarda programın simgesini göster",
+  "settings.field.ui_program_icon_art.help": "Kendi eklediğiniz bir oyun gibi kapağı olmayan bir oyun, yedek kapağında Windows programının simgesini gösterir. Kendi görselleriniz ve mağazanınkiler her zaman önceliklidir.",
   "settings.field.umu_id.label": "umu oyun kimliği",
   "settings.field.umu_id.help": "umu, oyunu Proton ile çalıştırırken bu kimlik için yayımlanan düzeltmeleri uygular. Mağazadan, Steam uygulama kimliğinden ya da başlıktan bulunması için boş bırakın.",
   "settings.field.xbox.label": "Xbox mağazası",

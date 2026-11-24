@@ -1317,6 +1317,9 @@ pub struct UiPrefs {
     /// Copies of one game from several stores are one library entry
     /// (`groupCopies`, on unless turned off).
     pub group_copies: bool,
+    /// A game without cover art shows the icon of its Windows program on its
+    /// stand-in cover (`programIconArt`, on unless turned off).
+    pub program_icon_art: bool,
     /// Quick sort, install, favourites and grouping controls in the
     /// library's header, shown as far as its width allows
     /// (`libraryQuickControls`, on unless turned off).
@@ -1538,6 +1541,7 @@ impl Default for UiPrefs {
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,
+            program_icon_art: true,
             library_quick_controls: true,
             sidebar_collapsed: false,
             window_width: 1440.0,
@@ -1604,6 +1608,7 @@ mod tests {
         assert!(ui.library_quick_controls);
         assert!(!ui.cover_categories);
         assert!(ui.group_copies);
+        assert!(ui.program_icon_art);
         assert!(!ui.wallpaper_colors);
         assert!(ui.wallpaper_colors_file.is_empty());
         let json = serde_json::to_value(UiPrefs {
