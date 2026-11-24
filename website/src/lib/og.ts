@@ -59,10 +59,10 @@ export async function ogImage(page: PageInfo): Promise<Buffer> {
       height: 630,
       display: 'flex',
       position: 'relative',
-      background: '#15110e',
+      background: '#13101d',
       backgroundImage: 'radial-gradient(circle at 18% 105%, rgba(255,107,44,0.38), rgba(255,107,44,0) 55%)',
       fontFamily: 'Body',
-      color: '#f2e9dc',
+      color: '#ece9f2',
       overflow: 'hidden',
     },
     [
@@ -83,7 +83,7 @@ export async function ogImage(page: PageInfo): Promise<Buffer> {
         position: 'absolute',
         inset: 0,
         display: 'flex',
-        backgroundImage: 'linear-gradient(90deg, #15110e 0%, #15110e 52%, rgba(21,17,14,0.6) 70%, rgba(21,17,14,0) 100%)',
+        backgroundImage: 'linear-gradient(90deg, #13101d 0%, #13101d 52%, rgba(19,16,29,0.6) 70%, rgba(19,16,29,0) 100%)',
       }),
       el(
         'div',
@@ -91,12 +91,12 @@ export async function ogImage(page: PageInfo): Promise<Buffer> {
         [
           el('div', { display: 'flex', alignItems: 'center', gap: 18 }, [
             el('img', { width: 64, height: 64 }, undefined, { src: markUri, width: 64, height: 64 }),
-            el('div', { fontFamily: 'Display', fontSize: 40, color: '#f2e9dc' }, 'Irori'),
+            el('div', { fontFamily: 'Display', fontSize: 40, color: '#ece9f2' }, 'Irori'),
             el('div', { fontFamily: 'Code', fontSize: 22, color: '#a9b47c', letterSpacing: 4, marginLeft: 12, textTransform: 'uppercase' }, page.tag),
           ]),
           el('div', { display: 'flex', flexDirection: 'column', marginTop: 'auto', gap: 22 }, [
-            el('div', { fontFamily: 'Display', fontSize: titleSize, lineHeight: 1.04, letterSpacing: -1.5, color: '#f2e9dc' }, page.title),
-            el('div', { fontSize: 27, lineHeight: 1.4, color: '#b2a493', display: 'flex' }, page.description.length > 140 ? `${page.description.slice(0, 137).trimEnd()}…` : page.description),
+            el('div', { fontFamily: 'Display', fontSize: titleSize, lineHeight: 1.04, letterSpacing: -1.5, color: '#ece9f2' }, page.title),
+            el('div', { fontSize: 27, lineHeight: 1.4, color: '#aca2bd', display: 'flex' }, page.description.length > 140 ? `${page.description.slice(0, 137).trimEnd()}…` : page.description),
           ]),
           el('div', { display: 'flex', alignItems: 'center', gap: 12, marginTop: 34, fontFamily: 'Code', fontSize: 22, color: '#ff6b2c' }, [
             el('div', { width: 12, height: 12, borderRadius: 6, background: '#ff6b2c' }),

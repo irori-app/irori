@@ -70,7 +70,9 @@ const { locale, crumbs, title, lede, wall = false } = Astro.props
     content: '';
     position: absolute;
     inset: -20% -10% 0 40%;
-    background: radial-gradient(closest-side, var(--glow), transparent);
+    background:
+      radial-gradient(closest-side at 70% 60%, var(--glow-dusk), transparent),
+      radial-gradient(closest-side, var(--glow), transparent);
     pointer-events: none;
   }
 </style>

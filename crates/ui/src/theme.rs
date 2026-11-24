@@ -1482,7 +1482,7 @@ mod tests {
     /// A Plasma selection colour or a COSMIC custom accent can be any of these,
     /// and some land right on Irori's surfaces.
     const HARD_ACCENTS: [u32; 9] = [
-        0x000000, 0xffffff, 0x808080, 0x777777, 0x100e0d, 0xfaf7f3, 0xffff00, 0x0000ff, 0x1c1916,
+        0x000000, 0xffffff, 0x808080, 0x777777, 0x100d18, 0xf8f7fb, 0xffff00, 0x0000ff, 0x1c172c,
     ];
 
     fn accents() -> impl Iterator<Item = Rgba> {

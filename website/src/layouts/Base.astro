@@ -72,8 +72,8 @@ const jsonLd = [breadcrumbSchema, ...schema].filter(Boolean)
     <link rel="canonical" href={canonical} />
     {LOCALES.map((l) => <link rel="alternate" hreflang={LANG_TAGS[l].html} href={new URL(localePath(l, path), site).href} />)}
     <link rel="alternate" hreflang="x-default" href={new URL(path, site).href} />
-    <meta name="theme-color" content="#15110e" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f6f4ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13101d" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f3f8" media="(prefers-color-scheme: light)" />
     <meta property="og:site_name" content="Irori" />
     <meta property="og:type" content={type} />
     <meta property="og:title" content={fullTitle} />
