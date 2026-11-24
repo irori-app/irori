@@ -1922,7 +1922,9 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   and a folder holding a PS3 marker is a PS3 game anywhere; PS3 images take their title
   from `PS3_GAME/PARAM.SFO` inside (`irori_engines::iso9660`, which reads only the
   volume descriptor and bounded directories). RPCS3's `dev_hdd0` is a PS3 folder, and its
-  patches (`PARAM.SFO` category `GD`) aren't games. Scan cache entries carry
+  patches (`PARAM.SFO` category `GD`) aren't games. A system's `notHeaders` name first
+  bytes that make a file with its extension something else: DOOM's `IWAD`/`PWAD` data
+  files aren't Wii `.wad` packages. Scan cache entries carry
   `DETECTION_RULES`, so files an older Irori didn't recognise are looked at again. BIOS
   files with many names match a `pattern`.
 - **Converting engines.** AnyPS5 (`kind: relinker`, `irori_engines::relink`) turns a PS5
