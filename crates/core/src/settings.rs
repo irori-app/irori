@@ -338,6 +338,11 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriIgdbId")]
     pub igdb_id: String,
+    /// The game's VNDB id (`v17`), when the user chose its match ("Change
+    /// VNDB match"), or `none` for no match; empty finds one by title. Per
+    /// game only. Irori-only.
+    #[serde(rename = "iroriVndbId")]
+    pub vndb_id: String,
     /// The game's Steam app id for its achievements read from game files,
     /// when the user chose one; empty finds it in the game's files and
     /// variables. Per game only. Irori-only.
@@ -570,6 +575,7 @@ impl Default for GameSettings {
             ludusavi_title: String::new(),
             hltb_id: String::new(),
             igdb_id: String::new(),
+            vndb_id: String::new(),
             steam_app_id: String::new(),
             umu_id: String::new(),
             replay: ReplaySettings::default(),
@@ -873,6 +879,12 @@ pub struct AppSettings {
     /// off by default. Irori-only.
     #[serde(rename = "iroriIgdb")]
     pub igdb: bool,
+    /// Fill what store pages and IGDB leave out of visual novels
+    /// (descriptions, release dates, developers, covers, screenshots) from
+    /// VNDB, and offer its covers in the art picker. VNDB's public API
+    /// needs no account; off by default. Irori-only.
+    #[serde(rename = "iroriVndb")]
+    pub vndb: bool,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -943,6 +955,7 @@ impl Default for AppSettings {
             achievement_notices: false,
             file_achievements: false,
             igdb: false,
+            vndb: false,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),

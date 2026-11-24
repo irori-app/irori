@@ -233,6 +233,7 @@ pub(crate) fn extra_info(id: &str, details: &AppDetails) -> ExtraInfo {
             .collect(),
         age_ratings: age_ratings(details),
         game_modes: game_modes(details.categories.iter().map(|c| c.id)),
+        developers: Vec::new(),
         details_from: None,
     }
 }
