@@ -39,6 +39,7 @@ mod igdb;
 mod launch_presets;
 mod launch_programs;
 mod launchbox;
+mod layout;
 mod library_folders;
 mod logs;
 mod optiscaler;

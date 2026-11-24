@@ -710,6 +710,83 @@ fn the_replay_panel_shows_each_way_to_get_the_shortcuts(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn settings_subtabs_switch_and_draw(cx: &mut TestAppContext) {
+    use crate::backup::BackupTab;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    for tab in ["basics", "window", "library", "integrations"] {
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_subtab_for_test(tab, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.update(|cx| {
+            assert!(!view.read(cx).app_form().read(cx).visible_paths().is_empty());
+        });
+    }
+
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("game-defaults", window, cx));
+    })
+    .unwrap();
+    let defaults_tabs = crate::layout::supported_defaults_tabs();
+    assert!(!defaults_tabs.is_empty());
+    for tab in defaults_tabs {
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_subtab_for_test(tab.id, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.update(|cx| {
+            assert!(
+                !view
+                    .read(cx)
+                    .defaults_form()
+                    .read(cx)
+                    .visible_paths()
+                    .is_empty(),
+                "{}",
+                tab.id
+            );
+        });
+    }
+
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("appearance", window, cx));
+    })
+    .unwrap();
+    for tab in ["theme", "library", "accessibility"] {
+        cx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_subtab_for_test(tab, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.update(|cx| {
+            assert!(!view.read(cx).app_form().read(cx).visible_paths().is_empty());
+        });
+    }
+
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("backup", window, cx));
+    })
+    .unwrap();
+    for tab in [BackupTab::BackupRestore, BackupTab::Sync, BackupTab::Export] {
+        cx.update_window(handle, |_, window, cx| {
+            let panel = view.read(cx).backup_panel().clone();
+            panel.update(cx, |p, cx| p.set_tab_for_test(tab, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    }
+}
+
+#[gpui_kit::test]
 fn the_quick_launcher_row_shows_each_way_to_open_it(cx: &mut TestAppContext) {
     use irori_services::QuickLaunchShortcut;
     use irori_services::replay::bindings::{Binding, Compositor, Program};
@@ -742,4 +819,211 @@ fn the_quick_launcher_row_shows_each_way_to_open_it(cx: &mut TestAppContext) {
         cx.read_from_clipboard().and_then(|c| c.text()),
         Some("bindsym Ctrl+Mod1+k exec irori --quick-launch".to_string())
     );
+}
+
+#[gpui_kit::test]
+fn dependent_fields_hide_when_parent_is_off_and_show_in_search(cx: &mut TestAppContext) {
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    cx.update(|cx| {
+        let paths = view.read(cx).app_form().read(cx).visible_paths();
+        assert!(paths.contains(&"autoUpdateGames"));
+        assert!(!paths.contains(&"iroriAutoUpdateFrom"));
+        assert!(!paths.contains(&"iroriAutoUpdateUntil"));
+    });
+
+    // Global search still surfaces dependent fields even when the parent toggle is off.
+    cx.update_window(handle, |_, window, cx| {
+        let search = view.read(cx).search_input();
+        search.read(cx).focus_handle(cx).focus(window, cx);
+    })
+    .unwrap();
+    cx.simulate_input(handle, "automatic updates from");
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let paths = view.read(cx).app_form().read(cx).visible_paths();
+        assert!(paths.contains(&"iroriAutoUpdateFrom"));
+    });
+
+    // Clear search and enable the parent toggle; dependent rows appear.
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("general", window, cx));
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.write_for_test("autoUpdateGames", Value::Bool(true), window, cx);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let paths = view.read(cx).app_form().read(cx).visible_paths();
+        assert!(paths.contains(&"iroriAutoUpdateFrom"));
+        assert!(paths.contains(&"iroriAutoUpdateUntil"));
+    });
+
+    // Restore original value to keep shared test backend clean.
+    cx.update_window(handle, |_, window, cx| {
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.write_for_test("autoUpdateGames", Value::Bool(false), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    // Appearance background picture field hides unless Background is "picture".
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_section("appearance", window, cx);
+            v.set_subtab_for_test("library", window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let paths = view.read(cx).app_form().read(cx).visible_paths();
+        assert!(!paths.contains(&"iroriUi.libraryBackgroundPicture"));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.write_for_test(
+                "iroriUi.libraryBackground",
+                Value::from("picture"),
+                window,
+                cx,
+            );
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let paths = view.read(cx).app_form().read(cx).visible_paths();
+        assert!(paths.contains(&"iroriUi.libraryBackgroundPicture"));
+    });
+    cx.update_window(handle, |_, window, cx| {
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.write_for_test("iroriUi.libraryBackground", Value::from("none"), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn more_options_collapses_advanced_fields_until_opened_or_searched(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    // checkUpdatesInterval lives in "More options", so its row is not drawn until opened.
+    assert!(vcx.debug_bounds("row-checkUpdatesInterval").is_none());
+
+    vcx.update_window(handle, |_, window, cx| {
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.set_advanced_open_for_test("app-basics", true, cx)
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("row-checkUpdatesInterval").is_some());
+
+    // Collapse back and verify global search draws the advanced field immediately.
+    vcx.update_window(handle, |_, window, cx| {
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.set_advanced_open_for_test("app-basics", false, cx)
+        });
+        let search = view.read(cx).search_input();
+        search.read(cx).focus_handle(cx).focus(window, cx);
+    })
+    .unwrap();
+    vcx.simulate_input("update check interval");
+    vcx.run_until_parked();
+    vcx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("row-checkUpdatesInterval").is_some());
+}
+
+#[gpui_kit::test]
+fn game_settings_view_keeps_full_layout_unchanged(cx: &mut TestAppContext) {
+    use crate::game_view::GameSettingsView;
+
+    let id = GameId::new(Runner::Sideload, "ui-test-game-full-layout");
+    let (handle, view) = open(cx, move |window, cx| {
+        GameSettingsView::new(id, "wine".into(), window, cx)
+    });
+    cx.update(|cx| {
+        assert!(!view.read(cx).form().read(cx).is_compact());
+    });
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn tooltips_draw_on_settings_rows_pairs_and_per_game_view(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    use crate::game_view::GameSettingsView;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
+        let app_form = view.read(cx).app_form().clone();
+        app_form.update(cx, |f, cx| {
+            f.write_for_test("autoUpdateGames", Value::Bool(true), window, cx);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("row-defaultInstallPath").is_some());
+    assert!(vcx.debug_bounds("pair-iroriAutoUpdateFrom").is_some());
+
+    for section in ["defaults", "appearance", "advanced", "saves"] {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section(section, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        vcx.run_until_parked();
+    }
+
+    let id = GameId::new(Runner::Sideload, "ui-test-game-tooltips");
+    let (game_handle, game_view) = open(cx, move |window, cx| {
+        GameSettingsView::new(id, "wine".into(), window, cx)
+    });
+    for tab in ["wine", "performance", "gpu", "launch", "saves", "art"] {
+        cx.update_window(game_handle, |_, window, cx| {
+            game_view.update(cx, |v, cx| v.set_section(tab, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    }
 }

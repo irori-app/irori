@@ -7,6 +7,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::scroll::ScrollableElement as _;
+use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
@@ -33,7 +34,9 @@ use crate::i18n::{LanguageStamp, english};
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
 use crate::storage::StoragePanel;
-use crate::widgets::{group_heading, muted, nav_button, panel};
+use crate::widgets::{
+    group_header, group_heading, muted, nav_button, panel, sidebar_section_label,
+};
 
 /// Sections of the settings page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -225,6 +228,9 @@ struct SysInfoState {
 /// field, and the selected section.
 pub struct SettingsView {
     section: SettingsSection,
+    general_tab: &'static str,
+    defaults_tab: &'static str,
+    appearance_tab: &'static str,
     search: Entity<InputState>,
     query: String,
     app_form: Entity<SettingsForm>,
@@ -258,16 +264,31 @@ impl SettingsView {
                 }
             },
         );
-        let app_form = cx.new(|cx| SettingsForm::new(FormTarget::App, window, cx));
-        let defaults_form = cx.new(|cx| SettingsForm::new(FormTarget::Defaults, window, cx));
+        let app_form = cx.new(|cx| {
+            let mut form = SettingsForm::new(FormTarget::App, window, cx);
+            form.set_compact(true, cx);
+            form
+        });
+        let defaults_form = cx.new(|cx| {
+            let mut form = SettingsForm::new(FormTarget::Defaults, window, cx);
+            form.set_compact(true, cx);
+            form
+        });
         let hud = cx.new(|cx| HudPanel::new(HudPanelScope::Global, None, window, cx));
         // The upload name identifies the log at the paste service and in the
         // upload history, so it stays the same in every language.
         let log =
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
         let storage = cx.new(StoragePanel::new);
+        let default_defaults_tab = crate::layout::supported_defaults_tabs()
+            .first()
+            .map(|tab| tab.id)
+            .unwrap_or("launch");
         let mut this = Self {
             section: SettingsSection::General,
+            general_tab: "basics",
+            defaults_tab: default_defaults_tab,
+            appearance_tab: "theme",
             search,
             query: String::new(),
             app_form,
@@ -319,6 +340,31 @@ impl SettingsView {
         &self.defaults_form
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_subtab_for_test(
+        &mut self,
+        tab: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_subtab(tab, window, cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn backup_panel(&self) -> &Entity<BackupPanel> {
+        &self.backup
+    }
+
+    fn set_subtab(&mut self, tab: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        match self.section {
+            SettingsSection::General => self.general_tab = tab,
+            SettingsSection::GameDefaults => self.defaults_tab = tab,
+            SettingsSection::Appearance => self.appearance_tab = tab,
+            _ => return,
+        }
+        self.open(self.section, window, cx);
+    }
+
     fn open(&mut self, section: SettingsSection, window: &mut Window, cx: &mut Context<Self>) {
         let section = if section.supported_on_host() {
             section
@@ -334,13 +380,23 @@ impl SettingsView {
             self.search.update(cx, |s, cx| s.set_value("", window, cx));
         }
         if let Some(fs) = section.field_section() {
-            self.app_form
-                .update(cx, |f, cx| f.set_sections(vec![fs], cx));
+            let subtab = match section {
+                SettingsSection::General => Some(self.general_tab),
+                SettingsSection::Appearance => Some(self.appearance_tab),
+                _ => None,
+            };
+            self.app_form.update(cx, |f, cx| {
+                f.set_sections(vec![fs], cx);
+                f.set_subtab(subtab, cx);
+            });
         }
         match section {
             SettingsSection::GameDefaults => {
+                let fs = crate::layout::defaults_section_for_tab(self.defaults_tab);
+                let tab = self.defaults_tab;
                 self.defaults_form.update(cx, |f, cx| {
-                    f.set_sections(FieldSection::GAME.to_vec(), cx);
+                    f.set_sections(vec![fs], cx);
+                    f.set_subtab(Some(tab), cx);
                     f.load_wine_versions(window, cx);
                 });
             }
@@ -439,22 +495,10 @@ impl SettingsView {
 
     fn render_nav(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let searching = !self.query.trim().is_empty();
-        let buttons = SettingsSection::ALL
-            .into_iter()
-            .filter(|s| s.supported_on_host())
-            .map(|s| {
-                nav_button(
-                    ElementId::Name(format!("settings-nav-{}", s.id()).into()),
-                    s.icon(),
-                    s.label(),
-                    !searching && s == self.section,
-                    cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
-                )
-            });
-        v_flex()
-            .w_56()
+        let mut nav = v_flex()
+            .w(rems(15.))
             .flex_shrink_0()
-            .gap_1()
+            .gap_0p5()
             .p_3()
             .border_r_1()
             .border_color(cx.theme().border)
@@ -465,8 +509,73 @@ impl SettingsView {
                     .prefix(Icon::new(IconName::Search).small())
                     .cleanable(true)
                     .mb_2(),
-            )
-            .children(buttons)
+            );
+        for (gx, group) in crate::layout::SIDEBAR_GROUPS.iter().enumerate() {
+            let items: Vec<SettingsSection> = group
+                .sections
+                .iter()
+                .copied()
+                .filter(|s| s.supported_on_host())
+                .collect();
+            if items.is_empty() {
+                continue;
+            }
+            nav = nav.child(sidebar_section_label(t(group.label_key), gx == 0, cx));
+            for s in items {
+                nav = nav.child(nav_button(
+                    ElementId::Name(format!("settings-nav-{}", s.id()).into()),
+                    s.icon(),
+                    s.label(),
+                    !searching && s == self.section,
+                    cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
+                ));
+            }
+        }
+        nav
+    }
+
+    fn render_subtabs(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (id, tabs, current): (&'static str, Vec<crate::layout::SubTab>, &'static str) =
+            match self.section {
+                SettingsSection::General => (
+                    "settings-general-tabs",
+                    crate::layout::GENERAL_TABS.to_vec(),
+                    self.general_tab,
+                ),
+                SettingsSection::GameDefaults => (
+                    "settings-defaults-tabs",
+                    crate::layout::supported_defaults_tabs(),
+                    self.defaults_tab,
+                ),
+                SettingsSection::Appearance => (
+                    "settings-appearance-tabs",
+                    crate::layout::APPEARANCE_TABS.to_vec(),
+                    self.appearance_tab,
+                ),
+                _ => return None,
+            };
+        if tabs.len() <= 1 {
+            return None;
+        }
+        let selected = tabs.iter().position(|tab| tab.id == current).unwrap_or(0);
+        let tab_ids: Vec<&'static str> = tabs.iter().map(|tab| tab.id).collect();
+        Some(
+            div()
+                .pb_2()
+                .child(
+                    TabBar::new(id)
+                        .underline()
+                        .large()
+                        .selected_index(selected)
+                        .children(tabs.iter().map(|tab| Tab::new().label(t(tab.label_key))))
+                        .on_click(cx.listener(move |this, ix: &usize, window, cx| {
+                            if let Some(&tab_id) = tab_ids.get(*ix) {
+                                this.set_subtab(tab_id, window, cx);
+                            }
+                        })),
+                )
+                .into_any_element(),
+        )
     }
 
     fn render_search(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -537,7 +646,7 @@ impl SettingsView {
                 .map(SharedString::from)
                 .unwrap_or_else(|| t("settings.sysinfo.not_installed"))
         };
-        let mut rows: Vec<(SharedString, SharedString)> = vec![
+        let mut hardware_rows: Vec<(SharedString, SharedString)> = vec![
             (
                 t("settings.sysinfo.cpu"),
                 format!("{} × {}", info.cpu.cores, info.cpu.model).into(),
@@ -572,23 +681,23 @@ impl SettingsView {
                 (Some(d), None) => d.clone().into(),
                 _ => t("settings.sysinfo.no_driver"),
             };
-            rows.push((label, format!("{name} · {driver}").into()));
+            hardware_rows.push((label, format!("{name} · {driver}").into()));
         }
         if let Some(displays) = &self.sysinfo.displays {
-            rows.extend(crate::displays::rows(displays));
+            hardware_rows.extend(crate::displays::rows(displays));
         }
         let os = format!(
             "{} {}",
             info.os.name,
             info.os.version.as_deref().unwrap_or("")
         );
-        rows.push((
+        let mut software_rows: Vec<(SharedString, SharedString)> = vec![(
             t("settings.sysinfo.os"),
             t_args(
                 "settings.sysinfo.os_value",
                 &[("os", os.trim()), ("kernel", &info.os.kernel)],
             ),
-        ));
+        )];
         if cfg!(target_os = "linux") {
             let desktop = info
                 .desktop
@@ -600,7 +709,7 @@ impl SettingsView {
                 .clone()
                 .map(SharedString::from)
                 .unwrap_or_else(|| t("settings.sysinfo.unknown_session"));
-            rows.push((
+            software_rows.push((
                 t("settings.sysinfo.session"),
                 format!(
                     "{desktop} · {session}{}",
@@ -608,7 +717,7 @@ impl SettingsView {
                 )
                 .into(),
             ));
-            rows.push((
+            software_rows.push((
                 "Vulkan".into(),
                 if info.vulkan.available() {
                     info.vulkan
@@ -622,7 +731,7 @@ impl SettingsView {
             ));
         }
         let software = &info.software;
-        rows.push(("Irori".into(), software.irori.clone().into()));
+        software_rows.push(("Irori".into(), software.irori.clone().into()));
         for (name, v) in [
             ("Wine", &software.wine),
             ("gamescope", &software.gamescope),
@@ -631,32 +740,44 @@ impl SettingsView {
             ("umu-launcher", &software.umu),
         ] {
             if cfg!(target_os = "linux") || (name == "Wine" && !cfg!(windows)) {
-                rows.push((name.into(), opt(v)));
+                software_rows.push((name.into(), opt(v)));
             }
         }
-        let list = rows
-            .into_iter()
-            .enumerate()
-            .fold(panel(cx), |p, (i, (k, v))| {
-                p.child(
-                    h_flex()
-                        .gap_4()
-                        .px_4()
-                        .py_2()
-                        .when(i > 0, |r| r.border_t_1().border_color(border))
-                        .child(
-                            div()
-                                .w_40()
-                                .flex_shrink_0()
-                                .min_w_0()
-                                .text_sm()
-                                .text_color(muted_fg)
-                                .child(k),
-                        )
-                        .child(div().flex_1().min_w_0().text_sm().child(v)),
-                )
-            });
-        v_flex().gap_4().child(list).into_any_element()
+        let render_table = |rows: Vec<(SharedString, SharedString)>| {
+            rows.into_iter()
+                .enumerate()
+                .fold(panel(cx), |p, (i, (k, v))| {
+                    p.child(
+                        h_flex()
+                            .gap_4()
+                            .px_4()
+                            .py_1p5()
+                            .when(i > 0, |r| r.border_t_1().border_color(border))
+                            .child(
+                                div()
+                                    .w_40()
+                                    .flex_shrink_0()
+                                    .min_w_0()
+                                    .text_sm()
+                                    .text_color(muted_fg)
+                                    .child(k),
+                            )
+                            .child(div().flex_1().min_w_0().text_sm().child(v)),
+                    )
+                })
+        };
+        v_flex()
+            .gap_2()
+            .child(group_header(t("settings.sysinfo.hardware"), None, true, cx))
+            .child(render_table(hardware_rows))
+            .child(group_header(
+                t("settings.sysinfo.software"),
+                None,
+                false,
+                cx,
+            ))
+            .child(render_table(software_rows))
+            .into_any_element()
     }
 
     fn open_feedback(&mut self, way: Feedback, window: &mut Window, cx: &mut Context<Self>) {
@@ -756,8 +877,9 @@ impl SettingsView {
             ("comet".into(), "Apache-2.0".into()),
             ("umu-launcher".into(), "GPL-3.0".into()),
         ];
+        let border = cx.theme().border;
         v_flex()
-            .gap_4()
+            .gap_3()
             .child(
                 v_flex()
                     .gap_1()
@@ -770,26 +892,42 @@ impl SettingsView {
                     .child(muted(t("settings.about.tagline"), cx)),
             )
             .child(self.app_update.clone())
-            .child(group_heading(t("settings.about.feedback.title"), cx))
+            .child(group_header(
+                t("settings.about.feedback.title"),
+                None,
+                false,
+                cx,
+            ))
             .child(self.render_feedback(cx))
-            .child(group_heading(t("settings.about.third_party"), cx))
-            .child(credits.into_iter().fold(panel(cx), |p, (name, license)| {
-                p.child(
-                    h_flex()
-                        .justify_between()
-                        .gap_4()
-                        .px_4()
-                        .py_2()
-                        .text_sm()
-                        .child(div().flex_1().min_w_0().child(name))
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(license),
-                        ),
-                )
-            }))
+            .child(group_header(
+                t("settings.about.third_party"),
+                None,
+                false,
+                cx,
+            ))
+            .child(
+                credits
+                    .into_iter()
+                    .enumerate()
+                    .fold(panel(cx), |p, (ix, (name, license))| {
+                        p.child(
+                            h_flex()
+                                .justify_between()
+                                .gap_4()
+                                .px_4()
+                                .py_1p5()
+                                .text_sm()
+                                .when(ix > 0, |r| r.border_t_1().border_color(border))
+                                .child(div().flex_1().min_w_0().child(name))
+                                .child(
+                                    div()
+                                        .flex_shrink_0()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(license),
+                                ),
+                        )
+                    }),
+            )
             .into_any_element()
     }
 
@@ -877,12 +1015,15 @@ impl Render for SettingsView {
             if !searching && let Some(actions) = self.header_actions(cx) {
                 header = header.action(actions);
             }
+            let subtabs = (!searching).then(|| self.render_subtabs(cx)).flatten();
             let body: AnyElement = if searching {
                 self.render_search(cx)
             } else {
                 match section {
                     SettingsSection::Appearance => v_flex()
-                        .child(self.preview.clone())
+                        .when(self.appearance_tab != "accessibility", |v| {
+                            v.child(self.preview.clone())
+                        })
                         .child(self.app_form.clone())
                         .into_any_element(),
                     SettingsSection::General
@@ -907,11 +1048,12 @@ impl Render for SettingsView {
                 .child(
                     v_flex()
                         .w_full()
-                        .max_w(rems(48.))
-                        .p_6()
-                        .pb_12()
+                        .max_w(rems(52.))
+                        .p_5()
+                        .pb_10()
                         .gap_2()
                         .child(header)
+                        .children(subtabs)
                         .child(body),
                 )
                 .into_any_element()

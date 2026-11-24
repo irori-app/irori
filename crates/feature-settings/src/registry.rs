@@ -424,6 +424,8 @@ pub struct FieldSpec {
     /// Translation key of one or two sentences under the label; empty for
     /// none.
     pub help: &'static str,
+    /// Translation key of the plain-language hover tooltip; empty for none.
+    pub tooltip: &'static str,
     /// Extra search terms, in English (they match in every language).
     pub keywords: &'static [&'static str],
     pub section: FieldSection,
@@ -456,6 +458,7 @@ impl FieldSpec {
             path,
             label,
             help: "",
+            tooltip: "",
             keywords: &[],
             section,
             group,
@@ -471,6 +474,11 @@ impl FieldSpec {
 
     const fn help(mut self, help: &'static str) -> Self {
         self.help = help;
+        self
+    }
+
+    const fn tooltip(mut self, tooltip: &'static str) -> Self {
+        self.tooltip = tooltip;
         self
     }
 
@@ -518,6 +526,15 @@ impl FieldSpec {
         }
     }
 
+    /// The hover tooltip in the interface language; empty when there is none.
+    pub fn tooltip_text(&self) -> SharedString {
+        if self.tooltip.is_empty() {
+            SharedString::default()
+        } else {
+            t(self.tooltip)
+        }
+    }
+
     /// The group heading in the interface language.
     pub fn group_text(&self) -> SharedString {
         t(self.group)
@@ -541,11 +558,17 @@ impl FieldSpec {
                 Label::Key(k) => Some(k),
                 Label::Verbatim(_) => None,
             });
-        [self.label, self.help, self.group, self.section.label_key()]
-            .into_iter()
-            .filter(|k| !k.is_empty())
-            .chain(self.requires.iter().map(|c| c.reason))
-            .chain(labels)
+        [
+            self.label,
+            self.help,
+            self.tooltip,
+            self.group,
+            self.section.label_key(),
+        ]
+        .into_iter()
+        .filter(|k| !k.is_empty())
+        .chain(self.requires.iter().map(|c| c.reason))
+        .chain(labels)
     }
 
     /// Key stored in a game's override map: the first path segment.
@@ -718,13 +741,20 @@ impl FieldSpec {
         for part in [
             self.label_text(),
             self.help_text(),
+            self.tooltip_text(),
             self.group_text(),
             self.section.label(),
             tag,
         ] {
             push(&part);
         }
-        for key in [self.label, self.help, self.group, self.section.label_key()] {
+        for key in [
+            self.label,
+            self.help,
+            self.tooltip,
+            self.group,
+            self.section.label_key(),
+        ] {
             if !key.is_empty() {
                 push(crate::i18n::english(key));
             }
@@ -1529,6 +1559,14 @@ const OVERLAY_HELP: &str = if cfg!(windows) {
     "settings.field.overlay.help"
 };
 
+const OVERLAY_TIP: &str = if cfg!(windows) {
+    "settings.field.overlay.tip_windows"
+} else if cfg!(target_os = "macos") {
+    "settings.field.overlay.tip_macos"
+} else {
+    "settings.field.overlay.tip"
+};
+
 const NEEDS_OVERLAY: &[Condition] = &[when(
     "iroriOverlay.enabled",
     true,
@@ -1597,6 +1635,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(&LANGUAGES),
     )
     .help("settings.field.ui_language.help")
+    .tooltip("settings.field.ui_language.tip")
     .keywords(&["language", "locale", "translation", "interface"]),
     app(
         "defaultInstallPath",
@@ -1606,7 +1645,8 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Directory),
     )
     .help("settings.field.default_install_path.help")
-    .keywords(&["path", "directory", "games"]),
+    .tooltip("settings.field.default_install_path.tip")
+    .keywords(&["path", "directory", "games", "default install folder"]),
     app(
         "iroriInstallPerStore",
         "settings.field.install_per_store.label",
@@ -1615,6 +1655,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.install_per_store.help")
+    .tooltip("settings.field.install_per_store.tip")
     .keywords(&["path", "directory", "folder", "store", "install"]),
     app(
         "panel.libraryFolders",
@@ -1633,6 +1674,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Directory),
     )
     .help("settings.field.default_wine_prefix_dir.help")
+    .tooltip("settings.field.default_wine_prefix_dir.tip")
     .keywords(&["prefix", "path", "wineprefix"]),
     app(
         "defaultSteamPath",
@@ -1642,6 +1684,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Directory),
     )
     .help("settings.field.default_steam_path.help")
+    .tooltip("settings.field.default_steam_path.tip")
     .keywords(&["steam", "proton", "path"]),
     app(
         "iroriCrossoverBottlesPath",
@@ -1652,6 +1695,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("CrossOver"))
     .help("settings.field.crossover_bottles_path.help")
+    .tooltip("settings.field.crossover_bottles_path.tip")
     .placeholder(Verbatim("~/Library/Application Support/CrossOver/Bottles"))
     .keywords(&["crossover", "bottle", "bottles", "path", "mac"]),
     app(
@@ -1687,6 +1731,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.check_for_app_updates.help")
+    .tooltip("settings.field.check_for_app_updates.tip")
     .keywords(&["irori", "version", "update", "release", "new"]),
     app(
         "checkForUpdatesOnStartup",
@@ -1695,6 +1740,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.updates",
         Toggle,
     )
+    .tooltip("settings.field.check_for_updates_on_startup.tip")
     .keywords(&["update", "startup"]),
     app(
         "checkUpdatesInterval",
@@ -1704,6 +1750,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Number { min: 5, max: 1440 }),
     )
     .help("settings.field.check_updates_interval.help")
+    .tooltip("settings.field.check_updates_interval.tip")
     .keywords(&["minutes", "update", "frequency"]),
     app(
         "iroriLaunchersRescan",
@@ -1713,6 +1760,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Number { min: 0, max: 1440 }),
     )
     .help("settings.field.launchers_rescan.help")
+    .tooltip("settings.field.launchers_rescan.tip")
     .keywords(&[
         "battle.net",
         "ea",
@@ -1731,6 +1779,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.auto_update_games.help")
+    .tooltip("settings.field.auto_update_games.tip")
     .keywords(&["update", "automatic"]),
     app(
         "iroriAutoUpdateComponents",
@@ -1740,6 +1789,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.auto_update_components.help")
+    .tooltip("settings.field.auto_update_components.tip")
     .keywords(&["update", "automatic", "wine", "proton", "dxvk", "emulator"]),
     app(
         "iroriAutoUpdateFrom",
@@ -1749,6 +1799,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(UPDATE_HOURS),
     )
     .help("settings.field.auto_update_window.help")
+    .tooltip("settings.field.auto_update_from.tip")
     .keywords(&["update", "schedule", "night", "window", "time"]),
     app(
         "iroriAutoUpdateUntil",
@@ -1757,6 +1808,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.updates",
         Choice(UPDATE_HOURS),
     )
+    .tooltip("settings.field.auto_update_until.tip")
     .keywords(&["update", "schedule", "night", "window", "time"]),
     app(
         "iroriAutoUpdateUnmetered",
@@ -1766,6 +1818,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.auto_update_unmetered.help")
+    .tooltip("settings.field.auto_update_unmetered.tip")
     .keywords(&["update", "metered", "data limit", "mobile", "hotspot"]),
     app(
         "noTrayIcon",
@@ -1774,8 +1827,9 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.tray_and_window",
         Toggle,
     )
+    .tooltip("settings.field.no_tray_icon.tip")
     .tag(Key("settings.tag.restart_required"))
-    .keywords(&["tray", "systray", "icon"]),
+    .keywords(&["tray", "systray", "icon", "restart required"]),
     app(
         "exitToTray",
         "settings.field.exit_to_tray.label",
@@ -1784,6 +1838,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.exit_to_tray.help")
+    .tooltip("settings.field.exit_to_tray.tip")
     .keywords(&["tray", "exit", "close", "background"])
     .requires(NEEDS_TRAY),
     app(
@@ -1794,6 +1849,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.start_in_tray.help")
+    .tooltip("settings.field.start_in_tray.tip")
     .keywords(&["tray", "minimized", "startup"])
     .requires(NEEDS_EXIT_TO_TRAY),
     app(
@@ -1804,6 +1860,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_start_maximized.help")
+    .tooltip("settings.field.ui_start_maximized.tip")
     .keywords(&["maximize", "maximized", "window", "startup", "full size"]),
     app(
         "iroriStartWithSystem",
@@ -1813,6 +1870,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.start_with_system.help")
+    .tooltip("settings.field.start_with_system.tip")
     .keywords(&["autostart", "login", "startup", "boot", "log in"]),
     app(
         "iroriStartWithSystemMinimized",
@@ -1822,6 +1880,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.start_with_system_minimized.help")
+    .tooltip("settings.field.start_with_system_minimized.tip")
     .keywords(&["autostart", "tray", "minimized", "startup"])
     .requires(NEEDS_START_WITH_SYSTEM),
     app(
@@ -1832,6 +1891,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.minimize_on_launch.help")
+    .tooltip("settings.field.minimize_on_launch.tip")
     .keywords(&["minimize", "hide", "launch"])
     .requires(NEEDS_TRAY),
     app(
@@ -1842,6 +1902,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.show_log_on_launch.help")
+    .tooltip("settings.field.show_log_on_launch.tip")
     .keywords(&["log", "console", "output", "launch"]),
     app(
         "darkTrayIcon",
@@ -1850,6 +1911,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.tray_and_window",
         Toggle,
     )
+    .tooltip("settings.field.dark_tray_icon.tip")
     .tag(Key("settings.tag.restart_required"))
     .keywords(&["tray", "icon", "dark"])
     .requires(NEEDS_TRAY),
@@ -1861,6 +1923,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.hide_window_on_protocol_launch.help")
+    .tooltip("settings.field.hide_window_on_protocol_launch.tip")
     .keywords(&["protocol", "url", "heroic://", "link", "shortcut"]),
     app(
         "startInConsoleMode",
@@ -1869,6 +1932,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.tray_and_window",
         Toggle,
     )
+    .tooltip("settings.field.start_in_console_mode.tip")
     .keywords(&["console", "gamepad", "fullscreen", "big picture"]),
     app(
         "iroriUi.bigPictureInGameMode",
@@ -1878,6 +1942,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.big_picture_in_game_mode.help")
+    .tooltip("settings.field.big_picture_in_game_mode.tip")
     .keywords(&[
         "steam deck",
         "game mode",
@@ -1893,6 +1958,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.big_picture_on_controller.help")
+    .tooltip("settings.field.big_picture_on_controller.tip")
     .keywords(&["controller", "gamepad", "console", "big picture", "connect"]),
     app(
         "iroriUi.quickLaunchShortcut",
@@ -1935,6 +2001,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.add_desktop_shortcuts.help")
+    .tooltip("settings.field.add_desktop_shortcuts.tip")
     .keywords(&["shortcut", "desktop"]),
     app(
         "addStartMenuShortcuts",
@@ -1943,6 +2010,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.new_installs",
         Toggle,
     )
+    .tooltip("settings.field.add_start_menu_shortcuts.tip")
     .keywords(&["shortcut", "start menu", "applications"]),
     app(
         "addSteamShortcuts",
@@ -1952,6 +2020,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.add_steam_shortcuts.help")
+    .tooltip("settings.field.add_steam_shortcuts.tip")
     .keywords(&["steam", "shortcut", "deck"]),
     app(
         "iroriShortcutIconFromExe",
@@ -1969,43 +2038,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.library",
         Choice(TOP_SECTION),
     )
+    .tooltip("settings.field.library_top_section.tip")
     .keywords(&["recent", "favourites", "top"]),
-    app(
-        "iroriUi.stores.epic",
-        "settings.field.show_store_epic.label",
-        General,
-        "settings.group.stores",
-        Toggle,
-    )
-    .help("settings.field.show_stores.help")
-    .keywords(&["store", "hide", "epic", "legendary"]),
-    app(
-        "iroriUi.stores.gog",
-        "settings.field.show_store_gog.label",
-        General,
-        "settings.group.stores",
-        Toggle,
-    )
-    .help("settings.field.show_stores.help")
-    .keywords(&["store", "hide", "gog"]),
-    app(
-        "iroriUi.stores.amazon",
-        "settings.field.show_store_amazon.label",
-        General,
-        "settings.group.stores",
-        Toggle,
-    )
-    .help("settings.field.show_stores.help")
-    .keywords(&["store", "hide", "amazon", "prime", "nile"]),
-    app(
-        "iroriDeals",
-        "settings.field.deals.label",
-        General,
-        "settings.group.stores",
-        Toggle,
-    )
-    .help("settings.field.deals.help")
-    .keywords(&["deals", "sale", "discount", "price", "offers"]),
     app(
         "maxRecentGames",
         "settings.field.max_recent_games.label",
@@ -2013,6 +2047,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.library",
         Text(TextKind::Number { min: 1, max: 20 }),
     )
+    .tooltip("settings.field.max_recent_games.tip")
     .keywords(&["recent", "tray"]),
     app(
         "iroriAchievementNotices",
@@ -2022,6 +2057,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.achievement_notices.help")
+    .tooltip("settings.field.achievement_notices.tip")
     .keywords(&[
         "achievements",
         "trophies",
@@ -2074,6 +2110,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.file_achievements.help")
+    .tooltip("settings.field.file_achievements.tip")
     .keywords(&[
         "achievements",
         "goldberg",
@@ -2085,6 +2122,82 @@ pub static FIELDS: &[FieldSpec] = &[
         "offline",
     ]),
     app(
+        "iroriUi.stores.epic",
+        "settings.field.show_store_epic.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .keywords(&["store", "hide", "epic", "legendary"]),
+    app(
+        "iroriUi.stores.gog",
+        "settings.field.show_store_gog.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .keywords(&["store", "hide", "gog"]),
+    app(
+        "iroriUi.stores.amazon",
+        "settings.field.show_store_amazon.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .keywords(&["store", "hide", "amazon", "prime", "nile"]),
+    app(
+        "iroriDeals",
+        "settings.field.deals.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .help("settings.field.deals.help")
+    .keywords(&["deals", "sale", "discount", "price", "offers"]),
+    app(
+        "zoomPlatform",
+        "settings.field.zoom_platform.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .tooltip("settings.field.zoom_platform.tip")
+    .keywords(&["zoom", "store"]),
+    app(
+        "iroriItchIo",
+        "settings.field.itch_io.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .help("settings.field.itch_io.help")
+    .tooltip("settings.field.itch_io.tip")
+    .keywords(&["itch", "itch.io", "store", "indie"]),
+    app(
+        "iroriXbox",
+        "settings.field.xbox.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .help("settings.field.xbox.help")
+    .tooltip("settings.field.xbox.tip")
+    .needs(&[Need::Linux])
+    .keywords(&["xbox", "microsoft", "store", "game pass", "gdk"]),
+    app(
+        "iroriXboxMarket",
+        "settings.field.xbox_market.label",
+        General,
+        "settings.group.stores",
+        Text(TextKind::Plain),
+    )
+    .help("settings.field.xbox_market.help")
+    .tooltip("settings.field.xbox_market.tip")
+    .placeholder(Verbatim("US"))
+    .requires(&[when("iroriXbox", true, "settings.field.xbox_market.off")])
+    .needs(&[Need::Linux])
+    .keywords(&["xbox", "market", "region", "country", "microsoft"]),
+    app(
         "discordRPC",
         "settings.field.discord_rpc.label",
         General,
@@ -2092,6 +2205,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.discord_rpc.help")
+    .tooltip("settings.field.discord_rpc.tip")
     .keywords(&["discord", "presence", "rpc"]),
     app(
         "discordClientId",
@@ -2101,6 +2215,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Digits { max_len: 20 }),
     )
     .help("settings.field.discord_client_id.help")
+    .tooltip("settings.field.discord_client_id.tip")
     .placeholder(Key("settings.field.discord_client_id.placeholder"))
     .keywords(&[
         "discord",
@@ -2118,6 +2233,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.sunshine_enabled.help")
+    .tooltip("settings.field.sunshine_enabled.tip")
     .keywords(&[
         "sunshine",
         "moonlight",
@@ -2132,6 +2248,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.integrations",
         Choice(SUNSHINE_GAMES),
     )
+    .tooltip("settings.field.sunshine_games.tip")
     .keywords(&["sunshine", "moonlight", "stream", "favourites"])
     .requires(NEEDS_SUNSHINE),
     app(
@@ -2142,6 +2259,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.sunshine_big_picture.help")
+    .tooltip("settings.field.sunshine_big_picture.tip")
     .keywords(&["sunshine", "moonlight", "big picture", "couch"])
     .requires(NEEDS_SUNSHINE),
     app(
@@ -2152,6 +2270,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Plain),
     )
     .help("settings.field.sunshine_address.help")
+    .tooltip("settings.field.sunshine_address.tip")
     .placeholder(Key("settings.field.sunshine_address.placeholder"))
     .keywords(&[
         "sunshine",
@@ -2171,6 +2290,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.sunshine_match_client.help")
+    .tooltip("settings.field.sunshine_match_client.tip")
     .keywords(&[
         "sunshine",
         "moonlight",
@@ -2188,6 +2308,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.integrations",
         Panel(PanelKind::Sunshine),
     )
+    .tooltip("settings.field.panel_sunshine.tip")
     .keywords(&[
         "sunshine",
         "moonlight",
@@ -2203,6 +2324,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.integrations",
         Toggle,
     )
+    .tooltip("settings.field.disable_playtime_sync.tip")
     .tag(Verbatim("GOG · Epic"))
     .keywords(&["playtime", "sync", "gog", "epic"]),
     app(
@@ -2212,6 +2334,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.integrations",
         Toggle,
     )
+    .tooltip("settings.field.disable_gog_presence.tip")
     .tag(Verbatim("GOG"))
     .keywords(&["presence", "gog", "galaxy", "online"]),
     app(
@@ -2223,46 +2346,8 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("GOG"))
     .help("settings.field.comet_support.help")
+    .tooltip("settings.field.comet_support.tip")
     .keywords(&["comet", "galaxy", "achievements", "gog"]),
-    app(
-        "zoomPlatform",
-        "settings.field.zoom_platform.label",
-        General,
-        "settings.group.integrations",
-        Toggle,
-    )
-    .keywords(&["zoom", "store"]),
-    app(
-        "iroriItchIo",
-        "settings.field.itch_io.label",
-        General,
-        "settings.group.integrations",
-        Toggle,
-    )
-    .help("settings.field.itch_io.help")
-    .keywords(&["itch", "itch.io", "store", "indie"]),
-    app(
-        "iroriXbox",
-        "settings.field.xbox.label",
-        General,
-        "settings.group.integrations",
-        Toggle,
-    )
-    .help("settings.field.xbox.help")
-    .needs(&[Need::Linux])
-    .keywords(&["xbox", "microsoft", "store", "game pass", "gdk"]),
-    app(
-        "iroriXboxMarket",
-        "settings.field.xbox_market.label",
-        General,
-        "settings.group.integrations",
-        Text(TextKind::Plain),
-    )
-    .help("settings.field.xbox_market.help")
-    .placeholder(Verbatim("US"))
-    .requires(&[when("iroriXbox", true, "settings.field.xbox_market.off")])
-    .needs(&[Need::Linux])
-    .keywords(&["xbox", "market", "region", "country", "microsoft"]),
     app(
         "action.open-windows-files",
         "settings.field.action_open_windows_files.label",
@@ -2271,6 +2356,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::OpenWindowsFiles),
     )
     .help("settings.field.action_open_windows_files.help")
+    .tooltip("settings.field.action_open_windows_files.tip")
     .keywords(&[
         "exe",
         "msi",
@@ -2290,6 +2376,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Number { min: 0, max: 64 }),
     )
     .help("settings.field.max_workers.help")
+    .tooltip("settings.field.max_workers.tip")
     .keywords(&["workers", "threads", "parallel", "download"]),
     app(
         "maxDownloadSpeed",
@@ -2302,7 +2389,8 @@ pub static FIELDS: &[FieldSpec] = &[
         }),
     )
     .help("settings.field.max_download_speed.help")
-    .keywords(&["bandwidth", "speed", "limit", "throttle", "download"]),
+    .tooltip("settings.field.max_download_speed.tip")
+    .keywords(&["bandwidth", "speed", "limit", "throttle", "download", "kib"]),
     app(
         "downloadNoHttps",
         "settings.field.download_no_https.label",
@@ -2312,6 +2400,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Epic"))
     .help("settings.field.download_no_https.help")
+    .tooltip("settings.field.download_no_https.tip")
     .keywords(&["https", "lancache", "cdn", "cache"]),
     app(
         "panel.button-map",
@@ -2339,6 +2428,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.controller",
         Panel(PanelKind::Controllers),
     )
+    .tooltip("settings.field.panel_controllers.tip")
     .keywords(&[
         "gamepad",
         "controller",
@@ -2357,6 +2447,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.disable_controller.help")
+    .tooltip("settings.field.disable_controller.tip")
     .keywords(&["gamepad", "controller", "joystick"]),
     app(
         "iroriController.hidePointer",
@@ -2383,6 +2474,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Number { min: 50, max: 500 }),
     )
     .help("settings.field.gamepad_initial_repeat_delay.help")
+    .tooltip("settings.field.gamepad_initial_repeat_delay.tip")
     .keywords(&["gamepad", "controller", "repeat", "delay"])
     .requires(NEEDS_CONTROLLER),
     app(
@@ -2393,6 +2485,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Number { min: 5, max: 150 }),
     )
     .help("settings.field.gamepad_repeat_delay.help")
+    .tooltip("settings.field.gamepad_repeat_delay.tip")
     .keywords(&["gamepad", "controller", "repeat", "frequency"])
     .requires(NEEDS_CONTROLLER),
     app(
@@ -2403,6 +2496,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(BIG_PICTURE_HOLD),
     )
     .help("settings.field.big_picture_hold_button.help")
+    .tooltip("settings.field.big_picture_hold_button.tip")
     .keywords(&[
         "gamepad",
         "controller",
@@ -2424,6 +2518,7 @@ pub static FIELDS: &[FieldSpec] = &[
         }),
     )
     .help("settings.field.big_picture_hold_ms.help")
+    .tooltip("settings.field.big_picture_hold_ms.tip")
     .keywords(&["gamepad", "controller", "hold", "delay", "big picture"])
     .requires(NEEDS_CONTROLLER),
     app(
@@ -2434,6 +2529,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help(OVERLAY_HELP)
+    .tooltip(OVERLAY_TIP)
     .keywords(&[
         "overlay",
         "in-game",
@@ -2608,6 +2704,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.theme",
         Choice(THEME_MODE),
     )
+    .tooltip("settings.field.ui_theme.tip")
     .keywords(&["dark", "light", "system", "mode"]),
     app(
         "iroriUi.themeName",
@@ -2616,6 +2713,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.theme",
         Custom(CustomKind::ThemeName),
     )
+    .tooltip("settings.field.ui_theme_name.tip")
     .keywords(&[
         "colors",
         "palette",
@@ -2632,6 +2730,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_system_accent.help")
+    .tooltip("settings.field.ui_system_accent.tip")
     .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
     app(
         "iroriUi.wallpaperColors",
@@ -2641,6 +2740,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_wallpaper_colors.help")
+    .tooltip("settings.field.ui_wallpaper_colors.tip")
     .keywords(&[
         "pywal",
         "wal",
@@ -2660,6 +2760,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::File),
     )
     .help("settings.field.ui_wallpaper_colors_file.help")
+    .tooltip("settings.field.ui_wallpaper_colors_file.tip")
     .placeholder(Verbatim("~/.cache/wal/colors.json"))
     .keywords(&[
         "pywal",
@@ -2678,6 +2779,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::AccentColor),
     )
     .help("settings.field.ui_accent_color.help")
+    .tooltip("settings.field.ui_accent_color.tip")
     .keywords(&["accent", "colour", "color", "highlight", "tint", "picker"]),
     app(
         "iroriUi.translucency",
@@ -2687,6 +2789,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(TRANSLUCENCY),
     )
     .help("settings.field.ui_translucency.help")
+    .tooltip("settings.field.ui_translucency.tip")
     .keywords(&[
         "translucency",
         "transparency",
@@ -2704,6 +2807,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::FontSize),
     )
     .help("settings.field.ui_font_size.help")
+    .tooltip("settings.field.ui_font_size.tip")
     .keywords(&["zoom", "font", "scale", "text size"]),
     app(
         "iroriUi.tileSize",
@@ -2713,6 +2817,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::TileSize),
     )
     .help("settings.field.ui_tile_size.help")
+    .tooltip("settings.field.ui_tile_size.tip")
     .keywords(&["tile", "grid", "cover", "library"]),
     app(
         "iroriUi.density",
@@ -2722,6 +2827,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(DENSITY),
     )
     .help("settings.field.ui_density.help")
+    .tooltip("settings.field.ui_density.tip")
     .keywords(&[
         "density", "compact", "spacious", "spacing", "padding", "dense",
     ]),
@@ -2733,6 +2839,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(BIG_PICTURE_SCALE),
     )
     .help("settings.field.ui_big_picture_scale.help")
+    .tooltip("settings.field.ui_big_picture_scale.tip")
     .keywords(&[
         "big picture",
         "tv",
@@ -2748,6 +2855,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.library",
         Choice(LIBRARY_LAYOUT),
     )
+    .tooltip("settings.field.ui_library_layout.tip")
     .keywords(&["grid", "list", "focus", "view"]),
     app(
         "iroriUi.showStoreBadges",
@@ -2756,6 +2864,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.library",
         Toggle,
     )
+    .tooltip("settings.field.ui_show_store_badges.tip")
     .keywords(&["badge", "store", "label"]),
     app(
         "iroriUi.storeBadgesAlways",
@@ -2785,6 +2894,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_group_copies.help")
+    .tooltip("settings.field.ui_group_copies.tip")
     .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
     app(
         "iroriUi.programIconArt",
@@ -2842,6 +2952,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_cover_categories.help")
+    .tooltip("settings.field.ui_cover_categories.tip")
     .keywords(&["category", "categories", "tag", "cover", "label"]),
     app(
         "iroriUi.coverCorners",
@@ -2949,6 +3060,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_library_quick_controls.help")
+    .tooltip("settings.field.ui_library_quick_controls.tip")
     .keywords(&[
         "quick",
         "sort",
@@ -2968,6 +3080,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_reduce_motion.help")
+    .tooltip("settings.field.ui_reduce_motion.tip")
     .keywords(&["animation", "accessibility", "motion"]),
     app(
         "disableAnimations",
@@ -2976,6 +3089,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.motion",
         Toggle,
     )
+    .tooltip("settings.field.disable_animations.tip")
     .keywords(&["animation", "accessibility"]),
     app(
         "iroriUi.middleClickScroll",
@@ -2985,6 +3099,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ui_middle_click_scroll.help")
+    .tooltip("settings.field.ui_middle_click_scroll.tip")
     .keywords(&[
         "middle",
         "mouse",
@@ -3002,6 +3117,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::FontFamily),
     )
     .help("settings.field.ui_font_family.help")
+    .tooltip("settings.field.ui_font_family.tip")
     .keywords(&["font", "typeface", "manrope", "text", "family"]),
     app(
         "iroriUi.libraryBackground",
@@ -3011,6 +3127,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(LIBRARY_BACKGROUND),
     )
     .help("settings.field.ui_library_background.help")
+    .tooltip("settings.field.ui_library_background.tip")
     .keywords(&[
         "background",
         "wallpaper",
@@ -3027,6 +3144,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::File),
     )
     .help("settings.field.ui_library_background_picture.help")
+    .tooltip("settings.field.ui_library_background_picture.tip")
     .keywords(&["background", "wallpaper", "picture", "image"]),
     app(
         "iroriUi.libraryBackgroundStrength",
@@ -3036,6 +3154,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::Percent),
     )
     .help("settings.field.ui_library_background_strength.help")
+    .tooltip("settings.field.ui_library_background_strength.tip")
     .keywords(&["background", "strength", "opacity", "intensity"]),
     app(
         "iroriUi.libraryBackgroundDim",
@@ -3045,6 +3164,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::Percent),
     )
     .help("settings.field.ui_library_background_dim.help")
+    .tooltip("settings.field.ui_library_background_dim.tip")
     .keywords(&["background", "dim", "darken", "fade"]),
     // ---- Advanced ----
     app(
@@ -3055,6 +3175,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Secret),
     )
     .help("settings.field.steam_grid_db_api_key.help")
+    .tooltip("settings.field.steam_grid_db_api_key.tip")
     .placeholder(Key("settings.field.steam_grid_db_api_key.placeholder"))
     .keywords(&["steamgriddb", "artwork", "cover", "key"]),
     app(
@@ -3065,6 +3186,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(ART_CACHE_LIMIT),
     )
     .help("settings.field.art_cache_limit.help")
+    .tooltip("settings.field.art_cache_limit.tip")
     .keywords(&[
         "art",
         "image",
@@ -3083,6 +3205,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.igdb.help")
+    .tooltip("settings.field.igdb.tip")
     .keywords(&[
         "igdb",
         "twitch",
@@ -3120,6 +3243,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.artwork",
         Panel(PanelKind::Igdb),
     )
+    .tooltip("settings.field.panel_igdb.tip")
     .keywords(&["igdb", "twitch", "client id", "client secret"]),
     app(
         "iroriVndb",
@@ -3172,6 +3296,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Epic"))
     .help("settings.field.panel_eos_overlay.help")
+    .tooltip("settings.field.panel_eos_overlay.tip")
     .keywords(&[
         "eos",
         "overlay",
@@ -3188,6 +3313,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Epic"))
     .help("settings.field.panel_egl_sync.help")
+    .tooltip("settings.field.panel_egl_sync.tip")
     .keywords(&[
         "egl",
         "egs",
@@ -3205,6 +3331,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.show_valve_proton.help")
+    .tooltip("settings.field.show_valve_proton.tip")
     .keywords(&["proton", "valve", "steam"]),
     app(
         "iroriCompatToolsPath",
@@ -3214,6 +3341,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Directory),
     )
     .help("settings.field.compat_tools_path.help")
+    .tooltip("settings.field.compat_tools_path.tip")
     .keywords(&["proton", "wine", "download", "folder", "path", "ge-proton"]),
     app(
         "downloadProtonToSteam",
@@ -3223,6 +3351,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.download_proton_to_steam.help")
+    .tooltip("settings.field.download_proton_to_steam.tip")
     .keywords(&["proton", "steam", "compatibilitytools"]),
     app(
         "iroriProtonCpuLevel",
@@ -3250,6 +3379,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.allow_installation_broken_anticheat.help")
+    .tooltip("settings.field.allow_installation_broken_anticheat.tip")
     .keywords(&["anticheat", "eac", "battleye", "denied"]),
     app(
         "disableLogs",
@@ -3259,6 +3389,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.disable_logs.help")
+    .tooltip("settings.field.disable_logs.tip")
     .keywords(&["log", "debug"]),
     app(
         "action.open-logs",
@@ -3267,6 +3398,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.diagnostics",
         Action(ActionKind::OpenLogsFolder),
     )
+    .tooltip("settings.field.action_open_logs.tip")
     .keywords(&["log", "folder", "open"]),
     app(
         "action.import-heroic",
@@ -3276,6 +3408,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::ImportHeroic),
     )
     .help("settings.field.action_import_heroic.help")
+    .tooltip("settings.field.action_import_heroic.tip")
     .keywords(&["heroic", "import", "migrate"]),
     app(
         "action.import-lutris",
@@ -3285,6 +3418,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::ImportLutris),
     )
     .help("settings.field.action_import_lutris.help")
+    .tooltip("settings.field.action_import_lutris.tip")
     .keywords(&["lutris", "import", "migrate", "emulator"]),
     app(
         "action.import-bottles",
@@ -3294,6 +3428,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::ImportBottles),
     )
     .help("settings.field.action_import_bottles.help")
+    .tooltip("settings.field.action_import_bottles.tip")
     .keywords(&["bottles", "import", "migrate", "wine", "prefix"]),
     app(
         "action.import-faugus",
@@ -3303,6 +3438,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::ImportFaugus),
     )
     .help("settings.field.action_import_faugus.help")
+    .tooltip("settings.field.action_import_faugus.tip")
     .keywords(&["faugus", "import", "migrate", "proton", "umu"]),
     app(
         "iroriLauncherImports.lutris",
@@ -3339,6 +3475,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::ImportPlaynite),
     )
     .help("settings.field.action_import_playnite.help")
+    .tooltip("settings.field.action_import_playnite.tip")
     .keywords(&["playnite", "import", "migrate", "playtime", "windows"]),
     app(
         "action.clear-caches",
@@ -3348,6 +3485,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::ClearCaches),
     )
     .help("settings.field.action_clear_caches.help")
+    .tooltip("settings.field.action_clear_caches.tip")
     .keywords(&["cache", "clear", "artwork", "refresh"]),
     app(
         "action.reset-settings",
@@ -3357,6 +3495,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Action(ActionKind::ResetSettings),
     )
     .help("settings.field.action_reset_settings.help")
+    .tooltip("settings.field.action_reset_settings.tip")
     .keywords(&["reset", "defaults", "factory"]),
     // ---- Wine & Proton ----
     game_only(
@@ -3375,6 +3514,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.compatibility_layer",
         Custom(CustomKind::WineVersion),
     )
+    .tooltip("settings.field.wine_version.tip")
     .keywords(&["wine", "proton", "ge", "version", "runner"]),
     game(
         "winePrefix",
@@ -3384,6 +3524,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Directory),
     )
     .help("settings.field.wine_prefix.help")
+    .tooltip("settings.field.wine_prefix.tip")
     .placeholder(Key("settings.field.wine_prefix.placeholder"))
     .keywords(&["prefix", "wineprefix", "path", "bottle"]),
     game(
@@ -3395,6 +3536,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("CrossOver"))
     .help("settings.field.wine_crossover_bottle.help")
+    .tooltip("settings.field.wine_crossover_bottle.tip")
     .keywords(&["crossover", "bottle", "prefix", "mac"]),
     game(
         "disableUMU",
@@ -3405,6 +3547,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Proton"))
     .help("settings.field.disable_umu.help")
+    .tooltip("settings.field.disable_umu.tip")
     .keywords(&["umu", "proton"]),
     game_only(
         "iroriUmuId",
@@ -3415,6 +3558,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("umu"))
     .help("settings.field.umu_id.help")
+    .tooltip("settings.field.umu_id.tip")
     .placeholder(Verbatim("umu-1091500"))
     .keywords(&["umu", "gameid", "protonfixes", "proton", "fixes"]),
     game_only(
@@ -3424,6 +3568,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.compatibility_layer",
         Panel(PanelKind::Umu),
     )
+    .tooltip("settings.field.panel_umu.tip")
     .keywords(&["umu", "gameid", "protonfixes", "database"]),
     game(
         "iroriProtonPreferSdl",
@@ -3434,12 +3579,14 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Proton"))
     .help("settings.field.proton_prefer_sdl.help")
+    .tooltip("settings.field.proton_prefer_sdl.tip")
     .keywords(&[
         "sdl",
         "controller",
         "gamepad",
         "joystick",
         "hidraw",
+        "evdev",
         "proton_prefer_sdl",
     ]),
     game(
@@ -3450,6 +3597,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::DllOverrides),
     )
     .help("settings.field.dll_overrides.help")
+    .tooltip("settings.field.dll_overrides.tip")
     .keywords(&[
         "dll",
         "overrides",
@@ -3467,7 +3615,8 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.enable_esync.help")
-    .keywords(&["esync", "sync", "performance"]),
+    .tooltip("settings.field.enable_esync.tip")
+    .keywords(&["esync", "eventfd", "sync", "performance"]),
     game(
         "enableFsync",
         "settings.field.enable_fsync.label",
@@ -3476,6 +3625,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.enable_fsync.help")
+    .tooltip("settings.field.enable_fsync.tip")
     .keywords(&["fsync", "futex", "sync", "performance"]),
     game(
         "iroriNtsync",
@@ -3485,6 +3635,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ntsync.help")
+    .tooltip("settings.field.ntsync.tip")
     .keywords(&["ntsync", "kernel", "sync", "performance"]),
     game(
         "enableMsync",
@@ -3493,6 +3644,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.wine_sync",
         Toggle,
     )
+    .tooltip("settings.field.enable_msync.tip")
     .tag(Verbatim("macOS"))
     .keywords(&["msync", "sync", "mac"]),
     game(
@@ -3504,6 +3656,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("macOS"))
     .help("settings.field.retina_mode.help")
+    .tooltip("settings.field.retina_mode.tip")
     .keywords(&["retina", "hidpi", "resolution", "scaling", "mac"]),
     game(
         "iroriMetalFxDlss",
@@ -3535,6 +3688,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Key("settings.tag.experimental"))
     .help("settings.field.enable_wine_wayland.help")
+    .tooltip("settings.field.enable_wine_wayland.tip")
     .keywords(&["wayland", "xwayland", "display"]),
     game(
         "enableHDR",
@@ -3543,6 +3697,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.display",
         Toggle,
     )
+    .tooltip("settings.field.enable_hdr.tip")
     .keywords(&["hdr", "high dynamic range", "wayland"])
     .requires(NEEDS_WAYLAND),
     game(
@@ -3552,6 +3707,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.display",
         Toggle,
     )
+    .tooltip("settings.field.enable_fsr.tip")
     .keywords(&["fsr", "upscale", "amd", "fidelityfx"]),
     game(
         "maxSharpness",
@@ -3560,6 +3716,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.display",
         Choice(SHARPNESS),
     )
+    .tooltip("settings.field.max_sharpness.tip")
     .keywords(&["fsr", "sharpness", "strength"])
     .requires(NEEDS_FSR),
     game(
@@ -3571,6 +3728,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Key("settings.tag.experimental"))
     .help("settings.field.enable_wow64.help")
+    .tooltip("settings.field.enable_wow64.tip")
     .keywords(&["wow64", "32-bit", "multilib"]),
     game(
         "autoInstallDxvk",
@@ -3580,6 +3738,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.auto_install_dxvk.help")
+    .tooltip("settings.field.auto_install_dxvk.tip")
     .keywords(&["dxvk", "directx", "d3d11", "vulkan"]),
     game(
         "autoInstallVkd3d",
@@ -3589,6 +3748,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.auto_install_vkd3d.help")
+    .tooltip("settings.field.auto_install_vkd3d.tip")
     .keywords(&["vkd3d", "directx 12", "d3d12", "vulkan"])
     .requires(NEEDS_DXVK),
     game(
@@ -3599,6 +3759,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.auto_install_dxvk_nvapi.help")
+    .tooltip("settings.field.auto_install_dxvk_nvapi.tip")
     .keywords(&["nvapi", "dlss", "nvidia"])
     .requires(NEEDS_DXVK),
     game(
@@ -3609,6 +3770,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::ToolVersion(DxTool::Dxvk)),
     )
     .help("settings.field.tool_version.help")
+    .tooltip("settings.field.dxvk_version.tip")
     .keywords(&["dxvk", "version", "release"])
     .requires(NEEDS_DXVK),
     game(
@@ -3619,6 +3781,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::ToolVersion(DxTool::Vkd3d)),
     )
     .help("settings.field.tool_version.help")
+    .tooltip("settings.field.vkd3d_version.tip")
     .keywords(&["vkd3d", "version", "release"])
     .requires(NEEDS_VKD3D),
     game(
@@ -3630,8 +3793,10 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Key("settings.tag.experimental"))
     .help("settings.field.descriptor_heap.help")
+    .tooltip("settings.field.descriptor_heap.tip")
     .keywords(&[
         "descriptor heap",
+        "descriptor_heap",
         "vkd3d_config",
         "proton_vkd3d_heap",
         "d3d12",
@@ -3644,6 +3809,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.prefer_system_libs.help")
+    .tooltip("settings.field.prefer_system_libs.tip")
     .keywords(&["libraries", "ld_library_path", "system"]),
     game(
         "eacRuntime",
@@ -3652,6 +3818,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.anti_cheat",
         Toggle,
     )
+    .tooltip("settings.field.eac_runtime.tip")
     .keywords(&["eac", "easyanticheat", "anticheat", "runtime"]),
     game(
         "battlEyeRuntime",
@@ -3660,6 +3827,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.anti_cheat",
         Toggle,
     )
+    .tooltip("settings.field.battleye_runtime.tip")
     .keywords(&["battleye", "anticheat", "runtime"]),
     // ---- Performance ----
     game(
@@ -3670,6 +3838,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.use_game_mode.help")
+    .tooltip("settings.field.use_game_mode.tip")
     .keywords(&["gamemode", "feral", "performance", "cpu governor"]),
     game(
         "showMangohud",
@@ -3679,6 +3848,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.show_mangohud.help")
+    .tooltip("settings.field.show_mangohud.tip")
     .keywords(&["mangohud", "overlay", "fps", "hud"]),
     game(
         "iroriMangohudHidden",
@@ -3697,6 +3867,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.system",
         Toggle,
     )
+    .tooltip("settings.field.show_fps.tip")
     .keywords(&["fps", "hud", "dxvk", "counter"]),
     game_only(
         "panel.performance-hud",
@@ -3705,6 +3876,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.performance_hud",
         Panel(PanelKind::PerformanceHud),
     )
+    .tooltip("settings.field.panel_performance_hud.tip")
     .keywords(&[
         "hud",
         "mangohud",
@@ -3723,6 +3895,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.replay_buffer",
         Panel(PanelKind::Replay),
     )
+    .tooltip("settings.field.panel_replay.tip")
     .keywords(&[
         "replay",
         "clip",
@@ -3740,6 +3913,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.replay_enabled.help")
+    .tooltip("settings.field.replay_enabled.tip")
     .keywords(&["replay", "clip", "record", "video", "instant replay"]),
     game(
         "iroriReplay.seconds",
@@ -3748,6 +3922,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.replay_buffer",
         Choice(REPLAY_SECONDS),
     )
+    .tooltip("settings.field.replay_seconds.tip")
     .keywords(&["replay", "clip", "length", "duration", "seconds"])
     .requires(NEEDS_REPLAY),
     game(
@@ -3758,6 +3933,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(REPLAY_QUALITY),
     )
     .help("settings.field.replay_quality.help")
+    .tooltip("settings.field.replay_quality.tip")
     .keywords(&["replay", "clip", "quality", "bitrate"])
     .requires(NEEDS_REPLAY),
     game(
@@ -3767,6 +3943,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.replay_buffer",
         Choice(REPLAY_AUDIO),
     )
+    .tooltip("settings.field.replay_audio.tip")
     .keywords(&["replay", "clip", "audio", "sound", "microphone"])
     .requires(NEEDS_REPLAY),
     game(
@@ -3777,6 +3954,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(REPLAY_CAPTURE),
     )
     .help("settings.field.replay_capture.help")
+    .tooltip("settings.field.replay_capture.tip")
     .keywords(&["replay", "clip", "monitor", "screen", "portal", "wayland"])
     .requires(NEEDS_REPLAY),
     game(
@@ -3786,6 +3964,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.replay_buffer",
         Text(TextKind::Directory),
     )
+    .tooltip("settings.field.replay_folder.tip")
     .placeholder(Key("settings.field.replay_folder.placeholder"))
     .keywords(&["replay", "clip", "folder", "videos", "output"])
     .requires(NEEDS_REPLAY),
@@ -3864,6 +4043,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help(FPS_LIMIT_HELP)
+    .tooltip("settings.field.enable_dxvk_fps_limit.tip")
     .keywords(&[
         "fps",
         "limit",
@@ -3880,6 +4060,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.frame_rate",
         Text(TextKind::Digits { max_len: 4 }),
     )
+    .tooltip("settings.field.dxvk_fps_cap.tip")
     .placeholder(Verbatim("60"))
     .keywords(&["fps", "limit", "cap"])
     .requires(NEEDS_FPS_LIMIT),
@@ -3902,6 +4083,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.gamescope_enabled.help")
+    .tooltip("settings.field.gamescope_enabled.tip")
     .keywords(&["gamescope", "compositor", "presenter", "window"]),
     game(
         "gamescope.enableUpscaling",
@@ -3911,6 +4093,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.gamescope_enable_upscaling.help")
+    .tooltip("settings.field.gamescope_enable_upscaling.tip")
     .keywords(&["gamescope", "upscale", "resolution"])
     .requires(NEEDS_GAMESCOPE),
     game(
@@ -3920,6 +4103,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Choice(UPSCALE_METHOD),
     )
+    .tooltip("settings.field.gamescope_upscale_method.tip")
     .keywords(&["gamescope", "fsr", "nis", "integer"])
     .requires(NEEDS_UPSCALING),
     game(
@@ -3929,6 +4113,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Choice(WINDOW_TYPE),
     )
+    .tooltip("settings.field.gamescope_window_type.tip")
     .keywords(&["gamescope", "fullscreen", "borderless", "windowed"])
     .requires(NEEDS_GAMESCOPE),
     game(
@@ -3938,6 +4123,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Text(TextKind::Digits { max_len: 5 }),
     )
+    .tooltip("settings.field.gamescope_game_width.tip")
     .placeholder(Verbatim("1280"))
     .keywords(&["gamescope", "resolution", "width"])
     .requires(NEEDS_GAMESCOPE),
@@ -3948,6 +4134,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Text(TextKind::Digits { max_len: 5 }),
     )
+    .tooltip("settings.field.gamescope_game_height.tip")
     .placeholder(Verbatim("720"))
     .keywords(&["gamescope", "resolution", "height"])
     .requires(NEEDS_GAMESCOPE),
@@ -3958,6 +4145,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Text(TextKind::Digits { max_len: 5 }),
     )
+    .tooltip("settings.field.gamescope_upscale_width.tip")
     .placeholder(Verbatim("2560"))
     .keywords(&["gamescope", "resolution", "width"])
     .requires(NEEDS_GAMESCOPE),
@@ -3968,6 +4156,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Text(TextKind::Digits { max_len: 5 }),
     )
+    .tooltip("settings.field.gamescope_upscale_height.tip")
     .placeholder(Verbatim("1440"))
     .keywords(&["gamescope", "resolution", "height"])
     .requires(NEEDS_GAMESCOPE),
@@ -3978,6 +4167,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Toggle,
     )
+    .tooltip("settings.field.gamescope_enable_limiter.tip")
     .keywords(&["gamescope", "fps", "limit"])
     .requires(NEEDS_GAMESCOPE),
     game(
@@ -3987,6 +4177,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Text(TextKind::Digits { max_len: 3 }),
     )
+    .tooltip("settings.field.gamescope_fps_limiter.tip")
     .placeholder(Verbatim("60"))
     .keywords(&["gamescope", "fps", "limit"])
     .requires(NEEDS_LIMITER),
@@ -3997,6 +4188,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Text(TextKind::Digits { max_len: 3 }),
     )
+    .tooltip("settings.field.gamescope_fps_limiter_no_focus.tip")
     .placeholder(Verbatim("30"))
     .keywords(&["gamescope", "fps", "limit", "focus", "background"])
     .requires(NEEDS_LIMITER),
@@ -4007,6 +4199,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Toggle,
     )
+    .tooltip("settings.field.gamescope_enable_force_grab_cursor.tip")
     .keywords(&["gamescope", "cursor", "mouse", "grab"])
     .requires(NEEDS_GAMESCOPE),
     game(
@@ -4016,6 +4209,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.gamescope",
         Text(TextKind::Plain),
     )
+    .tooltip("settings.field.gamescope_additional_options.tip")
     .placeholder(Verbatim("--hdr-enabled"))
     .keywords(&["gamescope", "options", "arguments"])
     .requires(NEEDS_GAMESCOPE),
@@ -4028,6 +4222,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::GpuCard),
     )
     .help("settings.field.gpu.help")
+    .tooltip("settings.field.gpu.tip")
     .keywords(&[
         "gpu",
         "graphics card",
@@ -4048,6 +4243,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(WINDOWS_GPU),
     )
     .help("settings.field.windows_gpu.help")
+    .tooltip("settings.field.windows_gpu.tip")
     .keywords(&[
         "gpu",
         "graphics card",
@@ -4086,6 +4282,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.nvidia_prime.help")
+    .tooltip("settings.field.nvidia_prime.tip")
     .keywords(&["prime", "optimus", "dgpu", "nvidia", "hybrid"])
     .needs(&[Need::NoChosenGpu]),
     game(
@@ -4097,6 +4294,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("NVIDIA"))
     .help("settings.field.smooth_motion.help")
+    .tooltip("settings.field.smooth_motion.tip")
     .keywords(&[
         "smooth motion",
         "frame generation",
@@ -4114,6 +4312,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("lsfg-vk · MAKO"))
     .help("settings.field.lsfg_enabled.help")
+    .tooltip("settings.field.lsfg_enabled.tip")
     .keywords(&[
         "lossless scaling",
         "lsfg",
@@ -4131,6 +4330,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(LSFG_LAYER),
     )
     .help("settings.field.lsfg_layer.help")
+    .tooltip("settings.field.lsfg_layer.tip")
     .keywords(&["lsfg-vk", "mako", "frame generation", "layer"])
     .needs(&[Need::Linux, Need::Lsfg])
     .requires(NEEDS_LSFG),
@@ -4142,6 +4342,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(LSFG_MULTIPLIER),
     )
     .help("settings.field.lsfg_multiplier.help")
+    .tooltip("settings.field.lsfg_multiplier.tip")
     .keywords(&["lossless scaling", "lsfg", "multiplier", "frame generation"])
     .needs(&[Need::Linux, Need::Lsfg])
     .requires(NEEDS_LSFG),
@@ -4153,6 +4354,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(LSFG_FLOW_SCALE),
     )
     .help("settings.field.lsfg_flow_scale.help")
+    .tooltip("settings.field.lsfg_flow_scale.tip")
     .keywords(&["lossless scaling", "lsfg", "flow scale", "frame generation"])
     .needs(&[Need::Linux, Need::Lsfg])
     .requires(NEEDS_LSFG),
@@ -4164,6 +4366,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.lsfg_performance_mode.help")
+    .tooltip("settings.field.lsfg_performance_mode.tip")
     .keywords(&[
         "lossless scaling",
         "lsfg",
@@ -4181,6 +4384,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("NVIDIA"))
     .help("settings.field.nvidia_reflex.help")
+    .tooltip("settings.field.nvidia_reflex.tip")
     .keywords(&[
         "reflex",
         "latency",
@@ -4198,8 +4402,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.upscalers",
         Toggle,
     )
+    .tooltip("settings.field.dlss_upgrade.tip")
     .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
     .keywords(&["dlss", "proton_dlss_upgrade", "nvidia"]),
     game(
         "iroriDlssIndicator",
@@ -4208,8 +4412,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.upscalers",
         Toggle,
     )
+    .tooltip("settings.field.dlss_indicator.tip")
     .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
     .keywords(&["dlss", "proton_dlss_indicator", "overlay"]),
     game(
         "iroriFsr4Upgrade",
@@ -4218,8 +4422,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.upscalers",
         Toggle,
     )
+    .tooltip("settings.field.fsr4_upgrade.tip")
     .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
     .keywords(&["fsr", "fsr4", "proton_fsr4_upgrade", "amd"]),
     game(
         "iroriXessUpgrade",
@@ -4228,8 +4432,8 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.upscalers",
         Toggle,
     )
+    .tooltip("settings.field.xess_upgrade.tip")
     .tag(Verbatim("Proton"))
-    .help("settings.field.proton_feature.help")
     .keywords(&["xess", "proton_xess_upgrade", "intel"]),
     game(
         "iroriShaderCacheSize",
@@ -4239,6 +4443,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Number { min: 0, max: 1024 }),
     )
     .help("settings.field.shader_cache_size.help")
+    .tooltip("settings.field.shader_cache_size.tip")
     .keywords(&["shader", "cache", "stutter", "nvidia", "mesa", "gl"]),
     // ---- Launch ----
     game(
@@ -4249,6 +4454,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::LaunchPresets),
     )
     .help("settings.field.panel_launch_presets.help")
+    .tooltip("settings.field.panel_launch_presets.tip")
     .keywords(&[
         "preset",
         "profile",
@@ -4267,6 +4473,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Plain),
     )
     .help("settings.field.launcher_args.help")
+    .tooltip("settings.field.launcher_args.tip")
     .placeholder(Verbatim("-nolauncher"))
     .keywords(&["arguments", "args", "parameters", "command line"]),
     game_only(
@@ -4293,6 +4500,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.command",
         Panel(PanelKind::SteamLaunchOptions),
     )
+    .tooltip("settings.field.panel_steam_launch.tip")
     .keywords(&[
         "steam",
         "launch options",
@@ -4309,6 +4517,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::File),
     )
     .help("settings.field.target_exe.help")
+    .tooltip("settings.field.target_exe.tip")
     .placeholder(Key("settings.field.target_exe.placeholder"))
     .keywords(&["exe", "executable", "override", "alternative"]),
     game(
@@ -4319,6 +4528,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Plain),
     )
     .help("settings.field.language.help")
+    .tooltip("settings.field.language.tip")
     .placeholder(Key("settings.field.language.placeholder"))
     .keywords(&["language", "locale", "translation"]),
     game_only(
@@ -4330,6 +4540,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Plain),
     )
     .help("settings.field.steam_app_id.help")
+    .tooltip("settings.field.steam_app_id.tip")
     .placeholder(Key("settings.field.steam_app_id.placeholder"))
     .keywords(&[
         "achievements",
@@ -4350,6 +4561,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.in_sunshine.help")
+    .tooltip("settings.field.in_sunshine.tip")
     .keywords(&[
         "sunshine",
         "apollo",
@@ -4366,6 +4578,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.discord_presence.help")
+    .tooltip("settings.field.discord_presence.tip")
     .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
     game_only(
         "iroriSteamOverlay",
@@ -4384,6 +4597,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(STEAM_RUNTIME),
     )
     .help("settings.field.steam_runtime.help")
+    .tooltip("settings.field.steam_runtime.tip")
     .keywords(&[
         "runtime",
         "scout",
@@ -4413,6 +4627,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Custom(CustomKind::Wrappers),
     )
     .help("settings.field.wrapper_options.help")
+    .tooltip("settings.field.wrapper_options.tip")
     .keywords(&["wrapper", "prefix command", "strace", "obs-gamecapture"]),
     game(
         "enviromentOptions",
@@ -4421,6 +4636,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.wrappers_and_environment",
         Custom(CustomKind::EnvVars),
     )
+    .tooltip("settings.field.environment_options.tip")
     .keywords(&["environment", "env", "variables", "dll overrides"]),
     game(
         "beforeLaunchScriptPath",
@@ -4429,6 +4645,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.scripts",
         Text(TextKind::File),
     )
+    .tooltip("settings.field.before_launch_script_path.tip")
     .keywords(&["script", "before", "pre-launch"]),
     game(
         "iroriBeforeLaunchScriptAlongside",
@@ -4438,6 +4655,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.before_launch_script_alongside.help")
+    .tooltip("settings.field.before_launch_script_alongside.tip")
     .keywords(&[
         "script",
         "before",
@@ -4454,6 +4672,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.scripts",
         Text(TextKind::File),
     )
+    .tooltip("settings.field.after_launch_script_path.tip")
     .keywords(&["script", "after", "post-exit"]),
     game_only(
         "panel.actions",
@@ -4481,6 +4700,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::LaunchPrograms),
     )
     .help("settings.field.panel_launch_programs.help")
+    .tooltip("settings.field.panel_launch_programs.tip")
     .keywords(&[
         "program",
         "alongside",
@@ -4501,6 +4721,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Epic"))
     .help("settings.field.offline_mode.help")
+    .tooltip("settings.field.offline_mode.tip")
     .keywords(&["offline", "network", "internet"]),
     game_only(
         "ignoreGameUpdates",
@@ -4510,6 +4731,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.ignore_game_updates.help")
+    .tooltip("settings.field.ignore_game_updates.tip")
     .keywords(&["update", "ignore", "pin", "version"]),
     game(
         "iroriSandbox.noNetwork",
@@ -4519,6 +4741,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.sandbox_no_network.help")
+    .tooltip("settings.field.sandbox_no_network.tip")
     .keywords(&[
         "sandbox",
         "bubblewrap",
@@ -4536,6 +4759,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.sandbox_no_home.help")
+    .tooltip("settings.field.sandbox_no_home.tip")
     .keywords(&[
         "sandbox",
         "bubblewrap",
@@ -4554,6 +4778,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.verbose_logs.help")
+    .tooltip("settings.field.verbose_logs.tip")
     .keywords(&["log", "verbose", "debug"]),
     // ---- Cloud saves ----
     game(
@@ -4564,6 +4789,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .help("settings.field.auto_sync_saves.help")
+    .tooltip("settings.field.auto_sync_saves.tip")
     .keywords(&["cloud", "save", "sync"]),
     game_only(
         "savesPath",
@@ -4572,6 +4798,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.locations",
         Text(TextKind::Directory),
     )
+    .tooltip("settings.field.saves_path.tip")
     .tag(Verbatim("Epic"))
     .placeholder(Key("settings.field.saves_path.placeholder"))
     .keywords(&["save", "cloud", "path"]),
@@ -4582,6 +4809,7 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.locations",
         Custom(CustomKind::GogSaves),
     )
+    .tooltip("settings.field.gog_saves.tip")
     .tag(Verbatim("GOG"))
     .keywords(&["save", "cloud", "path", "gog"]),
     game_only(
@@ -4592,6 +4820,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::SaveSync),
     )
     .help("settings.field.panel_sync_saves.help")
+    .tooltip("settings.field.panel_sync_saves.tip")
     .keywords(&["cloud", "save", "sync", "upload", "download", "force"]),
     game(
         "iroriLudusaviAutoBackup",
@@ -4602,6 +4831,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Ludusavi"))
     .help("settings.field.ludusavi_auto_backup.help")
+    .tooltip("settings.field.ludusavi_auto_backup.tip")
     .keywords(&["ludusavi", "backup", "save", "session", "exit"]),
     game(
         "iroriLudusaviInterval",
@@ -4612,6 +4842,7 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .tag(Verbatim("Ludusavi"))
     .help("settings.field.ludusavi_interval.help")
+    .tooltip("settings.field.ludusavi_interval.tip")
     .keywords(&[
         "ludusavi", "backup", "save", "periodic", "interval", "minutes",
     ]),
@@ -4623,6 +4854,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::SaveBackups),
     )
     .help("settings.field.panel_save_backups.help")
+    .tooltip("settings.field.panel_save_backups.tip")
     .keywords(&["ludusavi", "backup", "restore", "save", "prefix"]),
     // ---- Artwork ----
     game_only(
@@ -4633,6 +4865,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::Artwork),
     )
     .help("settings.field.panel_artwork.help")
+    .tooltip("settings.field.panel_artwork.tip")
     .keywords(&[
         "art",
         "artwork",
@@ -4666,6 +4899,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::Ludusavi),
     )
     .help("settings.field.panel_ludusavi.help")
+    .tooltip("settings.field.panel_ludusavi.tip")
     .keywords(&["ludusavi", "backup", "save", "install"]),
     app(
         "iroriLudusaviPath",
@@ -4675,6 +4909,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::File),
     )
     .help("settings.field.ludusavi_path.help")
+    .tooltip("settings.field.ludusavi_path.tip")
     .placeholder(Key("settings.field.ludusavi_path.placeholder"))
     .keywords(&["ludusavi", "program", "path", "flatpak"]),
     app(
@@ -4685,6 +4920,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Text(TextKind::Directory),
     )
     .help("settings.field.ludusavi_backup_path.help")
+    .tooltip("settings.field.ludusavi_backup_path.tip")
     .placeholder(Key("settings.field.ludusavi_backup_path.placeholder"))
     .keywords(&["ludusavi", "backup", "folder", "path"]),
     app(
@@ -4695,6 +4931,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(LUDUSAVI_FULL_LIMIT),
     )
     .help("settings.field.ludusavi_full_limit.help")
+    .tooltip("settings.field.ludusavi_full_limit.tip")
     .keywords(&["ludusavi", "backup", "retention", "keep", "full", "limit"]),
     app(
         "iroriLudusaviDifferentialLimit",
@@ -4704,6 +4941,7 @@ pub static FIELDS: &[FieldSpec] = &[
         Choice(LUDUSAVI_DIFFERENTIAL_LIMIT),
     )
     .help("settings.field.ludusavi_differential_limit.help")
+    .tooltip("settings.field.ludusavi_differential_limit.tip")
     .keywords(&[
         "ludusavi",
         "backup",
@@ -5151,5 +5389,18 @@ mod tests {
 
         let show_fps = find("showFps").expect("showFps");
         assert_eq!(show_fps.supported_on_host(), cfg!(target_os = "linux"));
+    }
+
+    #[test]
+    fn search_matches_tooltip_copy() {
+        crate::i18n::register();
+        let speed = find("maxDownloadSpeed").expect("maxDownloadSpeed");
+        assert!(!speed.tooltip_text().is_empty());
+        assert!(search("voice calls").any(|f| f.path == "maxDownloadSpeed"));
+        assert!(search("stale metadata").any(|f| f.path == "action.clear-caches"));
+        assert_eq!(
+            search("laptop fans").any(|f| f.path == "enableDXVKFpsLimit"),
+            !cfg!(windows)
+        );
     }
 }

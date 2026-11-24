@@ -10,6 +10,7 @@ use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex,
     v_flex,
@@ -27,7 +28,15 @@ use irori_ui::{backend, models};
 
 use crate::restore_paths::RestorePaths;
 use crate::sync::SyncPanel;
-use crate::widgets::{group_heading, muted, panel};
+use crate::widgets::{group_header, muted, panel};
+
+/// Horizontal sub-tabs of Settings -> Backup & sync.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BackupTab {
+    BackupRestore,
+    Sync,
+    Export,
+}
 
 const SCHEDULES: [BackupSchedule; 3] = [
     BackupSchedule::Off,
@@ -39,6 +48,7 @@ const MAX_KEEP: u32 = 50;
 
 /// The Backup section's state.
 pub struct BackupPanel {
+    tab: BackupTab,
     /// What a new backup holds.
     parts: BackupParts,
     /// A backup chosen for restoring, and the parts to restore from it.
@@ -61,6 +71,7 @@ impl BackupPanel {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let settings = models(cx).settings.clone();
         let mut this = Self {
+            tab: BackupTab::BackupRestore,
             parts: BackupParts::ALL,
             chosen: None,
             restore_parts: BackupParts::ALL,
@@ -74,6 +85,12 @@ impl BackupPanel {
         };
         this.list(cx);
         this
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_tab_for_test(&mut self, tab: BackupTab, cx: &mut Context<Self>) {
+        self.tab = tab;
+        cx.notify();
     }
 
     /// Read the backup folder off the UI thread.
@@ -301,10 +318,33 @@ impl BackupPanel {
 
 impl Render for BackupPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let selected = match self.tab {
+            BackupTab::BackupRestore => 0,
+            BackupTab::Sync => 1,
+            BackupTab::Export => 2,
+        };
+        let tabs = TabBar::new("backup-tabs")
+            .underline()
+            .large()
+            .selected_index(selected)
+            .children(
+                crate::layout::BACKUP_TABS
+                    .iter()
+                    .map(|tab| Tab::new().label(t(tab.label_key))),
+            )
+            .on_click(cx.listener(|this, ix: &usize, _, cx| {
+                this.tab = match ix {
+                    1 => BackupTab::Sync,
+                    2 => BackupTab::Export,
+                    _ => BackupTab::BackupRestore,
+                };
+                cx.notify();
+            }));
+
         let parts = self.parts;
         let backup = panel(cx)
-            .p_4()
-            .gap_3()
+            .p_3()
+            .gap_2()
             .child(muted(t("settings.backup.backup_description"), cx))
             .child(part_checkboxes(
                 "backup",
@@ -326,8 +366,8 @@ impl Render for BackupPanel {
 
         let restore = match &self.chosen {
             None => panel(cx)
-                .p_4()
-                .gap_3()
+                .p_3()
+                .gap_2()
                 .child(muted(t("settings.backup.restore_description"), cx))
                 .child(
                     h_flex().child(
@@ -342,8 +382,8 @@ impl Render for BackupPanel {
                 let available = backup.parts();
                 let created = irori_ui::dates::localized_day(&backup.created);
                 panel(cx)
-                    .p_4()
-                    .gap_3()
+                    .p_3()
+                    .gap_2()
                     .child(v_flex().gap_0p5().child(file_name(path)).child(muted(
                         t_args("settings.backup.made_on", &[("date", &created)]),
                         cx,
@@ -388,8 +428,8 @@ impl Render for BackupPanel {
         };
 
         let export = panel(cx)
-            .p_4()
-            .gap_3()
+            .p_3()
+            .gap_2()
             .child(muted(t("settings.backup.export_description"), cx))
             .child(
                 h_flex()
@@ -414,18 +454,49 @@ impl Render for BackupPanel {
                     ),
             );
 
-        v_flex()
-            .gap_2()
-            .child(group_heading(t("settings.backup.auto_title"), cx))
-            .child(self.render_schedule(cx))
-            .child(group_heading(t("settings.sync.title"), cx))
-            .child(self.sync.clone())
-            .child(group_heading(t("settings.backup.backup_title"), cx))
-            .child(backup)
-            .child(group_heading(t("settings.backup.restore_title"), cx))
-            .child(restore)
-            .child(group_heading(t("settings.backup.export_title"), cx))
-            .child(export)
+        let body = match self.tab {
+            BackupTab::BackupRestore => v_flex()
+                .gap_1()
+                .child(group_header(
+                    t("settings.backup.auto_title"),
+                    None,
+                    true,
+                    cx,
+                ))
+                .child(self.render_schedule(cx))
+                .child(group_header(
+                    t("settings.backup.backup_title"),
+                    None,
+                    false,
+                    cx,
+                ))
+                .child(backup)
+                .child(group_header(
+                    t("settings.backup.restore_title"),
+                    None,
+                    false,
+                    cx,
+                ))
+                .child(restore)
+                .into_any_element(),
+            BackupTab::Sync => v_flex()
+                .gap_1()
+                .child(group_header(t("settings.sync.title"), None, true, cx))
+                .child(self.sync.clone())
+                .into_any_element(),
+            BackupTab::Export => v_flex()
+                .gap_1()
+                .child(group_header(
+                    t("settings.backup.export_title"),
+                    None,
+                    true,
+                    cx,
+                ))
+                .child(export)
+                .into_any_element(),
+        };
+
+        v_flex().gap_2().child(tabs).child(body)
     }
 }
 
@@ -759,8 +830,8 @@ impl BackupPanel {
             }));
 
         panel(cx)
-            .p_4()
-            .gap_4()
+            .p_3()
+            .gap_3()
             .child(muted(t("settings.backup.auto_description"), cx))
             .child(h_flex().child(schedule))
             .child(last)

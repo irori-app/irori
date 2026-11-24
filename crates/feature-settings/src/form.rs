@@ -61,7 +61,8 @@ use crate::value::{
     value_to_text, with_path,
 };
 use crate::widgets::{
-    RowState, field_row, group_heading, group_panel, muted, panel, section_heading,
+    PairedRow, RowState, field_row, group_header, group_panel, more_options_disclosure, muted,
+    paired_field_row, panel, section_heading,
 };
 
 /// Whether `game` is installed as this system's own build: native Linux
@@ -213,6 +214,12 @@ pub struct SettingsForm {
     tool_versions_requested: bool,
     errors: HashMap<&'static str, SharedString>,
     filter: FormFilter,
+    /// Optional sub-tab filter active in SettingsView compact mode.
+    subtab: Option<&'static str>,
+    /// Enables progressive disclosure, compact pairing, and "More options".
+    compact: bool,
+    /// Disclosure keys (`<target>-<subtab>`) currently expanded by the user.
+    expanded_advanced: HashSet<String>,
     busy: HashSet<ActionKind>,
     import_summary: Option<SharedString>,
     heroic_detected: bool,
@@ -281,6 +288,9 @@ impl SettingsForm {
             tool_versions_requested: false,
             errors: HashMap::new(),
             filter: FormFilter::Sections(sections),
+            subtab: None,
+            compact: false,
+            expanded_advanced: HashSet::new(),
             busy: HashSet::new(),
             import_summary: None,
             heroic_detected: irori_ui::hooks::heroic_detected(),
@@ -346,6 +356,47 @@ impl SettingsForm {
     pub fn set_changed_only(&mut self, cx: &mut Context<Self>) {
         self.filter = FormFilter::Changed;
         cx.notify();
+    }
+
+    /// Enable compact progressive-disclosure layout (used by App Settings).
+    pub(crate) fn set_compact(&mut self, compact: bool, cx: &mut Context<Self>) {
+        if self.compact != compact {
+            self.compact = compact;
+            cx.notify();
+        }
+    }
+
+    /// Filter visible fields to one horizontal sub-tab when not searching.
+    pub(crate) fn set_subtab(&mut self, subtab: Option<&'static str>, cx: &mut Context<Self>) {
+        if self.subtab != subtab {
+            self.subtab = subtab;
+            cx.notify();
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_advanced_open_for_test(
+        &mut self,
+        key: &str,
+        open: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if open {
+            self.expanded_advanced.insert(key.to_string());
+        } else {
+            self.expanded_advanced.remove(key);
+        }
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn visible_paths(&self) -> Vec<&'static str> {
+        self.visible_fields().map(|f| f.path).collect()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_compact(&self) -> bool {
+        self.compact
     }
 
     /// Show the fields matching a search query, grouped by section.
@@ -647,7 +698,17 @@ impl SettingsForm {
                 return false;
             }
             match &self.filter {
-                FormFilter::Sections(s) => s.contains(&f.section),
+                FormFilter::Sections(s) => {
+                    if !s.contains(&f.section) {
+                        return false;
+                    }
+                    if let Some(tab) = self.subtab
+                        && crate::layout::subtab_of(f) != Some(tab)
+                    {
+                        return false;
+                    }
+                    !(self.compact && crate::layout::is_hidden_by_parent(f, &self.snapshot))
+                }
                 FormFilter::Query(q) => f.matches(q),
                 FormFilter::Changed => self.is_overridden(f),
             }
@@ -706,6 +767,29 @@ impl SettingsForm {
             .iter()
             .find(|c| self.bool_value(c.path) != c.equals)
             .map(|c| t(c.reason))
+    }
+
+    fn hardware_blocked(&self, spec: &FieldSpec) -> bool {
+        let need = NeedContext {
+            host: irori_core::HostPlatform::current(),
+            graphics: self.graphics.as_deref(),
+            chosen_gpu: !value_to_text(self.value("iroriGpu")).trim().is_empty(),
+            native_game: matches!(self.target, FormTarget::Game(_)) && self.native,
+        };
+        spec.needs.iter().any(|n| n.blocker(&need).is_some())
+    }
+
+    fn advanced_bucket_key(&self) -> String {
+        let scope = match &self.target {
+            FormTarget::App => "app",
+            FormTarget::Defaults => "defaults",
+            FormTarget::Game(_) => "game",
+        };
+        let fallback = match &self.filter {
+            FormFilter::Sections(s) if s.len() == 1 => s[0].label_key(),
+            _ => "all",
+        };
+        format!("{scope}-{}", self.subtab.unwrap_or(fallback))
     }
 
     fn build_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2098,20 +2182,95 @@ impl SettingsForm {
                 .into_any_element()
         });
         let label = spec.label_text();
+        let tooltip = spec.tooltip_text();
         let mut row = RowState {
-            label: label.clone(),
+            label,
             help: self.field_help(spec),
+            tooltip: (!tooltip.is_empty()).then(|| (SharedString::new_static(path), tooltip)),
             tag: spec.tag.map(|tag| tag.text()),
             reset,
             disabled_reason,
             error: self.errors.get(spec.path).cloned(),
             stacked: false,
         };
-        let control: AnyElement = match spec.kind {
+        let control = self.render_control(spec, disabled, false, Some(&mut row), window, cx);
+        field_row(row, control, cx)
+            .id(id("row"))
+            .debug_selector(move || format!("row-{path}"))
+            .into_any_element()
+    }
+
+    fn render_paired_fields(
+        &self,
+        first: &'static FieldSpec,
+        second: &'static FieldSpec,
+        pair: &'static crate::layout::FieldPair,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let disabled_a = self.disabled_reason(first).is_some();
+        let disabled_b = self.disabled_reason(second).is_some();
+        let ctrl_a = self.render_control(first, disabled_a, true, None, window, cx);
+        let ctrl_b = self.render_control(second, disabled_b, true, None, window, cx);
+        let mut help = if pair.help_key.is_empty() {
+            String::new()
+        } else {
+            t(pair.help_key).to_string()
+        };
+        if let Some(hint) = self.displays.as_deref().and_then(|d| {
+            crate::displays::hint_text(first.path, d)
+                .or_else(|| crate::displays::hint_text(second.path, d))
+        }) {
+            if help.is_empty() {
+                help = hint.to_string();
+            } else {
+                help = format!("{help} {hint}");
+            }
+        }
+        let error = self
+            .errors
+            .get(first.path)
+            .or_else(|| self.errors.get(second.path))
+            .cloned();
+        let pair_id = pair.first;
+        let tooltip = (!pair.tooltip_key.is_empty())
+            .then(|| (SharedString::new_static(pair_id), t(pair.tooltip_key)));
+        paired_field_row(
+            PairedRow {
+                label: t(pair.label_key),
+                help: help.into(),
+                tooltip,
+                first_sublabel: t(pair.first_sublabel_key),
+                first_ctrl: ctrl_a,
+                separator: pair.separator,
+                second_sublabel: t(pair.second_sublabel_key),
+                second_ctrl: ctrl_b,
+                error,
+            },
+            cx,
+        )
+        .id(ElementId::Name(format!("pair-{pair_id}").into()))
+        .debug_selector(move || format!("pair-{pair_id}"))
+        .into_any_element()
+    }
+
+    fn render_control(
+        &self,
+        spec: &'static FieldSpec,
+        disabled: bool,
+        compact_pair: bool,
+        row: Option<&mut RowState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id = |part: &str| ElementId::Name(format!("{part}-{}", spec.path).into());
+        let path = spec.path;
+        let label = spec.label_text();
+        match spec.kind {
             FieldKind::Toggle => Switch::new(id("field"))
                 .checked(self.bool_value(spec.path))
                 .disabled(disabled)
-                .accessibility_label(label.clone())
+                .accessibility_label(label)
                 .on_change(cx.listener(move |this, on: &bool, window, cx| {
                     this.write(path, Value::Bool(*on), window, cx)
                 }))
@@ -2150,23 +2309,28 @@ impl SettingsForm {
                 );
                 Input::new(state)
                     .id(id("field"))
-                    .aria_label(label.clone())
+                    .aria_label(label)
                     .disabled(disabled)
-                    .when(wide, |i| i.w_80())
-                    .when(!wide, |i| i.w_24())
+                    .when(wide && !compact_pair, |i| i.w_80())
+                    .when(wide && compact_pair, |i| i.w_48())
+                    .when(!wide && !compact_pair, |i| i.w_24())
+                    .when(!wide && compact_pair, |i| i.w_20())
                     .when_some(picker, |i, p| i.suffix(p))
                     .into_any_element()
             }
             FieldKind::Choice(_) => match self.choices.get(spec.path) {
                 Some(state) => Select::new(state)
                     .id(id("field"))
-                    .accessibility_label(label.clone())
+                    .accessibility_label(label)
                     .disabled(disabled)
-                    .w_64()
+                    .when(compact_pair, |s| s.w_40())
+                    .when(!compact_pair, |s| s.w_64())
                     .into_any_element(),
                 None => div().into_any_element(),
             },
             FieldKind::Custom(kind) => {
+                let mut fallback = RowState::default();
+                let row = row.unwrap_or(&mut fallback);
                 if matches!(
                     kind,
                     CustomKind::EnvVars
@@ -2176,10 +2340,12 @@ impl SettingsForm {
                 ) {
                     row.stacked = true;
                 }
-                self.render_custom(spec, kind, &mut row, window, cx)
+                self.render_custom(spec, kind, row, window, cx)
             }
             FieldKind::Panel(_) => {
-                row.stacked = true;
+                if let Some(row) = row {
+                    row.stacked = true;
+                }
                 match self.panels.get(spec.path) {
                     Some(view) => view.clone().into_any_element(),
                     None => div().into_any_element(),
@@ -2188,6 +2354,7 @@ impl SettingsForm {
             FieldKind::Action(action) => {
                 if action == ActionKind::ImportHeroic
                     && let Some(summary) = &self.import_summary
+                    && let Some(row) = row
                 {
                     row.help = summary.clone();
                 }
@@ -2212,8 +2379,7 @@ impl SettingsForm {
                     )
                     .into_any_element()
             }
-        };
-        field_row(row, control, cx).id(id("row")).into_any_element()
+        }
     }
 
     fn render_custom(
@@ -2548,23 +2714,26 @@ impl SettingsForm {
     }
 }
 
-impl Render for SettingsForm {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.language.changed() {
-            cx.defer_in(window, |this, window, cx| this.retranslate(window, cx));
-        }
-        let multi_section = match &self.filter {
-            FormFilter::Sections(s) => s.len() > 1,
-            FormFilter::Query(_) | FormFilter::Changed => true,
-        };
-        let fields: Vec<&'static FieldSpec> = self.visible_fields().collect();
+impl SettingsForm {
+    fn render_field_list(
+        &self,
+        fields: &[&'static FieldSpec],
+        multi_section: bool,
+        compact_rows: bool,
+        first_tight: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Div {
         let border = cx.theme().border;
         let mut body = v_flex().w_full();
         // Rows of the current group, gathered into one panel.
         let mut rows: Option<gpui_kit::Div> = None;
         let mut section = None;
         let mut group = "";
-        for spec in fields {
+        let mut first_group = true;
+        let mut i = 0;
+        while i < fields.len() {
+            let spec = fields[i];
             if section != Some(spec.section) {
                 body = body.children(rows.take());
                 if multi_section {
@@ -2580,20 +2749,86 @@ impl Render for SettingsForm {
                     body = body.child(div().id("row-panel.performance-hud").child(view.clone()));
                 }
                 group = spec.group;
+                first_group = false;
+                i += 1;
                 continue;
             }
             if group != spec.group {
                 body = body.children(rows.take());
-                body = body.child(group_heading(spec.group_text(), cx));
+                let desc = crate::layout::group_description_key(spec.group).map(t);
+                body = body.child(group_header(
+                    spec.group_text(),
+                    desc,
+                    first_group && first_tight,
+                    cx,
+                ));
                 group = spec.group;
+                first_group = false;
             }
             let first = rows.is_none();
+            let row_content = if compact_rows
+                && i + 1 < fields.len()
+                && fields[i + 1].section == spec.section
+                && fields[i + 1].group == spec.group
+                && let Some(pair) = crate::layout::match_pair(spec.path, fields[i + 1].path)
+            {
+                let next = fields[i + 1];
+                i += 2;
+                self.render_paired_fields(spec, next, pair, window, cx)
+            } else {
+                i += 1;
+                self.render_field(spec, window, cx)
+            };
             let row = div()
                 .when(!first, |d| d.border_t_1().border_color(border))
-                .child(self.render_field(spec, window, cx));
+                .child(row_content);
             rows = Some(rows.unwrap_or_else(|| group_panel(cx)).child(row));
         }
         body.children(rows)
+    }
+}
+
+impl Render for SettingsForm {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.language.changed() {
+            cx.defer_in(window, |this, window, cx| this.retranslate(window, cx));
+        }
+        let searching = matches!(&self.filter, FormFilter::Query(_));
+        let multi_section = match &self.filter {
+            FormFilter::Sections(s) => s.len() > 1,
+            FormFilter::Query(_) | FormFilter::Changed => true,
+        };
+        let fields: Vec<&'static FieldSpec> = self.visible_fields().collect();
+        if self.compact && !searching {
+            let (essential, advanced): (Vec<_>, Vec<_>) = fields
+                .into_iter()
+                .partition(|f| !crate::layout::is_advanced(f) && !self.hardware_blocked(f));
+            let mut body =
+                self.render_field_list(&essential, multi_section, true, true, window, cx);
+            if !advanced.is_empty() {
+                let bucket_key = self.advanced_bucket_key();
+                let open = self.expanded_advanced.contains(&bucket_key);
+                let count = advanced.len();
+                let toggle_key = bucket_key.clone();
+                body = body.child(more_options_disclosure(
+                    ElementId::Name(format!("more-{bucket_key}").into()),
+                    open,
+                    count,
+                    cx.listener(move |this, _, _, cx| {
+                        if !this.expanded_advanced.remove(&toggle_key) {
+                            this.expanded_advanced.insert(toggle_key.clone());
+                        }
+                        cx.notify();
+                    }),
+                    || {
+                        self.render_field_list(&advanced, multi_section, true, true, window, cx)
+                            .into_any_element()
+                    },
+                ));
+            }
+            return body;
+        }
+        self.render_field_list(&fields, multi_section, false, self.compact, window, cx)
     }
 }
 
