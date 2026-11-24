@@ -393,6 +393,15 @@ pub struct ArtPicker {
 
 impl EventEmitter<ArtPickerEvent> for ArtPicker {}
 
+/// Where a picker may search: SteamGridDB with its key, IGDB and VNDB while
+/// they are on, LaunchBox for this ROM library game's cover.
+struct Sources {
+    key: Option<ApiKey>,
+    igdb_on: bool,
+    vndb_on: bool,
+    rom: Option<String>,
+}
+
 impl ArtPicker {
     /// A picker for `kind`, searching for `title` right away when a key is set.
     pub fn new(kind: ArtKind, title: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -417,7 +426,13 @@ impl ArtPicker {
                     && crate::emulation_store(cx).is_some()
             })
             .map(|id| id.app_name.to_string());
-        Self::build(kind, title, key, igdb_on, vndb_on, rom, window, cx)
+        let sources = Sources {
+            key,
+            igdb_on,
+            vndb_on,
+            rom,
+        };
+        Self::build(kind, title, sources, window, cx)
     }
 
     /// A picker with SteamGridDB's `key` and IGDB on or off, whatever the
@@ -431,7 +446,13 @@ impl ArtPicker {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::build(kind, title, key, igdb_on, false, None, window, cx)
+        let sources = Sources {
+            key,
+            igdb_on,
+            vndb_on: false,
+            rom: None,
+        };
+        Self::build(kind, title, sources, window, cx)
     }
 
     /// A picker with SteamGridDB's `key` and IGDB and VNDB on or off,
@@ -446,19 +467,28 @@ impl ArtPicker {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::build(kind, title, key, igdb_on, vndb_on, None, window, cx)
+        let sources = Sources {
+            key,
+            igdb_on,
+            vndb_on,
+            rom: None,
+        };
+        Self::build(kind, title, sources, window, cx)
     }
 
     fn build(
         kind: ArtKind,
         title: &str,
-        key: Option<ApiKey>,
-        igdb_on: bool,
-        vndb_on: bool,
-        rom: Option<String>,
+        sources: Sources,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let Sources {
+            key,
+            igdb_on,
+            vndb_on,
+            rom,
+        } = sources;
         // A ROM's boxes first; else both sources at once when both can be
         // searched.
         let source = match (rom.is_some(), key.is_some(), igdb_on) {
