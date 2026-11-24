@@ -306,6 +306,7 @@ async fn installs_updates_repairs_launches_and_uninstalls() {
         environment: LaunchEnvironment {
             without_wine: false,
             env: Default::default(),
+            env_remove: Vec::new(),
             wrappers: vec![],
             wine: Some(WineLaunch {
                 bin: "/nonexistent/wine".into(),

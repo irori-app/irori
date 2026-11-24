@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "{launcher} の Wine の設定",
   "shell.palette.launcher_wine_keywords": "Wine Proton ビルド 変数 環境 ランチャー",
   "shell.palette.duplicates": "重複している追加したゲームを確認",
-  "shell.palette.duplicates_keywords": "重複 統合 同じ 2 回 追加 Lutris インポート"
+  "shell.palette.duplicates_keywords": "重複 統合 同じ 2 回 追加 Lutris インポート",
+  "shell.palette.performance_hud": "ゲーム内統計",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal オーバーレイ fps フレームタイム カウンター パフォーマンス ゲーム内統計 統計 in-game stats"
 }

@@ -160,6 +160,19 @@ async fn stop_handoff(handoff: Option<Arc<crate::follow::Handoff>>, force: bool)
     let _ = (handoff, force);
 }
 
+/// Propagate environment variable removals from a prepared launch environment
+/// onto a store's [`CommandSpec`], preserving order and avoiding duplicates.
+pub(crate) fn propagate_env_remove(
+    command: &mut irori_core::process::CommandSpec,
+    env_remove: &[String],
+) {
+    for key in env_remove {
+        if !command.env_remove.iter().any(|existing| existing == key) {
+            command.env_remove.push(key.clone());
+        }
+    }
+}
+
 /// Sessions shorter than this that end in an error count as failed starts.
 const FAILED_START_SECONDS: u64 = 10;
 
@@ -735,6 +748,7 @@ impl Backend {
                 }
             }
         }
+        propagate_env_remove(&mut plan.command, &request.environment.env_remove);
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
         // Windows' own graphics preference, for a program Irori starts.
         if id.runner.manages_installs()
@@ -893,23 +907,31 @@ impl Backend {
 
         // A third-party launcher's games are followed by their own processes;
         // a store whose client starts the game says how to follow it.
-        let probe: Option<crate::follow::Probe> = match &plan.watch {
-            Some(watch) => {
-                let watch = watch.clone();
-                Some(Arc::new(move || watch.running()))
-            }
-            None => (id.runner == irori_core::Runner::Launchers)
-                .then(|| game.install.as_ref().map(|i| i.install_path.clone()))
-                .flatten()
-                .filter(|p| !p.is_empty())
-                .map(crate::follow::folder_probe),
-        };
+        let (probe, wait): (Option<crate::follow::Probe>, Option<crate::follow::WaitFn>) =
+            match &plan.watch {
+                Some(watch) => {
+                    let w1 = watch.clone();
+                    let w2 = watch.clone();
+                    (
+                        Some(Arc::new(move || w1.running())),
+                        Some(Arc::new(move |timeout| w2.wait_for_exit(timeout))),
+                    )
+                }
+                None => (
+                    (id.runner == irori_core::Runner::Launchers)
+                        .then(|| game.install.as_ref().map(|i| i.install_path.clone()))
+                        .flatten()
+                        .filter(|p| !p.is_empty())
+                        .map(crate::follow::folder_probe),
+                    None,
+                ),
+            };
         let b = self.clone();
         let id = id.clone();
         self.spawn(async move {
             let _open = open;
             let status = match probe {
-                Some(probe) => crate::follow::follow(&mut child, probe).await,
+                Some(probe) => crate::follow::follow(&mut child, probe, wait).await,
                 None => {
                     let status = child.wait().await.ok();
                     // A launcher that handed over: the game it started is
@@ -1685,6 +1707,27 @@ impl Backend {
         irori_runtime::rosetta::install().await
     }
 
+    /// Run a Windows installer in the game's prefix and wait for it (and any
+    /// child processes in the prefix) to finish.
+    pub async fn run_installer_in_prefix(
+        &self,
+        id: &GameId,
+        installer: &Path,
+        cancel: CancellationToken,
+    ) -> Result<ExecResult> {
+        let game = self.game(id).context("unknown game")?;
+        let app = self.settings.app();
+        let settings = self.settings.game(id);
+        let target = Target {
+            id,
+            game: &game,
+            platform: InstallPlatform::Windows,
+        };
+        let argv = irori_runtime::windows_file::installer_command(installer);
+        let ctx = self.op_context(id, cancel);
+        irori_runtime::run_in_prefix(&app, &settings, target, argv, true, ctx).await
+    }
+
     /// Install the launcher a game starts through ([`irori_core::LauncherMissing`],
     /// from its launch) in the game's Wine prefix: download the vendor's
     /// installer, then run it there and wait while the user follows it.
@@ -2192,7 +2235,8 @@ mod platform_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::{failed_start, launch_sandbox, launch_steam_runtime};
+    use super::{failed_start, launch_sandbox, launch_steam_runtime, propagate_env_remove};
+    use irori_core::process::CommandSpec;
     use irori_core::{InstallPlatform, Runner, SandboxSettings};
     use std::process::ExitStatus;
 
@@ -2263,5 +2307,23 @@ mod tests {
         );
         assert!(!failed_start(Some(exit(1)), 2, true), "the user stopped it");
         assert!(!failed_start(None, 2, true));
+    }
+
+    #[test]
+    fn propagate_env_remove_appends_unique_keys_in_order() {
+        let mut cmd = CommandSpec::new("/usr/bin/game").env_remove("MANGOHUD_CONFIG");
+        propagate_env_remove(
+            &mut cmd,
+            &[
+                "MANGOHUD_CONFIG".to_string(),
+                "DISABLE_MANGOHUD".to_string(),
+                "MTL_HUD_ALIGNMENT".to_string(),
+                "DISABLE_MANGOHUD".to_string(),
+            ],
+        );
+        assert_eq!(
+            cmd.env_remove,
+            vec!["MANGOHUD_CONFIG", "DISABLE_MANGOHUD", "MTL_HUD_ALIGNMENT"]
+        );
     }
 }

@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "{launcher} 的 Wine 設定",
   "shell.palette.launcher_wine_keywords": "wine proton 版本 變數 環境 啟動器",
   "shell.palette.duplicates": "檢查重複的已加入遊戲",
-  "shell.palette.duplicates_keywords": "重複 合併 相同 兩次 已加入 lutris 匯入"
+  "shell.palette.duplicates_keywords": "重複 合併 相同 兩次 已加入 lutris 匯入",
+  "shell.palette.performance_hud": "遊戲內統計",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆蓋層 overlay fps 幀時間 計數器 效能 遊戲內統計 統計 in-game stats"
 }

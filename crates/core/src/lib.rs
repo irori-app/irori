@@ -16,6 +16,7 @@ pub mod game_mode;
 pub mod home_rename;
 pub mod host;
 pub mod http;
+pub mod hud;
 pub mod install;
 pub mod json_store;
 pub mod launch;
@@ -42,6 +43,12 @@ pub use dll_override::{DllMode, DllOverride};
 pub use events::{Event, EventBus, Notice, NoticeLevel};
 pub use game::*;
 pub use game_mode::GameMode;
+pub use hud::{
+    CustomPresetSnapshot, FpsLimitMethod, GameHudMode, GameHudSettings, GlobalHudMode,
+    GlobalHudSettings, GpuSelection, HardwareVendor, HudBackend, HudColorPalette, HudOrientation,
+    HudPosition, HudPreset, MangoHudProfile, MetalHudAlignment, MetalHudSettings, ModifierSide,
+    ResolvedHud, ThemeHudColors,
+};
 pub use install::*;
 pub use launch::*;
 pub use launch_extras::{LaunchPreset, LaunchProgram};

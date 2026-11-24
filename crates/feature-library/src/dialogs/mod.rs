@@ -9,7 +9,6 @@ pub mod duplicates;
 pub mod edit_game;
 pub mod fields;
 pub mod folder;
-pub(crate) mod installer_log;
 pub mod lutris;
 pub mod metadata;
 pub mod sideload;

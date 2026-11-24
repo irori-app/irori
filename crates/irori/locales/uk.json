@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "Налаштування Wine для {launcher}",
   "shell.palette.launcher_wine_keywords": "wine proton збірка змінні середовище лаунчер",
   "shell.palette.duplicates": "Переглянути дублікати доданих ігор",
-  "shell.palette.duplicates_keywords": "дублікат об’єднати однакові двічі додані lutris імпорт"
+  "shell.palette.duplicates_keywords": "дублікат об’єднати однакові двічі додані lutris імпорт",
+  "shell.palette.performance_hud": "Статистика в грі",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime лічильник продуктивність статистика в грі in-game stats"
 }

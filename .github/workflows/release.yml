@@ -331,7 +331,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
-      options: --privileged
+      # The image's runtimes sit in a lower overlay layer, which some x86-64
+      # runners can't rename across ("Invalid cross-device link") when
+      # flatpak-builder updates the SDK. A volume holds a copy of them on a
+      # plain file system instead.
+      options: --privileged -v /var/lib/flatpak
     steps:
       - uses: actions/checkout@v4
       # Irori's fat-LTO link needs more memory than the arm64 runners have.

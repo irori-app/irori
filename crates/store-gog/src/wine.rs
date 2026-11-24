@@ -26,6 +26,9 @@ pub struct WineContext {
 }
 
 fn keep_env(key: &str) -> bool {
+    if key.starts_with("MTL_HUD_") {
+        return false;
+    }
     const PREFIXES: [&str; 8] = [
         "WINE",
         "STEAM_COMPAT_",
@@ -186,6 +189,7 @@ mod tests {
         LaunchEnvironment {
             without_wine: false,
             env,
+            env_remove: Vec::new(),
             wrappers: vec![vec!["gamemoderun".into()]],
             wine: Some(WineLaunch {
                 bin: if uses_umu {
@@ -204,11 +208,17 @@ mod tests {
 
     #[test]
     fn captures_wine_env_only() {
-        let ctx =
-            WineContext::from_launch(&launch_env(WineKind::Proton, true, Path::new("/p"))).unwrap();
+        let mut le = launch_env(WineKind::Proton, true, Path::new("/p"));
+        le.env.insert("MTL_HUD_ENABLED".into(), "1".into());
+        le.env.insert("MTL_HUD_ALIGNMENT".into(), "topright".into());
+        le.env.insert("MTL_SHADER_VALIDATION".into(), "1".into());
+        let ctx = WineContext::from_launch(&le).unwrap();
         assert!(ctx.env.contains_key("WINEPREFIX"));
         assert!(ctx.env.contains_key("STEAM_COMPAT_DATA_PATH"));
+        assert!(ctx.env.contains_key("MTL_SHADER_VALIDATION"));
         assert!(!ctx.env.contains_key("MANGOHUD"));
+        assert!(!ctx.env.contains_key("MTL_HUD_ENABLED"));
+        assert!(!ctx.env.contains_key("MTL_HUD_ALIGNMENT"));
         assert!(WineContext::from_launch(&LaunchEnvironment::default()).is_none());
     }
 

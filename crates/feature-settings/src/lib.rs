@@ -33,6 +33,7 @@ mod form;
 mod game_view;
 mod graphics_mods;
 mod how_it_starts;
+pub mod hud;
 mod i18n;
 mod igdb;
 mod launch_presets;

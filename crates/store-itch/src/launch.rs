@@ -131,6 +131,7 @@ mod tests {
             environment: LaunchEnvironment {
                 without_wine: false,
                 env: [("MY_VAR".to_string(), "1".to_string())].into(),
+                env_remove: Vec::new(),
                 wrappers: vec![vec!["gamemoderun".into()]],
                 wine,
             },

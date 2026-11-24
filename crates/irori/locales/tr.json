@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "{launcher} Wine ayarları",
   "shell.palette.launcher_wine_keywords": "wine proton sürüm değişkenler ortam başlatıcı",
   "shell.palette.duplicates": "Yinelenen eklenmiş oyunları incele",
-  "shell.palette.duplicates_keywords": "yinelenen birleştir aynı iki kez eklenen lutris içe aktar"
+  "shell.palette.duplicates_keywords": "yinelenen birleştir aynı iki kez eklenen lutris içe aktar",
+  "shell.palette.performance_hud": "Oyun içi istatistikler",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal katman overlay fps frametime sayaç performans oyun içi istatistikler in-game stats"
 }

@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "Nastavení Wine pro {launcher}",
   "shell.palette.launcher_wine_keywords": "wine proton sestavení proměnné prostředí spouštěč",
   "shell.palette.duplicates": "Zkontrolovat duplicitní přidané hry",
-  "shell.palette.duplicates_keywords": "duplicita sloučit stejné dvakrát přidané lutris import"
+  "shell.palette.duplicates_keywords": "duplicita sloučit stejné dvakrát přidané lutris import",
+  "shell.palette.performance_hud": "Statistiky ve hře",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal překrytí fps frametime počítadlo výkon statistiky ve hře in-game stats"
 }

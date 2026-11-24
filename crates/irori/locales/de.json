@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "Wine-Einstellungen von {launcher}",
   "shell.palette.launcher_wine_keywords": "Wine Proton Version Variablen Umgebung Launcher",
   "shell.palette.duplicates": "Doppelte hinzugefügte Spiele prüfen",
-  "shell.palette.duplicates_keywords": "doppelt zusammenführen gleich zweimal hinzugefügt Lutris Import"
+  "shell.palette.duplicates_keywords": "doppelt zusammenführen gleich zweimal hinzugefügt Lutris Import",
+  "shell.palette.performance_hud": "Statistiken im Spiel",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime zähler leistung statistiken im spiel in-game stats"
 }

@@ -129,3 +129,5 @@ fn perform_blocking(action: PowerAction) -> Result<()> {
 pub(super) async fn perform(action: PowerAction) -> Result<()> {
     tokio::task::spawn_blocking(move || perform_blocking(action)).await?
 }
+
+pub(super) async fn activate_window() {}

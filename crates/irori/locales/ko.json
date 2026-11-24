@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "{launcher}의 Wine 설정",
   "shell.palette.launcher_wine_keywords": "wine proton 빌드 변수 환경 런처",
   "shell.palette.duplicates": "중복된 추가 게임 검토",
-  "shell.palette.duplicates_keywords": "중복 병합 같은 두 번 추가 lutris 가져오기"
+  "shell.palette.duplicates_keywords": "중복 병합 같은 두 번 추가 lutris 가져오기",
+  "shell.palette.performance_hud": "게임 내 통계",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 오버레이 fps 프레임타임 카운터 성능 게임 내 통계 in-game stats"
 }

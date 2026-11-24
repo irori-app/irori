@@ -149,7 +149,7 @@ impl SideloadApp {
         self.genres = (self.genres.into_iter())
             .filter_map(|g| non_empty(Some(g)))
             .collect();
-        self.launcher_args = self.launcher_args.trim().to_string();
+        self.launcher_args = self.launcher_args.replace('\0', "").trim().to_string();
         self.launch_link = non_empty(self.launch_link);
         self.command = non_empty(self.command);
         if let Some(command) = &self.command {

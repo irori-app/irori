@@ -52,6 +52,16 @@ mod platform {
     pub(super) async fn perform(_action: PowerAction) -> Result<()> {
         bail!("Irori can't power this system off")
     }
+
+    pub(super) async fn activate_window() {}
+}
+
+/// Ask the desktop compositor to bring this Irori process's window to the
+/// front when GPUI's own activation request is blocked by Wayland focus
+/// stealing prevention (for example on KWin after a game or third-party
+/// launcher like Steam held focus).
+pub async fn activate_window() {
+    platform::activate_window().await;
 }
 
 /// What can be done to the computer.

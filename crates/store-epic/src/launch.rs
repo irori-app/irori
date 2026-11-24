@@ -162,6 +162,7 @@ mod tests {
         LaunchEnvironment {
             without_wine: false,
             env: Default::default(),
+            env_remove: Vec::new(),
             wrappers: wrappers
                 .into_iter()
                 .map(|v| v.into_iter().map(String::from).collect())

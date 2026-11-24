@@ -280,5 +280,7 @@
   "shell.palette.launcher_wine": "Ustawienia Wine dla {launcher}",
   "shell.palette.launcher_wine_keywords": "wine proton wersja zmienne środowisko launcher",
   "shell.palette.duplicates": "Przejrzyj zduplikowane dodane gry",
-  "shell.palette.duplicates_keywords": "duplikat scal ten sam dwa razy dodane lutris import"
+  "shell.palette.duplicates_keywords": "duplikat scal ten sam dwa razy dodane lutris import",
+  "shell.palette.performance_hud": "Statystyki w grze",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal nakładka overlay fps frametime licznik wydajność statystyki w grze in-game stats"
 }

@@ -48,6 +48,7 @@ impl WineLaunch {
 #[derive(Debug, Clone, Default)]
 pub struct LaunchEnvironment {
     pub env: BTreeMap<String, String>,
+    pub env_remove: Vec<String>,
     pub wrappers: Vec<Vec<String>>,
     pub wine: Option<WineLaunch>,
     /// The game's Windows build starts a program of this system (a native
@@ -101,6 +102,14 @@ pub trait GameWatch: Send + Sync {
 
     /// Ask the game to quit, never the program that started it.
     fn stop(&self, force: bool);
+
+    /// Block until the tracked game processes exit when the OS provides kernel
+    /// exit notifications (`pidfd_open` on Linux). Returns `true` when it
+    /// waited (or saw a tracked PID already gone) and `false` when the caller
+    /// should sleep for its poll interval instead.
+    fn wait_for_exit(&self, _timeout: std::time::Duration) -> bool {
+        false
+    }
 }
 
 /// An installed game's files weren't there when it was started: a drive not
