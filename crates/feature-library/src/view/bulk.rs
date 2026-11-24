@@ -1,6 +1,6 @@
 //! Bulk actions on the games picked in selection mode (install, uninstall,
-//! remove from the library, add to Steam, categories, play status, favourite
-//! and hide), from a bar
+//! remove from the library, add to Steam, categories, play status, details,
+//! favourite and hide), from a bar
 //! floating over the library. Edits of library data say what they did in a
 //! notification with an Undo that puts every game back as it was.
 
@@ -503,6 +503,7 @@ impl LibraryView {
             all_hidden,
             categories,
         } = (*summary).clone();
+        let details = self.details_button(ids.clone(), cx);
         let theme = cx.theme();
         let status: SharedString = match count {
             0 => t("library.bulk.none"),
@@ -768,6 +769,7 @@ impl LibraryView {
                                 .child(combine)
                                 .child(categories_button)
                                 .child(status_button)
+                                .child(details)
                                 .child(favourite)
                                 .child(hide)
                         })

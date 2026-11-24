@@ -4,8 +4,9 @@
 //! The report measures installed games, Wine prefixes, the Wine and Proton
 //! builds Irori downloaded, emulators and Irori's own caches and logs, groups
 //! them by the disk holding them, and lists cleanups: download leftovers,
-//! prefixes no installed game uses, old Wine builds nothing uses, the art
-//! thumbnail cache and logs.
+//! prefixes no installed game uses, what Steam keeps of games it no longer
+//! has, folders in the games folder nothing uses, old Wine builds nothing
+//! uses, compiled shader caches, the art thumbnail cache and logs.
 //!
 //! Measuring walks folders, so it runs on a blocking thread, and each folder's
 //! size is cached in `<cache>/storage.json` with the folder's modified time. A
@@ -14,7 +15,9 @@
 //!
 //! A cleanup deletes only items the report offers at that moment (the report
 //! is rebuilt first, so a game installed since cannot lose its prefix), and
-//! every deletion goes through `fs_guard::ensure_deletable`.
+//! every deletion goes through `fs_guard::ensure_deletable`. Items that may
+//! hold saves (prefixes, Steam's prefixes, stray folders) go to the system's
+//! trash where it has one ([`crate::trash`]), so a wrong choice can be undone.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -36,6 +39,23 @@ const SIZE_MAX_AGE: u64 = 7 * 24 * 60 * 60;
 
 /// What the depot names a file it is still assembling.
 const PART_SUFFIX: &str = ".irori-part";
+
+/// Bumped when [`Cached`] learns to record something new, so folders
+/// measured before are walked again once.
+const CACHE_VERSION: u32 = 1;
+
+/// Steam app ids from here up are non-Steam shortcuts, which have a prefix
+/// in `compatdata` but never an app manifest.
+const SHORTCUT_APP_IDS: u32 = 1 << 31;
+
+/// Whether a file is a shader cache a translation layer writes beside the
+/// game (DXVK's state cache, VKD3D-Proton's pipeline cache). They are made
+/// again as the game plays.
+pub fn is_shader_cache(name: &str) -> bool {
+    name.ends_with(".dxvk-cache")
+        || name == "vkd3d-proton.cache"
+        || name == "vkd3d-proton.cache.write"
+}
 
 /// What a measured folder holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -108,6 +128,8 @@ pub struct GameSize {
     pub id: GameId,
     pub title: String,
     pub bytes: u64,
+    /// RFC 3339 time the game was last started, if it ever was.
+    pub last_played: Option<String>,
 }
 
 /// How one disk is used.
@@ -145,9 +167,18 @@ pub enum CleanupKind {
     DownloadLeftovers,
     /// Wine prefixes no installed game or launcher uses.
     OrphanPrefixes,
+    /// Proton prefixes (`compatdata`) and shader caches (`shadercache`)
+    /// Steam keeps of games it no longer has installed.
+    SteamLeftovers,
+    /// Folders in the games folder no game, prefix or setting uses: what an
+    /// uninstall left behind, or a game moved elsewhere.
+    StrayFolders,
     /// Wine and Proton builds Irori downloaded that nothing uses and a newer
     /// build of the same kind replaces.
     UnusedWineBuilds,
+    /// Shader caches DXVK and VKD3D-Proton write beside games, and the GPU
+    /// driver's own (Linux), compiled again as games play.
+    ShaderCaches,
     /// Cover and backdrop thumbnails, made again when shown.
     ArtCache,
     /// Game, install and older Irori logs.
@@ -155,10 +186,13 @@ pub enum CleanupKind {
 }
 
 impl CleanupKind {
-    pub const ALL: [CleanupKind; 5] = [
+    pub const ALL: [CleanupKind; 8] = [
         CleanupKind::DownloadLeftovers,
         CleanupKind::OrphanPrefixes,
+        CleanupKind::SteamLeftovers,
+        CleanupKind::StrayFolders,
         CleanupKind::UnusedWineBuilds,
+        CleanupKind::ShaderCaches,
         CleanupKind::ArtCache,
         CleanupKind::Logs,
     ];
@@ -178,6 +212,15 @@ pub enum ItemNote {
     LauncherInstallers,
     /// This many log files.
     LogFiles(usize),
+    /// Steam's Proton prefix of this app, with its title when the library
+    /// knows it.
+    SteamPrefix(u32, Option<String>),
+    /// Steam's shader cache of this app.
+    SteamShaders(u32, Option<String>),
+    /// A shader cache in this installed game's folder.
+    ShadersOf(String),
+    /// The GPU driver's shader cache, shared by every program.
+    DriverShaders,
 }
 
 /// One thing a cleanup deletes.
@@ -189,6 +232,17 @@ pub struct CleanupItem {
 }
 
 impl CleanupItem {
+    /// Whether it goes to the trash instead of being deleted: what may hold
+    /// saves or the user's own files. Everything else is made again or
+    /// downloaded again.
+    pub fn goes_to_trash(&self, kind: CleanupKind) -> bool {
+        match kind {
+            CleanupKind::OrphanPrefixes | CleanupKind::StrayFolders => true,
+            CleanupKind::SteamLeftovers => matches!(self.note, ItemNote::SteamPrefix(..)),
+            _ => false,
+        }
+    }
+
     /// The folder or file name.
     pub fn name(&self) -> String {
         self.path
@@ -294,6 +348,7 @@ pub fn aggregate(located: &[Located], drives: &[Drive]) -> Vec<DiskUsage> {
                 id: id.clone(),
                 title: title.clone(),
                 bytes,
+                last_played: None,
             }),
             (holding, _) => *disk.support.entry(*holding).or_default() += bytes,
         }
@@ -343,6 +398,78 @@ pub fn unused_builds<'a>(releases: &'a [Release], used: &[PathBuf]) -> Vec<&'a R
         .collect()
 }
 
+/// What Steam keeps of an app it no longer has installed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SteamLeftover {
+    pub path: PathBuf,
+    pub app: u32,
+    /// A Proton prefix (`compatdata`); else a shader cache (`shadercache`).
+    pub prefix: bool,
+}
+
+/// The `compatdata` and `shadercache` folders in Steam's `libraries` whose
+/// app no library has a manifest for. Non-Steam shortcuts (ids from
+/// [`SHORTCUT_APP_IDS`] up) and Steam's own `0` are never offered: they have
+/// no manifest by design.
+pub fn steam_leftovers(libraries: &[PathBuf]) -> Vec<SteamLeftover> {
+    let app_id = |name: &str| {
+        name.parse::<u32>()
+            .ok()
+            .filter(|id| *id != 0 && *id < SHORTCUT_APP_IDS)
+    };
+    let mut installed: HashSet<u32> = HashSet::new();
+    for library in libraries {
+        let entries = std::fs::read_dir(library.join("steamapps"));
+        for entry in entries.into_iter().flatten().flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if let Some(id) = name
+                .strip_prefix("appmanifest_")
+                .and_then(|n| n.strip_suffix(".acf"))
+                .and_then(app_id)
+            {
+                installed.insert(id);
+            }
+        }
+    }
+    let mut found = Vec::new();
+    for library in libraries {
+        for (folder, prefix) in [("compatdata", true), ("shadercache", false)] {
+            let dir = library.join("steamapps").join(folder);
+            for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let Some(app) = app_id(&name) else { continue };
+                if installed.contains(&app) || !entry.path().is_dir() {
+                    continue;
+                }
+                found.push(SteamLeftover {
+                    path: entry.path(),
+                    app,
+                    prefix,
+                });
+            }
+        }
+    }
+    found.sort_by(|a, b| a.path.cmp(&b.path));
+    found
+}
+
+/// The `candidates` (folders in the games folder) nothing uses: none of the
+/// `used` paths is inside one or holds one, and hidden folders are left out.
+pub fn stray_folders<'a>(candidates: &'a [PathBuf], used: &[PathBuf]) -> Vec<&'a PathBuf> {
+    candidates
+        .iter()
+        .filter(|dir| {
+            !dir.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        })
+        .filter(|dir| {
+            !used
+                .iter()
+                .any(|u| u.starts_with(dir) || dir.starts_with(u))
+        })
+        .collect()
+}
+
 /// The items of `kind` the report offers among `chosen`. Anything not offered
 /// right now (a path from an older report, a game installed since) is left out.
 pub fn select(report: &StorageReport, kind: CleanupKind, chosen: &[PathBuf]) -> Vec<CleanupItem> {
@@ -369,6 +496,13 @@ struct Cached {
     /// Partly downloaded files inside, with their sizes.
     #[serde(default)]
     parts: Vec<(PathBuf, u64)>,
+    /// Shader caches inside ([`is_shader_cache`]), with their sizes.
+    #[serde(default)]
+    shaders: Vec<(PathBuf, u64)>,
+    /// What the entry records ([`CACHE_VERSION`]); older ones are walked
+    /// again.
+    #[serde(default)]
+    version: u32,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -421,6 +555,7 @@ impl Measurer {
         if !self.rescan
             && let Some(hit) = self.cache.folders.get(path)
             && hit.modified == stamp
+            && hit.version == CACHE_VERSION
             && self.now.saturating_sub(hit.measured) < SIZE_MAX_AGE
         {
             return Some(hit.clone());
@@ -428,6 +563,7 @@ impl Measurer {
         let mut found = Cached {
             modified: stamp,
             measured: self.now,
+            version: CACHE_VERSION,
             ..Cached::default()
         };
         let mut stack = vec![path.to_path_buf()];
@@ -443,8 +579,12 @@ impl Measurer {
                     stack.push(entry.path());
                 } else if meta.is_file() {
                     found.bytes += meta.len();
-                    if entry.file_name().to_string_lossy().ends_with(PART_SUFFIX) {
+                    let name = entry.file_name();
+                    let name = name.to_string_lossy();
+                    if name.ends_with(PART_SUFFIX) {
                         found.parts.push((entry.path(), meta.len()));
+                    } else if is_shader_cache(&name) {
+                        found.shaders.push((entry.path(), meta.len()));
                     }
                 }
             }
@@ -466,7 +606,7 @@ impl Measurer {
 
 /// Where `path` really is, following links (a games folder linked to another
 /// disk counts for that disk).
-fn resolve(path: &Path) -> PathBuf {
+pub(crate) fn resolve(path: &Path) -> PathBuf {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     // Windows canonical paths are verbatim (`\\?\C:\…`); drives mount at `C:\`.
     if cfg!(windows)
@@ -492,7 +632,7 @@ fn read_drives() -> Vec<Drive> {
 
 /// Every absolute path a JSON document names, for state files whose layout
 /// this module doesn't know (third-party launchers' setups).
-fn paths_in_json(value: &serde_json::Value, out: &mut Vec<PathBuf>) {
+pub(crate) fn paths_in_json(value: &serde_json::Value, out: &mut Vec<PathBuf>) {
     match value {
         serde_json::Value::String(s) if Path::new(s).is_absolute() => out.push(PathBuf::from(s)),
         serde_json::Value::Array(items) => items.iter().for_each(|v| paths_in_json(v, out)),
@@ -510,6 +650,13 @@ struct Plan {
     uninstalled_prefixes: HashMap<PathBuf, String>,
     /// Games with a download queued, running or paused.
     downloading: HashSet<GameId>,
+    /// When each game was last started, by game key.
+    last_played: HashMap<String, String>,
+    /// Steam apps' titles by app id, for Steam's leftovers.
+    steam_titles: HashMap<u32, String>,
+    /// Paths the settings name (ROM and BIOS folders, backup folders, a
+    /// game's prefix…), which a stray folder must not hold or be inside.
+    named: Vec<PathBuf>,
 }
 
 impl Backend {
@@ -518,9 +665,28 @@ impl Backend {
         let library = self.library();
         let mut installed = Vec::new();
         let mut uninstalled_prefixes = HashMap::new();
+        let mut steam_titles = HashMap::new();
+        let mut named = Vec::new();
+        if let Ok(value) = serde_json::to_value(&*app) {
+            paths_in_json(&value, &mut named);
+        }
+        let userdata = self.userdata.snapshot();
+        let last_played = userdata
+            .playtime
+            .iter()
+            .filter_map(|(key, record)| Some((key.clone(), record.last_played.clone()?)))
+            .collect();
         for game in library.all_games().filter(|g| !g.is_dlc) {
             let id = game.id();
             let settings = self.settings.game(&id);
+            if id.runner == Runner::Steam
+                && let Ok(app_id) = game.app_name.parse::<u32>()
+            {
+                steam_titles.insert(app_id, game.title.clone());
+            }
+            if let Ok(value) = serde_json::to_value(&settings) {
+                paths_in_json(&value, &mut named);
+            }
             if game.is_installed {
                 let prefix = irori_runtime::prefix_path(&app, &settings, game);
                 let wine = [&settings.wine_version, &app.game.wine_version]
@@ -546,6 +712,9 @@ impl Backend {
             installed,
             uninstalled_prefixes,
             downloading,
+            last_played,
+            steam_titles,
+            named: named.iter().map(|p| expand(p)).collect(),
         }
     }
 
@@ -564,20 +733,22 @@ impl Backend {
         .context("measuring disk use")
     }
 
-    /// Delete what `kind` offers among `chosen`, returning the bytes freed.
-    /// The report is rebuilt first, so only what is still safe to delete goes.
-    pub async fn clean_up(&self, kind: CleanupKind, chosen: Vec<PathBuf>) -> Result<u64> {
+    /// Delete what `kind` offers among `chosen` (or move it to the trash,
+    /// [`CleanupItem::goes_to_trash`]), saying how much went where. The
+    /// report is rebuilt first, so only what is still safe to delete goes.
+    pub async fn clean_up(&self, kind: CleanupKind, chosen: Vec<PathBuf>) -> Result<CleanedUp> {
         let plan = self.storage_plan();
         let file = Paths::get().cache.join("storage.json");
-        let freed = tokio::task::spawn_blocking(move || -> Result<u64> {
+        let done = tokio::task::spawn_blocking(move || -> Result<CleanedUp> {
             let mut measurer = Measurer::open(file, false);
             let report = build(&plan, &mut measurer, read_drives());
             let items = select(&report, kind, &chosen);
-            let mut freed = 0;
+            let mut done = CleanedUp::default();
             let mut failed = Vec::new();
             for item in &items {
                 match delete(kind, item, &plan.app) {
-                    Ok(()) => freed += item.bytes,
+                    Ok(Disposal::Deleted) => done.freed += item.bytes,
+                    Ok(Disposal::Trashed) => done.trashed += item.bytes,
                     Err(e) => failed.push(format!("{e:#}")),
                 }
                 measurer.forget(&item.path);
@@ -587,12 +758,12 @@ impl Backend {
             }
             measurer.save();
             match failed.first() {
-                Some(first) if freed == 0 => anyhow::bail!("{first}"),
+                Some(first) if done.freed + done.trashed == 0 => anyhow::bail!("{first}"),
                 Some(first) => {
                     tracing::warn!("{} items could not be deleted: {first}", failed.len());
-                    Ok(freed)
+                    Ok(done)
                 }
-                None => Ok(freed),
+                None => Ok(done),
             }
         })
         .await
@@ -600,14 +771,35 @@ impl Backend {
         if kind == CleanupKind::UnusedWineBuilds {
             self.bus.emit(Event::WineVersionsChanged);
         }
-        Ok(freed)
+        Ok(done)
     }
 }
 
-/// Delete one cleanup item.
-fn delete(kind: CleanupKind, item: &CleanupItem, app: &AppSettings) -> Result<()> {
+/// What a cleanup did, in bytes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CleanedUp {
+    /// Deleted for good: free now.
+    pub freed: u64,
+    /// Moved to the trash: free once the trash is emptied.
+    pub trashed: u64,
+}
+
+/// Where a cleaned-up item went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Disposal {
+    Deleted,
+    Trashed,
+}
+
+/// Delete one cleanup item, or move it to the trash.
+fn delete(kind: CleanupKind, item: &CleanupItem, app: &AppSettings) -> Result<Disposal> {
     let path = &item.path;
     fs_guard::ensure_deletable(path, app)?;
+    // Without a trash for this disk the item is deleted, as the
+    // confirmation said it might be.
+    if item.goes_to_trash(kind) && crate::trash::trash(path)? {
+        return Ok(Disposal::Trashed);
+    }
     let removed = match kind {
         CleanupKind::UnusedWineBuilds => {
             let release = manager::cached_releases()
@@ -616,7 +808,9 @@ fn delete(kind: CleanupKind, item: &CleanupItem, app: &AppSettings) -> Result<()
                 .with_context(|| format!("{} is no longer a known build", path.display()))?;
             // Forgetting it goes through the manager, so its list stays true.
             // This runs on a blocking thread of the backend's runtime.
-            return tokio::runtime::Handle::current().block_on(manager::remove(&release));
+            return tokio::runtime::Handle::current()
+                .block_on(manager::remove(&release))
+                .map(|()| Disposal::Deleted);
         }
         CleanupKind::Logs => {
             let keep = Paths::get().launcher_log_file();
@@ -638,7 +832,14 @@ fn delete(kind: CleanupKind, item: &CleanupItem, app: &AppSettings) -> Result<()
         _ if path.is_dir() => std::fs::remove_dir_all(path),
         _ => std::fs::remove_file(path),
     };
-    removed.with_context(|| format!("deleting {}", path.display()))
+    removed
+        .map(|()| Disposal::Deleted)
+        .with_context(|| format!("deleting {}", path.display()))
+}
+
+/// A path from the settings as it is on disk (`~` expanded, links followed).
+fn expand(path: &Path) -> PathBuf {
+    resolve(&irori_core::paths::expand_home(&path.to_string_lossy()))
 }
 
 fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageReport {
@@ -648,6 +849,7 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
     let mut used_prefixes: Vec<PathBuf> = Vec::new();
     let mut used_programs: Vec<PathBuf> = Vec::new();
     let mut leftovers: Vec<CleanupItem> = Vec::new();
+    let mut shaders: Vec<CleanupItem> = Vec::new();
     let mut game_dirs: HashSet<PathBuf> = HashSet::new();
 
     for (game, prefix, wine) in &plan.installed {
@@ -664,6 +866,11 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
             continue;
         };
         let id = game.id();
+        shaders.extend(size.shaders.iter().map(|(path, bytes)| CleanupItem {
+            path: path.clone(),
+            bytes: *bytes,
+            note: ItemNote::ShadersOf(game.title.clone()),
+        }));
         if !plan.downloading.contains(&id) && game.runner().manages_installs() {
             leftovers.extend(size.parts.iter().map(|(path, bytes)| CleanupItem {
                 path: path.clone(),
@@ -789,6 +996,7 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
     // partly downloaded files and no installed game. While anything
     // downloads they are left alone, since one of them may be its target.
     let install_root = irori_core::paths::expand_home(&app.default_install_path);
+    let mut stray_candidates: Vec<PathBuf> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&install_root) {
         for dir in entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
             let dir = resolve(&dir);
@@ -802,6 +1010,9 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
                 continue;
             };
             if size.parts.is_empty() {
+                if !irori_runtime::is_prefix(&dir) && !dir.join("steamapps").exists() {
+                    stray_candidates.push(dir);
+                }
                 continue;
             }
             located.push(Located {
@@ -819,6 +1030,83 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
             }
         }
     }
+    // Folders in the games folder nothing uses. Never listed when the games
+    // folder is the home folder or holds it: that would offer the user's own
+    // folders. While anything downloads they stay too.
+    let home = dirs::home_dir().map(|h| resolve(&h));
+    let root = resolve(&install_root);
+    let root_is_home = home.as_ref().is_some_and(|h| h.starts_with(&root));
+    let mut used_paths: Vec<PathBuf> = game_dirs.iter().cloned().collect();
+    used_paths.extend(used_prefixes.iter().cloned());
+    used_paths.extend(used_programs.iter().cloned());
+    used_paths.extend(plan.named.iter().cloned());
+    let protected = fs_guard::protected_dirs(app);
+    let mut strays: Vec<CleanupItem> = if root_is_home || !plan.downloading.is_empty() {
+        Vec::new()
+    } else {
+        stray_folders(&stray_candidates, &used_paths)
+            .into_iter()
+            .filter(|dir| !protected.iter().any(|p| expand(p) == **dir))
+            .filter_map(|dir| {
+                Some(CleanupItem {
+                    bytes: measurer.measure(dir)?.bytes,
+                    path: dir.clone(),
+                    note: ItemNote::None,
+                })
+            })
+            .collect()
+    };
+    strays.sort_by_key(|item| std::cmp::Reverse(item.bytes));
+
+    // What Steam keeps of apps it no longer has.
+    let steam = irori_runtime::locations::steam_path(app);
+    let mut steam_items: Vec<CleanupItem> =
+        steam_leftovers(&irori_runtime::vdf::steam_libraries(&steam))
+            .into_iter()
+            .filter_map(|left| {
+                let title = plan.steam_titles.get(&left.app).cloned();
+                Some(CleanupItem {
+                    bytes: measurer.measure(&left.path)?.bytes,
+                    path: left.path,
+                    note: if left.prefix {
+                        ItemNote::SteamPrefix(left.app, title)
+                    } else {
+                        ItemNote::SteamShaders(left.app, title)
+                    },
+                })
+            })
+            .collect();
+    steam_items.sort_by_key(|item| std::cmp::Reverse(item.bytes));
+
+    // The GPU driver's caches. Linux keeps them in the user's cache folder;
+    // other systems keep theirs where Irori shouldn't reach.
+    if cfg!(target_os = "linux") {
+        let mut driver: Vec<PathBuf> = Vec::new();
+        if let Some(cache) = dirs::cache_dir() {
+            driver.extend(
+                [
+                    "mesa_shader_cache",
+                    "mesa_shader_cache_db",
+                    "nvidia/GLCache",
+                ]
+                .map(|d| cache.join(d)),
+            );
+        }
+        if let Some(home) = &home {
+            driver.push(home.join(".nv/GLCache"));
+        }
+        for dir in driver.into_iter().filter(|d| d.is_dir()) {
+            if let Some(size) = measurer.measure(&dir).filter(|s| s.bytes > 0) {
+                shaders.push(CleanupItem {
+                    path: dir,
+                    bytes: size.bytes,
+                    note: ItemNote::DriverShaders,
+                });
+            }
+        }
+    }
+    shaders.sort_by_key(|item| std::cmp::Reverse(item.bytes));
+
     let installers = paths.store_cache_dir(Runner::Launchers).join("installers");
     if let Some(size) = measurer.measure(&installers).filter(|s| s.bytes > 0) {
         leftovers.push(CleanupItem {
@@ -880,8 +1168,20 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
             items: orphans,
         },
         Cleanup {
+            kind: CleanupKind::SteamLeftovers,
+            items: steam_items,
+        },
+        Cleanup {
+            kind: CleanupKind::StrayFolders,
+            items: strays,
+        },
+        Cleanup {
             kind: CleanupKind::UnusedWineBuilds,
             items: unused,
+        },
+        Cleanup {
+            kind: CleanupKind::ShaderCaches,
+            items: shaders,
         },
         Cleanup {
             kind: CleanupKind::ArtCache,
@@ -892,10 +1192,11 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
             items: logs,
         },
     ];
-    StorageReport {
-        disks: aggregate(&located, &drives),
-        cleanups,
+    let mut disks = aggregate(&located, &drives);
+    for game in disks.iter_mut().flat_map(|d| d.games.iter_mut()) {
+        game.last_played = plan.last_played.get(&game.id.key()).cloned();
     }
+    StorageReport { disks, cleanups }
 }
 
 /// How many log files the logs folder holds besides `keep`, and their size.
@@ -1094,6 +1395,86 @@ mod tests {
     }
 
     #[test]
+    fn steam_keeps_leftovers_only_of_apps_it_no_longer_has() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, other) = (tmp.path().join("Steam"), tmp.path().join("Library"));
+        for dir in [
+            "Steam/steamapps/compatdata/620/pfx",
+            "Steam/steamapps/compatdata/440/pfx",
+            "Steam/steamapps/compatdata/0/pfx",
+            // A non-Steam shortcut's prefix: no manifest by design.
+            "Steam/steamapps/compatdata/3456789012/pfx",
+            "Steam/steamapps/shadercache/440",
+            "Library/steamapps/shadercache/570",
+            "Library/steamapps/compatdata/not-an-app",
+        ] {
+            std::fs::create_dir_all(tmp.path().join(dir)).unwrap();
+        }
+        // 620 is installed in the other library; 570 in the main one.
+        std::fs::write(other.join("steamapps/appmanifest_620.acf"), "").unwrap();
+        std::fs::write(main.join("steamapps/appmanifest_570.acf"), "").unwrap();
+        let found = steam_leftovers(&[main.clone(), other]);
+        assert_eq!(
+            found,
+            [
+                SteamLeftover {
+                    path: main.join("steamapps/compatdata/440"),
+                    app: 440,
+                    prefix: true,
+                },
+                SteamLeftover {
+                    path: main.join("steamapps/shadercache/440"),
+                    app: 440,
+                    prefix: false,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn stray_folders_are_what_nothing_uses() {
+        let candidates: Vec<PathBuf> = [
+            "/g/Hades",
+            "/g/Old game",
+            "/g/ROMs",
+            "/g/Heroic",
+            "/g/.cache",
+            "/g/Mods",
+        ]
+        .map(PathBuf::from)
+        .to_vec();
+        let used = [
+            PathBuf::from("/g/Hades"),
+            // A folder the settings name (ROMs), one that holds a game.
+            PathBuf::from("/g/ROMs"),
+            PathBuf::from("/g/Heroic/Celeste"),
+            // A setting naming a folder inside one keeps it too.
+            PathBuf::from("/g/Mods/backups"),
+        ];
+        assert_eq!(stray_folders(&candidates, &used), [&candidates[1]]);
+    }
+
+    #[test]
+    fn only_what_may_hold_saves_goes_to_the_trash() {
+        let item = |note| CleanupItem {
+            path: "/x".into(),
+            bytes: 1,
+            note,
+        };
+        assert!(item(ItemNote::None).goes_to_trash(CleanupKind::OrphanPrefixes));
+        assert!(item(ItemNote::None).goes_to_trash(CleanupKind::StrayFolders));
+        assert!(item(ItemNote::SteamPrefix(440, None)).goes_to_trash(CleanupKind::SteamLeftovers));
+        assert!(
+            !item(ItemNote::SteamShaders(440, None)).goes_to_trash(CleanupKind::SteamLeftovers)
+        );
+        assert!(!item(ItemNote::DriverShaders).goes_to_trash(CleanupKind::ShaderCaches));
+        assert!(!item(ItemNote::LogFiles(3)).goes_to_trash(CleanupKind::Logs));
+        assert!(is_shader_cache("Game.dxvk-cache"));
+        assert!(is_shader_cache("vkd3d-proton.cache.write"));
+        assert!(!is_shader_cache("cache.bin"));
+    }
+
+    #[test]
     fn a_cleanup_deletes_only_what_the_report_offers() {
         let item = |path: &str| CleanupItem {
             path: path.into(),
@@ -1138,6 +1519,17 @@ mod tests {
             size.parts,
             [(game.join("data/pak.bin.irori-part"), 40)].to_vec()
         );
+        measurer.save();
+        // An entry measured by an older Irori is walked again for what it
+        // didn't record.
+        std::fs::write(game.join("Game.dxvk-cache"), [0u8; 5]).unwrap();
+        let mut old = Measurer::open(file.clone(), false);
+        old.cache.folders.get_mut(&game).unwrap().version = 0;
+        let size = old.measure(&game).unwrap();
+        assert_eq!(size.shaders, [(game.join("Game.dxvk-cache"), 5)].to_vec());
+        std::fs::remove_file(game.join("Game.dxvk-cache")).unwrap();
+        measurer.cache.folders.get_mut(&game).unwrap().measured = 0;
+        measurer.measure(&game).unwrap();
         measurer.save();
 
         // A change deep inside goes unseen until a rescan...

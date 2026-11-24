@@ -25,6 +25,8 @@ anyhow.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
 tokio-util.workspace = true
+# Watches the files a store writes on an unlock while a game runs.
+notify.workspace = true
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -47,6 +49,8 @@ sha2.workspace = true
 # handshake. ring, as reqwest's rustls already uses, so no second provider.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 hex.workspace = true
+# The ffmpeg build downloaded on Windows comes as a zip.
+zip.workspace = true
 uuid.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 
@@ -73,6 +77,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security",
     "Win32_System_Shutdown",
     "Win32_System_Threading",
+    # Storage cleanups move items to the Recycle Bin (`trash`).
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 # The in-game overlay's volumes (Core Audio, a COM API), at the version GPUI

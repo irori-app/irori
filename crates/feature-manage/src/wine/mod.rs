@@ -1,8 +1,10 @@
 //! The Wine manager ([`Route::WineManager`](irori_ui::Route::WineManager)):
-//! downloadable Proton/Wine builds per source, and every build found on this
-//! system with the user's custom Wine paths.
+//! downloadable Proton/Wine builds per source, every build found on this
+//! system with the user's custom Wine paths, and the Wine prefixes with the
+//! games using them.
 
 mod installed;
+mod prefixes;
 mod sources;
 
 use std::collections::{HashMap, HashSet};
@@ -64,6 +66,7 @@ fn rate_limited_text(limited: release_checks::RateLimited, now: u64) -> SharedSt
 enum WineTab {
     Download,
     System,
+    Prefixes,
 }
 
 #[derive(Clone)]
@@ -91,6 +94,8 @@ pub struct WineManagerView {
     limited_until: Option<u64>,
     search: Entity<InputState>,
     system: Option<SystemState>,
+    /// The Prefixes tab, once opened.
+    prefixes: Option<prefixes::PrefixState>,
     ops: Entity<WineOps>,
     seen_revision: u64,
     ticking: bool,
@@ -125,7 +130,20 @@ impl WineManagerView {
                 if this.system.is_some() {
                     this.load_system(window, cx);
                 }
+                if this.prefixes.is_some() {
+                    this.load_prefixes(window, cx);
+                }
             }),
+            // Installs and uninstalls change who uses a prefix.
+            cx.observe_in(
+                &models(cx).library.clone(),
+                window,
+                |this, _, window, cx| {
+                    if this.prefixes.is_some() {
+                        this.load_prefixes(window, cx);
+                    }
+                },
+            ),
         ];
         let seen_revision = ops.read(cx).revision;
         let selected_source = ReleaseKind::available().first().copied();
@@ -143,6 +161,7 @@ impl WineManagerView {
             limited_until: None,
             search,
             system: None,
+            prefixes: None,
             ops,
             seen_revision,
             ticking: false,
@@ -165,6 +184,11 @@ impl WineManagerView {
             .flatten()
     }
 
+    /// The Prefixes tab, after the downloads and "On this system".
+    fn on_prefixes(&self) -> bool {
+        self.active_tab == WineTab::Prefixes
+    }
+
     fn select_tab(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         let has_downloads = !ReleaseKind::available().is_empty();
         if has_downloads && ix == 0 {
@@ -174,10 +198,15 @@ impl WineManagerView {
             {
                 self.load_list(kind, false, window, cx);
             }
-        } else {
+        } else if ix == usize::from(has_downloads) {
             self.active_tab = WineTab::System;
             if self.system.is_none() {
                 self.load_system(window, cx);
+            }
+        } else {
+            self.active_tab = WineTab::Prefixes;
+            if self.prefixes.is_none() {
+                self.load_prefixes(window, cx);
             }
         }
         cx.notify();
@@ -315,6 +344,7 @@ impl WineManagerView {
     fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.active_source() {
             Some(kind) => self.load_list(kind, true, window, cx),
+            None if self.on_prefixes() => self.load_prefixes(window, cx),
             None => self.load_system(window, cx),
         }
     }
@@ -972,19 +1002,34 @@ impl Render for WineManagerView {
         }
         let running = self.ops.read(cx).running.len();
         let has_downloads = !ReleaseKind::available().is_empty();
-        let selected_tab = if has_downloads && self.active_tab == WineTab::Download {
-            0
-        } else {
-            usize::from(has_downloads)
+        let selected_tab = match self.active_tab {
+            WineTab::Download if has_downloads => 0,
+            WineTab::Prefixes => usize::from(has_downloads) + 1,
+            _ => usize::from(has_downloads),
         };
-        let mut tabs = Vec::with_capacity(2);
+        let mut tabs = Vec::with_capacity(3);
         if has_downloads {
             tabs.push(Tab::new().label(t("manage.wine.tab.download")));
         }
         tabs.push(Tab::new().label(t("manage.wine.tab.system")));
+        tabs.push(Tab::new().label(t("manage.wine.tab.prefixes")));
+        let on_prefixes = self.on_prefixes();
         let content = match self.active_source() {
             Some(kind) => self.render_source(kind, cx),
+            None if on_prefixes => self.render_prefixes(cx),
             None => self.render_system(cx),
+        };
+        // The prefix list is virtual and scrolls itself.
+        let body = if on_prefixes {
+            content
+        } else {
+            div()
+                .id("wine-body")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scrollbar()
+                .child(div().px_6().py_4().child(content))
+                .into_any_element()
         };
         let description = if cfg!(target_os = "macos") {
             t("manage.wine.description_macos")
@@ -1030,13 +1075,6 @@ impl Render for WineManagerView {
                             })),
                     ),
             )
-            .child(
-                div()
-                    .id("wine-body")
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scrollbar()
-                    .child(div().px_6().py_4().child(content)),
-            )
+            .child(body)
     }
 }

@@ -9,12 +9,14 @@
 pub mod discovery;
 pub mod download;
 pub mod env;
+pub mod frame_limit;
 pub mod graphics;
 pub mod hooks;
 pub mod hud;
 pub mod locations;
 pub mod mac_driver;
 pub mod manager;
+pub mod mangohud;
 pub mod prefix;
 pub mod protontricks;
 pub mod release_checks;
@@ -227,13 +229,86 @@ fn find_on_path(name: &str) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
-/// Resolve GameMode, MAKO, gamescope and optional native OpenGL MangoHud
-/// wrapper (Heroic's `prepareLaunch` steps 7–9). A missing `gamemoderun` or
-/// `gamescope` fails the launch; Vulkan-layer MangoHud and gamescope
-/// `--mangoapp` never require the `mangohud` wrapper binary.
+/// How MangoHud takes part in a launch: the in-game stats ([`hud`]) load
+/// it, and the frame limiter ([`frame_limit`]) may use it, hidden then.
+#[derive(Debug, Clone, Copy, Default)]
+struct MangoUse {
+    /// MangoHud loads for the session.
+    loads: bool,
+    /// The in-game stats show it.
+    shown: bool,
+    /// Only the frame limit loads it: Irori starts it itself.
+    limit_only: bool,
+}
+
+/// The launch's frame limit and limiter ([`frame_limit`]), the settings
+/// the rest of the launch reads (only that limiter switched on), and how
+/// MangoHud takes part: when the in-game stats show it, or when it limits
+/// (hidden then). The stats switched off for the game leave it out as a
+/// limiter. Steam Deck's Game Mode has Steam's own MangoHud and gamescope.
+fn frame_limits(
+    settings: &GameSettings,
+    platform: InstallPlatform,
+    deck_game_mode: bool,
+    hud_plan: &hud::launch_env::HudLaunchPlan,
+) -> (GameSettings, Option<frame_limit::FrameLimit>, MangoUse) {
+    let linux = cfg!(target_os = "linux") && !deck_game_mode;
+    let shown = hud_plan.env_set.get("MANGOHUD").is_some_and(|v| v == "1");
+    let disabled = hud_plan.env_set.contains_key("DISABLE_MANGOHUD");
+    let cx = frame_limit::LimitContext {
+        linux: cfg!(target_os = "linux"),
+        gamescope: linux && wrappers::gamescope_enabled(&settings.gamescope),
+        mangohud: linux && !disabled && (shown || find_on_path("mangohud").is_some()),
+        wine: platform.needs_wine(),
+    };
+    let limit = frame_limit::resolve(settings, cx);
+    let limits = linux && limit.is_some_and(|l| l.limiter == frame_limit::Limiter::MangoHud);
+    let mango = MangoUse {
+        loads: linux && (shown || limits),
+        shown: linux && shown,
+        limit_only: limits && !shown,
+    };
+    (frame_limit::apply(settings, limit), limit, mango)
+}
+
+/// MangoHud's file or variable for the session ([`mangohud::prepare`]),
+/// over the in-game stats' configuration when they set one: hidden unless
+/// it shows (and isn't started hidden), with the limit when it is the
+/// launch's limiter.
+async fn mangohud_env(
+    id: &irori_core::GameId,
+    settings: &GameSettings,
+    limit: Option<frame_limit::FrameLimit>,
+    vars: &mut env::EnvMap,
+    host: &HostEnv,
+    shown: bool,
+) {
+    let ours = limit.filter(|l| l.limiter == frame_limit::Limiter::MangoHud);
+    let limits = limit.is_none() || ours.is_some();
+    let hidden = settings.mangohud_hidden || !shown;
+    let (id, mut moved, host) = (id.clone(), vars.clone(), host.clone());
+    // A small file read and written: off the async workers all the same.
+    let done = tokio::task::spawn_blocking(move || {
+        mangohud::prepare(&id, &mut moved, &host, hidden, ours.map(|l| l.fps), limits);
+        moved
+    })
+    .await;
+    match done {
+        Ok(back) => *vars = back,
+        Err(e) => tracing::warn!("setting MangoHud up: {e}"),
+    }
+}
+
+/// Resolve GameMode, MAKO, gamescope and the MangoHud wrapper (Heroic's
+/// `prepareLaunch` steps 7–9): the in-game stats' OpenGL wrapper, or
+/// `mangohud --dlsym` when only the frame limit loads MangoHud. A missing
+/// `gamemoderun`, `gamescope` or (for the limit) `mangohud` fails the
+/// launch; Vulkan-layer MangoHud and gamescope `--mangoapp` never require
+/// the `mangohud` wrapper binary.
 async fn wrapper_parts(
     settings: &GameSettings,
     hud_plan: &hud::launch_env::HudLaunchPlan,
+    limit_only: bool,
 ) -> Result<WrapperParts> {
     if !cfg!(target_os = "linux") {
         return Ok(WrapperParts::default());
@@ -242,6 +317,16 @@ async fn wrapper_parts(
     let mut parts = WrapperParts::default();
     if let Some(wrapper) = &hud_plan.opengl_wrapper {
         parts.mangohud = wrapper.clone();
+    } else if limit_only {
+        let flatpak_hint = if locations::is_flatpak() {
+            ". Make sure to install the MangoHud Flatpak extension matching Irori's runtime and restart Irori."
+        } else {
+            ""
+        };
+        let bin = find_on_path("mangohud").ok_or_else(|| {
+            anyhow!("Mangohud is enabled, but `mangohud` executable could not be found on $PATH{flatpak_hint}")
+        })?;
+        parts.mangohud = vec![bin, "--dlsym".into()];
     }
     if settings.use_game_mode {
         let bin = find_on_path("gamemoderun").ok_or_else(|| {
@@ -270,7 +355,7 @@ async fn wrapper_parts(
         let mut cmd = vec![bin.to_string_lossy().into_owned()];
         cmd.extend(wrappers::gamescope_args(
             &settings.gamescope,
-            hud_plan.use_mangoapp,
+            hud_plan.use_mangoapp || limit_only,
             new_cli,
         ));
         parts.gamescope = cmd;
@@ -476,7 +561,10 @@ pub async fn prepare_launch(
     }
 
     let hud_plan = prepare_hud_plan(app, settings, target).await?;
-    let mut parts = wrapper_parts(settings, &hud_plan).await?;
+    let deck = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
+    let (adjusted, limit, mango) = frame_limits(settings, target.platform, deck, &hud_plan);
+    let settings = &adjusted;
+    let mut parts = wrapper_parts(settings, &hud_plan, mango.limit_only).await?;
     let fixes = if cfg!(target_os = "linux") {
         hooks::hooks().known_fixes_env(target.id).await
     } else {
@@ -502,6 +590,9 @@ pub async fn prepare_launch(
         env::layer(&mut vars, graphics_env(app, settings, &host).await);
         env::layer(&mut vars, fixes);
         apply_hud_env(&mut vars, &hud_plan);
+        if mango.loads {
+            mangohud_env(target.id, settings, limit, &mut vars, &host, mango.shown).await;
+        }
         parts.sandbox = sandbox_wrapper(
             app,
             settings,
@@ -605,6 +696,9 @@ pub async fn prepare_launch(
         vars.insert("GAMEID".into(), found.id);
     }
     apply_hud_env(&mut vars, &hud_plan);
+    if mango.loads {
+        mangohud_env(target.id, &effective, limit, &mut vars, &host, mango.shown).await;
+    }
     parts.sandbox = sandbox_wrapper(
         app,
         settings,
@@ -687,6 +781,15 @@ async fn sandbox_wrapper(
         if let Some(p) = vars.get(key).map(PathBuf::from).filter(|p| p.is_absolute()) {
             tool_dirs.push(p);
         }
+    }
+    // MangoHud's file for the session, which it reads and watches.
+    if let Some(dir) = vars
+        .get("MANGOHUD_CONFIGFILE")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        tool_dirs.push(dir);
     }
     let plan = sandbox::SandboxPlan {
         settings: settings.sandbox,
@@ -1276,7 +1379,7 @@ mod tests {
             use_game_mode: true,
             ..Default::default()
         };
-        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default())
+        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default(), false)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("gamemoderun"));
@@ -1295,7 +1398,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default())
+        let err = wrapper_parts(&gs, &hud::launch_env::HudLaunchPlan::default(), false)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("gamescope"));

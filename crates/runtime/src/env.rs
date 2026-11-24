@@ -6,7 +6,7 @@
 //!
 //! 1. [`wrapper_env`]: game identity for wrappers and umu (`GAMEID=umu-0`)
 //! 2. [`generic_env`]: PRIME offload, `STEAM_COMPAT_INSTALL_PATH`, user
-//!    variables, MangoHud's frame limit, `LD_PRELOAD` reset
+//!    variables, `LD_PRELOAD` reset (MangoHud's options: [`crate::mangohud`])
 //! 3. [`crate::graphics::graphics_env`]: the chosen graphics card, Smooth
 //!    Motion and lsfg-vk, except what the user's variables set
 //! 4. known-fixes variables
@@ -70,33 +70,6 @@ fn with_vkd3d_flag(config: &str, flag: &str) -> String {
         flags.push(flag);
     }
     flags.join(",")
-}
-
-/// A frame limit as entered: a whole number above 0, else none.
-fn parse_fps_limit(value: &str) -> Option<u32> {
-    value.trim().parse::<u32>().ok().filter(|n| *n > 0)
-}
-
-/// `MANGOHUD_CONFIG` with MangoHud's frame limit set to `limit`. The value
-/// the user already has (their variable, else the one Irori was started
-/// with) keeps its other options; only its `fps_limit` is replaced. A value
-/// Irori starts gets `read_cfg`: once the variable is set, MangoHud reads
-/// its configuration file only when the variable asks for it, and the
-/// user's `MangoHud.conf` must keep applying.
-pub fn mangohud_config(existing: Option<&str>, limit: u32) -> String {
-    let existing = existing.map(remove_quote_if_necessary).unwrap_or_default();
-    let mut options: Vec<&str> = existing
-        .split(',')
-        .map(str::trim)
-        .filter(|o| !o.is_empty())
-        .filter(|o| o.split('=').next().map(str::trim) != Some("fps_limit"))
-        .collect();
-    if existing.trim().is_empty() {
-        options.push("read_cfg");
-    }
-    let limit = format!("fps_limit={limit}");
-    options.push(&limit);
-    options.join(",")
 }
 
 /// Merge `dxgi.maxFrameRate` and `d3d9.maxFrameRate` into an existing
@@ -376,17 +349,6 @@ pub fn generic_env_for(
             continue;
         }
         env.insert(key.to_string(), remove_quote_if_necessary(&var.value));
-    }
-    if platform == irori_core::HostPlatform::Linux
-        && settings.show_mangohud
-        && let Some(limit) = parse_fps_limit(&settings.mangohud_fps_limit)
-    {
-        let existing = env
-            .get("MANGOHUD_CONFIG")
-            .map(String::as_str)
-            .or_else(|| host.get("MANGOHUD_CONFIG"));
-        let config = mangohud_config(existing, limit);
-        env.insert("MANGOHUD_CONFIG".into(), config);
     }
     let user_sets_preload = settings
         .environment_options
@@ -935,45 +897,6 @@ mod tests {
         let env = generic_env_for(Linux, &gs, None, None, &none);
         assert!(!env.contains_key("__GL_SHADER_DISK_CACHE_SIZE"));
         assert!(!env.contains_key("MESA_SHADER_CACHE_MAX_SIZE"));
-    }
-
-    #[test]
-    fn mangohud_frame_limit_keeps_the_users_configuration() {
-        use irori_core::HostPlatform::{Linux, Mac};
-        assert_eq!(mangohud_config(None, 60), "read_cfg,fps_limit=60");
-        assert_eq!(mangohud_config(Some(" "), 60), "read_cfg,fps_limit=60");
-        assert_eq!(
-            mangohud_config(Some("\"read_cfg,fps_limit=30,position=top-right\""), 90),
-            "read_cfg,position=top-right,fps_limit=90"
-        );
-        // The user's own options without `read_cfg` stay theirs.
-        assert_eq!(mangohud_config(Some("full"), 144), "full,fps_limit=144");
-
-        let mut gs = GameSettings {
-            show_mangohud: true,
-            mangohud_fps_limit: " 75 ".into(),
-            ..Default::default()
-        };
-        let none = HostEnv::default();
-        let env = generic_env_for(Linux, &gs, None, None, &none);
-        assert_eq!(env["MANGOHUD_CONFIG"], "read_cfg,fps_limit=75");
-        assert!(!generic_env_for(Mac, &gs, None, None, &none).contains_key("MANGOHUD_CONFIG"));
-
-        let host = HostEnv::from_pairs([("MANGOHUD_CONFIG", "fps,frametime")]);
-        let env = generic_env_for(Linux, &gs, None, None, &host);
-        assert_eq!(env["MANGOHUD_CONFIG"], "fps,frametime,fps_limit=75");
-        gs.environment_options = vec![user("MANGOHUD_CONFIG", "read_cfg,cpu_temp")];
-        let env = generic_env_for(Linux, &gs, None, None, &host);
-        assert_eq!(env["MANGOHUD_CONFIG"], "read_cfg,cpu_temp,fps_limit=75");
-
-        // No limit, an unreadable one, or MangoHud off leave the variable alone.
-        for (limit, on) in [("", true), ("0", true), ("sixty", true), ("60", false)] {
-            gs.mangohud_fps_limit = limit.into();
-            gs.show_mangohud = on;
-            gs.environment_options.clear();
-            let env = generic_env_for(Linux, &gs, None, None, &none);
-            assert!(!env.contains_key("MANGOHUD_CONFIG"), "{limit} {on}");
-        }
     }
 
     #[test]

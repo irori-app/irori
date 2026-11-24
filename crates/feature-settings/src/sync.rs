@@ -2,7 +2,8 @@
 //! (a folder something else syncs, WebDAV, or an rclone remote), this
 //! computer's name, how
 //! the last sync went, the other computers and the changes that lost to
-//! theirs.
+//! theirs. Cloud copies show a mode per kind, how much each kind holds and
+//! how much waits to be sent, with a bar of their shares.
 
 use std::collections::HashMap;
 
@@ -19,13 +20,14 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, PathPromptOptions, Render,
-    SharedString, Styled as _, Subscription, Window, div,
+    SharedString, Styled as _, Subscription, Window, div, px, relative,
 };
 use irori_core::CopyMode;
+use irori_core::util::format_bytes;
 use irori_core::{GameId, Runner, SyncMode};
 use irori_services::backup_schedule::local_time;
 use irori_services::sync::ConflictField;
-use irori_services::sync::copies::{CopyKind, CopyStatus};
+use irori_services::sync::copies::{CopyKind, CopySize, CopyStatus};
 use irori_services::sync::rclone::INSTALL_URL as RCLONE_INSTALL_URL;
 use irori_services::{RcloneInfo, SyncConflict, SyncDevice, SyncStatus, WebDavLogin};
 use irori_ui::i18n::{t, t_args};
@@ -62,7 +64,41 @@ pub struct SyncPanel {
     finding: bool,
     /// The computer and kind being brought back.
     bringing: Option<(String, CopyKind)>,
+    /// How much each kind of cloud copy holds, once measured.
+    sizes: Option<Vec<CopySize>>,
+    measuring: bool,
     _subscriptions: Vec<Subscription>,
+}
+
+/// "1.2 GB in 40 files · 300 MB to send" for one kind, or what it says when
+/// it holds nothing or everything is sent.
+fn size_text(size: &CopySize) -> SharedString {
+    if size.files == 0 {
+        return t("settings.sync.copies.size_empty");
+    }
+    let held = t_args(
+        if size.files == 1 {
+            "settings.sync.copies.size_one"
+        } else {
+            "settings.sync.copies.size_other"
+        },
+        &[
+            ("size", &format_bytes(size.bytes)),
+            ("count", &size.files.to_string()),
+        ],
+    );
+    let waiting = if size.waiting_files == 0 {
+        t("settings.sync.copies.all_sent")
+    } else {
+        t_args(
+            "settings.sync.copies.waiting",
+            &[("size", &format_bytes(size.waiting_bytes))],
+        )
+    };
+    t_args(
+        "settings.sync.copies.size_line",
+        &[("held", &held), ("waiting", &waiting)],
+    )
 }
 
 impl SyncPanel {
@@ -137,14 +173,41 @@ impl SyncPanel {
             devices: None,
             finding: false,
             bringing: None,
+            sizes: None,
+            measuring: false,
             _subscriptions: subscriptions,
         };
+        if prefs.mode != SyncMode::Off {
+            this.measure_copies(cx);
+        }
         this.refresh(cx);
         this.load_user(cx);
         if prefs.mode == SyncMode::Rclone {
             this.look_for_rclone(cx);
         }
         this
+    }
+
+    /// Measure how much each kind of cloud copy holds, off the UI thread.
+    fn measure_copies(&mut self, cx: &mut Context<Self>) {
+        if self.measuring {
+            return;
+        }
+        self.measuring = true;
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move { b.cloud_copy_sizes().await });
+        cx.spawn(async move |this, cx| {
+            let sizes = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.measuring = false;
+                match sizes {
+                    Ok(sizes) => this.sizes = Some(sizes),
+                    Err(e) => tracing::debug!("measuring cloud copies: {e:#}"),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Find rclone and its remotes, off the UI thread.
@@ -662,6 +725,7 @@ impl SyncPanel {
                         cx,
                     ),
                 }
+                this.measure_copies(cx);
                 cx.notify();
             });
         })
@@ -726,6 +790,7 @@ impl SyncPanel {
                         .title(t("settings.sync.copies.bring_failed")),
                 };
                 window.push_notification(note, cx);
+                this.measure_copies(cx);
                 cx.notify();
             });
         })
@@ -744,6 +809,9 @@ impl SyncPanel {
                 cx,
             ))
             .child(muted(t("settings.sync.copies.description"), cx));
+        if let Some(bar) = self.render_copies_bar(cx) {
+            out = out.child(bar);
+        }
         for (row, status) in statuses.iter().enumerate() {
             out = out.child(self.render_copy_row(row, status, cx));
         }
@@ -820,6 +888,50 @@ impl SyncPanel {
         out
     }
 
+    /// The kinds' shares of what the cloud copies hold here, as one bar with
+    /// a legend; `None` before they are measured or when they hold nothing.
+    fn render_copies_bar(&self, cx: &mut Context<Self>) -> Option<gpui_kit::Div> {
+        let sizes = self.sizes.as_ref()?;
+        let total: u64 = sizes.iter().map(|s| s.bytes).sum();
+        if total == 0 {
+            return None;
+        }
+        let theme = cx.theme();
+        let colors = [theme.chart_1, theme.chart_2, theme.chart_3];
+        let (track, muted_fg) = (theme.muted, theme.muted_foreground);
+        let bar = h_flex()
+            .w_full()
+            .h(px(8.))
+            .rounded(px(4.))
+            .overflow_hidden()
+            .bg(track)
+            .children(sizes.iter().zip(colors).map(|(size, color)| {
+                div()
+                    .h_full()
+                    .w(relative(size.bytes as f32 / total as f32))
+                    .bg(color)
+            }));
+        let legend = h_flex()
+            .flex_wrap()
+            .gap_x_4()
+            .gap_y_1()
+            .text_xs()
+            .text_color(muted_fg)
+            .children(sizes.iter().zip(colors).map(|(size, color)| {
+                h_flex()
+                    .gap_1p5()
+                    .child(div().size_2p5().rounded_full().bg(color))
+                    .child(t_args(
+                        "settings.sync.copies.legend",
+                        &[
+                            ("what", &kind_label(size.kind)),
+                            ("size", &format_bytes(size.bytes)),
+                        ],
+                    ))
+            }));
+        Some(v_flex().gap_1().child(bar).child(legend))
+    }
+
     fn render_copy_row(
         &self,
         row: usize,
@@ -827,6 +939,11 @@ impl SyncPanel {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let kind = status.kind;
+        let size = self
+            .sizes
+            .as_ref()
+            .and_then(|s| s.iter().find(|s| s.kind == kind))
+            .map(size_text);
         let modes = ButtonGroup::new(SharedString::from(format!("copies-mode-{row}")))
             .outline()
             .xsmall()
@@ -864,6 +981,7 @@ impl SyncPanel {
                     .flex_1()
                     .min_w_0()
                     .child(div().text_sm().truncate().child(kind_label(kind)))
+                    .when_some(size, |col, size| col.child(muted(size, cx)))
                     .when_some(last, |col, last| col.child(muted(last, cx))),
             )
             .child(modes)

@@ -28,10 +28,11 @@ mod commands;
 mod dialogs;
 mod filter;
 mod filters_panel;
-mod format;
+pub mod format;
 mod grid;
 mod i18n;
 mod launch;
+mod launchbox;
 mod layouts;
 mod quick;
 mod random;
@@ -60,10 +61,14 @@ pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};
 pub use filter::{CategoryFilter, GroupKind, Grouping, HiddenMode, InstallFilter, ViewFilter};
 pub use filters_panel::active_filters;
 pub use i18n::CATALOGS;
-pub use random::open_random_game;
+pub use launchbox::{download_launchbox, offers_launchbox};
+pub use random::{
+    Pool as RandomPool, open_random_game, pick_from as pick_random_from, pools as random_pools,
+};
 pub use stats::StatsView;
 pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
+pub use view::details::{link_picked_to_steam, picked_count, refresh_picked_details};
 pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
@@ -121,6 +126,20 @@ gpui_kit::actions!(
         NextLibraryView,
         /// Open the grid's drawer on the focused game, or close it.
         ToggleDrawer,
+        /// Move through the art picker's pictures (arrows, a controller's
+        /// directions).
+        ArtPickerUp,
+        ArtPickerDown,
+        ArtPickerLeft,
+        ArtPickerRight,
+        /// Use the picture the art picker's cursor is on.
+        UseArt,
+        /// Move to the art picker's search field.
+        SearchArt,
+        /// Show the previous or next source's pictures (a controller's
+        /// shoulders).
+        PrevArtSource,
+        NextArtSource,
     ]
 );
 
@@ -165,6 +184,18 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-a", SelectAllGames, grid),
         KeyBinding::new("delete", RemovePicked, grid),
         KeyBinding::new("escape", EndSelection, grid),
+    ]);
+    let art = Some(dialogs::steamgrid::ART_PICKER_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("up", ArtPickerUp, art),
+        KeyBinding::new("down", ArtPickerDown, art),
+        KeyBinding::new("left", ArtPickerLeft, art),
+        KeyBinding::new("right", ArtPickerRight, art),
+        KeyBinding::new("enter", UseArt, art),
+        KeyBinding::new("ctrl-enter", SearchArt, art),
+        KeyBinding::new("ctrl-f", SearchArt, art),
+        KeyBinding::new("pageup", PrevArtSource, art),
+        KeyBinding::new("pagedown", NextArtSource, art),
     ]);
 }
 
@@ -353,6 +384,20 @@ pub fn show_game_mode(mode: irori_core::GameMode, cx: &mut App) {
         move |f| {
             f.reset_filters();
             f.modes = [mode].into();
+        },
+        cx,
+    );
+    irori_ui::navigate(irori_ui::Route::Library, cx);
+}
+
+/// Show the library's games with Steam tag `tag` (a game page's tag
+/// chip): the Filters popover's criteria give way to that tag alone, while
+/// the search, store, sort and grouping stay.
+pub fn show_tag(tag: String, cx: &mut App) {
+    filters_panel::change_filters(
+        move |f| {
+            f.reset_filters();
+            f.tags = [tag].into();
         },
         cx,
     );

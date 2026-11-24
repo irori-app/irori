@@ -10,10 +10,10 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, MouseButton, NavigationDirection, ParentElement as _, Render,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div,
-    rems,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Decorations, Entity, FocusHandle,
+    Focusable, InteractiveElement, IntoElement, MouseButton, NavigationDirection,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Task, Window, div, rems,
 };
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
 use irori_ui::components::{BrandMark, BrandWordmark};
@@ -135,6 +135,8 @@ impl AppShell {
                 this.sync_glass(window, cx);
                 this.save_placement(window, cx);
             }),
+            // The desktop moved its window buttons (Linux).
+            cx.observe_button_layout_changed(window, |_, _, cx| cx.notify()),
             // "Follow system" follows the system while Irori runs, too.
             cx.observe_window_appearance(window, |_, window, cx| {
                 let prefs = models(cx).settings.read(cx).app.ui.clone();
@@ -162,7 +164,7 @@ impl AppShell {
         cx.set_reduce_motion(reduce);
         Self {
             focus: cx.focus_handle(),
-            palette: Palette::new(window, cx),
+            palette: Palette::default(),
             pages: Pages::default(),
             sidebar_collapsed: collapsed,
             narrow_expanded: false,
@@ -367,16 +369,33 @@ impl AppShell {
         cx.notify();
     }
 
-    fn render_title_bar(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut title_bar = TitleBar::new();
-        if glass::current(cx).is_translucent() {
-            // One flat tint, like the sidebar, instead of gpui-kit's gradient.
-            title_bar = title_bar.bg(glass::chrome(cx.theme().title_bar, cx));
-        }
+    fn render_title_bar(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        // One flat tint, like the sidebar, instead of the title bar's gradient.
+        let flat = glass::current(cx)
+            .is_translucent()
+            .then(|| glass::chrome(cx.theme().title_bar, cx));
         let open_palette = cx.listener(|this, _, window, cx| {
             this.palette.open(window, cx);
         });
-        title_bar.child(title_bar_content(cx, open_palette))
+        let content = title_bar_content(cx, open_palette);
+        // The desktop's own button layout, where Irori draws the buttons.
+        let desktop = cx
+            .button_layout()
+            .filter(|l| !crate::title_bar::is_kits_layout(l))
+            .filter(|_| matches!(window.window_decorations(), Decorations::Client { .. }));
+        if let Some(layout) = desktop {
+            let bar = crate::title_bar::DesktopTitleBar::new(layout, content);
+            return match flat {
+                Some(color) => bar.flat(color),
+                None => bar,
+            }
+            .into_any_element();
+        }
+        let mut title_bar = TitleBar::new();
+        if let Some(color) = flat {
+            title_bar = title_bar.bg(color);
+        }
+        title_bar.child(content).into_any_element()
     }
 
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -954,7 +973,7 @@ mod start_tests {
 /// The title bar row laid out in a real window, so a change to the flex tracks
 /// is measured where it ships.
 #[cfg(test)]
-mod title_bar_tests {
+pub(crate) mod title_bar_tests {
     use std::sync::{Arc, Mutex, Once};
     use std::time::{Duration, Instant};
 
@@ -1003,7 +1022,7 @@ mod title_bar_tests {
     }
 
     /// A real backend over a shelf with one manually added (browser) app.
-    fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
+    pub(crate) fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
         isolate_paths();
         cx.executor().allow_parking();
         let made: Arc<Mutex<Option<Arc<SideloadStore>>>> = Arc::default();
@@ -1029,7 +1048,11 @@ mod title_bar_tests {
     }
 
     /// Add the game whose title the pill shows, and wait for the library model.
-    fn add_game(cx: &mut TestAppContext, backend: &Backend, store: &SideloadStore) -> GameId {
+    pub(crate) fn add_game(
+        cx: &mut TestAppContext,
+        backend: &Backend,
+        store: &SideloadStore,
+    ) -> GameId {
         let id = backend
             .runtime()
             .block_on(store.add_app(SideloadApp {
@@ -1054,7 +1077,7 @@ mod title_bar_tests {
     }
 
     /// Wait until the status model shows (or stops showing) `id` as playing.
-    fn wait_for_status(cx: &mut TestAppContext, id: &GameId, playing: bool) {
+    pub(crate) fn wait_for_status(cx: &mut TestAppContext, id: &GameId, playing: bool) {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
             cx.run_until_parked();

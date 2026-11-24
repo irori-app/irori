@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use gpui_kit::{App, Global};
+use irori_emulation::EmulationStore;
 use irori_epic::EpicStore;
 use irori_steam::SteamStore;
 
@@ -29,6 +30,21 @@ pub fn install_store_handles(
     cx: &mut App,
 ) {
     cx.set_global(StoreHandles { epic, steam });
+}
+
+struct EmulationHandle(Arc<EmulationStore>);
+
+impl Global for EmulationHandle {}
+
+/// Give the settings feature the ROM library store, for the LaunchBox panel
+/// of Advanced → Artwork (the stored game list and removing it).
+pub fn install_emulation_store(store: Arc<EmulationStore>, cx: &mut App) {
+    cx.set_global(EmulationHandle(store));
+}
+
+/// The ROM library store, when the shell installed it.
+pub(crate) fn emulation(cx: &App) -> Option<Arc<EmulationStore>> {
+    cx.try_global::<EmulationHandle>().map(|h| h.0.clone())
 }
 
 /// The Epic store, when the shell installed it.

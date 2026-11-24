@@ -26,6 +26,13 @@
 //! device on macOS; and on Windows the policy configuration COM object
 //! Windows' own sound settings use (`IPolicyConfig`, which Microsoft doesn't
 //! document but every output switcher relies on), for every role.
+//!
+//! The default microphone is read, muted and switched the same ways
+//! ([`GameAudio::microphone`], [`Backend::audio_inputs`],
+//! [`Backend::set_audio_input`]): `pactl`'s default source (monitors of the
+//! outputs left out) on Linux, Core Audio's default input device on macOS
+//! (its level through `osascript`), and the default capture endpoint on
+//! Windows.
 
 use std::collections::{HashMap, HashSet};
 
@@ -68,6 +75,14 @@ mod platform {
     pub(super) async fn set_output(_game: Option<GameProcess>, _id: String) -> Result<()> {
         anyhow::bail!("Sound outputs can't be switched on this system")
     }
+
+    pub(super) async fn inputs() -> Result<Vec<AudioOutput>> {
+        anyhow::bail!("Microphones can't be switched on this system")
+    }
+
+    pub(super) async fn set_input(_id: String) -> Result<()> {
+        anyhow::bail!("Microphones can't be switched on this system")
+    }
 }
 
 /// A name `pactl` gives, unless it is empty or PipeWire's "(null)".
@@ -108,27 +123,62 @@ pub struct AudioOutput {
 /// get-default-sink`) marked current. `None` when the text isn't that JSON.
 pub fn parse_sinks_json(text: &str, default: &str) -> Option<Vec<AudioOutput>> {
     let sinks: Vec<Value> = serde_json::from_str(text).ok()?;
-    Some(
-        sinks
-            .iter()
-            .filter_map(|sink| {
-                let id = sink.get("name")?.as_str()?.to_owned();
-                // PipeWire writes "(null)" for outputs without a
-                // description (an AirPlay output, for one); their nickname
-                // says more than the sink's name.
-                let properties = sink.get("properties");
-                let name = shown_name(sink.get("description"))
-                    .or_else(|| shown_name(properties.and_then(|p| p.get("node.nick"))))
-                    .unwrap_or(&id)
-                    .to_owned();
-                Some(AudioOutput {
-                    current: id == default.trim(),
-                    id,
-                    name,
-                })
+    Some(devices_of(&sinks, default))
+}
+
+/// The microphones in `pactl -f json list sources`, `default` (`pactl
+/// get-default-source`) marked current: every source but the monitors,
+/// which record what an output plays rather than a microphone. `None` when
+/// the text isn't that JSON.
+pub fn parse_sources_json(text: &str, default: &str) -> Option<Vec<AudioOutput>> {
+    let sources: Vec<Value> = serde_json::from_str(text).ok()?;
+    let microphones: Vec<Value> = sources.into_iter().filter(|s| !is_monitor(s)).collect();
+    Some(devices_of(&microphones, default))
+}
+
+/// Whether a source of `pactl -f json list sources` is an output's monitor.
+fn is_monitor(source: &Value) -> bool {
+    let of_sink = source
+        .get("monitor_of_sink")
+        .and_then(Value::as_str)
+        .is_some_and(|sink| !sink.is_empty() && sink != "n/a");
+    let class = source
+        .get("properties")
+        .and_then(|p| p.get("device.class"))
+        .and_then(Value::as_str);
+    let name = source.get("name").and_then(Value::as_str).unwrap_or("");
+    of_sink || class == Some("monitor") || name.ends_with(".monitor")
+}
+
+/// The microphones in `pactl list sources short`: their names, monitors
+/// left out.
+pub fn parse_sources_short(text: &str, default: &str) -> Vec<AudioOutput> {
+    parse_sinks_short(text, default)
+        .into_iter()
+        .filter(|source| !source.id.ends_with(".monitor"))
+        .collect()
+}
+
+/// Sinks or sources as `pactl -f json` lists them, `default` marked.
+fn devices_of(list: &[Value], default: &str) -> Vec<AudioOutput> {
+    list.iter()
+        .filter_map(|sink| {
+            let id = sink.get("name")?.as_str()?.to_owned();
+            // PipeWire writes "(null)" for outputs without a description
+            // (an AirPlay output, for one); their nickname says more than
+            // the sink's name.
+            let properties = sink.get("properties");
+            let name = shown_name(sink.get("description"))
+                .or_else(|| shown_name(properties.and_then(|p| p.get("node.nick"))))
+                .unwrap_or(&id)
+                .to_owned();
+            Some(AudioOutput {
+                current: id == default.trim(),
+                id,
+                name,
             })
-            .collect(),
-    )
+        })
+        .collect()
 }
 
 /// Whether the sound output can be switched on this system.
@@ -177,6 +227,9 @@ pub struct GameAudio {
     /// The game's streams together (the loudest of them, and muted when all
     /// of them are); `None` while the game plays no sound.
     pub game: Option<Volume>,
+    /// The default microphone's input level; `None` without one, or when it
+    /// couldn't be read.
+    pub microphone: Option<Volume>,
 }
 
 /// Whose volume to change.
@@ -184,6 +237,8 @@ pub struct GameAudio {
 pub enum VolumeTarget {
     System,
     Game,
+    /// The default microphone: muting it, or its input level.
+    Microphone,
 }
 
 /// One playing stream, as `pactl` lists it.
@@ -454,9 +509,22 @@ pub(crate) fn parse_volume_settings(text: &str) -> Option<Volume> {
     })
 }
 
+/// The microphone's input level in `osascript`'s `get volume settings`;
+/// `None` without an input (`missing value`).
+// Used on macOS; the parser is tested everywhere.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn parse_input_volume(text: &str) -> Option<u32> {
+    text.trim().split(',').find_map(|part| {
+        let (key, value) = part.split_once(':')?;
+        (key.trim() == "input volume")
+            .then(|| value.trim().parse().ok())
+            .flatten()
+    })
+}
+
 impl Backend {
     /// The process Irori started for the running game `id`.
-    fn game_process(&self, id: &GameId) -> Option<GameProcess> {
+    pub(crate) fn game_process(&self, id: &GameId) -> Option<GameProcess> {
         let pid = self.running_pid(id)?;
         let elapsed = self.playing_for(id).unwrap_or_default();
         let since = std::time::SystemTime::now()
@@ -507,6 +575,45 @@ impl Backend {
         platform::set_output(self.game_process(id), output.to_owned()).await
     }
 
+    /// The microphones, the one in use marked.
+    pub async fn audio_inputs(&self) -> Result<Vec<AudioOutput>> {
+        platform::inputs().await
+    }
+
+    /// Record from `input` (an [`AudioOutput::id`] of
+    /// [`Self::audio_inputs`]): the system's default microphone, which games
+    /// follow unless they picked their own.
+    pub async fn set_audio_input(&self, input: &str) -> Result<()> {
+        platform::set_input(input.to_owned()).await
+    }
+
+    /// Move the system's volume by `step` percent for the controller's
+    /// volume shortcut and unmute it; returns the volume as it is then, for
+    /// the level shown over the game. No window shows a failure, so it is
+    /// announced, and `None` comes back.
+    pub async fn change_system_volume(&self, step: i32) -> Option<Volume> {
+        let changed = async {
+            platform::change(None, VolumeTarget::System, Change::Step(step)).await?;
+            platform::audio(None).await
+        };
+        match changed.await {
+            Ok(audio) => audio.system,
+            Err(e) => {
+                self.volume_failed(&e);
+                None
+            }
+        }
+    }
+
+    fn volume_failed(&self, e: &anyhow::Error) {
+        tracing::warn!("changing the volume: {e:#}");
+        self.bus.notice(
+            irori_core::Notice::new(irori_core::NoticeLevel::Error, "The volume wasn't changed")
+                .message(format!("{e:#}"))
+                .keys("shell.notice.volume_failed", None, &[]),
+        );
+    }
+
     /// Send sound to `output` from outside a game's overlay (Big Picture's
     /// home): the system's default, and a running game's sound with it.
     pub async fn set_system_audio_output(&self, output: &str) -> Result<()> {
@@ -523,15 +630,7 @@ impl Backend {
         let b = self.clone();
         self.spawn(async move {
             if let Err(e) = platform::change(None, VolumeTarget::System, Change::Step(step)).await {
-                tracing::warn!("changing the volume: {e:#}");
-                b.bus.notice(
-                    irori_core::Notice::new(
-                        irori_core::NoticeLevel::Error,
-                        "The volume wasn't changed",
-                    )
-                    .message(format!("{e:#}"))
-                    .keys("shell.notice.volume_failed", None, &[]),
-                );
+                b.volume_failed(&e);
             }
         });
     }
@@ -757,5 +856,38 @@ Sink Input #7
             None
         );
         assert_eq!(parse_volume_settings(""), None);
+        assert_eq!(
+            parse_input_volume("output volume:44, input volume:50, output muted:false"),
+            Some(50)
+        );
+        assert_eq!(
+            parse_input_volume("output volume:44, input volume:missing value"),
+            None
+        );
+    }
+
+    #[test]
+    fn lists_microphones_without_the_outputs_monitors() {
+        let json = r#"[
+            {"index": 1, "name": "alsa_output.pci.analog-stereo.monitor",
+             "description": "Monitor of Built-in Audio", "monitor_of_sink": "alsa_output.pci.analog-stereo"},
+            {"index": 2, "name": "alsa_input.pci.analog-stereo",
+             "description": "Built-in Audio Analog Stereo", "monitor_of_sink": "n/a"},
+            {"index": 3, "name": "bluez_input.AA_BB", "description": "Headset",
+             "properties": {"device.class": "sound"}},
+            {"index": 4, "name": "easyeffects_sink_monitor", "description": "Effects",
+             "properties": {"device.class": "monitor"}}
+        ]"#;
+        let mics = parse_sources_json(json, "bluez_input.AA_BB\n").unwrap();
+        let ids: Vec<&str> = mics.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, ["alsa_input.pci.analog-stereo", "bluez_input.AA_BB"]);
+        assert!(mics[1].current && !mics[0].current);
+        assert_eq!(mics[0].name, "Built-in Audio Analog Stereo");
+        assert!(parse_sources_json("Source #1", "x").is_none());
+        let short = "1\talsa_output.pci.monitor\tPipeWire\ts16le\tIDLE\n\
+2\talsa_input.pci\tPipeWire\ts16le\tRUNNING\n";
+        let mics = parse_sources_short(short, "alsa_input.pci");
+        assert_eq!(mics.len(), 1);
+        assert!(mics[0].current);
     }
 }

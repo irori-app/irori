@@ -149,26 +149,27 @@ impl GamePage {
     /// Play, Install and the rest act on that copy.
     pub(super) fn render_store_line(&self, store: &str, cx: &mut Context<Self>) -> AnyElement {
         let ink = self.ink;
-        let copies = irori_ui::copies::of(&self.id, cx);
+        // Each copy says what tells it apart: its store, its own title, a
+        // ROM's emulator and file.
+        let copies = irori_ui::copies::labelled(&self.id, cx);
         if copies.len() < 2 {
             return super::caption(store.to_string(), ink.muted).into_any_element();
         }
         h_flex()
             .gap_1()
             .flex_wrap()
-            .children(copies.into_iter().map(|copy| {
+            .children(copies.into_iter().map(|(copy, label)| {
                 let id = copy.id();
                 let current = id == self.id;
+                let text = label.text();
                 Button::new(SharedString::from(format!("game-copy-{}", id.key())))
                     .xsmall()
                     .when(current, |b| b.outline())
                     .when(!current, |b| b.ghost())
                     .selected(current)
                     .when(copy.is_installed, |b| b.icon(IconName::HardDrive))
-                    .label(copy.runner().store_name())
-                    .when(!current, |b| {
-                        b.tooltip(irori_ui::copies::open_label(copy.runner().store_name()))
-                    })
+                    .label(text.clone())
+                    .when(!current, |b| b.tooltip(irori_ui::copies::open_label(&text)))
                     .on_click(move |_, _, cx| {
                         if !current {
                             irori_ui::navigate(irori_ui::Route::Game(id.clone()), cx)
@@ -685,6 +686,19 @@ impl GamePage {
                 )
                 .into_any_element(),
             PrimaryAction::Stop => row
+                .child({
+                    let id = id.clone();
+                    Button::new("back-to-game")
+                        .debug_selector(|| "back-to-game".into())
+                        .primary()
+                        .large()
+                        .icon(IconName::AppWindow)
+                        .label(t("game.hero.back_to_game"))
+                        .tooltip(t("game.hero.back_to_game_tooltip"))
+                        .on_click(move |_, window, cx| {
+                            irori_ui::game_window::back_to_game(id.clone(), window, cx)
+                        })
+                })
                 .child(
                     Button::new("primary-action")
                         .large()
@@ -874,7 +888,8 @@ impl GamePage {
     }
 
     /// Play as a split button: launch options (when the store offers
-    /// several) and one-off variants (verbose logs, no update check).
+    /// several), the user's own actions and one-off variants (verbose logs,
+    /// no update check).
     fn render_play_button(&self, cx: &mut Context<Self>) -> AnyElement {
         let play = self.render_play_pill(cx);
         let page = cx.entity();
@@ -883,7 +898,8 @@ impl GamePage {
         } else {
             Vec::new()
         };
-        if options.is_empty() && !self.id.runner.manages_installs() {
+        let has_actions = !irori_ui::user_actions::list(&self.id, cx).is_empty();
+        if options.is_empty() && !has_actions && !self.id.runner.manages_installs() {
             return play;
         }
         let current = self.selected_option.clone();
@@ -896,7 +912,7 @@ impl GamePage {
             .icon(IconName::ChevronDown)
             .accessibility_label(t("game.hero.play_with"))
             .tooltip(t("game.hero.play_with"))
-            .dropdown_menu(move |mut menu, _, _| {
+            .dropdown_menu(move |mut menu, _, cx| {
                 menu = menu.label(t("game.hero.play_with"));
                 for option in &options {
                     let page = page.clone();
@@ -925,6 +941,7 @@ impl GamePage {
                         )
                         .separator();
                 }
+                menu = irori_ui::user_actions::menu_items(menu, &id, true, cx).separator();
                 for (label, icon, params) in super::menu::PLAY_VARIANTS {
                     let page = page.clone();
                     let option = current.clone();

@@ -960,6 +960,16 @@ impl Store for SteamStore {
         self.achievement_cache.forget(app_name).await
     }
 
+    /// Steam writes the game's stats file on every unlock.
+    async fn achievement_signal(&self, app_name: &str) -> irori_core::AchievementSignal {
+        let files = self.achievement_files(app_name).await;
+        if files.is_empty() {
+            irori_core::AchievementSignal::None
+        } else {
+            irori_core::AchievementSignal::Files(files)
+        }
+    }
+
     async fn remote_playtime(&self) -> Result<HashMap<String, u64>> {
         if (self.settings)().disable_playtime_sync {
             return Ok(HashMap::new());

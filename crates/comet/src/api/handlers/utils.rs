@@ -218,14 +218,25 @@ pub async fn unlock_achievement(
 
     context.set_updated_achievements(true).await;
     let pid = context.get_pid().await;
+    let client_id = context.client_id().await.unwrap_or_default();
     super::utils::send_custom_events(
-        context.client_id().await.unwrap_or_default(),
+        client_id.clone(),
         reqwest_client.clone(),
         achievement.clone(),
     );
     let _ = context
         .overlay_sender()
-        .send((pid, OverlayPeerMessage::Achievement(achievement)));
+        .send((pid, OverlayPeerMessage::Achievement(achievement.clone())));
+    // Irori: tell the host, which shows unlocks over the game.
+    if !client_id.is_empty() {
+        let _ = context.overlay_sender().send((
+            pid,
+            OverlayPeerMessage::Unlocked {
+                client_id,
+                achievement,
+            },
+        ));
+    }
 }
 
 pub fn send_custom_events(

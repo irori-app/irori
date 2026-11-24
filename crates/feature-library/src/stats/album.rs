@@ -23,7 +23,7 @@ pub struct Shot {
     /// Unix time it was taken.
     pub taken: i64,
     pub day: NaiveDate,
-    /// A video clip, drawn over its game's art and played by the system.
+    /// A video clip, drawn as its poster frame and played by the system.
     pub video: bool,
 }
 

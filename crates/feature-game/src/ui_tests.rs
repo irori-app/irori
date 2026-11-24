@@ -79,8 +79,19 @@ impl Store for FakeStore {
         (app_name == self.game.app_name).then(|| self.game.clone())
     }
     async fn extra_info(&self, _: &str) -> anyhow::Result<ExtraInfo> {
+        // The Steam game's page names a trailer (never played here: it would
+        // reach the network).
+        let videos = (self.game.runner() == Runner::Steam)
+            .then(|| irori_core::Video {
+                name: "Launch trailer".into(),
+                thumbnail: None,
+                url: "https://example.invalid/trailer.mp4".into(),
+            })
+            .into_iter()
+            .collect();
         Ok(ExtraInfo {
             description: Some("A test game.".into()),
+            videos,
             ..Default::default()
         })
     }
@@ -387,6 +398,30 @@ fn a_launch_being_prepared_is_cancelled_with_escape_or_its_button(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn a_running_game_offers_back_to_game_beside_stop(cx: &mut TestAppContext) {
+    let id = test_game().id();
+    let (b, handle, page) = open_page(cx, id.clone());
+    let drawn = |cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .expect("window");
+        let mut vcx = VisualTestContext::from_window(handle, cx);
+        vcx.run_until_parked();
+        vcx.debug_bounds("back-to-game").is_some()
+    };
+    assert!(!drawn(cx), "nothing to go back to while it isn't running");
+
+    b.statuses.set(&id, irori_core::StatusKind::Playing);
+    settle();
+    cx.run_until_parked();
+    assert_eq!(primary(cx, &page), Some(PrimaryAction::Stop));
+    assert!(drawn(cx), "Back to game sits beside Stop");
+    b.statuses.clear(&id);
+}
+
+#[gpui_kit::test]
 fn the_settings_shortcut_reaches_a_steam_games_steam_play_choice(cx: &mut TestAppContext) {
     let id = steam_game().id();
     let (_b, handle, page) = open_page(cx, id.clone());
@@ -404,6 +439,33 @@ fn the_settings_shortcut_reaches_a_steam_games_steam_play_choice(cx: &mut TestAp
         "launch"
     };
     assert_eq!(route, irori_ui::Route::GameSettings(id, section.into()));
+}
+
+#[gpui_kit::test]
+fn a_store_pages_trailer_gets_a_stage(cx: &mut TestAppContext) {
+    let steam = steam_game().id();
+    let (_b, handle, page) = open_page(cx, steam.clone());
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("trailer-stage").is_some());
+    cx.update(|cx| {
+        assert!(page.read(cx).has_trailer(cx));
+        // The palette reaches the open page's player.
+        assert!(irori_ui::trailer::has_trailer(&steam, cx));
+    });
+}
+
+#[gpui_kit::test]
+fn a_page_without_trailers_has_no_stage(cx: &mut TestAppContext) {
+    let gog = test_game().id();
+    let (_b, handle, page) = open_page(cx, gog.clone());
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("trailer-stage").is_none());
+    cx.update(|cx| {
+        assert!(!page.read(cx).has_trailer(cx));
+        assert!(!irori_ui::trailer::has_trailer(&gog, cx));
+    });
 }
 
 #[test]

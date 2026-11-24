@@ -94,7 +94,7 @@ irori displays [--json]                          the displays: modes, HDR and VR
 Irori's other arguments (`crates/irori/src/cli.rs`) are:
 
 - `-l/--launch <runner>/<app>`, `--big-picture`/`--console`, `--minimized`/`--tray`,
-  `--save-clip`, `--screenshot`, `-V/--version` and `-h/--help`.
+  `--save-clip`, `--screenshot`, `--quick-launch`, `-V/--version` and `-h/--help`.
 - `--launch` with `--minimized`/`--tray` (or Heroic's `--no-gui`, a hidden alias) plays
   without opening the window or Big Picture (`Cli::launch_without_window`); a launch that
   fails then brings the window up to say why.
@@ -102,12 +102,24 @@ Irori's other arguments (`crates/irori/src/cli.rs`) are:
   the replay buffer, take a screenshot of the running game) for a key binding in the
   user's compositor; they never start Irori and exit 1 when none runs
   (`instance::forward`; see `docs/PLATFORMS.md`, "Clip and screenshot keys").
+- `--quick-launch` and `irori://quick-launch` open the quick launcher
+  (`crates/irori/src/quick_launch.rs`: the palette in a window of its own, a layer
+  surface with the keyboard on Wayland, a pop-up on macOS and Windows, a plain window on
+  X11), or close it when it is open; started that way Irori keeps its main window hidden
+  while a tray can bring it back. Enter plays a game (or goes back to it), Shift+Enter
+  shows it in Irori, → lists its actions; Escape, running something or losing the focus
+  closes it, and closing it never quits Irori. With `iroriUi.quickLaunchShortcut` the
+  desktop is asked for Ctrl+Alt+K: on Linux through the replay buffer's shortcut session
+  (portal, X11 grab, else compositor lines; `Backend::quick_launch_shortcut`), on macOS
+  and Windows through the overlay's hot key registration
+  (`irori_bigpicture::overlay::register_quick_launch`). General → Tray and window shows
+  its state and the command to bind.
 - `--wait` with `--launch` or `--big-picture` (`crates/irori/src/waiting.rs`): the
   invocation stays until the game's session (or Big Picture) ends, exiting 0, or 1 with
   the reason on stderr; ending it first stops the game (leaves Big Picture). It starts
   Irori first when none runs, in a process group of its own and, on Windows, outside the
   caller's job, so Irori outlives a stream. Sunshine's applications use it.
-- Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture`,
+- Links: `irori://launch|game|open/<runner>/<app>`, `irori://library|downloads|updates|accounts|stores|stats|wine|emulators|bigpicture|quick-launch`,
   `irori://settings/<section>`, `irori://stats/year[/<year>]` (the Year in review),
   `irori://lutris/<slug>` (the Lutris script installer at
   a lutris.net game; Lutris's own `lutris:<slug>` is accepted as an argument too), and
@@ -234,7 +246,7 @@ irori-core                        (depends on nothing internal)
   ├─ store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
   │                   irori-steam, irori-sideload, irori-xbox (+ runtime, irori-msstore-api,
   │                   irori-msixvc, irori-xbox-api), irori-emulation (+ engines,
-  │                   irori-retroachievements-api),
+  │                   irori-retroachievements-api, extras for LaunchBox's box art),
   │                   irori-launchers (+ runtime, irori-launchers-data, irori-xbox-api)
   └─ irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade, irori-steam-api
                       for Steam's public achievement schema; stores reach it as `DynStore`)
@@ -256,7 +268,12 @@ irori-sign-in     (standalone; Irori links it only on macOS/Windows)
   same goes for another feature's views: the library's Focus view and grid drawer show
   the game page through `irori_ui::hooks::game_panel` (`GamePage::embedded`), and
   Big Picture shows a game's settings in place through `irori_ui::hooks::game_settings`
-  (`GameSettingsView::embedded`), so they never take the user out of it.
+  (`GameSettingsView::embedded`), so they never take the user out of it. The game
+  page's Setup card (what the game's settings change, by section) comes from the
+  settings feature through `irori_ui::hooks::game_setup` (`irori_settings::setup_card`,
+  `setup_card::changed_sections`), and Storage uninstalls through
+  `irori_ui::hooks::uninstall`. A game's settings open on "Changed" (route id
+  `changed`) to list only what differs from the defaults, each with its reset.
 
 ## 4. Architecture
 
@@ -276,9 +293,11 @@ and `launch.rs` before changing anything below the UI.
 - Operations: `install`, `update` and `repair` take an `OpContext` and return an
   `Outcome`. Also `uninstall(RemoveArgs)`, `import`, `set_install_path`, and
   `launch` → `LaunchPlan`.
-- Optional, with defaults: cloud saves, achievements (`achievements`, and
-  `forget_achievements` to drop a cached answer after a session), `remote_playtime`
-  (minutes by app name), `after_exit`, extras, `forget_install`, `set_version_pinned`.
+- Optional, with defaults: cloud saves, achievements (`achievements`,
+  `forget_achievements` to drop a cached answer after a session, and
+  `achievement_signal`: how the store tells that a running game unlocked one),
+  `remote_playtime` (minutes by app name), `after_exit`, extras, `forget_install`,
+  `set_version_pinned`.
 - Accounts, with defaults for stores with one login: `accounts`, `can_add_account`,
   `account_login_flow`/`account_login`/`account_logout`/`refresh_account` by slot,
   and `game_account`.
@@ -323,7 +342,9 @@ and `launch.rs` before changing anything below the UI.
 - Variants: `LibraryChanged(Runner)`, `LibraryUpdated(rev)`, `GameChanged`, `Status`,
   `StatusCleared`, `AccountChanged`, `DownloadQueueChanged`, `WineVersionsChanged`,
   `SettingsChanged`, `GameSettingsChanged`, `Connectivity`, `Notice`, `GameExited`,
-  `SunshineChanged`.
+  `SunshineChanged`, `AchievementSignal` (a store's raw "this running game unlocked
+  something") and `AchievementsUnlocked` (services saw new unlocks; the UI takes them
+  with `Backend::take_live_unlocks`).
 - Events carry *identities, not data*: receivers re-read state from the service that
   owns it.
 - Emit `LibraryChanged(runner)` after a store's catalogue or install state changes,
@@ -464,7 +485,9 @@ commands without a window.
   `copies_of`, `entry_of` and `copy_on` relate them, and `all_games` is every copy (for
   counts, storage, backups and stats). Every per-game operation keeps the copy's own
   `GameId`; a store filter shows that store's copy. Screens offer the copies through
-  `irori_ui::copies`.
+  `irori_ui::copies`, each named by `copy_label`: its store (a ROM's emulator), then its
+  own title when the copies' folded titles differ, else a ROM's file or, for two copies
+  on one store, its folder.
 - **Search** (`search.rs`): each snapshot builds a `SearchIndex` on its first search
   (titles, a renamed game's store title in `GameInfo::alt_titles`, folder names,
   developer, publisher; folded, Roman numerals read as digits, initials). Matches rank
@@ -546,19 +569,49 @@ commands without a window.
     `smart_categories`, written only while one is picked, and drops ids that
     no longer exist as soon as the user data says so. Every list respects
     hidden games and their PIN like the rest of the library.
+- **Links** (`GameOverrides::links`, `irori_core::GameLink`): web pages the user keeps
+  with a game, set with `UserDataService::set_links` (`set_overrides` keeps them) and
+  synced in a register of their own (`Registers::links`), so a title edited on one
+  computer and links on another both stay. The details panel's Links row shows the
+  store page, SteamDB (with a Steam link), the PCGamingWiki, ProtonDB, IGDB and
+  HowLongToBeat pages the sources found, and the user's links, each opened through
+  `irori_ui::web_url`; "Links…" (`irori_game::open_links_dialog`: the row, the game
+  menu, the palette) adds and removes them.
 - **Journal** (`journal.rs`): one note per game per local calendar day (optional
   title, text, paths of that day's screenshots), written with
   `UserDataService::set_journal_entry`; an empty note is removed. Backups carry the
   notes, and a restore keeps the later-written note of each day. Screens edit them
   through `irori_ui::journal::open_editor` (the game page's timeline, the stats page's
   Journal tab).
-- **Steam tags** (`steam_tags.rs`): Steam games' user tags (`GameInfo::store_tags`,
-  strongest first, named in the interface language) from the keyless
+- **Steam link** (`steam_link.rs`): each game's Steam app, which Steam's tags, its
+  store details (a store page's gaps: screenshots, trailers, description, genres, date;
+  cached a week in `<cache>/steam-details/`), ProtonDB and the Steam Deck rating follow. It
+  never changes how a game starts. Order: a Steam game is its own app; the user's
+  choice (per-game `iroriSteamAppId`, `none` for none; "Link to Steam app…" in the
+  game menu, the details panel's Steam row and the palette,
+  `irori_game::open_steam_link_dialog`, which searches the store or takes a pasted id or
+  store address); the app GamesDB or PCGamingWiki name (learned in
+  `Backend::wiki_info`); with `iroriSteamTitleMatch` (off by default) or the bulk bar's
+  Details → "Find on Steam by title" (`Backend::link_by_title`), the app of
+  the game's exact title (`title_candidates`:
+  edition names aside, never a similar title; a known release year within one), asked
+  25 games a round, 1.5 s apart, kept a month (a week when nothing matched).
+  `<cache>/steam-links.json` holds what was found and a copy of the user's choices
+  (followed through `GameSettingsChanged`), so a library rebuild reads no game's
+  settings file.
+- **Steam tags** (`steam_tags.rs`): the user tags (`GameInfo::store_tags`,
+  strongest first, named in the interface language) of Steam games and games linked
+  to a Steam app (see Steam link) from the keyless
   `IStoreBrowseService/GetItems` and `IStoreService/GetTagList`
   (`irori_steam_api::tags`), kept in `<cache>/steam-tags.json` (a month per app, a week
   per language) and asked after a library rebuild only for apps without an answer.
-  The library filters by them (`ViewFilter::tags`, the commonest 30 offered) and
-  searches with `tag:` (`search::tag_key` folds case and punctuation).
+  A game keeps at most `iroriSteamTagLimit` (5–20) and none with under a quarter of
+  the strongest tag's votes (`steam_tags::kept`; answers cached before votes were kept
+  count every tag). The library filters by them (`ViewFilter::tags`, the commonest 30
+  offered) and searches with `tag:` (`search::tag_key` folds case and punctuation);
+  the game page's details show them as chips, leaving out what its genres and modes
+  already say (`details::tag_chips`), each opening the library filtered by that tag
+  (`GamePageEvent::ShowTag`, `irori_library::show_tag`).
 - **Hidden games PIN** (`hidden_lock.rs`, UI `irori_ui::hidden_lock`): with a PIN,
   `LibrarySnapshot::hidden_locked` holds until it is entered (per run) and every place
   that lists games must leave hidden ones out: `LibraryFilter::apply` does, Big
@@ -575,6 +628,20 @@ commands without a window.
   when a result's folded name is the title (`best_match`). The user's choice
   ("Change match", `irori_game::hltb_match`) is the per-game `iroriHltbId` (`none` for
   no match) and part of the wiki cache's file name.
+- **Fetch details again** (`Backend::refresh_details`; the bulk bar's Details menu,
+  `irori-library`'s `view/details.rs`, and the palette while games are picked): for
+  each picked game, one at a time 500 ms apart, forgets the wiki answer
+  (`wiki::forget`), IGDB's record while it is on (`igdb::forget`) and its Steam app's
+  page, then reads the store page and the wikis again (ROMs skip the PC wikis). The
+  report counts games read, failed and not on IGDB, so those can get a match by hand.
+- **PC facts** (`irori-extras::wiki::pcgamingwiki::pc_facts`): only bare facts from a
+  page (its text is CC BY-NC-SA): `{{Video}}`'s ultra-wide, 4K, HDR and 120+ FPS
+  ratings and `{{Input}}`'s controller support (`Support`: full, limited, with a fix;
+  a controller without a full-controller rating is limited), the infobox's engines,
+  `{{Game data/saves}}` folders with `{{p|…}}` tokens spelt out (`%APPDATA%`,
+  `<path-to-game>`) and the `{{Fixbox}}` count. A cached answer from before
+  (`PcGamingWikiInfo::version` below `PARSE_VERSION`) is read again. The compatibility
+  panel shows them with the save folder of the game's platform and a copy button.
 - **IGDB** (`igdb.rs`, client in `irori-extras::igdb`, opt-in `iroriIgdb`): the user's
   own Twitch application (client ID and secret in `<config>/igdb.json` through
   `irori_secrets`, checked with Twitch before it is saved; Settings → Advanced →
@@ -586,9 +653,29 @@ commands without a window.
   several), cached in `<cache>/igdb` (a month, a week for "not found").
   `Backend::extra_info` fills only what the store page left empty (description,
   genres, release date, screenshots; `ExtraInfo::details_from` names IGDB), and the
-  art picker offers IGDB's covers and artworks (no square art or logos). Nothing is
-  asked while the setting is off; the Modify dialog's title and art overrides win
-  over everything.
+  art picker offers IGDB's covers and artworks (no square art or logos). With a
+  SteamGridDB key too, the picker's "All sources" asks both at once (each takes the
+  game named like the search, `pick_game`) and pills filter by source; every picture
+  shows its size, SteamGridDB's from its API, the others' read from their first bytes
+  (`irori_extras::image_size`, a range request). Nothing is asked while the setting is
+  off; the Modify dialog's title and art overrides win over everything.
+- **Store media for other stores' games**: `Backend::extra_info` fills a non-Steam
+  game's page from the store page of its Steam link (see Steam link; one `appdetails`
+  fetch per linked app, cached a week, `Backend::fill_from_steam`) before IGDB: its
+  screenshots and trailers (`media/steam.rs` reads them from the page) and its
+  description, genres and date, each only where the game's own page has none. Amazon's
+  library entries carry their own screenshots (`Details::screenshots`).
+- **Trailers** (`ExtraInfo::videos`, from Steam `appdetails` `movies`, also for games
+  linked to a Steam app): `media/trailer.rs` plays one through the user's ffmpeg
+  (`media/ffmpeg.rs`; never bundled) at its own pace (`-re`), only network protocols
+  allowed, as raw BGRA frames on a pipe (`process::spawn_piped`), with sound through
+  ffmpeg's `pulse`/`alsa`/`audiotoolbox` output where it has one (none on Windows).
+  `irori_ui::trailer::TrailerPlayer` draws it on the game page (`page/trailer.rs`):
+  muted at first, looping, ffmpeg ended whenever it pauses or its stage isn't drawn on
+  screen, two frames in the GPU atlas at most. `iroriUi.trailerAutoplay` starts the
+  first one (not with reduced motion). On Windows `media/ffmpeg_download.rs` offers,
+  after asking, BtbN's LGPL build named on ffmpeg.org, checked against the release's
+  `checksums.sha256`, into `<data>/tools/ffmpeg`.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
@@ -628,10 +715,30 @@ commands without a window.
   shown unfiltered there, never lost.
 - **Achievements** (`achievements.rs`): UI code asks `Backend::achievements`, never the
   store directly, so every answer is summed up per game in `state/achievements.json`
-  (unlocked, points, hardcore, latest and rarest unlocks). The stats page totals that
-  file; "Check played games" (`scan_achievements`) asks stores one game at a time.
+  (unlocked, points, hardcore, latest and rarest unlocks, and `history`: every unlock
+  ever answered, which only grows: an unlock a later answer leaves out stays, at the
+  earliest time any answer gave it; `Backend::achievement_history`). The stats page
+  totals that file (period counts from the history); the game page's timeline puts
+  each day's unlocks on it, days without a session Irori saw included. "Check played
+  games" (`scan_achievements`) asks stores one game at a time.
   After a session the game's cached answer is dropped and asked again; with
-  `iroriAchievementNotices` on, new unlocks raise a notice. Stores cache their answers
+  `iroriAchievementNotices` on, new unlocks raise a notice.
+  - **While playing**, with notices on, `watch_achievements_while_playing` notes the
+    game's unlocks when the session starts and then follows the store's
+    `Store::achievement_signal`: `Events` (GOG: comet tells the store of every unlock
+    a game makes through the Galaxy service, `irori_gog_galaxy::Service::unlocks`; the
+    store merges them into its answers before GOG's API has them and emits
+    `Event::AchievementSignal`) or `Files` (Steam: the game's
+    `appcache/stats/UserGameStats_<account>_<app>.bin`, watched with `notify`). With
+    a signal nothing is asked in between; without one, the game's own files are read
+    every minute and the store asked every three, only during the session. New
+    unlocks go to `Backend::take_live_unlocks` and `Event::AchievementsUnlocked`; the
+    UI shows them over the game (`irori_ui::hooks::show_unlocks`, Big Picture's
+    `overlay::show_unlocks`), else as a notice. On Windows, while GOG Galaxy's own
+    communication service runs it holds port 9977, so comet doesn't start and GOG
+    games fall back to asking every three minutes; Irori doesn't talk to Galaxy's
+    service (it reports unlocks to GOG, which the next answer has).
+  Stores cache their answers
   with `irori_core::achievement_cache` (15 minutes; stale answers stand in offline).
   Sources: GOG and Epic web APIs, Steam's `IPlayerService` (definitions are public;
   unlocks with the account, else Steam's `appcache/stats` files), RetroAchievements
@@ -718,7 +825,9 @@ commands without a window.
   (2, 5, 15 then 30 minutes after failures) and never run while a game does. Another
   computer's copies are brought back without replacing anything: backups into the
   backup folder, saves into Ludusavi's (games it has no backups of), screenshots into
-  `Pictures/Irori/<computer>`.
+  `Pictures/Irori/<computer>`. `Backend::cloud_copy_sizes` says what each kind holds
+  here and what of it hasn't reached the current target (`copies::size_of`), which the
+  Sync page shows per kind and as a bar of their shares.
 - **Sunshine** (`sunshine/`, settings `iroriSunshine`, login `<config>/sunshine.json`
   through `irori_secrets`): Irori's installed games (or favourites), plus an "Irori Big
   Picture" application, kept among Sunshine's applications through its web API on
@@ -786,7 +895,11 @@ commands without a window.
   folder's modified time; matching is redone each build. The stats page's Album tab
   and its insight card show them, and journal notes link them. Video files (mp4, mkv,
   webm, mov) count too: the replay buffer's clip folders, each named after its game, are
-  read the same way.
+  read the same way. A clip's `file://` address in the art store is its poster
+  (`media/posters.rs`: the user's ffmpeg, `media/ffmpeg.rs`, one at a time with one
+  decoder thread, keyframes from two thirds in through `thumbnail`), cached in
+  `<cache>/clip-posters/` with its length in `clip-posters.json` by path, size and
+  modified time; `irori_ui::components::clip_mark` draws the play chip and length.
 - **Year in review** (`irori-library::stats::year`, `year_view`): a calendar year of
   `sessions.jsonl` in local time, told as full-window stories on
   `Route::YearInReview(year)`; the shell hides the sidebar there. The numbers are pure
@@ -795,18 +908,35 @@ commands without a window.
 - **Storage** (`storage.rs`, `Backend::storage_report`, `Backend::clean_up`): what games,
   prefixes, Wine builds, emulators and Irori's caches take per disk, measured on a
   blocking thread and cached in `<cache>/storage.json` by folder and modified time, plus
-  the cleanups (download leftovers, unused prefixes, old Wine builds, art thumbnails,
-  logs). `clean_up` rebuilds the report and deletes only what it still offers, each item
-  through `fs_guard::ensure_deletable`. Settings → Storage draws it.
+  the cleanups (download leftovers, unused prefixes, Steam's `compatdata` and
+  `shadercache` of apps no library has a manifest for, stray folders in the games folder
+  that no game, prefix or setting names, old Wine builds, DXVK/VKD3D-Proton and GPU driver
+  shader caches, art thumbnails, logs). `clean_up` rebuilds the report and deletes only
+  what it still offers, each item through `fs_guard::ensure_deletable`; what may hold saves
+  (prefixes, Steam's prefixes, stray folders) goes to the system's trash
+  (`irori_services::trash`: freedesktop trash, `~/.Trash`, the Recycle Bin) and is only
+  deleted where the disk has none. Settings → Storage draws it, with a list of installed
+  games by size or last played that opens their folder or uninstalls them
+  (`irori_ui::hooks::uninstall`).
+- **Wine prefixes** (`prefixes.rs`, `Backend::wine_prefixes`): every prefix in the prefix
+  folder, the defaults', the launchers' and the installed games', each with the
+  installed games running in it (a launcher's game counts for the prefix holding its
+  folder); games uninstalled since are only "was the prefix of". Steam's, native and
+  browser games use none. The Wine manager's Prefixes tab draws it (virtual list);
+  deleting stays with Storage's unused-prefix cleanup.
 - **Replay buffer** (`replay/`, Linux only): with `iroriReplay.enabled` (game
   defaults or one game), gpu-screen-recorder runs as its own process for the session,
   found on `PATH` or as the Flatpak `com.dec05eba.gpu_screen_recorder` and never
   bundled. `Backend::save_clip` sends it SIGUSR1 (the process is found by its `-o`
   folder, which also finds the Flatpak's); the path it prints is renamed to
-  `<game> <date> <time>.mp4` and announced with a notice. Every way to save calls
+  `<game> <date> <time>.mp4`, linked in that day's journal note (`iroriReplay.journal`)
+  and announced with a notice. Frame rate, codec, size limit, monitor and game-only
+  sound (`-a app:<program>`) are settings; a recorder that stops by itself is started
+  again up to three times (`restart_delay`, `iroriReplay.restart`); the settings show
+  what `--info` says (version, codecs, monitors). Every way to save calls
   `save_clip`: Guide + X on a controller (`gamepad/reader.rs`), the tray, the command
   palette, a key and `irori --save-clip`. The keys (`replay/shortcut.rs`, a second
-  one takes a screenshot) come from the XDG GlobalShortcuts portal, else on X11 from
+  one takes a screenshot, a third opens the quick launcher) come from the XDG GlobalShortcuts portal, else on X11 from
   `XGrabKey` (`replay/x11.rs`), else the settings show the lines that bind
   `irori --save-clip`/`--screenshot` in the detected compositor (`replay/bindings.rs`,
   pure and tested). Never read keyboards from `/dev/input`.
@@ -862,6 +992,13 @@ commands without a window.
   logs, so the log names a missing DLL; installers and winetricks keep their own.
   The UI is `irori_game::open_launch_problem_sheet` (after a failed start) and
   `open_troubleshooter` (game menu, palette, Ctrl+Shift+T on the game page).
+- **User actions** (`user_actions.rs`, per-game `iroriActions`, `irori_core::UserAction`):
+  programs and links the user adds beside Play. `Backend::run_user_action` hands a link
+  to the system's opener, starts a program from its folder, or (outside Windows, a
+  Windows build) runs it in the game's prefix through `run_in_prefix`; one that counts
+  as playing holds the Playing status and records a session like a launch. Screens list
+  and run them through `irori_ui::user_actions` (Play's split menu, the game menu, the
+  library's context menu, the palette); the game settings' Launch section edits them.
 - **Launching** (`games.rs`). Until the game starts (status `Launching`),
   `Backend::cancel_launch` fires the launch's token (`StatusRegistry::launch_guard`):
   steps 2 to 5 get it, so what they start ends with it, none starts once it fired,
@@ -999,6 +1136,12 @@ cx.spawn_in(window, async move |this, cx| {
 - `ArtStore::get(url, width, keep_alpha)` returns `Ready`, `Loading` or `Missing`.
 - Wrap art-heavy regions in `div().image_cache(LruImageCache::new(n, cx))`. Use the
   components (`GameCover`, `art_img`) instead of loading images yourself.
+- `art::aspect(url)` gives a picture's height over width once a thumbnail of it is
+  ready (its header read once, off the UI thread). With `iroriUi.coverFit` `whole` the
+  library's grid draws each cover uncut in its own shape, standing on its 2:3 cell's
+  foot, and the tall boxes of a row share one height (`grid::whole_sizes`, pure and
+  tested); rows keep their fixed height, so the virtual list and keyboard moves don't
+  change.
 - The disk cache is capped (`iroriArtCacheLimit`, MiB, 2 GiB by default, 0 = none) by
   `irori_services::art_cache` on the periodic tick, every six hours: whole images (an
   original with its thumbnails) go least recently used first. Art the store hands out
@@ -1064,7 +1207,13 @@ cx.spawn_in(window, async move |this, cx| {
 **Components** (`components/`): `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`,
 `SectionTitle`, `ProgressSummary`, `StoreBadge`. Style helpers are in `style.rs`
 (`legible` contrast, `reduce_motion(cx)`, `keyboard_focusable`); motion constants are
-in `motion.rs`.
+in `motion.rs`. The library's covers follow the user's cover options: `coverCorners`
+(through `components::cover_radius`), `coverCaption` (full, title only or nothing; the
+grid's row height follows it, `grid::caption_rem`), `coverHover` (rise or ring only)
+and `coverFavourite`; the library toolbar's Look menu (`view/toolbar.rs`) changes these,
+the background, store badges and cover categories in place. The Focus view's column holds `libraryFocusColumns` covers to a
+row (0 = as many as fit beside the page; `layouts::focus_columns_for`), set by
+dragging its edge or with the arrow keys on it.
 
 **Feature crates:**
 
@@ -1100,9 +1249,34 @@ Other parts:
   tested; Wayland keeps only size and display).
 - `actions.rs` binds global shortcuts. `ctrl-` becomes `cmd-` on macOS, which also
   gets a native menu.
-- `palette.rs` is the Ctrl/Cmd+K command palette.
+- `palette/` is the Ctrl/Cmd+K command palette (`view.rs`). It filters rows
+  itself: games come from the library's `SearchIndex` (at most
+  `search::MAX_GAMES` rows, each with its cover, since the palette measures
+  every row it holds; the recently played without a query), and a preview
+  pane beside the list (`preview.rs`, left out in a narrow window) shows the
+  highlighted game or command. Rows for running games follow `StatusModel`.
+  → on a game row (or the preview's Actions button) lists that game's
+  actions (`game::level_rows`: play, back to it or cancel, its page, store
+  page, favourite, status, folder, hide, Stop last); ←, Escape and Back
+  return. "Pick a random game" asks which games to pick from
+  (`irori_library::random_pools`: shown, installed, never played,
+  favourites, all, any category) and stays on the pick with "Pick another";
+  `random.rs` leaves the run's last five picks out while others remain.
 - Tray: `tray.rs` on Linux (ksni) and `tray_native.rs` on macOS and Windows
-  (`tray-icon`, kept on the main thread).
+  (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
+  Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362
+  and later), following the theme as it changes.
+- `title_bar.rs`: on Linux with client-side decorations, when the desktop's button
+  layout (`App::button_layout`, GNOME's `button-layout`) isn't gpui-kit's minimize,
+  maximize, close on the right, the shell draws this bar with the buttons where the
+  desktop puts them, and redraws when the layout changes.
+- Help and feedback (`irori_settings::feedback`, Settings → About and the palette):
+  report a problem opens GitHub's new-issue form with the version, install kind,
+  system, desktop and GPUs filled in (never paths, names or logs); ideas and questions
+  open the same form (the repository has no discussions). Each carries its label
+  (`bug`, `enhancement`, `question`) and, since GitHub applies it only for triagers, a
+  body whose first line names the kind. Known issues opens the issue list; nothing is
+  sent until the user submits the form.
 
 ### 4.6 Store sign-in
 
@@ -1177,6 +1351,42 @@ Microsoft's approval page (`irori_manage::login`).
   list) must leave one that moves nothing at its edge unhandled (`cx.propagate()`, as
   the library grid does), or a controller is stuck in it. Menu opens the palette,
   which reaches every screen.
+- A routed controller input hides the mouse pointer until the mouse moves
+  (`gamepad/pointer.rs`, `iroriController.hidePointer`, on by default). GPUI has no
+  public call for that, so the input first counts as keyboard input (an unbound F24
+  press, which also drops hover looks) and then a global action is taken, which GPUI's
+  default `CursorHideMode::OnTypingAndAction` turns into hiding the pointer. Never
+  bind F24.
+- **Button map** (`gamepad/bindings.rs`, `iroriController`): one map for the whole app
+  turns a physical button into its job. `confirmButton` (automatic: the right button on
+  Nintendo's layout; bottom; right), `glyphs` (the family buttons are shown as, which
+  also decides the automatic confirm button) and `buttons` (a button's id to a job, only
+  the buttons the user changed) feed it; the reader thread, the overlay's evdev reader
+  and every hint (`ControllerKind::glyph`) read the global, so a change applies to the
+  next press. Guide, the D-pad and the sticks keep their jobs, and a map leaving nothing
+  to confirm or go back with is never used. Settings → Controller
+  (`irori_settings` `controller_map.rs`) draws the controller in hand
+  (`gamepad/drawing.rs`, an SVG of theme colours without text, labels laid over it) per
+  place (Irori's screens, Big Picture, the overlay, Guide held) and moves a job to
+  another button by swapping it with that button's job (`ButtonMap::assigning`).
+- **Navigation sounds** (`nav_sound.rs`, `iroriBigPicture.sounds`/`soundVolume`, off
+  by default; the quick menu cycles them): tones made in code (`samples`, pure and
+  tested) are written once as WAV files under `<cache>/bigpicture-sounds` and played by
+  the system, never by a linked audio library: `PlaySoundW` on Windows, `afplay` on
+  macOS, `pw-play`/`paplay`/`aplay` on Linux. A move sounds only when the focus moved
+  (`nav_cue`) and not while the last tone still plays; changing the setting plays a
+  sample.
+- **Idle screen** (`view/idle.rs`, `iroriBigPicture.idleMinutes`, 0 = off by default,
+  and `idleScreen`: slideshow of Home's art or dimmed, both with the clock): one timer
+  task sleeps until the screen is due and again for what is left after input, so input
+  only stamps a time; the dimmed screen needs no timer. Any input, mouse movement or
+  click wakes Big Picture and does nothing else.
+- **Shelf kinds** (`theme::ShelfKind`, built in `model::build_rows_on`, pure and
+  tested): Continue playing, Favourites, Installed, Recently added, Plan to play, one per
+  system, Playing, Most played, Installed and not played for 90 days, Pick of the day
+  (one installed game not beaten or abandoned, the same all day) and one per store. A
+  theme naming a kind an older Irori doesn't know is refused there, as any unknown
+  value is.
 - The Guide button toggles Big Picture. Every screen must stay usable with arrows,
   Enter and Escape, because that is how controllers reach it. Guide's release may
   never arrive (Steam takes it, the pad disconnects), so `input::GuideTap` lets go of
@@ -1219,11 +1429,13 @@ Microsoft's approval page (`irori_manage::login`).
   bounded size, never a path or address, and ids are made by Irori, so a file
   can't name anything outside that folder. The editor (`view/editor.rs`, quick
   menu → Themes and layouts) edits a draft that Home shows live, and keeps it on
-  close. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
+  close; LB and RB (Page Up/Down) undo and redo its changes, up to a hundred, until
+  another theme is loaded into it. Settings: `iroriUi.bigPictureLayout`, `bigPictureTheme`,
   `bigPictureOnController` (open Big Picture when a controller connects, or is
   connected when Irori starts; `input::ConnectWatch` compares controllers by ids and
   name, so a pad switching mode counts, and one a system hid while Irori was in the
-  background is no news when it returns).
+  background is no news when it returns), `bigPictureFullscreen` (on by default; off,
+  Big Picture stays in the window as it is).
 - The mouse works on every screen: covers, rows, chips and switchers take hover and
   clicks, and the wheel goes through `layout/wheel.rs`, which turns travel into the
   controller's moves (per layout: along the strip on Spotlight, Cinema and Carousel), so
@@ -1232,6 +1444,12 @@ Microsoft's approval page (`irori_manage::login`).
   end (`layout::end_scroll`).
 - The Library's search field sits outside the `BigPicture` key context
   (`SEARCH_CONTEXT`), so letters bound there (M, Space) reach the field.
+- The art picker (a game's settings → Artwork → find online, also inside Big Picture)
+  answers a controller through its keys (`irori-library`'s `ART_PICKER_CONTEXT`): the
+  directions move a cursor through the pictures by rows (`step_cursor`; up from the
+  first row and down from the search field cross between them), A uses the picture, X
+  (Ctrl+Enter) goes to the search field, where the system's keyboard opens, and the
+  shoulders (Page Up/Down) switch the source shown.
 - **In-game overlay** (`overlay/`, beta, every system, `iroriOverlay.enabled`): Guide while a
   game Irori started runs opens a panel above the game (`overlay::open`) instead of
   toggling Big Picture, and every controller input goes to it while it is open. It is
@@ -1246,13 +1464,45 @@ Microsoft's approval page (`irori_manage::login`).
   (`services/src/capture/`, desktop portal, else `grim`). The shell installs "Back to
   Irori" with `overlay::install_show_irori`. Chords with Guide held
   (`gamepad::Chord`): X saves a clip; with the overlay on, RB takes a screenshot and
-  Up/Down change the system volume. What differs per system is one table,
-  `overlay/support.rs`; macOS and Windows use GPUI's pop-up window (a non-activating
+  Up/Down change the system volume, each switchable (`iroriOverlay.screenshotChord`,
+  `volumeChords`, `gamepad::Chords`), by `volumeStep`; `side` places the panel
+  (`window::placement`). What differs per system is one table,
+  `overlay/support.rs`, which Settings' status panel (`irori_settings` `overlay.rs`)
+  reads too; macOS and Windows use GPUI's pop-up window (a non-activating
   panel, a topmost tool window), add Ctrl+Shift+O (`overlay/hotkey/`, registered only
   while a game runs), hold no controller, and get volume and screenshots from
   `audio/{macos,windows}.rs` and `capture/{macos,windows}.rs` (`osascript` and
   `screencapture`; Core Audio and GDI). Windows doesn't open it over a game in
-  exclusive fullscreen. `docs/PLATFORMS.md`, "In-game overlay".
+  exclusive fullscreen. The microphone is `GameAudio::microphone`,
+  `VolumeTarget::Microphone`, `audio_inputs`/`set_audio_input`; the Controllers tab
+  turns a Bluetooth pad off through `Backend::disconnect_bluetooth`
+  (`services/src/bluetooth.rs`, BlueZ, Linux only). Guide + Up/Down's level shows in
+  `overlay/level.rs`, a surface that exists only while it shows. "Back to the game"
+  (overlay row; the palette, the game page's button and Ctrl+Shift+Enter, the library's
+  game menus and Big Picture's page through `irori_ui::game_window::back_to_game`) is
+  `Backend::focus_game_window` (`services/src/game_window/`:
+  Hyprland, sway, X11, Windows, macOS; `Raised::Unsupported` on GNOME/KDE Wayland,
+  where nothing is done). Home's rows come from `model::home_rows`. On Windows
+  Back + Start opens it while a game runs (`gamepad/xinput.rs`, XInput read only then;
+  `iroriOverlay.backStart`), and the panel takes the foreground and gives it back
+  (`window::Foreground`). MangoHud's rows (show/hide, frame limit) write the session's
+  MangoHud file (`irori_runtime::mangohud`, `Backend::mangohud`/`set_mangohud`), which
+  `prepare_launch` writes and `finish_session` removes; one frame limit
+  (`enableDXVKFpsLimit`/`DXVKFpsCap`) goes through one limiter
+  (`irori_runtime::frame_limit`, `iroriFpsLimiter`). `docs/PLATFORMS.md`,
+  "In-game overlay". Its Achievements tab
+  lists the game's sets (`irori_core::achievement_sets`, as the game page counts them)
+  and leaves a set the player can't earn out of "Next up".
+- **Unlocks over the game** (`overlay/notice.rs`, `iroriAchievementToast`): what
+  services report as it unlocks (`irori_ui::hooks::show_unlocks`) shows as a card in
+  the top right corner, one after another, with the lines the user chose (game,
+  description, rarity, progress, points; `model::Toast`). It shares its queue with the
+  overlay's corner notices (`overlay::toasts`, one timer), so each unlock shows once,
+  in the panel while it is open. The card's surface never takes the focus: a
+  layer-shell surface anchored top right without keyboard on Wayland (none without
+  layer-shell: the unlock becomes a notice), GPUI's pop-up window elsewhere; it exists
+  only while a card shows. While Irori's window is in front, or Windows has a game in
+  exclusive fullscreen, unlocks are notices instead.
 
 ### 4.8 Engines (emulators)
 
@@ -1333,6 +1583,23 @@ Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
   way, version pin (typed `EngineMissing`), then the command. `GameInfo.system` and
   `GameInfo.tags` (region, revision) drive the system filter, badges, the generated
   cover and Big Picture's per-system shelves.
+- **LaunchBox box art** (`irori-extras::launchbox` downloads and reads,
+  `irori-emulation::launchbox` matches). LaunchBox offers other programs its whole
+  database as one file, `gamesdb.launchbox-app.com/Metadata.zip`, and serves images by
+  file name from `images.launchbox-app.com`; Irori uses only those, never its pages.
+  The file (about 110 MB) downloads only when the user asks (the art picker's button,
+  the palette, which ask first and turn `iroriLaunchBox` on), then at most weekly,
+  `If-None-Match`, while that setting is on and the ROM library has games; never from
+  `init` or the test constructors (`EmulationStore::with_dirs` has no address).
+  Settings → Advanced → Artwork turns it off and, while off, removes the stored list
+  (confirmed with its size, `fs_guard` first). It is
+  read as a stream (quick-xml over the zip entry; capped fields, lists and text runs),
+  kept as one `<cache>/stores/emulation/launchbox/systems/<system>.json` per system
+  (front boxes with their regions), then deleted. Games match by system
+  (`launchbox::PLATFORMS`) and folded title (Roman numerals only as a fallback); the
+  cover is the box of the ROM's region badge, else libretro's thumbnail, and the
+  user's own art wins. A ROM's cover picker opens on its LaunchBox boxes, every
+  region's, its own first and each captioned with its region.
 - **Lutris import** (`irori-extras::lutris_import` reads; `crates/irori/src/lutris.rs`
   applies; Bottles and Faugus Launcher plans from `irori-extras::wine_launchers` use
   the same shapes and apply step). It only reads Lutris: `pga.db` is opened read-only and immutable, YAML is

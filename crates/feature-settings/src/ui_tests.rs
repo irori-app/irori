@@ -162,10 +162,48 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         let general = app_form.read(cx).visible_count();
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
         // The in-game overlay's switch is among the controller rows, and so
-        // are the button held to open Big Picture and how long.
-        assert_eq!(app_form.read(cx).visible_count(), 8);
+        // are the button held to open Big Picture and how long, hiding the
+        // pointer, the button map, Big Picture's sounds and idle screen, and
+        // the overlay's own rows (all but Back + Start, which is Windows only).
+        let overlay_rows = if cfg!(windows) { 7 } else { 6 };
+        assert_eq!(app_form.read(cx).visible_count(), 14 + overlay_rows);
         assert!(general > 20);
     });
+}
+
+#[gpui_kit::test]
+fn the_controller_page_draws_the_button_map_and_saves_choices(cx: &mut TestAppContext) {
+    use irori_core::controller_prefs::ConfirmButton;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("gamepad".into(), window, cx)
+    });
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    let backend = cx.update(|cx| {
+        assert_eq!(view.read(cx).section(), SettingsSection::Controller);
+        irori_ui::backend(cx)
+    });
+    backend
+        .settings
+        .update_app(|s| s.controller.confirm_button = ConfirmButton::East);
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert_eq!(
+        backend.settings.app().controller.confirm_button,
+        ConfirmButton::East
+    );
+    backend
+        .settings
+        .update_app(|s| s.controller = Default::default());
+    cx.run_until_parked();
 }
 
 #[gpui_kit::test]
@@ -660,5 +698,40 @@ fn the_replay_panel_shows_each_way_to_get_the_shortcuts(cx: &mut TestAppContext)
             "bindsym Mod1+F10 exec irori --save-clip\nbindsym Mod1+F12 exec irori --screenshot"
                 .to_string()
         )
+    );
+}
+
+#[gpui_kit::test]
+fn the_quick_launcher_row_shows_each_way_to_open_it(cx: &mut TestAppContext) {
+    use irori_services::QuickLaunchShortcut;
+    use irori_services::replay::bindings::{Binding, Compositor, Program};
+
+    use crate::quick_launch::QuickLaunchPanel;
+
+    let (handle, panel) = open(cx, |_, cx| QuickLaunchPanel::new(cx));
+    let sway = Binding::quick_launch(Some(Compositor::Sway), &Program(vec!["irori".into()]));
+    for state in [
+        QuickLaunchShortcut::Off,
+        QuickLaunchShortcut::Keys(Some("Ctrl+Alt+K".into())),
+        QuickLaunchShortcut::Keys(Some(String::new())),
+        QuickLaunchShortcut::Keys(None),
+        QuickLaunchShortcut::Commands(sway.clone()),
+        QuickLaunchShortcut::Unavailable,
+    ] {
+        cx.update_window(handle, |_, window, cx| {
+            panel.update(cx, |p, cx| p.set_state(state, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    }
+    // Copy puts Sway's exact line on the clipboard.
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| p.copy(sway.lines.clone(), window, cx))
+    })
+    .unwrap();
+    assert_eq!(
+        cx.read_from_clipboard().and_then(|c| c.text()),
+        Some("bindsym Ctrl+Mod1+k exec irori --quick-launch".to_string())
     );
 }

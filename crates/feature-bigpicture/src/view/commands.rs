@@ -67,6 +67,11 @@ impl BigPictureView {
                     error("bigpicture.error.stop"),
                 )
             }
+            // The desktop answers at once; failures are told there.
+            GameAction::BackToGame => {
+                irori_ui::game_window::back_to_game(id, window, cx);
+                return;
+            }
             // The launch itself ends quietly; nothing to track here.
             GameAction::CancelLaunch => {
                 b.cancel_launch(&id);
@@ -207,12 +212,13 @@ impl BigPictureView {
     pub(super) fn menu(&self, cx: &App) -> Vec<MenuItem> {
         let m = models(cx);
         let queue = &m.downloads.read(cx).queue;
-        let scale = m.settings.read(cx).app.ui.big_picture_scale;
+        let app = &m.settings.read(cx).app;
         menu_items(
             !queue.active.is_empty(),
             queue.paused,
-            scale,
+            app.ui.big_picture_scale,
             self.look.layout(),
+            app.big_picture.sounds,
             &self.power,
         )
     }
@@ -257,6 +263,14 @@ impl BigPictureView {
                 task.detach();
             }
             MenuItem::Layout(_) => self.next_layout(cx),
+            MenuItem::Sounds(current) => {
+                let next = crate::model::next_sounds(current);
+                let task = irori_ui::run(cx, async move {
+                    b.settings.update_app(|app| app.big_picture.sounds = next);
+                    Ok::<_, anyhow::Error>(())
+                });
+                task.detach();
+            }
             MenuItem::Themes => self.open_editor(window, cx),
             MenuItem::ToggleFullscreen => window.toggle_fullscreen(),
             MenuItem::SetUpEmulation => {

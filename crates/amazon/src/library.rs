@@ -51,6 +51,30 @@ pub struct Details {
     /// USK rating (`USK_12`, `12`).
     #[serde(deserialize_with = "string_or_none")]
     pub usk_rating: Option<String>,
+    /// Full-size screenshot addresses from the product page.
+    #[serde(deserialize_with = "urls_or_null")]
+    pub screenshots: Vec<String>,
+}
+
+/// Addresses written as texts or as objects with a `url`; anything that
+/// isn't an `https` address is left out.
+fn urls_or_null<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    let Value::Array(items) = Value::deserialize(d)? else {
+        return Ok(Vec::new());
+    };
+    Ok(items
+        .into_iter()
+        .filter_map(|v| match v {
+            Value::String(s) => Some(s),
+            Value::Object(mut o) => match o.remove("url") {
+                Some(Value::String(s)) => Some(s),
+                _ => None,
+            },
+            _ => None,
+        })
+        .map(|s| s.trim().to_string())
+        .filter(|s| s.starts_with("https://"))
+        .collect())
 }
 
 /// A text or a number as text; anything else (`null`, objects) is none.
@@ -91,7 +115,9 @@ mod tests {
           {"id": "ent-1", "product": {"id": "amzn1.adg.product.abc", "title": "Foo", "sku": "SKU1",
             "productDetail": {"iconUrl": "https://img/icon.png", "details": {
               "backgroundUrl1": "https://img/bg1.jpg", "genres": ["Action"], "esrbRating": "TEEN",
-              "pegiRating": 12, "uskRating": null}}}},
+              "pegiRating": 12, "uskRating": null,
+              "screenshots": ["https://img/s1.jpg", {"url": "https://img/s2.jpg"}, "", 3,
+                              "http://img/plain.jpg"]}}}},
           {"id": "ent-2", "product": {"id": "amzn1.adg.product.abc", "title": "Dup"}},
           {"id": "ent-3", "product": {"id": "", "title": "No id"}},
           {"id": "ent-4", "product": {"id": "amzn1.adg.product.def",
@@ -107,6 +133,10 @@ mod tests {
         assert_eq!(details.esrb_rating.as_deref(), Some("TEEN"));
         assert_eq!(details.pegi_rating.as_deref(), Some("12"));
         assert_eq!(details.usk_rating, None);
+        assert_eq!(
+            details.screenshots,
+            ["https://img/s1.jpg", "https://img/s2.jpg"]
+        );
         assert!(list[1].product.product_detail.details.genres.is_empty());
         // Round-trips through Irori's library file.
         let again: Vec<Entitlement> =

@@ -743,6 +743,21 @@ pub fn spawn(spec: &CommandSpec, log_file: Option<&Path>) -> Result<Child> {
         .with_context(|| format!("failed to start {}", spec.program.display()))
 }
 
+/// Start a tool whose output Irori reads as a stream of bytes (a decoder
+/// writing frames), with its standard output and error piped and no
+/// console window. Killed when the returned child is dropped, so a reader
+/// that stops never leaves it behind.
+pub fn spawn_piped(spec: &CommandSpec) -> Result<Child> {
+    tracing::debug!(command = %spec, "spawn piped");
+    let mut cmd = spec.to_command(Start::Run)?;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    cmd.spawn()
+        .with_context(|| format!("failed to start {}", spec.program.display()))
+}
+
 /// SIGTERM the child's process group, escalating to SIGKILL after 5 s.
 #[cfg(unix)]
 pub async fn terminate(child: &mut Child) {

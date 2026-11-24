@@ -11,16 +11,20 @@ mod headless;
 mod import;
 mod instance;
 mod lutris;
+#[cfg(not(target_os = "linux"))]
+mod menu_theme;
 mod pages;
 mod palette;
 mod placement;
 mod playing;
 mod playnite;
+mod quick_launch;
 mod routing;
 mod shell;
 mod sidebar;
 mod stores;
 mod strings;
+mod title_bar;
 #[cfg(target_os = "linux")]
 mod tray;
 #[cfg(not(target_os = "linux"))]
@@ -63,6 +67,8 @@ pub enum ShellCommand {
     LeaveBigPicture,
     /// Save a clip of the replay buffer.
     SaveClip,
+    /// Open the quick launcher, or close it (its global shortcut).
+    QuickLaunch,
 }
 
 fn main() -> Result<()> {
@@ -179,6 +185,7 @@ fn main() -> Result<()> {
             }
             if let Some(emulation) = stores::EMULATION.get() {
                 irori_library::install_emulation_store(emulation.clone(), cx);
+                irori_settings::install_emulation_store(emulation.clone(), cx);
             }
         }
         actions::bind_keys(cx);
@@ -188,6 +195,24 @@ fn main() -> Result<()> {
 
         let app = Arc::new(Mutex::new(AppHandles::default()));
         start_tray(&backend, tx.clone(), app.clone(), cx);
+        {
+            let (show, window, launch) = (app.clone(), app.clone(), app.clone());
+            quick_launch::install(
+                quick_launch::ShellAccess {
+                    show: std::rc::Rc::new(move |cx| open_main_window(&show, cx)),
+                    window: std::rc::Rc::new(move || window.lock().window.map(Into::into)),
+                    launch: std::rc::Rc::new(move |id, cx| launch_from_outside(id, &launch, cx)),
+                },
+                cx,
+            );
+            let tx = tx.clone();
+            quick_launch::follow_shortcut(
+                move || {
+                    let _ = tx.unbounded_send(ShellCommand::QuickLaunch);
+                },
+                cx,
+            );
+        }
         {
             // The in-game overlay's "Back to Irori".
             let app = app.clone();
@@ -219,12 +244,16 @@ fn main() -> Result<()> {
         // Steam's Game Mode has no tray to come back from. A game launched
         // with no window asked for none: the game is what shows, and
         // starting Irori again brings the window.
+        // The quick launcher alone opens no main window either, while a
+        // tray brings it back.
+        let can_hide = !irori_core::platform::in_steam_gamepad_ui()
+            && ((cfg!(target_os = "linux") && !backend.settings.app().no_tray_icon)
+                || app.lock().tray.is_some());
         let start_hidden = cli.launch_without_window()
-            || ((cli.minimized || backend.settings.app().start_in_tray)
-                && !irori_core::platform::in_steam_gamepad_ui()
-                && ((cfg!(target_os = "linux") && !backend.settings.app().no_tray_icon)
-                    || app.lock().tray.is_some())
-                && !cli.has_request());
+            || (can_hide
+                && (((cli.minimized || backend.settings.app().start_in_tray)
+                    && !cli.has_request())
+                    || cli.quick_launch_only()));
         if !start_hidden {
             open_main_window(&app, cx);
             let app_settings = backend.settings.app();
@@ -361,6 +390,9 @@ fn open_main_window(app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
 }
 
 fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
+    if cli.quick_launch {
+        quick_launch::toggle(cx);
+    }
     if cli.save_clip {
         irori_ui::backend(cx).save_clip();
     }
@@ -597,6 +629,7 @@ fn listen(
                     nav::navigate(Route::BigPicture, cx);
                 }
                 ShellCommand::SaveClip => irori_ui::backend(cx).save_clip(),
+                ShellCommand::QuickLaunch => quick_launch::toggle(cx),
                 ShellCommand::Wait(args, waiter) => {
                     waiting::serve(&Cli::parse(args), waiter, &app, tx.clone(), cx)
                 }
@@ -676,7 +709,24 @@ fn start_tray(
     if let Some(handle) = tray::start(tx, settings.dark_tray_icon) {
         app.lock().tray = Some(handle.clone());
         watch_recent_for_tray(handle, cx);
+        follow_theme_in_menus(cx);
     }
+}
+
+/// Draw the tray's menu in Irori's light or dark, as its window is
+/// (Windows; macOS menus follow the system on their own).
+#[cfg(not(target_os = "linux"))]
+fn follow_theme_in_menus(cx: &mut App) {
+    use gpui_kit::component::{ActiveTheme as _, Theme};
+    let last = std::rc::Rc::new(std::cell::Cell::new(None));
+    let apply = move |cx: &mut App| {
+        let dark = cx.theme().is_dark();
+        if last.replace(Some(dark)) != Some(dark) {
+            menu_theme::follow(dark);
+        }
+    };
+    apply(cx);
+    cx.observe_global::<Theme>(apply).detach();
 }
 
 /// Keep the tray's "Recently played" menu in step with the library model.
@@ -709,6 +759,10 @@ fn watch_recent_for_tray(handle: tray::TrayHandle, cx: &mut App) {
 /// Other windows (the in-game overlay) come and go without either.
 fn install_quit_on_close(app: Arc<Mutex<AppHandles>>, cx: &mut App) {
     cx.on_window_closed(move |cx, closed| {
+        // The quick launcher comes and goes; Irori stays for its games.
+        if quick_launch::is_launcher(closed, cx) {
+            return;
+        }
         let main = app
             .lock()
             .window

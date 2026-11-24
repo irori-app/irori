@@ -849,6 +849,16 @@ fn a_mode_chosen_before_the_library_opens_filters_it(cx: &mut TestAppContext) {
             .clone()
     });
     assert_eq!(modes, [GameMode::Single].into());
+
+    // A tag chip gives the filters way to that tag alone.
+    cx.update(|cx| crate::show_tag("Roguelike".into(), cx));
+    let (tags, modes) = cx.read(|cx| {
+        let filters = crate::filters_panel::active_filters(cx).expect("the view's filters");
+        let filter = filters.read(cx).filter();
+        (filter.tags.clone(), filter.modes.clone())
+    });
+    assert_eq!(tags, ["Roguelike".to_string()].into());
+    assert!(modes.is_empty());
 }
 
 #[gpui_kit::test]
@@ -1297,4 +1307,217 @@ fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
     assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
+    // Both at once needs SteamGridDB's key too.
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::All, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::All, true));
+
+    // On with a key: both sources together from the start.
+    let both = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                let key = irori_extras::steamgrid::ApiKey::new("key");
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", key, true, window, cx))
+            })
+        })
+        .expect("window opens")
+        .1;
+    cx.run_until_parked();
+    assert_eq!(source(&both, cx), (ArtSource::All, false));
+}
+
+#[gpui_kit::test]
+fn the_art_picker_moves_through_pictures_with_the_arrows(cx: &mut TestAppContext) {
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtPickerEvent, ArtSource, Found};
+    use irori_extras::steamgrid::SgdbImage;
+
+    let _backend = start(cx);
+    // The shell binds the library's keys at start.
+    cx.update(crate::init);
+    let (window, picker) = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", None, true, window, cx))
+            })
+        })
+        .expect("window opens");
+    let picked = Arc::new(parking_lot::Mutex::new(None::<String>));
+    let sink = picked.clone();
+    cx.update(|cx| {
+        cx.subscribe(&picker, move |_, event: &ArtPickerEvent, _| {
+            if let ArtPickerEvent::Picked(url) = event {
+                *sink.lock() = Some(url.clone());
+            }
+        })
+        .detach()
+    });
+    let found = (0..5)
+        .map(|id| Found {
+            source: ArtSource::Igdb,
+            image: SgdbImage {
+                id,
+                url: format!("https://example.invalid/{id}.png"),
+                thumb: String::new(),
+                width: Some(600),
+                height: Some(900),
+            },
+        })
+        .collect();
+    cx.update(|cx| picker.update(cx, |p, cx| p.show_for_test(found, cx)));
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    let cursor = |cx: &mut TestAppContext| cx.read(|cx| picker.read(cx).cursor());
+
+    // From the search field, Down reaches the first picture; Right moves on.
+    cx.update_window(window, |_, window, cx| {
+        picker.read(cx).query_focus(cx).focus(window, cx)
+    })
+    .unwrap();
+    cx.simulate_keystrokes(window, "down");
+    draw(cx);
+    assert_eq!(cursor(cx), Some(0));
+    let holds = cx
+        .update_window(window, |_, window, cx| {
+            picker.read(cx).holds_keyboard(window)
+        })
+        .unwrap();
+    assert!(holds, "the pictures hold the keyboard");
+    cx.simulate_keystrokes(window, "right");
+    draw(cx);
+    assert_eq!(cursor(cx), Some(1));
+
+    // Enter uses the picture the cursor is on.
+    cx.simulate_keystrokes(window, "enter");
+    assert_eq!(
+        picked.lock().as_deref(),
+        Some("https://example.invalid/1.png")
+    );
+
+    // Up from the first row goes back to the search field.
+    cx.simulate_keystrokes(window, "up");
+    assert_eq!(cursor(cx), None);
+    let in_search = cx
+        .update_window(window, |_, window, cx| {
+            picker.read(cx).query_focus(cx).is_focused(window)
+        })
+        .unwrap();
+    assert!(in_search);
+}
+
+#[gpui_kit::test]
+fn a_roms_cover_picker_opens_on_its_launchbox_boxes(cx: &mut TestAppContext) {
+    use irori_extras::launchbox::{BoxArt, IndexState, LaunchBoxGame, SystemIndex, table_key};
+
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+
+    let backend = start(cx);
+    let dir = Paths::get().cache.join("ui-launchbox");
+    let rom = dir.join("roms/Super Mario Bros. 3 (Europe).nes");
+    std::fs::create_dir_all(rom.parent().unwrap()).unwrap();
+    std::fs::write(&rom, b"NES\x1a").unwrap();
+    let settings = backend.settings.clone();
+    let make = |cache: &str| {
+        let settings = settings.clone();
+        irori_emulation::EmulationStore::with_dirs(
+            backend.bus.clone(),
+            Arc::new(move || settings.app()),
+            dir.join("config"),
+            dir.join(cache),
+        )
+    };
+
+    // LaunchBox's index as a download leaves it.
+    let index = dir.join("cache/launchbox");
+    let art = |file: &str, region: &str| BoxArt {
+        file: file.into(),
+        region: Some(region.into()),
+        reconstructed: false,
+    };
+    irori_core::json_store::write(
+        &index.join("systems/nes.json"),
+        &SystemIndex {
+            games: vec![LaunchBoxGame {
+                id: 10,
+                name: "Super Mario Bros. 3".into(),
+                alternate: Vec::new(),
+                boxes: vec![art("us.jpg", "North America"), art("eu.jpg", "Europe")],
+            }],
+        },
+    )
+    .unwrap();
+    irori_core::json_store::write(
+        &index.join("state.json"),
+        &IndexState {
+            updated_at: irori_extras::launchbox::now(),
+            systems: vec!["nes".into()],
+            table: table_key(&irori_emulation::launchbox::platforms()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let open = |store: Arc<irori_emulation::EmulationStore>, cx: &mut TestAppContext| {
+        let rt = backend.runtime();
+        rt.block_on(store.init()).unwrap();
+        let id = rt.block_on(store.add_game(&rom, None, None)).unwrap();
+        cx.update(|cx| crate::install_emulation_store(store, cx));
+        cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| {
+                    ArtPicker::for_game(
+                        ArtKind::Cover,
+                        Some(&id),
+                        "Super Mario Bros. 3",
+                        window,
+                        cx,
+                    )
+                })
+            })
+        })
+        .expect("window opens")
+        .1
+    };
+    let wait = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            let (captions, offers) = cx.read(|cx| picker.read(cx).launchbox_view());
+            if !captions.is_empty() || offers || Instant::now() > deadline {
+                return (captions, offers);
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+
+    // The ROM's own region comes first, each box labelled with its region.
+    let picker = open(make("cache"), cx);
+    let (captions, offers) = wait(&picker, cx);
+    assert_eq!(
+        cx.read(|cx| picker.read(cx).source().0),
+        ArtSource::LaunchBox
+    );
+    assert!(!offers);
+    let captions: Vec<String> = captions.iter().map(|c| c.to_string()).collect();
+    assert_eq!(captions, ["Europe", "North America"]);
+
+    // Without the game list yet, it offers to download it, and its button
+    // turns LaunchBox box art on (this store has nowhere to download from).
+    let picker = open(make("cache-empty"), cx);
+    let (captions, offers) = wait(&picker, cx);
+    assert!(captions.is_empty());
+    assert!(offers);
+    assert!(!backend.settings.app().launchbox);
+    cx.update(|cx| picker.update(cx, |p, cx| p.download_launchbox(cx)));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !backend.settings.app().launchbox {
+        assert!(Instant::now() < deadline, "the setting never turned on");
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }

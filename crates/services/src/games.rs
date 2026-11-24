@@ -736,7 +736,18 @@ impl Backend {
         }
         // Recording starts before the status says "playing", so whatever
         // follows that status sees the replay buffer.
-        self.start_replay(id, &game.title, &settings.replay);
+        // The game's own program names its sound for "game" audio.
+        let sound_app = game
+            .install
+            .as_ref()
+            .and_then(|i| crate::gpu_preference::game_program(&plan.command, &i.install_path))
+            .and_then(|p| {
+                p.rsplit(['/', '\\'])
+                    .next()
+                    .filter(|n| !n.is_empty())
+                    .map(str::to_owned)
+            });
+        self.start_replay(id, &game.title, &settings.replay, sound_app);
         let backups = (settings.ludusavi_interval > 0).then(|| {
             let stop = CancellationToken::new();
             let (b, id, title) = (self.clone(), id.clone(), game.title.clone());
@@ -890,6 +901,8 @@ impl Backend {
             log_file,
         } = end;
         crate::running::forget(&id);
+        // MangoHud's file for the session; the next launch writes another.
+        irori_runtime::mangohud::remove_session(&id);
         let seconds = started.elapsed().as_secs();
         let stopped = self.running.lock().remove(&id).is_some_and(|r| r.stopping);
         // A session followed again after a restart has no exit status to

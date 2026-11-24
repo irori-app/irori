@@ -1,6 +1,8 @@
 //! The achievements tab: a summary (a ring of the share unlocked, points,
 //! hardcore unlocks and the rarest one), the latest unlocks, the likeliest
-//! next ones, and every achievement in a list filtered by state. Hidden
+//! next ones, and every achievement in a list filtered by state, searched by
+//! name or description and sorted as the user picks. A search never finds a
+//! hidden achievement still covered, so it gives nothing away. Hidden
 //! achievements stay covered until the user reveals one (by clicking it) or
 //! all of them. A game whose store groups its achievements into sets (the
 //! base game, each DLC) lists them under a heading per set with that set's
@@ -19,6 +21,8 @@ use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::Input;
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::progress::{Progress, ProgressCircle};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
@@ -31,6 +35,7 @@ use gpui_kit::{
     SharedString, Size, StatefulInteractiveElement as _, Styled, StyledImage as _, Window, div, px,
     rems, size,
 };
+use irori_core::achievement_sets::{SetProgress, sets};
 use irori_core::util::{parse_rfc3339, unix_now};
 use irori_core::{Achievement, AchievementGroup};
 use irori_ui::components::art_img;
@@ -50,8 +55,9 @@ const VISIBLE_ROWS: usize = 8;
 const STRIP: usize = 3;
 
 /// Which achievements the list shows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AchievementFilter {
+    #[default]
     All,
     Unlocked,
     Locked,
@@ -71,6 +77,72 @@ impl AchievementFilter {
             AchievementFilter::Locked => "game.achievements.filter_locked",
         })
     }
+}
+
+/// How the list is ordered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AchievementSort {
+    /// Unlocked first (newest unlock first), then the likeliest next.
+    #[default]
+    Suggested,
+    Name,
+    /// Fewest players first.
+    Rarest,
+    /// Most players first.
+    Common,
+    /// Worth most first.
+    Points,
+}
+
+impl AchievementSort {
+    pub const ALL: [AchievementSort; 5] = [
+        AchievementSort::Suggested,
+        AchievementSort::Name,
+        AchievementSort::Rarest,
+        AchievementSort::Common,
+        AchievementSort::Points,
+    ];
+
+    fn label(self) -> SharedString {
+        t(match self {
+            AchievementSort::Suggested => "game.achievements.sort_suggested",
+            AchievementSort::Name => "game.achievements.sort_name",
+            AchievementSort::Rarest => "game.achievements.sort_rarest",
+            AchievementSort::Common => "game.achievements.sort_common",
+            AchievementSort::Points => "game.achievements.sort_points",
+        })
+    }
+}
+
+/// What the list shows and in which order.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ListView {
+    pub filter: AchievementFilter,
+    pub sort: AchievementSort,
+    /// Search text; empty for none.
+    pub query: String,
+}
+
+impl ListView {
+    #[cfg(test)]
+    fn of(filter: AchievementFilter) -> Self {
+        Self {
+            filter,
+            ..Self::default()
+        }
+    }
+}
+
+/// `text` for comparing without letter case or accents' case.
+fn folded(text: &str) -> String {
+    text.trim().to_lowercase()
+}
+
+/// Whether `a` matches the folded search `query`: its name or description,
+/// when the user may see them (`shows`).
+fn matches(a: &Achievement, query: &str, shows: bool) -> bool {
+    query.is_empty()
+        || (shows && (folded(&a.name).contains(query) || folded(&a.description).contains(query)))
 }
 
 fn unlock_ts(a: &Achievement) -> Option<i64> {
@@ -111,71 +183,38 @@ pub fn arrange(list: &[Achievement], filter: AchievementFilter) -> Vec<usize> {
     out
 }
 
-/// One set of a game's achievements and how much of it is unlocked.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SetProgress {
-    /// `None` for the achievements no set holds.
-    pub group: Option<AchievementGroup>,
-    pub unlocked: usize,
-    pub total: usize,
-}
-
-impl SetProgress {
-    /// Whether every achievement is unlocked, or the store says the set
-    /// was completed (a set may need fewer than all of them).
-    pub fn complete(&self) -> bool {
-        (self.total > 0 && self.unlocked == self.total) || self.completed_at().is_some()
+/// The achievements `view` keeps, in its order. Returns indices into
+/// `list`. `shows` says which the user may read (not covered).
+pub fn arrange_view(
+    list: &[Achievement],
+    view: &ListView,
+    shows: impl Fn(&Achievement) -> bool,
+) -> Vec<usize> {
+    let query = folded(&view.query);
+    let mut out = arrange(list, view.filter);
+    out.retain(|&ix| matches(&list[ix], &query, shows(&list[ix])));
+    let by_name = |a: &Achievement| (!shows(a), folded(&a.name));
+    // A rarity of 0 means the store didn't say: those go last either way.
+    let rarity = |a: &Achievement, rarest: bool| {
+        if a.rarity <= 0.0 {
+            f32::INFINITY
+        } else if rarest {
+            a.rarity
+        } else {
+            -a.rarity
+        }
+    };
+    match view.sort {
+        AchievementSort::Suggested => {}
+        AchievementSort::Name => out.sort_by_key(|&ix| by_name(&list[ix])),
+        AchievementSort::Rarest | AchievementSort::Common => {
+            let rarest = view.sort == AchievementSort::Rarest;
+            out.sort_by(|&a, &b| rarity(&list[a], rarest).total_cmp(&rarity(&list[b], rarest)));
+        }
+        AchievementSort::Points => {
+            out.sort_by_key(|&ix| std::cmp::Reverse(list[ix].points));
+        }
     }
-
-    /// Whether the store says the player can't earn this set.
-    pub fn unearnable(&self) -> bool {
-        self.group
-            .as_ref()
-            .is_some_and(AchievementGroup::unearnable)
-    }
-
-    /// When the store says the player completed the set.
-    pub fn completed_at(&self) -> Option<&str> {
-        self.group
-            .as_ref()
-            .and_then(|g| g.completed_at.as_deref())
-            .filter(|d| !d.is_empty())
-    }
-}
-
-/// The sets `list` falls into, in the store's order with the achievements
-/// of no set last. Empty when there is at most one set, so a game without
-/// sets (or with only its base game's) keeps one plain list.
-pub fn sets(list: &[Achievement]) -> Vec<SetProgress> {
-    let mut out: Vec<SetProgress> = Vec::new();
-    for a in list {
-        let ix = match out.iter().position(|s| s.group == a.group) {
-            Some(ix) => ix,
-            None => {
-                out.push(SetProgress {
-                    group: a.group.clone(),
-                    unlocked: 0,
-                    total: 0,
-                });
-                out.len() - 1
-            }
-        };
-        out[ix].total += 1;
-        out[ix].unlocked += usize::from(a.is_unlocked());
-    }
-    if out.len() < 2 {
-        return Vec::new();
-    }
-    out.sort_by(|a, b| match (&a.group, &b.group) {
-        (Some(a), Some(b)) => a
-            .order
-            .cmp(&b.order)
-            .then_with(|| a.dlc_app_id.is_some().cmp(&b.dlc_app_id.is_some()))
-            .then_with(|| a.id.cmp(&b.id)),
-        (Some(_), None) => Ordering::Less,
-        (None, Some(_)) => Ordering::Greater,
-        (None, None) => Ordering::Equal,
-    });
     out
 }
 
@@ -188,10 +227,16 @@ pub enum Row {
     Item(usize),
 }
 
-/// The list's lines: [`arrange`]d achievements, under a heading per set
-/// when there are `sets`. A set the filter empties is left out.
-pub fn rows(list: &[Achievement], filter: AchievementFilter, sets: &[SetProgress]) -> Vec<Row> {
-    let order = arrange(list, filter);
+/// The list's lines: the achievements `view` keeps ([`arrange_view`]),
+/// under a heading per set when there are `sets`. A set the view empties is
+/// left out.
+pub fn rows(
+    list: &[Achievement],
+    view: &ListView,
+    sets: &[SetProgress],
+    shows: impl Fn(&Achievement) -> bool,
+) -> Vec<Row> {
+    let order = arrange_view(list, view, shows);
     if sets.is_empty() {
         return order.into_iter().map(Row::Item).collect();
     }
@@ -302,10 +347,14 @@ fn rarity_text(a: &Achievement) -> Option<String> {
     }
 }
 
+/// What the rows were arranged for: the view, the list, the rem size and
+/// the hidden achievements revealed (a search may find them then).
+type RowsKey = (ListView, usize, Pixels, (bool, usize));
+
 /// Arranged rows and their measurements, rebuilt only when the list, the
-/// filter or the rem size change.
+/// view, the revealed achievements or the rem size change.
 pub(crate) struct RowsCache {
-    key: Option<(AchievementFilter, usize, Pixels)>,
+    key: Option<RowsKey>,
     sets: Rc<Vec<SetProgress>>,
     rows: Rc<Vec<Row>>,
     sizes: Rc<Vec<Size<Pixels>>>,
@@ -328,17 +377,28 @@ impl Default for RowsCache {
 }
 
 impl RowsCache {
-    fn sync(&mut self, list: &Arc<Vec<Achievement>>, filter: AchievementFilter, rem: Pixels) {
-        let key = (filter, Arc::as_ptr(list) as usize, rem);
-        if self.key == Some(key) {
+    fn sync(
+        &mut self,
+        list: &Arc<Vec<Achievement>>,
+        view: &ListView,
+        reveal: &Reveal,
+        rem: Pixels,
+    ) {
+        let key = (
+            view.clone(),
+            Arc::as_ptr(list) as usize,
+            rem,
+            (reveal.all, reveal.ids.len()),
+        );
+        if self.key.as_ref() == Some(&key) {
             return;
         }
-        let filter_changed = self.key.is_some_and(|k| k.0 != filter);
-        let list_changed = self.key.is_none_or(|k| k.1 != key.1);
+        let view_changed = self.key.as_ref().is_some_and(|k| k.0 != *view);
+        let list_changed = self.key.as_ref().is_none_or(|k| k.1 != key.1);
         if list_changed {
             self.sets = Rc::new(sets(list));
         }
-        let rows = rows(list, filter, &self.sets);
+        let rows = rows(list, view, &self.sets, |a| reveal.shows(a));
         let height = |row: &Row| match row {
             Row::Set(_) => SET_REMS,
             Row::Item(_) => ROW_REMS,
@@ -347,7 +407,7 @@ impl RowsCache {
         self.sizes = Rc::new(rows.iter().map(|r| size(px(0.), rem * height(r))).collect());
         self.rows = Rc::new(rows);
         self.key = Some(key);
-        if filter_changed {
+        if view_changed {
             self.scroll.scroll_to_item(0, gpui_kit::ScrollStrategy::Top);
         }
     }
@@ -375,8 +435,14 @@ impl GamePage {
         let Some(list) = self.achievements.ready().cloned() else {
             return div().into_any_element();
         };
+        let view = ListView {
+            filter: self.achievement_filter,
+            sort: self.achievement_sort,
+            query: self.achievement_query.read(cx).value().to_string(),
+        };
+        let searching = !view.query.trim().is_empty();
         self.achievement_view
-            .sync(&list, self.achievement_filter, window.rem_size());
+            .sync(&list, &view, &self.achievement_reveal, window.rem_size());
         let rows_total = self.achievement_view.rows.len();
         let list_rems = self.achievement_view.visible_rems;
         let summary = Summary::of(&list, |a| self.achievement_reveal.shows(a));
@@ -384,6 +450,40 @@ impl GamePage {
             .iter()
             .position(|f| *f == self.achievement_filter)
             .unwrap_or(0);
+        let page = cx.entity();
+        let sort = self.achievement_sort;
+        let sort_menu = Button::new("achievement-sort")
+            .small()
+            .ghost()
+            .icon(Icon::new(IconName::ArrowDownUp))
+            .label(sort.label())
+            .accessibility_label(t_args(
+                "game.achievements.sort_by",
+                &[("order", &sort.label())],
+            ))
+            .dropdown_menu(move |mut menu, _, _| {
+                menu = menu.label(t("game.achievements.sort"));
+                for choice in AchievementSort::ALL {
+                    let page = page.clone();
+                    menu = menu.item(
+                        PopupMenuItem::new(choice.label())
+                            .checked(choice == sort)
+                            .on_click(move |_, _, cx| {
+                                page.update(cx, |p, cx| {
+                                    p.achievement_sort = choice;
+                                    cx.notify();
+                                });
+                            }),
+                    );
+                }
+                menu
+            });
+        let search = div().w(rems(14.)).min_w_0().child(
+            Input::new(&self.achievement_query)
+                .small()
+                .prefix(Icon::new(IconName::Search).small())
+                .cleanable(true),
+        );
         let icon_px = icon_px(window, 2.5);
         let rows = v_virtual_list(
             cx.entity(),
@@ -415,6 +515,8 @@ impl GamePage {
                         }
                     })),
             )
+            .child(search)
+            .child(sort_menu)
             .child(div().flex_1())
             .when(summary.hidden > 0, |bar| {
                 bar.child(
@@ -484,7 +586,11 @@ impl GamePage {
                     div()
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
-                        .child(t("game.achievements.empty")),
+                        .child(if searching {
+                            t("game.achievements.no_match")
+                        } else {
+                            t("game.achievements.empty")
+                        }),
                 )
             })
             .when(rows_total > 0, |col| {
@@ -1128,7 +1234,7 @@ mod tests {
             ]
         );
         let ids = |f| {
-            rows(&list, f, &sets)
+            rows(&list, &ListView::of(f), &sets, |_| true)
                 .into_iter()
                 .map(|r| match r {
                     Row::Set(s) => format!("#{s}"),
@@ -1199,7 +1305,12 @@ mod tests {
         assert_eq!(s.next, [1]);
         // Its row stays in the list, under its set.
         assert_eq!(
-            rows(&list, AchievementFilter::Locked, &sets),
+            rows(
+                &list,
+                &ListView::of(AchievementFilter::Locked),
+                &sets,
+                |_| true
+            ),
             [Row::Set(0), Row::Item(1), Row::Set(1), Row::Item(2)]
         );
     }
@@ -1209,7 +1320,7 @@ mod tests {
         let plain = vec![a("x", 1.0, None), a("y", 2.0, Some("2024-01-01T00:00:00Z"))];
         assert!(sets(&plain).is_empty());
         assert_eq!(
-            rows(&plain, AchievementFilter::All, &[]),
+            rows(&plain, &ListView::of(AchievementFilter::All), &[], |_| true),
             [Row::Item(1), Row::Item(0)]
         );
         let base_only: Vec<_> = plain
@@ -1217,5 +1328,60 @@ mod tests {
             .map(|x| in_set(x, "1", "Base game", None, 0))
             .collect();
         assert!(sets(&base_only).is_empty());
+    }
+
+    #[test]
+    fn searches_and_sorts_without_spoiling_hidden_ones() {
+        let mut boss = a("boss", 2.0, Some("2024-01-01T00:00:00Z"));
+        boss.name = "Beat the Boss".into();
+        boss.points = 5;
+        let mut secret = a("secret", 0.0, None);
+        secret.name = "Boss Rush".into();
+        secret.visible = false;
+        let mut common = a("common", 70.0, None);
+        common.name = "Arrive".into();
+        common.description = "Reach the boss's door".into();
+        common.points = 20;
+        let list = vec![boss, secret, common];
+        let covered = |a: &Achievement| a.visible || a.is_unlocked();
+        let ids = |view: &ListView, shows: &dyn Fn(&Achievement) -> bool| {
+            arrange_view(&list, view, shows)
+                .into_iter()
+                .map(|ix| list[ix].id.as_str())
+                .collect::<Vec<_>>()
+        };
+        let search = |query: &str, sort| ListView {
+            query: query.into(),
+            sort,
+            ..ListView::default()
+        };
+        assert_eq!(
+            ids(&search(" BOSS ", AchievementSort::Suggested), &covered),
+            ["boss", "common"],
+            "name or description, any case; the covered one stays out"
+        );
+        assert_eq!(
+            ids(&search("boss", AchievementSort::Suggested), &|_| true),
+            ["boss", "common", "secret"],
+            "revealed, it is found"
+        );
+        assert_eq!(
+            ids(&search("", AchievementSort::Name), &covered),
+            ["common", "boss", "secret"],
+            "covered names sort last"
+        );
+        assert_eq!(
+            ids(&search("", AchievementSort::Rarest), &covered),
+            ["boss", "common", "secret"],
+            "unknown rarity last"
+        );
+        assert_eq!(
+            ids(&search("", AchievementSort::Common), &covered),
+            ["common", "boss", "secret"]
+        );
+        assert_eq!(
+            ids(&search("", AchievementSort::Points), &covered),
+            ["common", "boss", "secret"]
+        );
     }
 }

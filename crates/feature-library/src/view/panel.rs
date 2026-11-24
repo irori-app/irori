@@ -44,6 +44,10 @@ const SAVE_AFTER: Duration = Duration::from_millis(400);
 #[derive(Clone)]
 pub(super) struct DrawerResize;
 
+/// The drag payload of the Focus view's column edge.
+#[derive(Clone)]
+pub(super) struct FocusResize;
+
 /// The views of selected games and the drawer's state.
 pub(super) struct Panels {
     /// Views made recently, newest last.
@@ -407,6 +411,64 @@ impl LibraryView {
             drawer,
             DRAWER_SLIDE_PX,
         )
+    }
+
+    /// Show `columns` covers to a row in the Focus view's column, and keep
+    /// the choice.
+    fn set_focus_columns(&mut self, columns: usize, cx: &mut Context<Self>) {
+        let columns = columns as u32;
+        if self.ui_prefs.library_focus_columns == columns {
+            return;
+        }
+        self.ui_prefs.library_focus_columns = columns;
+        cx.notify();
+        persist_ui(cx, move |ui| ui.library_focus_columns = columns);
+    }
+
+    /// The Focus view's column edge: drag it, or focus it and use the arrow
+    /// keys, to show one, two or three covers to a row.
+    pub(super) fn render_focus_handle(&self, cx: &mut Context<Self>) -> AnyElement {
+        let ring = cx.theme().ring;
+        let now = layouts::focus_columns_near(self.frame.focus_rem);
+        div()
+            .id("library-focus-handle")
+            .keyboard_focusable(cx)
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .right(px(-HANDLE_PX / 2.))
+            .w(px(HANDLE_PX))
+            .cursor_col_resize()
+            .hover(move |s| s.bg(ring.opacity(0.5)))
+            .focus(move |s| s.bg(ring))
+            .on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
+                let columns = match e.keystroke.key.as_str() {
+                    "right" => now + 1,
+                    "left" => now.saturating_sub(1),
+                    _ => return,
+                };
+                cx.stop_propagation();
+                this.set_focus_columns(columns.clamp(1, 3), cx);
+            }))
+            .on_drag(FocusResize, |_, _, _, cx| {
+                cx.stop_propagation();
+                cx.new(|_| Empty)
+            })
+            .tooltip(|window, cx| Tooltip::new(t("library.focus.resize")).build(window, cx))
+            .into_any_element()
+    }
+
+    /// Follow a drag of the Focus column's edge over the library body, whose
+    /// left edge the column keeps.
+    pub(super) fn on_focus_drag(
+        &mut self,
+        event: &DragMoveEvent<FocusResize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let left: Pixels = event.bounds.left();
+        let width = (event.event.position.x - left).max(px(0.)) / window.rem_size();
+        self.set_focus_columns(layouts::focus_columns_near(width), cx);
     }
 
     /// Follow a drag of the drawer's edge anywhere over the library body,

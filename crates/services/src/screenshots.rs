@@ -357,7 +357,7 @@ fn list(dir: &Path, cached: Option<&Listing>, now: i64) -> Option<Listing> {
 }
 
 /// Whether `path` names a video clip.
-fn is_video(path: &Path) -> bool {
+pub fn is_video(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| VIDEO_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))

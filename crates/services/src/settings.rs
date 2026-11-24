@@ -75,6 +75,12 @@ impl SettingsService {
             .clone()
     }
 
+    /// `id`'s overrides when they were read already, without reading the
+    /// file: for the UI thread, which must not wait on the disk.
+    pub fn cached_overrides(&self, id: &GameId) -> Option<GameSettingsOverrides> {
+        self.overrides.read().get(id).cloned()
+    }
+
     /// Effective settings of a game: global defaults plus its overrides.
     pub fn game(&self, id: &GameId) -> GameSettings {
         self.overrides(id).apply(&self.app().game)

@@ -14,6 +14,7 @@ use gpui_kit::{App, Global, SharedString, Task};
 use irori_core::{AppSettings, GameId, GameInfo};
 use irori_epic::EpicStore;
 use irori_extras::anticheat::{self, AntiCheatInfo, AntiCheatStatus, InstallGate};
+pub use irori_extras::wiki::pcgamingwiki::Support;
 use irori_gog::GogStore;
 use irori_services::MultiAccountStore;
 use irori_ui::i18n::{t, t_args};
@@ -166,6 +167,56 @@ impl ReviewScore {
     }
 }
 
+/// A PC feature PCGamingWiki rates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PcFeature {
+    Ultrawide,
+    Hdr,
+    HighFps,
+    Uhd4k,
+    Controller,
+}
+
+impl PcFeature {
+    pub fn label(self) -> SharedString {
+        t(match self {
+            Self::Ultrawide => "game.compat.feature.ultrawide",
+            Self::Hdr => "game.compat.feature.hdr",
+            Self::HighFps => "game.compat.feature.high_fps",
+            Self::Uhd4k => "game.compat.feature.4k",
+            Self::Controller => "game.compat.feature.controller",
+        })
+    }
+
+    /// The feature's name with how far the game supports it.
+    pub fn label_with(self, support: Support) -> SharedString {
+        let label = self.label();
+        match support {
+            Support::Full => label,
+            Support::Limited => t_args("game.compat.feature.limited", &[("feature", &label)]),
+            Support::WithFix => t_args("game.compat.feature.with_fix", &[("feature", &label)]),
+        }
+    }
+}
+
+/// What PCGamingWiki says about the PC version: the features it supports,
+/// its engines, the save folder for this game's platform and the fixes the
+/// page lists.
+#[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
+pub struct PcFeatures {
+    pub features: Vec<(PcFeature, Support)>,
+    pub engines: Vec<String>,
+    pub save_folder: Option<String>,
+    pub fixes: u32,
+}
+
+impl PcFeatures {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// Everything the compatibility panel shows. Every field is optional; the
 /// panel renders what is present.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -184,6 +235,8 @@ pub struct CompatibilityInfo {
     pub known_fixes: Vec<String>,
     /// External page with important information about the game.
     pub wiki_link: Option<String>,
+    /// PC features from PCGamingWiki.
+    pub pc: Option<PcFeatures>,
 }
 
 impl CompatibilityInfo {

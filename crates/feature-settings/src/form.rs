@@ -36,6 +36,7 @@ use serde_json::Value;
 
 use crate::appearance::{AccentPicker, FontPicker};
 use crate::artwork::ArtworkPanel;
+use crate::controller_map::ButtonMapPanel;
 use crate::controllers::ControllersPanel;
 use crate::epic::{EglSyncPanel, EosOverlayPanel};
 use crate::hud::{HudPanel, HudPanelScope};
@@ -43,6 +44,7 @@ use crate::i18n::LanguageStamp;
 use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
 use crate::launch_programs::LaunchProgramsPanel;
+use crate::overlay::OverlayPanel;
 use crate::registry::{
     self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
     PanelKind, Scope, TextKind,
@@ -51,6 +53,7 @@ use crate::replay::ReplayPanel;
 use crate::saves::SaveSyncPanel;
 use crate::sunshine::SunshinePanel;
 use crate::umu::UmuPanel;
+use crate::user_actions::UserActionsPanel;
 use crate::value::{
     bool_at, effective_overrides, env_text, get_path, override_key, parse_env_text,
     plan_game_write, remove_row, split_assignment, text_to_value, upsert_row,
@@ -77,6 +80,8 @@ pub enum FormTarget {
 enum FormFilter {
     Sections(Vec<FieldSection>),
     Query(String),
+    /// Only the fields the game changes from the defaults, every section.
+    Changed,
 }
 
 /// Select item: a stable key and a label.
@@ -322,6 +327,13 @@ impl SettingsForm {
     /// Show only these sections (in this order).
     pub fn set_sections(&mut self, sections: Vec<FieldSection>, cx: &mut Context<Self>) {
         self.filter = FormFilter::Sections(sections);
+        cx.notify();
+    }
+
+    /// Show only the fields that differ from the game defaults (game
+    /// target), grouped by section, each with its reset.
+    pub fn set_changed_only(&mut self, cx: &mut Context<Self>) {
+        self.filter = FormFilter::Changed;
         cx.notify();
     }
 
@@ -590,6 +602,7 @@ impl SettingsForm {
             match &self.filter {
                 FormFilter::Sections(s) => s.contains(&f.section),
                 FormFilter::Query(q) => f.matches(q),
+                FormFilter::Changed => self.is_overridden(f),
             }
         })
     }
@@ -724,10 +737,19 @@ impl SettingsForm {
     ) {
         let view: Option<AnyView> = match kind {
             PanelKind::Controllers => Some(cx.new(ControllersPanel::new).into()),
+            PanelKind::ButtonMap => Some(cx.new(ButtonMapPanel::new).into()),
+            PanelKind::Overlay => Some(cx.new(OverlayPanel::new).into()),
             PanelKind::EosOverlay => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EosOverlayPanel::new(epic, window, cx)).into()),
             PanelKind::EglSync => crate::stores::epic(cx)
                 .map(|epic| cx.new(|cx| EglSyncPanel::new(epic, window, cx)).into()),
+            PanelKind::UserActions => match &self.target {
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    Some(cx.new(|cx| UserActionsPanel::new(id, window, cx)).into())
+                }
+                _ => None,
+            },
             PanelKind::LaunchPrograms => {
                 let target = self.target.clone();
                 Some(
@@ -801,7 +823,14 @@ impl SettingsForm {
                 _ => None,
             },
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
+            PanelKind::QuickLaunch => {
+                Some(cx.new(crate::quick_launch::QuickLaunchPanel::new).into())
+            }
             PanelKind::Igdb => Some(cx.new(|cx| IgdbPanel::new(window, cx)).into()),
+            PanelKind::LaunchBox => crate::stores::emulation(cx).map(|store| {
+                cx.new(|cx| crate::launchbox::LaunchBoxPanel::new(store, cx))
+                    .into()
+            }),
             PanelKind::SteamLaunchOptions => match &self.target {
                 FormTarget::Game(id) if id.runner == Runner::Steam => {
                     crate::stores::steam(cx).map(|steam| {
@@ -2425,7 +2454,7 @@ impl Render for SettingsForm {
         }
         let multi_section = match &self.filter {
             FormFilter::Sections(s) => s.len() > 1,
-            FormFilter::Query(_) => true,
+            FormFilter::Query(_) | FormFilter::Changed => true,
         };
         let fields: Vec<&'static FieldSpec> = self.visible_fields().collect();
         let border = cx.theme().border;
