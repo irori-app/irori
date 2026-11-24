@@ -674,6 +674,8 @@
   "settings.field.art_cache_limit.help": "Nedladdade omslag och bakgrunder, och de mindre kopior som görs av dem. Över den här storleken tas de bilder bort som inte visats på längst tid; de laddas ned igen vid behov. Bilder på skärmen tas aldrig bort.",
   "settings.field.igdb.help": "Fyller i beskrivningar, genrer, releasedatum och skärmbilder som butikssidorna saknar, och erbjuder bilder från IGDB i bildväljaren. Ett spel slås upp först när du öppnar det, och dina egna ändringar går alltid före.",
   "settings.field.panel_igdb.label": "IGDB-applikation",
+  "settings.field.vndb.label": "Detaljer och bilder för visual novels från VNDB",
+  "settings.field.vndb.help": "Fyller i beskrivningar, utgivningsdatum, utvecklare och skärmbilder för visual novels som saknas på butikssidor och i IGDB, och föreslår omslag och skärmbilder från VNDB i bildväljaren. Inget konto behövs. Ett spel slås upp först när du öppnar det, bilder som VNDB:s användare bedömer som sexuella eller våldsamma visas aldrig, och dina egna ändringar går alltid före.",
   "settings.igdb.description": "IGDB kräver en egen Twitch-applikation. Registrera en och ange sedan dess klient-ID och en klienthemlighet här. Irori sparar dem krypterade på den här datorn.",
   "settings.igdb.open_guide": "Så registrerar du en",
   "settings.igdb.client_id": "Klient-ID",

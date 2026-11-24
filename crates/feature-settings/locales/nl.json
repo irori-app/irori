@@ -674,6 +674,8 @@
   "settings.field.art_cache_limit.help": "Gedownloade hoezen en achtergronden, en de kleinere kopieën die ervan gemaakt zijn. Boven deze grootte verdwijnen de afbeeldingen die het langst niet getoond zijn; ze worden opnieuw gedownload als dat nodig is. Afbeeldingen op het scherm worden nooit verwijderd.",
   "settings.field.igdb.help": "Vult beschrijvingen, genres, releasedatums en screenshots aan die winkelpagina’s weglaten, en biedt afbeeldingen van IGDB aan in de afbeeldingskiezer. Een game wordt pas opgezocht als je hem opent, en je eigen wijzigingen gaan altijd voor.",
   "settings.field.panel_igdb.label": "IGDB-applicatie",
+  "settings.field.vndb.label": "Details en afbeeldingen van visual novels van VNDB",
+  "settings.field.vndb.help": "Vult beschrijvingen, releasedatums, ontwikkelaars en screenshots van visual novels aan die winkelpagina’s en IGDB weglaten, en biedt de covers en screenshots van VNDB aan in de afbeeldingskiezer. Een account is niet nodig. Een game wordt pas opgezocht wanneer je hem opent, afbeeldingen die VNDB-gebruikers als seksueel of gewelddadig beoordelen worden nooit getoond, en je eigen wijzigingen gaan altijd voor.",
   "settings.igdb.description": "IGDB heeft een eigen Twitch-applicatie nodig. Registreer er een en vul hier de client-ID en een clientgeheim in. Irori bewaart ze versleuteld op deze computer.",
   "settings.igdb.open_guide": "Zo registreer je er een",
   "settings.igdb.client_id": "Client-ID",

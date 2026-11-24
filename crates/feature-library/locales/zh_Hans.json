@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "图片来自 SteamGridDB",
   "library.art.attribution_igdb": "图片来自 IGDB",
+  "library.art.attribution_vndb": "图片来自 VNDB",
   "library.art.back_to_form": "返回表单",
   "library.art.back_to_games": "返回匹配的游戏",
   "library.art.choose_game": "选择游戏",

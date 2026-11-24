@@ -1217,6 +1217,66 @@ fn igdb_fills_store_gaps_only_while_on_and_after_the_users_choice() {
     b.settings.update_app(|s| s.igdb = false);
 }
 
+#[test]
+fn vndb_fills_what_others_leave_only_while_on() {
+    use irori_core::GameId;
+    use irori_depot::test_server::{Resp, TestServer};
+    isolate_paths();
+    let b = Backend::start_headless(|_, _| {
+        vec![ListStore::store(
+            Runner::Sideload,
+            &[("vndb-novel", "Ever17: The Out of Infinity")],
+        )]
+    })
+    .unwrap();
+    let _rt = b.runtime().enter();
+    let server = TestServer::start(|req| {
+        let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap_or_default();
+        if body["filters"] == serde_json::json!(["id", "=", "v5"]) {
+            return Resp::json(serde_json::json!({"results": [
+                {"id": "v5", "title": "Chosen", "description": "Picked."}
+            ]}));
+        }
+        Resp::json(serde_json::json!({"results": [{
+            "id": "v17", "title": "Ever17 -the out of infinity-",
+            "released": "2002-08-29",
+            "description": "Under the sea.[spoiler] Twist.[/spoiler]",
+            "developers": [{"id": "p8", "name": "KID"}],
+            "screenshots": [
+                {"url": "https://t.vndb.org/sf/1.jpg", "sexual": 0, "violence": 0},
+                {"url": "https://t.vndb.org/sf/2.jpg", "sexual": 1, "violence": 0}
+            ]
+        }]}))
+    });
+    b.set_vndb_api(&server.url("/kana"));
+    b.rebuild_library();
+    let id = GameId::new(Runner::Sideload, "vndb-novel");
+    let rt = b.runtime();
+
+    // Off: nothing is asked, nothing filled.
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!((info.description, info.details_from), (None, None));
+    assert!(server.requests().is_empty());
+    assert!(rt.block_on(b.search_vndb("Ever17")).is_err());
+
+    b.settings.update_app(|s| s.vndb = true);
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.description.as_deref(), Some("Under the sea."));
+    assert_eq!(info.release_date.as_deref(), Some("2002-08-29"));
+    assert_eq!(info.developers, ["KID"]);
+    assert_eq!(info.screenshots, ["https://t.vndb.org/sf/1.jpg"]);
+    assert_eq!(info.details_from.as_deref(), Some("VNDB"));
+
+    // The user's match wins over the title search.
+    b.set_vndb_match(&id, Some("v5".into()));
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.description.as_deref(), Some("Picked."));
+    b.set_vndb_match(&id, Some(irori_extras::vndb::VNDB_NONE.into()));
+    let info = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(info.details_from, None);
+    b.settings.update_app(|s| s.vndb = false);
+}
+
 #[cfg(unix)]
 #[test]
 fn removing_a_prefix_forgets_it() {

@@ -90,7 +90,9 @@ developer, release date and genres, and you can change the title or the art of a
 library. With your own free Twitch application, IGDB fills in the descriptions, genres, release
 dates and screenshots that store pages leave out, added games and ROMs above all, and adds its
 covers and artworks to the art picker. It is off by default, and a game is looked up only when
-you open it. Libraries from Heroic, Lutris, Bottles and Faugus Launcher import in one click, and on
+you open it. VNDB does the same for visual novels without an account: descriptions without
+spoilers, release dates, developers, screenshots and covers, never a picture its users flag as
+explicit. Libraries from Heroic, Lutris, Bottles and Faugus Launcher import in one click, and on
 Windows so does Playnite’s.
 
 ## Your colours, your size

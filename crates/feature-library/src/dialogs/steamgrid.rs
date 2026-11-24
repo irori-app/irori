@@ -1,12 +1,15 @@
-//! "Find art online": search SteamGridDB (or, with `iroriIgdb` on, IGDB)
-//! for a game and pick a cover, square or background image. Embedded in the
+//! "Find art online": search SteamGridDB (or, with `iroriIgdb` on, IGDB;
+//! with `iroriVndb` on, VNDB) for a game and pick a cover, square or
+//! background image. Embedded in the
 //! "Add game", "Edit app" and "Edit details" dialogs in place of their form
 //! while open.
 //!
 //! Without an API key the picker explains how to get one and where to enter
 //! it. Nothing is searched until the user opens the picker (Heroic looked up
 //! art on a third-party server whenever the title field lost focus). IGDB
-//! has covers, artworks and screenshots but no square art or logos.
+//! has covers, artworks and screenshots but no square art or logos; VNDB
+//! has a visual novel's cover and screenshots, only those its users flag
+//! safe.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -27,6 +30,7 @@ use gpui_kit::{
 };
 use irori_extras::igdb::{IgdbGame, ImageSize, image_url};
 use irori_extras::steamgrid::{self, ApiKey, ImageFilter, SgdbGame, SgdbImage};
+use irori_extras::vndb::VndbNovel;
 use irori_ui::art_picker::{ArtSlot, OnPicked};
 use irori_ui::components::{art_img, physical_width};
 use irori_ui::i18n::{t, t_args};
@@ -101,6 +105,7 @@ impl ArtKind {
 pub enum ArtSource {
     SteamGridDb,
     Igdb,
+    Vndb,
 }
 
 /// IGDB's images of `game` for `kind`: its cover, or its artworks then
@@ -125,6 +130,23 @@ pub fn igdb_images(kind: ArtKind, game: &IgdbGame) -> Vec<SgdbImage> {
             .chain(&game.screenshots)
             .filter_map(|id| image(id, ImageSize::ScreenshotMed, ImageSize::FullHD))
             .collect(),
+        ArtKind::Square | ArtKind::Logo => Vec::new(),
+    }
+}
+
+/// VNDB's images of `novel` for `kind`: its cover, or its screenshots as
+/// backgrounds (both already only those flagged safe). VNDB has no square
+/// art or logos.
+pub fn vndb_images(kind: ArtKind, novel: &VndbNovel) -> Vec<SgdbImage> {
+    let id = novel.number().unwrap_or_default();
+    let image = |i: &irori_extras::vndb::VndbImage| SgdbImage {
+        id,
+        url: i.url.clone(),
+        thumb: i.thumbnail.clone(),
+    };
+    match kind {
+        ArtKind::Cover => novel.cover.iter().map(image).collect(),
+        ArtKind::Background => novel.screenshots.iter().map(image).collect(),
         ArtKind::Square | ArtKind::Logo => Vec::new(),
     }
 }
@@ -171,12 +193,16 @@ pub struct ArtPicker {
     key: Option<ApiKey>,
     /// `iroriIgdb` is on: IGDB can be searched too.
     igdb_on: bool,
+    /// `iroriVndb` is on: VNDB can be searched too.
+    vndb_on: bool,
     source: ArtSource,
     query: Entity<InputState>,
     phase: Phase,
     games: Vec<SgdbGame>,
     /// IGDB's records of `games`, which already hold their images.
     igdb_found: Vec<IgdbGame>,
+    /// VNDB's novels of `games`, which already hold their images.
+    vndb_found: Vec<VndbNovel>,
     _task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -187,24 +213,25 @@ impl ArtPicker {
     /// A picker for `kind`, searching for `title` right away when a key is set.
     pub fn new(kind: ArtKind, title: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let app = &models(cx).settings.read(cx).app;
-        let (key, igdb_on) = (ApiKey::from_settings(app), app.igdb);
-        Self::with_sources(kind, title, key, igdb_on, window, cx)
+        let (key, igdb_on, vndb_on) = (ApiKey::from_settings(app), app.igdb, app.vndb);
+        Self::with_sources(kind, title, key, igdb_on, vndb_on, window, cx)
     }
 
-    /// A picker with SteamGridDB's `key` and IGDB on or off, whatever the
-    /// settings say.
+    /// A picker with SteamGridDB's `key` and IGDB and VNDB on or off,
+    /// whatever the settings say.
     pub(crate) fn with_sources(
         kind: ArtKind,
         title: &str,
         key: Option<ApiKey>,
         igdb_on: bool,
+        vndb_on: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let source = if key.is_none() && igdb_on {
-            ArtSource::Igdb
-        } else {
-            ArtSource::SteamGridDb
+        let source = match (key.is_some(), igdb_on, vndb_on) {
+            (false, true, _) => ArtSource::Igdb,
+            (false, false, true) => ArtSource::Vndb,
+            _ => ArtSource::SteamGridDb,
         };
         let query = cx.new(|cx| {
             InputState::new(window, cx)
@@ -221,7 +248,7 @@ impl ArtPicker {
             }),
         ];
         let mut this = Self {
-            phase: if key.is_some() || source == ArtSource::Igdb {
+            phase: if key.is_some() || source != ArtSource::SteamGridDb {
                 Phase::Idle
             } else {
                 Phase::NoKey
@@ -229,10 +256,12 @@ impl ArtPicker {
             kind,
             key,
             igdb_on,
+            vndb_on,
             source,
             query,
             games: Vec::new(),
             igdb_found: Vec::new(),
+            vndb_found: Vec::new(),
             _task: None,
             _subscriptions: subscriptions,
         };
@@ -266,6 +295,7 @@ impl ArtPicker {
         self._task = None;
         self.games.clear();
         self.igdb_found.clear();
+        self.vndb_found.clear();
         if source == ArtSource::SteamGridDb && self.key.is_none() {
             self.phase = Phase::NoKey;
             cx.notify();
@@ -276,13 +306,11 @@ impl ArtPicker {
     }
 
     fn search(&mut self, cx: &mut Context<Self>) {
-        let key = match self.source {
-            ArtSource::SteamGridDb => match self.key.clone() {
-                Some(key) => Some(key),
-                None => return,
-            },
-            ArtSource::Igdb => None,
-        };
+        let source = self.source;
+        let key = self.key.clone();
+        if source == ArtSource::SteamGridDb && key.is_none() {
+            return;
+        }
         let query = self.query.read(cx).value().trim().to_string();
         if query.is_empty() {
             return;
@@ -291,9 +319,26 @@ impl ArtPicker {
         cx.notify();
         let b = backend(cx);
         let task = irori_ui::run(cx, async move {
-            match key {
-                Some(key) => Ok((steamgrid::search_games(&key, &query).await?, Vec::new())),
-                None => {
+            match (source, key) {
+                (ArtSource::SteamGridDb, Some(key)) => Ok((
+                    steamgrid::search_games(&key, &query).await?,
+                    Vec::new(),
+                    Vec::new(),
+                )),
+                (ArtSource::Vndb, _) => {
+                    let found = b.search_vndb(&query).await?;
+                    let games = found
+                        .iter()
+                        .filter_map(|n| {
+                            Some(SgdbGame {
+                                id: n.number()?,
+                                name: n.title.clone(),
+                            })
+                        })
+                        .collect();
+                    Ok((games, Vec::new(), found))
+                }
+                _ => {
                     let found = b.search_igdb(&query).await?;
                     let games = found
                         .iter()
@@ -302,15 +347,16 @@ impl ArtPicker {
                             name: g.name.clone(),
                         })
                         .collect();
-                    Ok((games, found))
+                    Ok((games, found, Vec::new()))
                 }
             }
         });
         self._task = Some(cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
-                let result = result.map(|(games, found)| {
-                    this.igdb_found = found;
+                let result = result.map(|(games, igdb, vndb)| {
+                    this.igdb_found = igdb;
+                    this.vndb_found = vndb;
                     games
                 });
                 match result.map(search_outcome) {
@@ -336,13 +382,19 @@ impl ArtPicker {
 
     fn load_images(&mut self, game: SgdbGame, cx: &mut Context<Self>) {
         let name: SharedString = game.name.clone().into();
-        if self.source == ArtSource::Igdb {
-            let images = self
-                .igdb_found
-                .iter()
-                .find(|g| g.id == game.id)
-                .map(|g| igdb_images(self.kind, g))
-                .unwrap_or_default();
+        if self.source != ArtSource::SteamGridDb {
+            let images = if self.source == ArtSource::Igdb {
+                self.igdb_found
+                    .iter()
+                    .find(|g| g.id == game.id)
+                    .map(|g| igdb_images(self.kind, g))
+            } else {
+                self.vndb_found
+                    .iter()
+                    .find(|n| n.number() == Some(game.id))
+                    .map(|n| vndb_images(self.kind, n))
+            }
+            .unwrap_or_default();
             self.phase = if images.is_empty() {
                 Phase::Message(self.kind.none_found(&name))
             } else {
@@ -512,7 +564,7 @@ impl ArtPicker {
 impl Render for ArtPicker {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
-        let has_key = self.key.is_some() || self.source == ArtSource::Igdb;
+        let has_key = self.key.is_some() || self.source != ArtSource::SteamGridDb;
         let source = self.source;
         let busy = matches!(self.phase, Phase::Searching | Phase::Loading(_));
         let can_go_back =
@@ -562,7 +614,7 @@ impl Render for ArtPicker {
         v_flex()
             .id("art-picker")
             .gap_3()
-            .when(self.igdb_on, |el| {
+            .when(self.igdb_on || self.vndb_on, |el| {
                 el.child(
                     h_flex()
                         .gap_1()
@@ -576,16 +628,30 @@ impl Render for ArtPicker {
                                     this.set_source(ArtSource::SteamGridDb, cx)
                                 })),
                         )
-                        .child(
-                            Button::new("art-source-igdb")
-                                .ghost()
-                                .small()
-                                .label("IGDB")
-                                .selected(source == ArtSource::Igdb)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_source(ArtSource::Igdb, cx)
-                                })),
-                        ),
+                        .when(self.igdb_on, |row| {
+                            row.child(
+                                Button::new("art-source-igdb")
+                                    .ghost()
+                                    .small()
+                                    .label("IGDB")
+                                    .selected(source == ArtSource::Igdb)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.set_source(ArtSource::Igdb, cx)
+                                    })),
+                            )
+                        })
+                        .when(self.vndb_on, |row| {
+                            row.child(
+                                Button::new("art-source-vndb")
+                                    .ghost()
+                                    .small()
+                                    .label("VNDB")
+                                    .selected(source == ArtSource::Vndb)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.set_source(ArtSource::Vndb, cx)
+                                    })),
+                            )
+                        }),
                 )
             })
             .when(has_key, |el| {
@@ -633,6 +699,7 @@ impl Render for ArtPicker {
                                 el.child(match source {
                                     ArtSource::SteamGridDb => t("library.art.attribution"),
                                     ArtSource::Igdb => t("library.art.attribution_igdb"),
+                                    ArtSource::Vndb => t("library.art.attribution_vndb"),
                                 })
                             }),
                     )
@@ -726,6 +793,27 @@ mod tests {
         assert!(backgrounds[0].ends_with("/t_1080p/ar1.jpg"));
         assert!(igdb_images(ArtKind::Logo, &game).is_empty());
         assert!(igdb_images(ArtKind::Square, &game).is_empty());
+    }
+
+    #[test]
+    fn vndb_offers_its_cover_and_screenshots_only() {
+        let image = |name: &str| irori_extras::vndb::VndbImage {
+            url: format!("https://t.vndb.org/{name}.jpg"),
+            thumbnail: format!("https://t.vndb.org/{name}.t.jpg"),
+        };
+        let novel = VndbNovel {
+            id: "v17".into(),
+            cover: Some(image("cv")),
+            screenshots: vec![image("sf1"), image("sf2")],
+            ..Default::default()
+        };
+        let covers = vndb_images(ArtKind::Cover, &novel);
+        assert_eq!(covers.len(), 1);
+        assert_eq!(covers[0].id, 17);
+        assert_eq!(covers[0].thumb, "https://t.vndb.org/cv.t.jpg");
+        assert_eq!(vndb_images(ArtKind::Background, &novel).len(), 2);
+        assert!(vndb_images(ArtKind::Logo, &novel).is_empty());
+        assert!(vndb_images(ArtKind::Square, &novel).is_empty());
     }
 
     #[test]

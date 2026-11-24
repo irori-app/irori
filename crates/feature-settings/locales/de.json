@@ -674,6 +674,8 @@
   "settings.field.art_cache_limit.help": "Heruntergeladene Cover und Hintergründe sowie die daraus erstellten kleineren Kopien. Über dieser Größe werden die am längsten nicht gezeigten Bilder entfernt; bei Bedarf werden sie erneut geladen. Angezeigte Bilder werden nie entfernt.",
   "settings.field.igdb.help": "Ergänzt Beschreibungen, Genres, Erscheinungsdaten und Screenshots, die auf Shopseiten fehlen, und bietet Bilder von IGDB in der Bildauswahl an. Ein Spiel wird erst nachgeschlagen, wenn du es öffnest, und deine eigenen Änderungen haben immer Vorrang.",
   "settings.field.panel_igdb.label": "IGDB-Anwendung",
+  "settings.field.vndb.label": "Details und Bilder zu Visual Novels von VNDB",
+  "settings.field.vndb.help": "Ergänzt Beschreibungen, Erscheinungsdaten, Entwickler und Screenshots von Visual Novels, die auf Shopseiten und bei IGDB fehlen, und bietet Cover und Screenshots von VNDB in der Bildauswahl an. Ein Konto ist nicht nötig. Ein Spiel wird erst nachgeschlagen, wenn du es öffnest, Bilder, die VNDB-Nutzer als sexuell oder gewalttätig einstufen, werden nie gezeigt, und deine eigenen Änderungen haben immer Vorrang.",
   "settings.igdb.description": "IGDB braucht eine eigene Twitch-Anwendung. Registriere eine und gib dann hier ihre Client-ID und ein Client-Secret ein. Irori speichert beides verschlüsselt auf diesem Computer.",
   "settings.igdb.open_guide": "So registrierst du eine",
   "settings.igdb.client_id": "Client-ID",

@@ -674,6 +674,8 @@
   "settings.field.art_cache_limit.help": "İndirilen kapaklar ve arka planlar ile bunlardan üretilen küçük kopyalar. Bu boyut aşılınca en uzun süredir gösterilmeyen görseller silinir; gerektiğinde yeniden indirilir. Ekrandaki görseller asla silinmez.",
   "settings.field.igdb.help": "Mağaza sayfalarında eksik olan açıklamaları, türleri, çıkış tarihlerini ve ekran görüntülerini tamamlar, görsel seçicide IGDB’nin görsellerini sunar. Bir oyun yalnızca onu açtığınızda aranır ve kendi düzenlemeleriniz her zaman önceliklidir.",
   "settings.field.panel_igdb.label": "IGDB uygulaması",
+  "settings.field.vndb.label": "VNDB’den görsel roman ayrıntıları ve görselleri",
+  "settings.field.vndb.help": "Mağaza sayfalarında ve IGDB’de eksik kalan görsel roman açıklamalarını, çıkış tarihlerini, geliştiricileri ve ekran görüntülerini tamamlar, görsel seçicide VNDB’nin kapaklarını ve ekran görüntülerini sunar. Hesap gerekmez. Bir oyun yalnızca onu açtığınızda aranır, VNDB kullanıcılarının cinsel ya da şiddet içerikli bulduğu görseller asla gösterilmez ve kendi düzenlemeleriniz her zaman önceliklidir.",
   "settings.igdb.description": "IGDB kendinize ait bir Twitch uygulaması gerektirir. Bir uygulama kaydedin, ardından istemci kimliğini ve bir istemci gizli anahtarını buraya girin. Irori bunları bu bilgisayarda şifreli olarak saklar.",
   "settings.igdb.open_guide": "Nasıl kaydedilir",
   "settings.igdb.client_id": "İstemci kimliği",

@@ -674,6 +674,8 @@
   "settings.field.art_cache_limit.help": "Downloaded covers and backgrounds, and the smaller copies cut from them. Past this size the art not shown for longest goes; it is downloaded again when needed. Art on screen is never removed.",
   "settings.field.igdb.help": "Fills in descriptions, genres, release dates and screenshots that store pages leave out, and offers IGDB’s art in the art picker. A game is looked up only when you open it, and your own edits always win.",
   "settings.field.panel_igdb.label": "IGDB application",
+  "settings.field.vndb.label": "Visual novel details and art from VNDB",
+  "settings.field.vndb.help": "Fills in descriptions, release dates, developers and screenshots of visual novels that store pages and IGDB leave out, and offers VNDB’s covers and screenshots in the art picker. No account is needed. A game is looked up only when you open it, pictures VNDB’s users rate as sexual or violent are never shown, and your own edits always win.",
   "settings.igdb.description": "IGDB needs a Twitch application of your own. Register one, then enter its client ID and a client secret here. Irori keeps them encrypted on this computer.",
   "settings.igdb.open_guide": "How to register one",
   "settings.igdb.client_id": "Client ID",

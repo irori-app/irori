@@ -674,6 +674,8 @@
   "settings.field.art_cache_limit.help": "下载的封面和背景，以及由它们生成的小尺寸副本。超过此大小时，最久未显示的图片会被删除，需要时会重新下载。屏幕上正在显示的图片不会被删除。",
   "settings.field.igdb.help": "补全商店页面缺少的简介、类型、发行日期和截图，并在图片选择器中提供 IGDB 的图片。只有在你打开游戏时才会查询，你自己的修改始终优先。",
   "settings.field.panel_igdb.label": "IGDB 应用程序",
+  "settings.field.vndb.label": "来自 VNDB 的视觉小说详情和图片",
+  "settings.field.vndb.help": "补全商店页面和 IGDB 缺少的视觉小说简介、发行日期、开发商和截图，并在图片选择器中提供 VNDB 的封面和截图。无需账户。只有在打开游戏时才会查询，VNDB 用户评为色情或暴力的图片永远不会显示，你自己的编辑始终优先。",
   "settings.igdb.description": "IGDB 需要你自己的 Twitch 应用程序。注册一个，然后在此输入它的客户端 ID 和客户端密钥。Irori 会在这台电脑上加密保存它们。",
   "settings.igdb.open_guide": "如何注册",
   "settings.igdb.client_id": "客户端 ID",

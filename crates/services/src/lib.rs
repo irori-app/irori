@@ -61,6 +61,7 @@ pub mod sync;
 pub mod troubleshoot;
 pub mod updates;
 pub mod userdata;
+mod vndb;
 mod windows_files;
 
 use std::collections::BTreeMap;
@@ -185,6 +186,8 @@ pub struct Inner {
     troubleshoot: troubleshoot::TroubleshootState,
     /// The user's IGDB application.
     igdb: igdb::IgdbState,
+    /// The VNDB client, shared so requests stay spaced.
+    vndb: vndb::VndbState,
 }
 
 impl Deref for Backend {
@@ -285,6 +288,7 @@ impl Backend {
             sunshine: Default::default(),
             troubleshoot: Default::default(),
             igdb: Default::default(),
+            vndb: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {

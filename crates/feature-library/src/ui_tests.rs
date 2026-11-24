@@ -1269,19 +1269,22 @@ fn smart_categories_filter_the_library_and_reopen_as_saved(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
+fn the_art_picker_offers_igdb_and_vndb_only_while_they_are_on(cx: &mut TestAppContext) {
     use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
 
     let _backend = start(cx);
-    let open = |igdb_on: bool, cx: &mut TestAppContext| {
+    let open_with = |igdb_on: bool, vndb_on: bool, cx: &mut TestAppContext| {
         cx.update(|cx| {
             gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", None, igdb_on, window, cx))
+                cx.new(|cx| {
+                    ArtPicker::with_sources(ArtKind::Cover, "", None, igdb_on, vndb_on, window, cx)
+                })
             })
         })
         .expect("window opens")
         .1
     };
+    let open = |igdb_on: bool, cx: &mut TestAppContext| open_with(igdb_on, false, cx);
     let source = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
         cx.read(|cx| picker.read(cx).source())
     };
@@ -1297,4 +1300,13 @@ fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
     assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
+
+    // VNDB alone, without a SteamGridDB key: VNDB first.
+    let picker = open_with(false, true, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
+    // Both on: IGDB first.
+    let picker = open_with(true, true, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
 }
