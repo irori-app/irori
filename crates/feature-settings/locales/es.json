@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Nitidez de FSR",
   "settings.field.max_workers.help": "Máximo de conexiones de descarga a la vez. Con 0, Irori mide qué es lo más rápido (hasta 32); cualquier otro número es el máximo que usará.",
   "settings.field.max_workers.label": "Procesos de descarga",
-  "settings.field.minimize_on_launch.help": "La ventana vuelve cuando el juego se cierra.",
+  "settings.field.minimize_on_launch.help": "Con «Cerrar a la bandeja» activado, Irori se oculta en la bandeja. La ventana vuelve cuando el juego se cierra.",
   "settings.field.minimize_on_launch.label": "Minimizar al iniciar un juego",
   "settings.field.no_tray_icon.label": "Ocultar el icono de la bandeja",
   "settings.field.nvidia_prime.help": "Para portátiles con NVIDIA Optimus o gráficos conmutables de AMD.",

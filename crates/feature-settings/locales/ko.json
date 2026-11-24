@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR 선명도",
   "settings.field.max_workers.help": "동시 다운로드 연결의 최대 수. 0이면 Irori가 가장 빠른 수를 측정합니다(최대 32). 다른 숫자는 사용할 최대값입니다.",
   "settings.field.max_workers.label": "다운로드 작업자 수",
-  "settings.field.minimize_on_launch.help": "게임이 종료되면 창이 다시 나타납니다.",
+  "settings.field.minimize_on_launch.help": "‘닫을 때 트레이로 최소화’가 켜져 있으면 대신 트레이로 숨습니다. 게임이 종료되면 창이 다시 나타납니다.",
   "settings.field.minimize_on_launch.label": "게임 시작 시 최소화",
   "settings.field.no_tray_icon.label": "트레이 아이콘 숨기기",
   "settings.field.nvidia_prime.help": "NVIDIA Optimus 또는 AMD 전환 그래픽이 탑재된 노트북용입니다.",

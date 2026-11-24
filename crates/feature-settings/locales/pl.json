@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Ostrość FSR",
   "settings.field.max_workers.help": "Maksymalna liczba jednoczesnych połączeń pobierania. 0 pozwala Irori zmierzyć, co jest najszybsze (do 32); każda inna liczba to maksimum.",
   "settings.field.max_workers.label": "Wątki pobierania",
-  "settings.field.minimize_on_launch.help": "Okno wróci po zamknięciu gry.",
+  "settings.field.minimize_on_launch.help": "Gdy włączone jest „Zamykaj do zasobnika”, Irori chowa się zamiast tego do zasobnika. Okno wróci po zamknięciu gry.",
   "settings.field.minimize_on_launch.label": "Minimalizuj po uruchomieniu gry",
   "settings.field.no_tray_icon.label": "Ukryj ikonę w zasobniku",
   "settings.field.nvidia_prime.help": "Dla laptopów z NVIDIA Optimus lub przełączaną grafiką AMD.",

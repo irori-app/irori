@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR keskinliği",
   "settings.field.max_workers.help": "Aynı anda en fazla indirme bağlantısı. 0 olursa Irori en hızlısını ölçer (en fazla 32); başka bir sayı kullanılacak en yüksek değerdir.",
   "settings.field.max_workers.label": "İndirme iş parçacıkları",
-  "settings.field.minimize_on_launch.help": "Oyundan çıkıldığında pencere geri gelir.",
+  "settings.field.minimize_on_launch.help": "“Sistem tepsisine küçült” açıkken Irori bunun yerine sistem tepsisine gizlenir. Oyundan çıkıldığında pencere geri gelir.",
   "settings.field.minimize_on_launch.label": "Oyun başlayınca simge durumuna küçült",
   "settings.field.no_tray_icon.label": "Tepsi simgesini gizle",
   "settings.field.nvidia_prime.help": "NVIDIA Optimus veya AMD değiştirilebilir grafik özellikli dizüstü bilgisayarlar için.",

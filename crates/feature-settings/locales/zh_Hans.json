@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR 锐化度",
   "settings.field.max_workers.help": "同时下载连接数上限。设为 0 时由 Irori 测出最快的数量（最多 32）；其他数字为可使用的上限。",
   "settings.field.max_workers.label": "下载线程数",
-  "settings.field.minimize_on_launch.help": "游戏退出后窗口会重新出现。",
+  "settings.field.minimize_on_launch.help": "开启“关闭时最小化到托盘”时，Irori 会改为隐藏到托盘。游戏退出后窗口会重新出现。",
   "settings.field.minimize_on_launch.label": "游戏启动时最小化",
   "settings.field.no_tray_icon.label": "隐藏托盘图标",
   "settings.field.nvidia_prime.help": "适用于配备 NVIDIA Optimus 或 AMD 可切换显卡的笔记本电脑。",

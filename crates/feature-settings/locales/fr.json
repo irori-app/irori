@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Netteté FSR",
   "settings.field.max_workers.help": "Nombre maximal de connexions de téléchargement simultanées. 0 laisse Irori mesurer ce qui est le plus rapide (jusqu'à 32) ; tout autre nombre est le maximum utilisé.",
   "settings.field.max_workers.label": "Processus de téléchargement",
-  "settings.field.minimize_on_launch.help": "La fenêtre réapparaît à la fermeture du jeu.",
+  "settings.field.minimize_on_launch.help": "Avec « Fermer dans la zone de notification » activé, Irori se masque plutôt dans la zone de notification. La fenêtre réapparaît à la fermeture du jeu.",
   "settings.field.minimize_on_launch.label": "Réduire au lancement d’un jeu",
   "settings.field.no_tray_icon.label": "Masquer l’icône de la zone de notification",
   "settings.field.nvidia_prime.help": "Pour les ordinateurs portables avec NVIDIA Optimus ou une carte graphique commutable AMD.",

@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Резкость FSR",
   "settings.field.max_workers.help": "Наибольшее число одновременных подключений для загрузки. При 0 Irori сам измеряет, что быстрее (до 32); любое другое число — это максимум.",
   "settings.field.max_workers.label": "Потоки скачивания",
-  "settings.field.minimize_on_launch.help": "Окно вернётся после выхода из игры.",
+  "settings.field.minimize_on_launch.help": "Если включено «Сворачивать в трей», Irori вместо этого скрывается в трей. Окно вернётся после выхода из игры.",
   "settings.field.minimize_on_launch.label": "Сворачивать при запуске игры",
   "settings.field.no_tray_icon.label": "Скрыть значок в трее",
   "settings.field.nvidia_prime.help": "Для ноутбуков с NVIDIA Optimus или переключаемой графикой AMD.",

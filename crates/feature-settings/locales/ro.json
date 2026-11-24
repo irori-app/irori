@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Claritate FSR",
   "settings.field.max_workers.help": "Numărul maxim de conexiuni de descărcare simultane. 0 lasă Irori să măsoare ce e mai rapid (până la 32); orice alt număr este maximul folosit.",
   "settings.field.max_workers.label": "Procese de descărcare",
-  "settings.field.minimize_on_launch.help": "Fereastra revine după ce jocul se închide.",
+  "settings.field.minimize_on_launch.help": "Cu „Închide în zona de notificare” activat, Irori se ascunde în schimb în zona de notificare. Fereastra revine după ce jocul se închide.",
   "settings.field.minimize_on_launch.label": "Minimizează la pornirea unui joc",
   "settings.field.no_tray_icon.label": "Ascunde pictograma din zona de notificare",
   "settings.field.nvidia_prime.help": "Pentru laptopuri cu NVIDIA Optimus sau grafică comutabilă AMD.",

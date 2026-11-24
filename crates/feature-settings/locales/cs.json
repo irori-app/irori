@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Ostrost FSR",
   "settings.field.max_workers.help": "Nejvyšší počet současných připojení pro stahování. 0 nechá Irori změřit, co je nejrychlejší (až 32); jiné číslo je maximum, které použije.",
   "settings.field.max_workers.label": "Vlákna pro stahování",
-  "settings.field.minimize_on_launch.help": "Okno se vrátí po ukončení hry.",
+  "settings.field.minimize_on_launch.help": "Se zapnutým „Zavírat do systémové oblasti“ se Irori místo toho skryje do systémové oblasti. Okno se vrátí po ukončení hry.",
   "settings.field.minimize_on_launch.label": "Minimalizovat při spuštění hry",
   "settings.field.no_tray_icon.label": "Skrýt ikonu v systémové oblasti",
   "settings.field.nvidia_prime.help": "Pro notebooky s NVIDIA Optimus nebo přepínatelnou grafikou AMD.",

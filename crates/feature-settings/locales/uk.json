@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Різкість FSR",
   "settings.field.max_workers.help": "Найбільша кількість одночасних з'єднань для завантаження. При 0 Irori сам вимірює, що найшвидше (до 32); будь-яке інше число — це максимум.",
   "settings.field.max_workers.label": "Потоки завантаження",
-  "settings.field.minimize_on_launch.help": "Вікно повернеться після виходу з гри.",
+  "settings.field.minimize_on_launch.help": "Якщо ввімкнено «Згортати в лоток», Irori натомість ховається в лоток. Вікно повернеться після виходу з гри.",
   "settings.field.minimize_on_launch.label": "Згортати під час запуску гри",
   "settings.field.no_tray_icon.label": "Сховати піктограму в лотку",
   "settings.field.nvidia_prime.help": "Для ноутбуків з NVIDIA Optimus або з перемиканням графіки AMD.",

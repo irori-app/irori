@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR-skärpa",
   "settings.field.max_workers.help": "Högsta antal samtidiga nedladdningsanslutningar. Med 0 mäter Irori vad som går snabbast (upp till 32); andra tal är det högsta som används.",
   "settings.field.max_workers.label": "Nedladdningstrådar",
-  "settings.field.minimize_on_launch.help": "Fönstret kommer tillbaka när spelet avslutas.",
+  "settings.field.minimize_on_launch.help": "Med ”Stäng till systemfältet” på göms Irori i systemfältet i stället. Fönstret kommer tillbaka när spelet avslutas.",
   "settings.field.minimize_on_launch.label": "Minimera när ett spel startar",
   "settings.field.no_tray_icon.label": "Dölj ikonen i systemfältet",
   "settings.field.nvidia_prime.help": "För bärbara datorer med NVIDIA Optimus eller AMD:s växlingsbara grafik.",

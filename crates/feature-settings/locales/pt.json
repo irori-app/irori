@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Nitidez do FSR",
   "settings.field.max_workers.help": "Máximo de ligações de transferência em simultâneo. Com 0, o Irori mede o que é mais rápido (até 32); qualquer outro número é o máximo que usa.",
   "settings.field.max_workers.label": "Ligações de transferência",
-  "settings.field.minimize_on_launch.help": "A janela volta quando o jogo fecha.",
+  "settings.field.minimize_on_launch.help": "Com «Fechar para o tabuleiro» ativo, o Irori esconde-se antes no tabuleiro. A janela volta quando o jogo fecha.",
   "settings.field.minimize_on_launch.label": "Minimizar ao iniciar um jogo",
   "settings.field.no_tray_icon.label": "Ocultar o ícone do tabuleiro",
   "settings.field.nvidia_prime.help": "Para portáteis com NVIDIA Optimus ou gráficos comutáveis AMD.",

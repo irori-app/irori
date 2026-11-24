@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR-scherpte",
   "settings.field.max_workers.help": "Maximaal aantal gelijktijdige downloadverbindingen. Bij 0 meet Irori wat het snelst is (tot 32); elk ander getal is het maximum.",
   "settings.field.max_workers.label": "Downloadworkers",
-  "settings.field.minimize_on_launch.help": "Het venster komt terug wanneer de game wordt afgesloten.",
+  "settings.field.minimize_on_launch.help": "Met ‘Sluiten naar systeemvak’ aan verdwijnt Irori in plaats daarvan naar het systeemvak. Het venster komt terug wanneer de game wordt afgesloten.",
   "settings.field.minimize_on_launch.label": "Minimaliseren wanneer een game start",
   "settings.field.no_tray_icon.label": "Systeemvakpictogram verbergen",
   "settings.field.nvidia_prime.help": "Voor laptops met NVIDIA Optimus of schakelbare AMD-graphics.",

@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR sharpness",
   "settings.field.max_workers.help": "Most download connections at once. 0 lets Irori measure what is fastest (up to 32); any other number is the most it will use.",
   "settings.field.max_workers.label": "Download workers",
-  "settings.field.minimize_on_launch.help": "The window comes back when the game exits.",
+  "settings.field.minimize_on_launch.help": "With “Close to tray” on, Irori hides to the tray instead. The window comes back when the game exits.",
   "settings.field.minimize_on_launch.label": "Minimize when a game starts",
   "settings.field.no_tray_icon.label": "Hide tray icon",
   "settings.field.nvidia_prime.help": "For laptops with NVIDIA Optimus or AMD switchable graphics.",

@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSRのシャープネス",
   "settings.field.max_workers.help": "同時ダウンロード接続数の上限。0 にすると Irori が最速の数を測定します（最大 32）。それ以外の数値は使用する上限です。",
   "settings.field.max_workers.label": "ダウンロードワーカー数",
-  "settings.field.minimize_on_launch.help": "ゲームが終了するとウィンドウが元に戻ります。",
+  "settings.field.minimize_on_launch.help": "「閉じるときにトレイに格納」がオンのときは、代わりにトレイに隠れます。ゲームが終了するとウィンドウが元に戻ります。",
   "settings.field.minimize_on_launch.label": "ゲーム起動時に最小化",
   "settings.field.no_tray_icon.label": "トレイアイコンを非表示",
   "settings.field.nvidia_prime.help": "NVIDIA OptimusまたはAMDのスイッチャブルグラフィックスを搭載したノートPC向けです。",

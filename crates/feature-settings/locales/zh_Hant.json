@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR 銳利度",
   "settings.field.max_workers.help": "同時下載連線數上限。設為 0 時由 Irori 測出最快的數量（最多 32）；其他數字為可使用的上限。",
   "settings.field.max_workers.label": "下載執行緒數",
-  "settings.field.minimize_on_launch.help": "遊戲結束後視窗會重新出現。",
+  "settings.field.minimize_on_launch.help": "開啟「關閉時縮小到系統列」時，Irori 會改為隱藏到系統列。遊戲結束後視窗會重新出現。",
   "settings.field.minimize_on_launch.label": "遊戲啟動時最小化",
   "settings.field.no_tray_icon.label": "隱藏系統列圖示",
   "settings.field.nvidia_prime.help": "適用於配備 NVIDIA Optimus 或 AMD 可切換顯示卡的筆記型電腦。",

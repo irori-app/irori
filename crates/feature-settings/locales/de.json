@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "FSR-Schärfe",
   "settings.field.max_workers.help": "Höchstzahl gleichzeitiger Download-Verbindungen. Bei 0 misst Irori, was am schnellsten ist (bis zu 32); jede andere Zahl ist das Maximum.",
   "settings.field.max_workers.label": "Download-Worker",
-  "settings.field.minimize_on_launch.help": "Das Fenster erscheint wieder, wenn das Spiel beendet wird.",
+  "settings.field.minimize_on_launch.help": "Ist „Beim Schließen in die Taskleiste“ aktiv, verschwindet Irori stattdessen in die Taskleiste. Das Fenster erscheint wieder, wenn das Spiel beendet wird.",
   "settings.field.minimize_on_launch.label": "Beim Spielstart minimieren",
   "settings.field.no_tray_icon.label": "Taskleistensymbol ausblenden",
   "settings.field.nvidia_prime.help": "Für Laptops mit NVIDIA Optimus oder umschaltbarer AMD-Grafik.",

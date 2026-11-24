@@ -504,7 +504,7 @@
   "settings.field.max_sharpness.label": "Nitidezza FSR",
   "settings.field.max_workers.help": "Numero massimo di connessioni di download contemporanee. Con 0 Irori misura cosa è più veloce (fino a 32); qualsiasi altro numero è il massimo che userà.",
   "settings.field.max_workers.label": "Connessioni di download",
-  "settings.field.minimize_on_launch.help": "La finestra ricompare quando il gioco termina.",
+  "settings.field.minimize_on_launch.help": "Con «Chiudi nell'area di notifica» attivo, Irori si nasconde invece nell'area di notifica. La finestra ricompare quando il gioco termina.",
   "settings.field.minimize_on_launch.label": "Riduci a icona all'avvio di un gioco",
   "settings.field.no_tray_icon.label": "Nascondi l'icona nell'area di notifica",
   "settings.field.nvidia_prime.help": "Per portatili con NVIDIA Optimus o grafica commutabile AMD.",
