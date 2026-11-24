@@ -109,7 +109,7 @@ jobs:
           curl -fsSLo "$tools/runtime-$ARCH" "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-$ARCH"
           printf '%s  %s\n' "$tool_sum" "$tools/appimagetool" "$runtime_sum" "$tools/runtime-$ARCH" | sha256sum -c
           chmod +x "$tools/appimagetool"
-          sudo apt-get install -y zsync desktop-file-utils
+          sudo apt-get install -y zsync desktop-file-utils patchelf
           echo "IRORI_APPIMAGETOOL=$tools/appimagetool" >> "$GITHUB_ENV"
           echo "IRORI_APPIMAGE_RUNTIME=$tools/runtime-$ARCH" >> "$GITHUB_ENV"
       - name: Tarball and AppImage
@@ -201,9 +201,10 @@ jobs:
           cat error.txt
           [ "$status" -eq 1 ] && grep -q 'unknown argument --unsupported' error.txt
 
-  # The AppImage where only a desktop's usual libraries are installed, and no
-  # WebKitGTK: Irori must start, and its sign-in window must fail to load (so
-  # Irori signs in through the browser) rather than take Irori down with it.
+  # The AppImage where only the libraries AppImage's excludelist expects are
+  # installed (no xkbcommon or udev, which it bundles), and no WebKitGTK:
+  # Irori must start, and its sign-in window must fail to load (so Irori
+  # signs in through the browser) rather than take Irori down with it.
   appimage-run:
     needs: linux
     strategy:
@@ -223,24 +224,22 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.arch == 'aarch64' && 'linux-arm64' || 'linux' }}
-      - name: A desktop's libraries, without WebKitGTK
+      - name: The excludelist's libraries, without WebKitGTK
         shell: bash
         run: |
           case "${{ matrix.image }}" in
             ubuntu*|debian*)
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libfontconfig1 \
-                libfreetype6 libxkbcommon0 libxkbcommon-x11-0 libxcb1 libx11-xcb1 libwayland-client0 \
-                libvulkan1 libudev1 ;;
+                libfreetype6 libxcb1 libx11-xcb1 libwayland-client0 libvulkan1 ;;
             fedora*)
-              dnf install -y --setopt=install_weak_deps=False fontconfig freetype libxkbcommon \
-                libxkbcommon-x11 libxcb libX11-xcb libwayland-client vulkan-loader systemd-libs ;;
+              dnf install -y --setopt=install_weak_deps=False fontconfig freetype libxcb \
+                libX11-xcb libwayland-client vulkan-loader ;;
             opensuse*)
-              zypper --non-interactive install --no-recommends fontconfig libfreetype6 libxkbcommon0 \
-                libxkbcommon-x11-0 libxcb1 libX11-xcb1 libwayland-client0 libvulkan1 libudev1 ;;
+              zypper --non-interactive install --no-recommends fontconfig libfreetype6 libxcb1 \
+                libX11-xcb1 libwayland-client0 libvulkan1 ;;
             archlinux*)
-              pacman -Syu --noconfirm fontconfig freetype2 libxkbcommon libxkbcommon-x11 libxcb libx11 \
-                wayland vulkan-icd-loader systemd-libs ;;
+              pacman -Syu --noconfirm fontconfig freetype2 libxcb libx11 wayland vulkan-icd-loader ;;
           esac
           if ldconfig -p | grep -q libwebkit2gtk; then echo "::error::WebKitGTK is installed"; exit 1; fi
       - name: Irori starts from the AppImage
@@ -332,7 +331,11 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
-      options: --privileged
+      # The image's runtimes sit in a lower overlay layer, which some x86-64
+      # runners can't rename across ("Invalid cross-device link") when
+      # flatpak-builder updates the SDK. A volume holds a copy of them on a
+      # plain file system instead.
+      options: --privileged -v /var/lib/flatpak
     steps:
       - uses: actions/checkout@v4
       # Irori's fat-LTO link needs more memory than the arm64 runners have.

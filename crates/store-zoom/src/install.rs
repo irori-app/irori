@@ -1,7 +1,7 @@
 //! The install pipeline: file list → downloads into a per-game staging folder
 //! (through [`irori_depot`], with fresh download links from the API) → native
-//! extraction or a silent Windows installer through Wine → executable/DOSBox
-//! detection → installed record.
+//! extraction, a silent Windows installer through Wine, or a Mac disk image
+//! copied out → executable/app/DOSBox detection → installed record.
 //!
 //! Interrupting at any point keeps the staging folder (tracked in
 //! `pending.json`): a later install continues the downloads with HTTP ranges
@@ -88,6 +88,13 @@ pub(crate) fn detect_installed(
     platform: InstallPlatform,
     confs_before: &[PathBuf],
 ) -> Detected {
+    if platform == InstallPlatform::Mac {
+        return Detected {
+            executable: crate::mac::app_bundle(root, title).unwrap_or_default(),
+            platform: InstallPlatform::Mac,
+            dosbox: None,
+        };
+    }
     if platform == InstallPlatform::Linux {
         let executable = detect::linux_executable(root, title).unwrap_or_default();
         if !executable.is_empty() {
@@ -348,9 +355,7 @@ impl ZoomStore {
         mode: Mode,
         ctx: &OpContext,
     ) -> Result<Outcome> {
-        if !matches!(platform, InstallPlatform::Windows | InstallPlatform::Linux) {
-            bail!("ZOOM Platform only offers Windows and Linux builds");
-        }
+        crate::ensure_installable(platform)?;
         let game = self
             .game(app)
             .with_context(|| format!("{app} is not in your ZOOM Platform library"))?;
@@ -450,6 +455,10 @@ impl ZoomStore {
         let previous = self.installed_record(app);
         let phase = match platform {
             InstallPlatform::Linux => self.install_linux(&game, &local, install_path, ctx).await?,
+            InstallPlatform::Mac => {
+                self.install_mac(&game, &local, &staging, install_path, ctx)
+                    .await?
+            }
             _ => {
                 self.install_windows(&game, &local, &staging, install_path, ctx)
                     .await?
@@ -675,6 +684,152 @@ impl ZoomStore {
         .await
         .context("scanning the installed game")?;
         Ok(Phase::Done(detected))
+    }
+
+    /// A Mac build: disk images mounted and their apps copied out, archives
+    /// extracted, then the game's app found.
+    async fn install_mac(
+        &self,
+        game: &GameInfo,
+        local: &[PathBuf],
+        staging: &Path,
+        install_path: &Path,
+        ctx: &OpContext,
+    ) -> Result<Phase<Detected>> {
+        tokio::fs::create_dir_all(install_path)
+            .await
+            .with_context(|| format!("creating {}", install_path.display()))?;
+        for (i, file) in local.iter().enumerate() {
+            if crate::mac::is_installer_package(file) {
+                bail!(
+                    "{} is a Mac installer package, which Irori doesn't run. Install it from ZOOM Platform's website instead.",
+                    file.file_name().unwrap_or_default().to_string_lossy()
+                );
+            }
+            let phase = if crate::mac::is_disk_image(file) {
+                self.copy_disk_image(
+                    file,
+                    &staging.join(format!(".mount-{i}")),
+                    install_path,
+                    ctx,
+                )
+                .await?
+            } else {
+                let f = file.clone();
+                let kind = tokio::task::spawn_blocking(move || extract::classify(&f))
+                    .await
+                    .context("inspecting download")?;
+                match kind {
+                    ArchiveKind::Tar
+                    | ArchiveKind::TarGz
+                    | ArchiveKind::TarXz
+                    | ArchiveKind::TarZst
+                    | ArchiveKind::TarBz2
+                    | ArchiveKind::TarLzma
+                    | ArchiveKind::Zip => {
+                        self.extract_native(file, kind, install_path, ctx).await?
+                    }
+                    _ => {
+                        log_line(ctx, &format!("ignoring {}", file.display()));
+                        Phase::Done(())
+                    }
+                }
+            };
+            if let Phase::Aborted = phase {
+                return Ok(Phase::Aborted);
+            }
+        }
+        (ctx.step)("Finishing");
+        let root = install_path.to_path_buf();
+        let title = game.title.clone();
+        let detected = tokio::task::spawn_blocking(move || {
+            detect_installed(&root, &title, InstallPlatform::Mac, &[])
+        })
+        .await
+        .context("scanning the installed game")?;
+        Ok(Phase::Done(detected))
+    }
+
+    /// Mount a disk image read-only at `mount` (hidden from Finder, never
+    /// opened), copy its apps (or folders) into `dest` with `ditto`, and
+    /// always unmount it again. A disk image that asks to accept a licence
+    /// first isn't agreed to: mounting it fails.
+    async fn copy_disk_image(
+        &self,
+        image: &Path,
+        mount: &Path,
+        dest: &Path,
+        ctx: &OpContext,
+    ) -> Result<Phase<()>> {
+        let name = image
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        (ctx.step)(&format!("Opening {name}"));
+        log_line(ctx, &format!("mounting {name}"));
+        tokio::fs::create_dir_all(mount)
+            .await
+            .with_context(|| format!("creating {}", mount.display()))?;
+        let attach = CommandSpec::new("/usr/bin/hdiutil")
+            .args([
+                "attach",
+                "-nobrowse",
+                "-readonly",
+                "-noautoopen",
+                "-mountpoint",
+            ])
+            .arg(mount.as_os_str())
+            .arg(image.as_os_str());
+        match self.run_tool(attach, "Opening the disk image", ctx).await? {
+            Phase::Done(()) => {}
+            Phase::Aborted => return Ok(Phase::Aborted),
+        }
+        let copied = self.copy_out_of(mount, dest, &name, ctx).await;
+        let detach = |force: bool| {
+            let mut spec = CommandSpec::new("/usr/bin/hdiutil").arg("detach");
+            if force {
+                spec = spec.arg("-force");
+            }
+            spec.arg(mount.as_os_str())
+        };
+        // Not cancellable: a mounted image must not be left behind.
+        let detached = process::run(&detach(false), RunOptions::default()).await;
+        if !detached.is_ok_and(|r| r.success()) {
+            let _ = process::run(&detach(true), RunOptions::default()).await;
+        }
+        let _ = tokio::fs::remove_dir(mount).await;
+        copied
+    }
+
+    async fn copy_out_of(
+        &self,
+        mount: &Path,
+        dest: &Path,
+        name: &str,
+        ctx: &OpContext,
+    ) -> Result<Phase<()>> {
+        let root = mount.to_path_buf();
+        let items = tokio::task::spawn_blocking(move || crate::mac::disk_image_items(&root))
+            .await
+            .context("reading the disk image")?;
+        if items.is_empty() {
+            bail!("{name} holds nothing to install");
+        }
+        (ctx.step)(&format!("Copying from {name}"));
+        for item in items {
+            let Some(file_name) = item.file_name() else {
+                continue;
+            };
+            log_line(ctx, &format!("copying {}", file_name.to_string_lossy()));
+            let spec = CommandSpec::new("/usr/bin/ditto")
+                .arg(item.as_os_str())
+                .arg(dest.join(file_name).as_os_str());
+            if let Phase::Aborted = self.run_tool(spec, "Copying the game", ctx).await? {
+                return Ok(Phase::Aborted);
+            }
+        }
+        Ok(Phase::Done(()))
     }
 
     async fn install_windows(

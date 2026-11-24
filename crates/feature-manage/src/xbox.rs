@@ -74,9 +74,7 @@ impl Designation {
             remaining: value["remainingToggles"].as_u64(),
             max: value["maxToggles"].as_u64(),
             period_days: value["periodDays"].as_u64(),
-            next_change: value["nextChangeAt"]
-                .as_str()
-                .map(|d| d.chars().take(10).collect()),
+            next_change: value["nextChangeAt"].as_str().map(str::to_owned),
         })
     }
 
@@ -217,7 +215,10 @@ impl Render for OfflinePlay {
                     .next_change
                     .clone()
                     .filter(|_| !d.can_change())
-                    .map(|date| t_args("manage.xbox.offline.next_change", &[("date", &date)]));
+                    .map(|date| {
+                        let date = irori_ui::dates::localized_day(&date);
+                        t_args("manage.xbox.offline.next_change", &[("date", &date)])
+                    });
                 v_flex()
                     .gap_2()
                     .child(div().text_sm().child(state))

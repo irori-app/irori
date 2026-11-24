@@ -26,6 +26,7 @@ use irori_ui::i18n::{t, t_args};
 use crate::app_update::AppUpdatePanel;
 use crate::appearance::AppearancePreview;
 use crate::backup::BackupPanel;
+use crate::feedback::{self, Feedback};
 use crate::form::{FormTarget, SettingsForm};
 use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::{LanguageStamp, english};
@@ -38,6 +39,7 @@ use crate::widgets::{group_heading, muted, nav_button, panel};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
     General,
+    Controller,
     GameDefaults,
     PerformanceHud,
     Appearance,
@@ -51,8 +53,9 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 11] = [
+    pub const ALL: [SettingsSection; 12] = [
         SettingsSection::General,
+        SettingsSection::Controller,
         SettingsSection::GameDefaults,
         SettingsSection::PerformanceHud,
         SettingsSection::Appearance,
@@ -77,6 +80,7 @@ impl SettingsSection {
     pub fn id(self) -> &'static str {
         match self {
             SettingsSection::General => "general",
+            SettingsSection::Controller => "controller",
             SettingsSection::GameDefaults => "game-defaults",
             SettingsSection::PerformanceHud => "hud",
             SettingsSection::Appearance => "appearance",
@@ -97,6 +101,7 @@ impl SettingsSection {
             "game-defaults" | "games" | "games_settings" | "wine" | "defaults" => {
                 SettingsSection::GameDefaults
             }
+            "controller" | "controllers" | "gamepad" | "buttons" => SettingsSection::Controller,
             "hud" | "mangohud" | "metal-hud" | "performance-hud" => SettingsSection::PerformanceHud,
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
             "storage" | "disks" | "cleanup" => SettingsSection::Storage,
@@ -118,6 +123,7 @@ impl SettingsSection {
     fn label_key(self) -> &'static str {
         match self {
             SettingsSection::General => "settings.page.general",
+            SettingsSection::Controller => "settings.page.controller",
             SettingsSection::GameDefaults => "settings.page.game_defaults",
             SettingsSection::PerformanceHud => "settings.page.performance_hud",
             SettingsSection::Appearance => "settings.page.appearance",
@@ -139,6 +145,7 @@ impl SettingsSection {
     fn description(self) -> SharedString {
         let key = match self {
             SettingsSection::General => "settings.page.general_description",
+            SettingsSection::Controller => "settings.page.controller_description",
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
             SettingsSection::PerformanceHud => match irori_core::HudBackend::current() {
                 irori_core::HudBackend::MetalHud => {
@@ -161,6 +168,7 @@ impl SettingsSection {
     fn icon(self) -> IconName {
         match self {
             SettingsSection::General => IconName::Settings,
+            SettingsSection::Controller => IconName::Gamepad2,
             SettingsSection::GameDefaults => IconName::Gamepad2,
             SettingsSection::PerformanceHud => IconName::Gauge,
             SettingsSection::Appearance => IconName::Palette,
@@ -195,6 +203,7 @@ impl SettingsSection {
     fn field_section(self) -> Option<FieldSection> {
         match self {
             SettingsSection::General => Some(FieldSection::General),
+            SettingsSection::Controller => Some(FieldSection::Controller),
             SettingsSection::Appearance => Some(FieldSection::Appearance),
             SettingsSection::Advanced => Some(FieldSection::Advanced),
             SettingsSection::Saves => Some(FieldSection::Saves),
@@ -227,6 +236,8 @@ pub struct SettingsView {
     preview: Entity<AppearancePreview>,
     storage: Entity<StoragePanel>,
     sysinfo: SysInfoState,
+    /// A problem report is reading this computer's facts.
+    reporting: bool,
     language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
 }
@@ -268,6 +279,7 @@ impl SettingsView {
             preview: cx.new(AppearancePreview::new),
             storage: storage.clone(),
             sysinfo: SysInfoState::default(),
+            reporting: false,
             language: LanguageStamp::new(),
             // The header's Rescan button shows the measuring.
             _subscriptions: vec![sub, cx.observe(&storage, |_, _, cx| cx.notify())],
@@ -647,6 +659,94 @@ impl SettingsView {
         v_flex().gap_4().child(list).into_any_element()
     }
 
+    fn open_feedback(&mut self, way: Feedback, window: &mut Window, cx: &mut Context<Self>) {
+        if way == Feedback::Report {
+            if self.reporting {
+                return;
+            }
+            self.reporting = true;
+            cx.notify();
+        }
+        let task = feedback::open(way, window, cx);
+        cx.spawn(async move |this, cx| {
+            task.await;
+            this.update(cx, |this, cx| {
+                this.reporting = false;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Help and feedback: one row per way to reach the project.
+    fn render_feedback(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let border = cx.theme().border;
+        let tour = h_flex()
+            .gap_3()
+            .px_4()
+            .py_3()
+            .child(Icon::new(IconName::Compass).text_color(cx.theme().muted_foreground))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_medium()
+                            .child(t("settings.about.tour")),
+                    )
+                    .child(muted(t("settings.about.tour_help"), cx)),
+            )
+            .child(
+                Button::new("about-tour")
+                    .outline()
+                    .small()
+                    .label(t("settings.about.tour"))
+                    .on_click(|_, window, cx| irori_ui::tour::start(window, cx)),
+            );
+        Feedback::ALL
+            .into_iter()
+            .enumerate()
+            .fold(panel(cx).child(tour), |list, (_, way)| {
+                let button = if way == Feedback::Report {
+                    "settings.about.feedback.report_open"
+                } else {
+                    "settings.about.feedback.open"
+                };
+                list.child(
+                    h_flex()
+                        .gap_3()
+                        .px_4()
+                        .py_3()
+                        .border_t_1()
+                        .border_color(border)
+                        .child(Icon::new(way.icon()).text_color(cx.theme().muted_foreground))
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .child(div().text_sm().font_medium().child(t(way.label_key())))
+                                .child(muted(t(way.help_key()), cx)),
+                        )
+                        .child(
+                            Button::new(ElementId::Name(
+                                format!("feedback-{}", way.label_key()).into(),
+                            ))
+                            .outline()
+                            .small()
+                            .icon(IconName::ExternalLink)
+                            .label(t(button))
+                            .loading(way == Feedback::Report && self.reporting)
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| this.open_feedback(way, window, cx),
+                            )),
+                        ),
+                )
+            })
+    }
+
     fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {
         let credits: [(SharedString, SharedString); 6] = [
             (t("settings.about.credit_gpui"), "Apache-2.0".into()),
@@ -670,6 +770,8 @@ impl SettingsView {
                     .child(muted(t("settings.about.tagline"), cx)),
             )
             .child(self.app_update.clone())
+            .child(group_heading(t("settings.about.feedback.title"), cx))
+            .child(self.render_feedback(cx))
             .child(group_heading(t("settings.about.third_party"), cx))
             .child(credits.into_iter().fold(panel(cx), |p, (name, license)| {
                 p.child(
@@ -784,6 +886,7 @@ impl Render for SettingsView {
                         .child(self.app_form.clone())
                         .into_any_element(),
                     SettingsSection::General
+                    | SettingsSection::Controller
                     | SettingsSection::Advanced
                     | SettingsSection::Saves => self.app_form.clone().into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),

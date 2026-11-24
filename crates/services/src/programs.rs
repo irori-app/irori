@@ -480,6 +480,7 @@ mod tests {
 
     fn wine(kind: WineKind, uses_umu: bool) -> LaunchEnvironment {
         LaunchEnvironment {
+            without_wine: false,
             env: [("WINEPREFIX".to_string(), "/p".to_string())].into(),
             env_remove: Vec::new(),
             wrappers: vec![vec!["gamescope".into(), "--".into()]],

@@ -46,12 +46,13 @@ pub fn smart_from_view(name: &str, view: &ViewFilter) -> (SmartCategory, ViewFil
     let mut rest = ViewFilter {
         platform: view.platform,
         hidden: view.hidden,
-        offline_only: view.offline_only,
         hide_third_party: view.hide_third_party,
-        updates_only: view.updates_only,
         hide_unavailable: view.hide_unavailable,
         released: view.released,
         smart_categories: view.smart_categories.clone(),
+        // Smart categories have no rule for who made a game.
+        developers: view.developers.clone(),
+        publishers: view.publishers.clone(),
         ..Default::default()
     };
     if let StoreFilter::Store(runner) = view.store {
@@ -66,6 +67,12 @@ pub fn smart_from_view(name: &str, view: &ViewFilter) -> (SmartCategory, ViewFil
     }
     if view.favourites_only {
         rules.push(Rule::Favourite {});
+    }
+    if view.updates_only {
+        rules.push(Rule::Update {});
+    }
+    if view.offline_only {
+        rules.push(Rule::Offline {});
     }
     // "Uncategorized" has no rule; the categories picked with it are its
     // alternatives, so none of the choice can come along without it.
@@ -168,7 +175,7 @@ mod tests {
             IndexKey::default(),
             library,
             user,
-            &HashMap::new(),
+            &irori_services::smart_categories::Inputs::default(),
             &chrono::Local,
         ))
     }
@@ -217,6 +224,27 @@ mod tests {
         let again = Arc::new((*index).clone());
         cache.get_in(&f, &[], &lib, &user, &again, &none, &none);
         assert_eq!(cache.recomputes(), 3);
+    }
+
+    #[test]
+    fn search_terms_name_categories_of_both_kinds() {
+        let lib = library();
+        let user = user();
+        let index = index(&lib, &user);
+        let found = |query: &str| -> Vec<String> {
+            let f = ViewFilter {
+                query: query.into(),
+                ..Default::default()
+            };
+            let none = HashSet::new();
+            let shown = crate::filter::apply_in(&f, &[], &lib, &user, &index, &none, &none);
+            titles(&shown).into_iter().map(str::to_owned).collect()
+        };
+        assert_eq!(found("smart:installed"), ["Witcher 3", "Hades"]);
+        assert_eq!(found("smart:inst category:story"), Vec::<String>::new());
+        assert_eq!(found("category:story"), ["Alan Wake"]);
+        assert_eq!(found("hades smart:installed"), ["Hades"]);
+        assert!(found("smart:nothing-named-so").is_empty());
     }
 
     #[test]
@@ -320,6 +348,8 @@ mod tests {
             max_age: Some(12),
             released: ReleaseWindow::ThisYear,
             hidden: HiddenMode::Show,
+            updates_only: true,
+            offline_only: true,
             ..Default::default()
         };
         let (smart, rest) = smart_from_view(" Co-op now ", &view);
@@ -336,6 +366,8 @@ mod tests {
                 "store",
                 "installed",
                 "favourite",
+                "update",
+                "offline",
                 "category",
                 "status",
                 "ageRating",
@@ -344,7 +376,7 @@ mod tests {
         );
         assert_eq!(rest.released, ReleaseWindow::ThisYear);
         assert_eq!(rest.hidden, HiddenMode::Show);
-        assert!(rest.categories.is_empty());
+        assert!(rest.categories.is_empty() && !rest.offline_only && !rest.updates_only);
         crate::i18n::register();
         assert_eq!(rest.describe(&UserData::default()).len(), 2);
 

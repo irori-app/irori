@@ -16,6 +16,7 @@ mod api;
 mod auth;
 mod build;
 mod extra;
+mod galaxy;
 mod heroic_import;
 mod install;
 mod installed;
@@ -88,6 +89,8 @@ pub struct GogStore {
     content: irori_gog_api::content::Client,
     /// The in-process Galaxy service and the games using it.
     galaxy: tokio::sync::Mutex<launch::Galaxy>,
+    /// What games unlocked through the Galaxy service this run.
+    live_unlocks: parking_lot::Mutex<launch::LiveUnlocks>,
 }
 
 impl GogStore {
@@ -141,6 +144,7 @@ impl GogStore {
             totals_read: parking_lot::Mutex::new(None),
             content,
             galaxy: Default::default(),
+            live_unlocks: Default::default(),
         })
     }
 
@@ -518,6 +522,9 @@ impl Store for GogStore {
 
     async fn refresh(&self, full: bool) -> Result<()> {
         self.refresh_library(full).await.map_err(expired_login)?;
+        if cfg!(windows) {
+            self.import_galaxy_installs().await;
+        }
         if let Some(me) = self.arc() {
             tokio::spawn(async move { me.flush_playtime().await });
         }
@@ -649,6 +656,14 @@ impl Store for GogStore {
 
     async fn forget_achievements(&self, app_name: &str) {
         self.clear_achievement_cache(app_name).await
+    }
+
+    async fn achievement_signal(&self, app_name: &str) -> irori_core::AchievementSignal {
+        if self.galaxy_reports(app_name).await {
+            irori_core::AchievementSignal::Events
+        } else {
+            irori_core::AchievementSignal::None
+        }
     }
 }
 

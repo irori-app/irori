@@ -11,12 +11,14 @@ use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::link::Link;
+use gpui_kit::component::notification::Notification;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -120,6 +122,18 @@ fn load(entity: Entity<DealsCache>, cx: &mut App) {
         });
     })
     .detach();
+}
+
+/// Show or hide the Stores page's deals (`iroriDeals`). Hiding says where
+/// to bring them back, since the section that held the button is gone.
+pub fn set_deals_shown(shown: bool, window: &mut Window, cx: &mut App) {
+    crate::common::backend_op(cx, move |b| b.settings.update_app(|s| s.deals = shown));
+    let message = if shown {
+        t("manage.deals.shown_notice")
+    } else {
+        t("manage.deals.hidden_notice")
+    };
+    window.push_notification(Notification::info(message), cx);
 }
 
 /// Discount percentage from `"-70%"`.
@@ -369,6 +383,12 @@ impl Render for DealsSection {
             .label(t("manage.deals.reload"))
             .disabled(matches!(state, DealsState::Loading))
             .on_click(cx.listener(|this, _, _, cx| load(this.cache.clone(), cx)));
+        let hide = Button::new("deals-hide")
+            .ghost()
+            .small()
+            .icon(IconName::EyeOff)
+            .label(t("manage.deals.hide"))
+            .on_click(|_, window, cx| set_deals_shown(false, window, cx));
         let body: AnyElement = match &state {
             DealsState::Idle | DealsState::Loading => h_flex()
                 .gap_2()
@@ -469,7 +489,10 @@ impl Render for DealsSection {
         };
         v_flex()
             .gap_3()
-            .child(SectionTitle::new(t("manage.deals.title")).trailing(reload))
+            .child(
+                SectionTitle::new(t("manage.deals.title"))
+                    .trailing(h_flex().gap_1().child(reload).child(hide)),
+            )
             .child(
                 h_flex()
                     .gap_2()
@@ -512,8 +535,10 @@ mod tests {
             deal("Unrelated Game", DealStore::Humble, "-90%"),
             deal("Witchery", DealStore::Gog, "-10%"),
         ];
-        let owned: HashSet<String> = ["witcher 3: wild hunt".to_string(), "hades".to_string()]
+        // Keyed as the library's titles are (`owned_titles`).
+        let owned: HashSet<String> = ["The Witcher 3: Wild Hunt", "Hades"]
             .into_iter()
+            .map(sort_key)
             .collect();
         assert_eq!(
             filter_deals(&products, None, "", false, &owned),

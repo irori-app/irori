@@ -74,6 +74,16 @@ pub struct FilesResponse {
     pub windows: Vec<ZoomFile>,
     #[serde(deserialize_with = "nullable")]
     pub linux: Vec<ZoomFile>,
+    /// Mac builds, under whichever name the listing gives them.
+    #[serde(
+        deserialize_with = "nullable",
+        alias = "osx",
+        alias = "macos",
+        alias = "macOS",
+        alias = "Mac",
+        alias = "OSX"
+    )]
+    pub mac: Vec<ZoomFile>,
 }
 
 /// A downloadable file. `size` is human readable ("1.2 GB").

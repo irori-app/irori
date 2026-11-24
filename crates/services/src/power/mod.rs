@@ -241,6 +241,20 @@ impl Backend {
         after_sessions(sessions, timeout, system, action).await
     }
 
+    /// Whether a game runs, or a session is still ending (saves, mods).
+    pub(crate) fn game_running(&self) -> bool {
+        !self.running_games().is_empty() || *self.open_sessions.borrow() > 0
+    }
+
+    /// Take `action` only while no game runs: unlike [`Backend::power`] it
+    /// never stops one. `Ok(false)` when a game ran and nothing was done.
+    pub(crate) async fn power_when_idle(&self, action: PowerAction) -> Result<bool> {
+        if self.game_running() {
+            return Ok(false);
+        }
+        self.power_system().perform(action).await.map(|()| true)
+    }
+
     /// How many game sessions are open (running, or still ending).
     #[cfg(test)]
     pub(crate) fn open_session_count(&self) -> usize {

@@ -38,6 +38,9 @@ pub struct LaunchParams {
     pub verbose: bool,
     /// The streaming client the session is for (Sunshine's Moonlight).
     pub stream: Option<crate::sunshine::StreamClient>,
+    /// What Steam set when it started the game through its non-Steam
+    /// shortcut, for its overlay (`iroriSteamOverlay`).
+    pub steam: Option<crate::steam_overlay::SteamLaunch>,
     /// Play without the cloud-save download first: the user chose to play
     /// on this device's saves after it failed ([`SaveDownloadFailed`]).
     pub skip_save_download: bool,
@@ -48,6 +51,16 @@ pub struct LaunchParams {
 /// game from starting, or the session from ending, for good; three minutes
 /// is far longer than syncing a game's saves takes on a working connection.
 pub const SAVE_SYNC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
+/// What moving several games into a library folder did
+/// ([`Backend::move_installs`]).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MoveReport {
+    /// Games now in the folder.
+    pub moved: usize,
+    /// Games that weren't moved: their title and why.
+    pub failed: Vec<(String, String)>,
+}
 
 /// A game process Irori started and is tracking.
 #[derive(Debug, Clone)]
@@ -112,6 +125,22 @@ pub(crate) fn launch_sandbox(
         sandbox
     } else {
         irori_core::SandboxSettings::default()
+    }
+}
+
+/// The Steam Linux Runtime a launch uses. A game's own choice stands; the
+/// game defaults' reaches every native build except the ROM library's, whose
+/// emulators are this computer's programs (often Flatpaks or AppImages) and
+/// would not find their own libraries inside the runtime's container.
+pub(crate) fn launch_steam_runtime(
+    runner: irori_core::Runner,
+    own_choice: bool,
+    runtime: Option<String>,
+) -> Option<String> {
+    if own_choice || runner != irori_core::Runner::Emulation {
+        runtime
+    } else {
+        None
     }
 }
 
@@ -298,6 +327,28 @@ impl Backend {
         crate::screenshots::build(&folders, &sessions, &Paths::get().screenshot_index_file())
     }
 
+    /// Make `id`'s playtime `seconds`, or with `None` what Irori counted
+    /// again ("Edit time played"). Sessions played later add to it, and
+    /// sync carries the edit to the other computers without counting time
+    /// twice. Writes the library file; call off the UI thread.
+    pub fn set_playtime(&self, id: &GameId, seconds: Option<u64>) {
+        // Sync sees the edit whole, as it sees a session.
+        let _playtime = self.sync.playtime_guard();
+        self.userdata.set_playtime(id, seconds);
+    }
+
+    /// The folder holding most of the screenshots and clips of `id`'s
+    /// entry (any of its copies); `None` before any was taken. Lists the
+    /// folders; call off the UI thread.
+    pub fn captures_folder(&self, id: &GameId) -> Option<std::path::PathBuf> {
+        let library = self.library();
+        let mut keys: Vec<String> = library.copies_of(id).iter().map(GameId::key).collect();
+        if keys.is_empty() {
+            keys.push(id.key());
+        }
+        self.screenshots().folder_of(&keys)
+    }
+
     /// Refuse to touch the files of a game another launcher manages (Steam),
     /// before anything moves or is deleted.
     fn ensure_managed(id: &GameId) -> Result<()> {
@@ -393,6 +444,30 @@ impl Backend {
         choices
     }
 
+    /// The titles of the other installed games whose prefix is `prefix`,
+    /// whose own files deleting it would take. Reads their settings; call
+    /// off the UI thread.
+    pub fn games_sharing_prefix(&self, id: &GameId, prefix: &Path) -> Vec<String> {
+        let app = self.settings.app();
+        let library = self.library();
+        let others = library
+            .all_games()
+            .filter(|g| {
+                !g.is_dlc
+                    && g.is_installed
+                    && g.id() != *id
+                    && Self::target_platform(g).needs_wine()
+            })
+            .map(|g| {
+                let settings = self.settings.game(&g.id());
+                (
+                    g.title.clone(),
+                    irori_runtime::prefix_path(&app, &settings, g),
+                )
+            });
+        titles_in_prefix(others, prefix)
+    }
+
     /// The umu database id `id` runs with when umu starts it, and where it
     /// came from; `None` when it has none (umu then runs it as `umu-0`).
     pub async fn umu_id(&self, id: &GameId) -> Option<irori_runtime::umu::UmuMatch> {
@@ -440,6 +515,7 @@ impl Backend {
             skip_version_check,
             verbose,
             stream,
+            steam,
             skip_save_download,
         } = params;
         if self.is_running(id) {
@@ -484,11 +560,23 @@ impl Backend {
             self.settings.overrides(id).is_overridden("iroriSandbox"),
             settings.sandbox,
         );
+        settings.steam_runtime = launch_steam_runtime(
+            id.runner,
+            self.settings.overrides(id).is_overridden("steamRuntime"),
+            settings.steam_runtime.take(),
+        );
         if verbose {
             settings.verbose_logs = true;
         }
         if let Some(client) = &stream {
             client.apply(&mut settings, app.sunshine.match_client);
+        }
+        // After the stream, which may turn gamescope on.
+        if let Some(steam) = &steam
+            && let Err(skipped) = steam.apply(id.runner, &mut settings)
+            && skipped != crate::steam_overlay::Skipped::Off
+        {
+            tracing::info!("{id} starts without Steam's overlay: {skipped:?}");
         }
         let ctx = self.op_context(id, cancel.clone());
         let target = Target {
@@ -509,6 +597,8 @@ impl Backend {
                 // not the cloud's; the game page's cloud saves say so.
                 Err(e) => tracing::warn!("pre-launch save sync of {id}: {e:#}"),
                 Ok(saves) => {
+                    self.snapshot_saves(id, &saves, SyncDirection::Download)
+                        .await;
                     let synced = launch_step(&cancel, async {
                         Ok(self
                             .sync_saves_limited(
@@ -652,6 +742,26 @@ impl Backend {
                     .await);
             }
         };
+        // An Intel Mac build started from Irori's arm64 process would hang:
+        // it goes through Rosetta, which the UI offers to install if needed.
+        if target.platform == InstallPlatform::Mac && plan.watch.is_none() {
+            let folder = game.install_path();
+            let command = std::mem::replace(&mut plan.command, process::CommandSpec::new(""));
+            match irori_runtime::rosetta::for_launch(command, folder, settings.rosetta, &game.title)
+                .await
+            {
+                Ok(command) => plan.command = command,
+                Err(e) => {
+                    if mods {
+                        self.restore_mods(id, &game.title).await;
+                    }
+                    if let Err(e) = store.after_exit(&id.app_name, 0).await {
+                        tracing::warn!("after a refused launch of {id}: {e:#}");
+                    }
+                    return Err(e);
+                }
+            }
+        }
         propagate_env_remove(&mut plan.command, &request.environment.env_remove);
         append_log(&log_file, &format!("Launch command: {}\n\n", plan.command));
         // Windows' own graphics preference, for a program Irori starts.
@@ -670,6 +780,20 @@ impl Backend {
                 .await
         {
             append_log(&log_file, &note);
+        }
+        // A graphics card hidden from the game (Windows): enabled again when
+        // the session ends, or as soon as this launch fails or is cancelled,
+        // since every early return drops it.
+        let mut hidden_gpu = None;
+        if !settings.hide_gpu.trim().is_empty()
+            && plan.watch.is_none()
+            && target.platform != InstallPlatform::Browser
+            && let Some(hidden) = self.hide_gpu_for_launch(id, &settings.hide_gpu).await
+        {
+            if let Some(note) = &hidden.note {
+                append_log(&log_file, note);
+            }
+            hidden_gpu = hidden.held;
         }
 
         // Programs started before the game; the game waits for each. A
@@ -757,7 +881,18 @@ impl Backend {
         }
         // Recording starts before the status says "playing", so whatever
         // follows that status sees the replay buffer.
-        self.start_replay(id, &game.title, &settings.replay);
+        // The game's own program names its sound for "game" audio.
+        let sound_app = game
+            .install
+            .as_ref()
+            .and_then(|i| crate::gpu_preference::game_program(&plan.command, &i.install_path))
+            .and_then(|p| {
+                p.rsplit(['/', '\\'])
+                    .next()
+                    .filter(|n| !n.is_empty())
+                    .map(str::to_owned)
+            });
+        self.start_replay(id, &game.title, &settings.replay, sound_app);
         let backups = (settings.ludusavi_interval > 0).then(|| {
             let stop = CancellationToken::new();
             let (b, id, title) = (self.clone(), id.clone(), game.title.clone());
@@ -838,6 +973,13 @@ impl Backend {
                     status
                 }
             };
+            if let Some(hidden) = hidden_gpu {
+                let ended = tokio::task::spawn_blocking(move || hidden.end()).await;
+                if let Ok(Err(e)) = ended {
+                    tracing::warn!("hidden graphics card: {e:#}");
+                    append_log(&log_file, &format!("\n{e:#}; Irori tries again at its next start.\n"));
+                }
+            }
             if let Some(bound) = bound {
                 bound.abort();
                 let _ = log_cap::cut_back(&log_file, header, log_cap::GAME_LOG_CAP);
@@ -911,6 +1053,8 @@ impl Backend {
             log_file,
         } = end;
         crate::running::forget(&id);
+        // MangoHud's file for the session; the next launch writes another.
+        irori_runtime::mangohud::remove_session(&id);
         let seconds = started.elapsed().as_secs();
         let stopped = self.running.lock().remove(&id).is_some_and(|r| r.stopping);
         // A session followed again after a restart has no exit status to
@@ -924,7 +1068,6 @@ impl Backend {
         {
             // Sync sees both or neither.
             let _playtime = self.sync.playtime_guard();
-            self.userdata.record_session(&id, seconds);
             let session = crate::sessions::Session {
                 game: id.key(),
                 started: started_at,
@@ -935,6 +1078,9 @@ impl Backend {
             if let Err(e) = crate::sessions::append(&session) {
                 tracing::warn!("recording the session of {id}: {e:#}");
             }
+            // After the history, so screens redrawn for the new playtime
+            // also count the new session.
+            self.userdata.record_session(&id, seconds);
         }
         if let Some(store) = self.store(id.runner)
             && let Err(e) = store.after_exit(&id.app_name, seconds).await
@@ -1133,6 +1279,13 @@ impl Backend {
                 "{} is shared by other games. Keep the prefix when uninstalling.",
                 prefix.display()
             );
+            let sharing = self.games_sharing_prefix(id, &prefix);
+            anyhow::ensure!(
+                sharing.is_empty(),
+                "{} is also the prefix of {}. Keep the prefix when uninstalling.",
+                prefix.display(),
+                sharing.join(", ")
+            );
         }
         store.uninstall(&id.app_name, args).await?;
         // The game is gone from its store now. Each clean-up step runs on its
@@ -1160,6 +1313,59 @@ impl Backend {
 
     /// Move an installed game to another directory (`new_base/<folder>`).
     pub async fn move_install(&self, id: &GameId, new_base: PathBuf) -> Result<()> {
+        if self.move_install_quietly(id, &new_base).await? {
+            let title = self.game(id).map(|g| g.title.clone()).unwrap_or_default();
+            let dest = new_base.display().to_string();
+            self.bus.notice(
+                Notice::new(NoticeLevel::Success, format!("{title} moved to {dest}")).keys(
+                    "shell.notice.moved",
+                    None,
+                    &[("title", &title), ("path", &dest)],
+                ),
+            );
+        }
+        Ok(())
+    }
+
+    /// Move each of `ids` into the library folder `folder` (into its store's
+    /// own folder there with `iroriInstallPerStore`), one game at a time, as
+    /// [`Self::move_install`] does but without a notice per game: the caller
+    /// says how it went. Games running or busy stay where they are; games
+    /// there already count as neither moved nor failed.
+    pub async fn move_installs(
+        &self,
+        ids: &[GameId],
+        folder: &irori_core::settings::LibraryFolder,
+    ) -> MoveReport {
+        let mut report = MoveReport::default();
+        for id in ids {
+            let title = self
+                .game(id)
+                .map(|g| g.title.clone())
+                .unwrap_or_else(|| id.app_name.to_string());
+            let base = irori_core::paths::expand_home(
+                &self
+                    .settings
+                    .app()
+                    .install_folder_in(&folder.path, id.runner),
+            );
+            let moved = if self.is_running(id) || self.statuses.is_busy(id) {
+                Err(anyhow::anyhow!("{title} is running or busy"))
+            } else {
+                self.move_install_quietly(id, &base).await
+            };
+            match moved {
+                Ok(true) => report.moved += 1,
+                Ok(false) => {}
+                Err(e) => report.failed.push((title, format!("{e:#}"))),
+            }
+        }
+        report
+    }
+
+    /// Move one game; `false` when it was there already. Announces nothing
+    /// but leftovers.
+    async fn move_install_quietly(&self, id: &GameId, new_base: &Path) -> Result<bool> {
         Self::ensure_managed(id)?;
         let game = self.installed_game(id)?;
         let store = self.store(id.runner).context("store not available")?;
@@ -1167,7 +1373,7 @@ impl Backend {
         let folder = src.file_name().context("invalid install path")?.to_owned();
         let dst = new_base.join(folder);
         if dst == src {
-            return Ok(());
+            return Ok(false);
         }
         if dst.exists() {
             bail!("{} already exists", dst.display());
@@ -1211,19 +1417,7 @@ impl Backend {
             }
         }
         self.bus.emit(Event::LibraryChanged(id.runner));
-        let dest = new_base.display().to_string();
-        self.bus.notice(
-            Notice::new(
-                NoticeLevel::Success,
-                format!("{} moved to {dest}", game.title),
-            )
-            .keys(
-                "shell.notice.moved",
-                None,
-                &[("title", &game.title), ("path", &dest)],
-            ),
-        );
-        Ok(())
+        Ok(true)
     }
 
     pub async fn repair(&self, id: &GameId) -> Result<()> {
@@ -1267,8 +1461,55 @@ impl Backend {
         let _guard = self.statuses.guard(id, StatusKind::SyncingSaves);
         let saves = self.save_locations(id).await?;
         let store = self.store(id.runner).context("store not available")?;
+        self.snapshot_saves(id, &saves, direction).await;
         let ctx = self.op_context(id, CancellationToken::new());
         store.sync_saves(&id.app_name, direction, &saves, ctx).await
+    }
+
+    /// Snapshot the saves before a sync that could replace them: every
+    /// direction but a plain upload, which leaves this computer's saves as
+    /// they are. A snapshot that can't be taken never stops the sync.
+    async fn snapshot_saves(&self, id: &GameId, saves: &str, direction: SyncDirection) {
+        let reason = match direction {
+            SyncDirection::Upload => return,
+            SyncDirection::Download => "download",
+            SyncDirection::Auto => "auto",
+            SyncDirection::ForceDownload => "force-download",
+            SyncDirection::ForceUpload => "force-upload",
+        };
+        let keep = self.settings.app().save_snapshots;
+        let (id, saves) = (id.clone(), saves.to_string());
+        let taken = self
+            .spawn_blocking(move || {
+                crate::save_snapshots::take(&id, &saves, reason, keep)
+                    .with_context(|| format!("snapshot of {id}'s saves"))
+            })
+            .await;
+        match taken {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => tracing::warn!("{e:#}"),
+            Err(e) => tracing::warn!("snapshot of saves: {e}"),
+        }
+    }
+
+    /// The snapshots of a game's saves, newest first. Reads the disk.
+    pub async fn save_snapshots(&self, id: &GameId) -> Vec<crate::save_snapshots::SaveSnapshot> {
+        let id = id.clone();
+        self.spawn_blocking(move || crate::save_snapshots::list(&id))
+            .await
+            .unwrap_or_default()
+    }
+
+    /// Put a snapshot of a game's saves back (see `save_snapshots`). Not
+    /// while the game runs, which would write over them again.
+    pub async fn restore_save_snapshot(&self, id: &GameId, snapshot: &str) -> Result<u64> {
+        if self.running_games().contains(id) {
+            bail!("Close the game before restoring its saves");
+        }
+        let keep = self.settings.app().save_snapshots;
+        let (id, snapshot) = (id.clone(), snapshot.to_string());
+        self.spawn_blocking(move || crate::save_snapshots::restore(&id, &snapshot, keep))
+            .await?
     }
 
     /// Whether a forced upload of `id`'s saves would delete cloud saves: a
@@ -1376,6 +1617,7 @@ impl Backend {
         if !store.supports_cloud_saves() || !game.cloud_save_enabled {
             bail!("{} has no cloud saves", game.title);
         }
+        self.forget_stale_save_path(id);
         let mut settings = self.settings.game(id);
         if settings.saves_path.is_empty() && settings.gog_saves.is_empty() {
             let app = self.settings.app();
@@ -1383,6 +1625,7 @@ impl Backend {
             let path = store.default_save_path(&id.app_name, Some(&prefix)).await?;
             self.settings
                 .set_game_value(id, "savesPath", Some(Value::String(path.clone())));
+            self.note_save_path_found(id);
             settings.saves_path = path;
         }
         Ok(if settings.gog_saves.is_empty() {
@@ -1397,6 +1640,72 @@ impl Backend {
         })
     }
 
+    /// The prefix the game's saves would be in now, and whether Proton lays
+    /// it out. Only works out paths; touches no files.
+    fn save_prefix(&self, id: &GameId) -> Option<(String, bool)> {
+        let game = self.game(id)?;
+        let settings = self.settings.game(id);
+        let app = self.settings.app();
+        let prefix = irori_runtime::prefix_path(&app, &settings, &game);
+        let wine = if settings.wine_version.is_set() {
+            &settings.wine_version
+        } else {
+            &app.game.wine_version
+        };
+        Some((
+            prefix.to_string_lossy().into_owned(),
+            wine.kind == irori_core::WineKind::Proton,
+        ))
+    }
+
+    /// Record that the game's `savesPath` is the store's default Irori just
+    /// worked out for its current prefix, so a later change of prefix or
+    /// Wine build works it out again instead of syncing the old prefix's
+    /// folder. Settings only; call after writing `savesPath`.
+    pub fn note_save_path_found(&self, id: &GameId) {
+        let Some((prefix, proton)) = self.save_prefix(id) else {
+            return;
+        };
+        let settings = self.settings.game(id);
+        let found = irori_core::SavesPathFound {
+            prefix,
+            proton,
+            path: settings.saves_path,
+            gog_saves: settings.gog_saves,
+        };
+        self.settings
+            .set_game_value(id, "iroriSavesPathFound", serde_json::to_value(found).ok());
+    }
+
+    /// Forget a `savesPath` Irori worked out for a prefix the game no longer
+    /// uses (the user picked another prefix, or switched between Wine and
+    /// Proton), so the next sync or the cloud-saves sheet finds the folder
+    /// in the current one. A folder the user chose or typed is kept.
+    /// Returns whether one was forgotten. Settings only.
+    pub fn forget_stale_save_path(&self, id: &GameId) -> bool {
+        let settings = self.settings.game(id);
+        let Some(found) = settings.saves_path_found.as_ref() else {
+            return false;
+        };
+        let Some((prefix, proton)) = self.save_prefix(id) else {
+            return false;
+        };
+        if !found.is_stale(&settings.saves_path, &settings.gog_saves, &prefix, proton) {
+            if !found.is_current(&settings.saves_path, &settings.gog_saves) {
+                // Typed over since: the folders are the user's now.
+                self.settings
+                    .set_game_value(id, "iroriSavesPathFound", None);
+            }
+            return false;
+        }
+        tracing::info!("{id}: the prefix changed, so its save folder is found again");
+        self.settings.set_game_value(id, "savesPath", None);
+        self.settings.set_game_value(id, "gogSaves", None);
+        self.settings
+            .set_game_value(id, "iroriSavesPathFound", None);
+        true
+    }
+
     /// Run a Windows program (or `winecfg`, `regedit`…) in the game's prefix.
     pub async fn run_in_prefix(&self, id: &GameId, argv: Vec<String>) -> Result<ExecResult> {
         let game = self.game(id).context("unknown game")?;
@@ -1409,6 +1718,13 @@ impl Backend {
         };
         let ctx = self.op_context(id, CancellationToken::new());
         irori_runtime::run_in_prefix(&app, &settings, target, argv, false, ctx).await
+    }
+
+    /// Install Rosetta 2 ([`irori_core::RosettaMissing`], from a launch) with
+    /// Apple's `softwareupdate`, which accepts Apple's licence for it. Only
+    /// after the user agreed in the dialog that says so.
+    pub async fn install_rosetta(&self) -> Result<()> {
+        irori_runtime::rosetta::install().await
     }
 
     /// Run a Windows installer in the game's prefix and wait for it (and any
@@ -1694,6 +2010,18 @@ fn uninstalled_notice(title: &str, problems: &[String]) -> Notice {
     )
 }
 
+/// The titles among `others` (title and prefix of each other installed
+/// game) whose prefix is `prefix`, sorted and each once.
+fn titles_in_prefix(others: impl Iterator<Item = (String, PathBuf)>, prefix: &Path) -> Vec<String> {
+    let mut titles: Vec<String> = others
+        .filter(|(_, theirs)| theirs == prefix)
+        .map(|(title, _)| title)
+        .collect();
+    titles.sort_by_key(|t| t.to_lowercase());
+    titles.dedup();
+    titles
+}
+
 /// Delete a prefix after sanity checks: never the shared prefix root, a
 /// protected folder, or a directory that is not actually a Wine prefix.
 async fn remove_prefix_dir(prefix: &Path, app: &irori_core::AppSettings) -> Result<()> {
@@ -1897,6 +2225,21 @@ mod platform_tests {
         std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
     }
 
+    #[test]
+    fn a_prefix_other_games_play_in_names_them() {
+        let others = vec![
+            ("Hades".to_string(), PathBuf::from("/prefixes/shared")),
+            ("celeste".to_string(), PathBuf::from("/prefixes/shared/")),
+            ("Doom".to_string(), PathBuf::from("/prefixes/doom")),
+            ("Hades".to_string(), PathBuf::from("/prefixes/shared")),
+        ];
+        assert_eq!(
+            titles_in_prefix(others.clone().into_iter(), Path::new("/prefixes/shared")),
+            ["celeste", "Hades"]
+        );
+        assert!(titles_in_prefix(others.into_iter(), Path::new("/prefixes/mine")).is_empty());
+    }
+
     #[tokio::test]
     async fn uninstall_never_removes_shared_crossover_bottles() {
         let dir = tempfile::tempdir().unwrap();
@@ -1912,10 +2255,27 @@ mod platform_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::{failed_start, launch_sandbox, propagate_env_remove};
+    use super::{failed_start, launch_sandbox, launch_steam_runtime, propagate_env_remove};
     use irori_core::process::CommandSpec;
     use irori_core::{InstallPlatform, Runner, SandboxSettings};
     use std::process::ExitStatus;
+
+    #[test]
+    fn the_default_steam_runtime_leaves_emulators_alone() {
+        let sniper = || Some("umu-sniper".to_string());
+        for runner in [Runner::Gog, Runner::Sideload, Runner::Legendary] {
+            assert_eq!(launch_steam_runtime(runner, false, sniper()), sniper());
+        }
+        assert_eq!(
+            launch_steam_runtime(Runner::Emulation, false, sniper()),
+            None
+        );
+        // A ROM's own choice is kept as it is.
+        assert_eq!(
+            launch_steam_runtime(Runner::Emulation, true, sniper()),
+            sniper()
+        );
+    }
 
     #[test]
     fn the_default_sandbox_holds_only_games_it_can() {

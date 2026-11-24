@@ -448,17 +448,39 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
     assert_eq!(state(cx).0, ["Alan Wake", "Celeste", "Inside"]);
     cx.simulate_keystrokes(window, "ctrl-a");
     draw(cx);
-    assert_eq!(state(cx).0.len(), 5);
+    // Every game shown: tests share one state folder, so another test's
+    // added game may be among them.
+    let shown = cx.read(|cx| view.read(cx).visible_games().len());
+    assert!(shown >= 5);
+    assert_eq!(state(cx).0.len(), shown);
     // The bar offers to take the picked games out of Steam too.
     {
         let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
         assert!(vcx.debug_bounds("bulk-steam-remove").is_some());
     }
-    // Redrawing with everything picked doesn't work out the bar again.
-    let computes = cx.read(|cx| view.read(cx).bulk_computes());
+    // Redrawing with everything picked doesn't work out the bar again,
+    // unless one of its inputs changed meanwhile: the library or the shown
+    // list (another test's game arriving in the state folder they share,
+    // a filter's data arriving in the background) or a game's status.
+    let seen = |cx: &mut TestAppContext| {
+        cx.read(|cx| {
+            let model = models(cx).library.read(cx);
+            let shown = view.read(cx).visible_games();
+            let statuses = models(cx).statuses.read(cx).all().count();
+            (
+                model.snapshot.revision,
+                Arc::as_ptr(&model.user) as usize,
+                Arc::as_ptr(&shown) as *const () as usize,
+                statuses,
+            )
+        })
+    };
+    let (computes, before) = (cx.read(|cx| view.read(cx).bulk_computes()), seen(cx));
     draw(cx);
     draw(cx);
-    assert_eq!(cx.read(|cx| view.read(cx).bulk_computes()), computes);
+    if seen(cx) == before {
+        assert_eq!(cx.read(|cx| view.read(cx).bulk_computes()), computes);
+    }
 
     // A filter hiding picked games drops them from the selection.
     cx.update(|cx| {
@@ -467,7 +489,14 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
         })
     });
     draw(cx);
-    assert_eq!(state(cx).0, ["Celeste", "Hades", "Outer Wilds"]);
+    // Of this test's own games (another test's may be installed too).
+    let ours = ["Alan Wake", "Celeste", "Hades", "Inside", "Outer Wilds"];
+    let picked: Vec<String> = state(cx)
+        .0
+        .into_iter()
+        .filter(|t| ours.contains(&t.as_str()))
+        .collect();
+    assert_eq!(picked, ["Celeste", "Hades", "Outer Wilds"]);
 
     cx.simulate_keystrokes(window, "escape");
     draw(cx);
@@ -547,6 +576,22 @@ fn grid_drawer_focus_view_and_switching(cx: &mut TestAppContext) {
     draw(cx);
     assert!(state(cx).1);
     cx.simulate_keystrokes(window, "i");
+    draw(cx);
+    assert!(!state(cx).1);
+
+    // With details on click off, a click only selects; I still opens the
+    // drawer, which then follows the clicks.
+    cx.update(|cx| view.update(cx, |v, cx| v.set_open_details_for_test(false, cx)));
+    click(cx, "1", 1);
+    assert_eq!(focused(cx), Some(game("1")));
+    assert!(!state(cx).1);
+    cx.simulate_keystrokes(window, "i");
+    draw(cx);
+    click(cx, "3", 1);
+    assert!(state(cx).1);
+    assert_eq!(focused(cx), Some(game("3")));
+    cx.update(|cx| view.update(cx, |v, cx| v.set_open_details_for_test(true, cx)));
+    cx.simulate_keystrokes(window, "escape");
     draw(cx);
     assert!(!state(cx).1);
 
@@ -849,6 +894,16 @@ fn a_mode_chosen_before_the_library_opens_filters_it(cx: &mut TestAppContext) {
             .clone()
     });
     assert_eq!(modes, [GameMode::Single].into());
+
+    // A tag chip gives the filters way to that tag alone.
+    cx.update(|cx| crate::show_tag("Roguelike".into(), cx));
+    let (tags, modes) = cx.read(|cx| {
+        let filters = crate::filters_panel::active_filters(cx).expect("the view's filters");
+        let filter = filters.read(cx).filter();
+        (filter.tags.clone(), filter.modes.clone())
+    });
+    assert_eq!(tags, ["Roguelike".to_string()].into());
+    assert!(modes.is_empty());
 }
 
 #[gpui_kit::test]
@@ -1269,22 +1324,19 @@ fn smart_categories_filter_the_library_and_reopen_as_saved(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn the_art_picker_offers_igdb_and_vndb_only_while_they_are_on(cx: &mut TestAppContext) {
+fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
     use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
 
     let _backend = start(cx);
-    let open_with = |igdb_on: bool, vndb_on: bool, cx: &mut TestAppContext| {
+    let open = |igdb_on: bool, cx: &mut TestAppContext| {
         cx.update(|cx| {
             gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-                cx.new(|cx| {
-                    ArtPicker::with_sources(ArtKind::Cover, "", None, igdb_on, vndb_on, window, cx)
-                })
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", None, igdb_on, window, cx))
             })
         })
         .expect("window opens")
         .1
     };
-    let open = |igdb_on: bool, cx: &mut TestAppContext| open_with(igdb_on, false, cx);
     let source = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
         cx.read(|cx| picker.read(cx).source())
     };
@@ -1300,13 +1352,417 @@ fn the_art_picker_offers_igdb_and_vndb_only_while_they_are_on(cx: &mut TestAppCo
     assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
+    // Both at once needs SteamGridDB's key too.
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::All, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::All, true));
+
+    // On with a key: both sources together from the start.
+    let both = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                let key = irori_extras::steamgrid::ApiKey::new("key");
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", key, true, window, cx))
+            })
+        })
+        .expect("window opens")
+        .1;
+    cx.run_until_parked();
+    assert_eq!(source(&both, cx), (ArtSource::All, false));
+}
+
+#[gpui_kit::test]
+fn the_art_picker_moves_through_pictures_with_the_arrows(cx: &mut TestAppContext) {
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtPickerEvent, ArtSource, Found};
+    use irori_extras::steamgrid::SgdbImage;
+
+    let _backend = start(cx);
+    // The shell binds the library's keys at start.
+    cx.update(crate::init);
+    let (window, picker) = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Cover, "", None, true, window, cx))
+            })
+        })
+        .expect("window opens");
+    let picked = Arc::new(parking_lot::Mutex::new(None::<String>));
+    let sink = picked.clone();
+    cx.update(|cx| {
+        cx.subscribe(&picker, move |_, event: &ArtPickerEvent, _| {
+            if let ArtPickerEvent::Picked(url) = event {
+                *sink.lock() = Some(url.clone());
+            }
+        })
+        .detach()
+    });
+    let found = (0..5)
+        .map(|id| Found {
+            source: ArtSource::Igdb,
+            image: SgdbImage {
+                id,
+                url: format!("https://example.invalid/{id}.png"),
+                thumb: String::new(),
+                width: Some(600),
+                height: Some(900),
+            },
+        })
+        .collect();
+    cx.update(|cx| picker.update(cx, |p, cx| p.show_for_test(found, cx)));
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    let cursor = |cx: &mut TestAppContext| cx.read(|cx| picker.read(cx).cursor());
+
+    // From the search field, Down reaches the first picture; Right moves on.
+    cx.update_window(window, |_, window, cx| {
+        picker.read(cx).query_focus(cx).focus(window, cx)
+    })
+    .unwrap();
+    cx.simulate_keystrokes(window, "down");
+    draw(cx);
+    assert_eq!(cursor(cx), Some(0));
+    let holds = cx
+        .update_window(window, |_, window, cx| {
+            picker.read(cx).holds_keyboard(window)
+        })
+        .unwrap();
+    assert!(holds, "the pictures hold the keyboard");
+    cx.simulate_keystrokes(window, "right");
+    draw(cx);
+    assert_eq!(cursor(cx), Some(1));
+
+    // Enter uses the picture the cursor is on.
+    cx.simulate_keystrokes(window, "enter");
+    assert_eq!(
+        picked.lock().as_deref(),
+        Some("https://example.invalid/1.png")
+    );
+
+    // Up from the first row goes back to the search field.
+    cx.simulate_keystrokes(window, "up");
+    assert_eq!(cursor(cx), None);
+    let in_search = cx
+        .update_window(window, |_, window, cx| {
+            picker.read(cx).query_focus(cx).is_focused(window)
+        })
+        .unwrap();
+    assert!(in_search);
+}
+
+#[gpui_kit::test]
+fn a_roms_cover_picker_opens_on_its_launchbox_boxes(cx: &mut TestAppContext) {
+    use irori_extras::launchbox::{BoxArt, IndexState, LaunchBoxGame, SystemIndex, table_key};
+
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+
+    let backend = start(cx);
+    let dir = Paths::get().cache.join("ui-launchbox");
+    let rom = dir.join("roms/Super Mario Bros. 3 (Europe).nes");
+    std::fs::create_dir_all(rom.parent().unwrap()).unwrap();
+    std::fs::write(&rom, b"NES\x1a").unwrap();
+    let settings = backend.settings.clone();
+    let make = |cache: &str| {
+        let settings = settings.clone();
+        irori_emulation::EmulationStore::with_dirs(
+            backend.bus.clone(),
+            Arc::new(move || settings.app()),
+            dir.join("config"),
+            dir.join(cache),
+        )
+    };
+
+    // LaunchBox's index as a download leaves it.
+    let index = dir.join("cache/launchbox");
+    let art = |file: &str, region: &str| BoxArt {
+        file: file.into(),
+        region: Some(region.into()),
+        reconstructed: false,
+    };
+    irori_core::json_store::write(
+        &index.join("systems/nes.json"),
+        &SystemIndex {
+            games: vec![LaunchBoxGame {
+                id: 10,
+                name: "Super Mario Bros. 3".into(),
+                alternate: Vec::new(),
+                boxes: vec![art("us.jpg", "North America"), art("eu.jpg", "Europe")],
+            }],
+        },
+    )
+    .unwrap();
+    irori_core::json_store::write(
+        &index.join("state.json"),
+        &IndexState {
+            updated_at: irori_extras::launchbox::now(),
+            systems: vec!["nes".into()],
+            table: table_key(&irori_emulation::launchbox::platforms()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let open = |store: Arc<irori_emulation::EmulationStore>, cx: &mut TestAppContext| {
+        let rt = backend.runtime();
+        rt.block_on(store.init()).unwrap();
+        let id = rt.block_on(store.add_game(&rom, None, None)).unwrap();
+        cx.update(|cx| crate::install_emulation_store(store, cx));
+        cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| {
+                    ArtPicker::for_game(
+                        ArtKind::Cover,
+                        Some(&id),
+                        "Super Mario Bros. 3",
+                        window,
+                        cx,
+                    )
+                })
+            })
+        })
+        .expect("window opens")
+        .1
+    };
+    let wait = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            cx.run_until_parked();
+            let (captions, offers) = cx.read(|cx| picker.read(cx).launchbox_view());
+            if !captions.is_empty() || offers || Instant::now() > deadline {
+                return (captions, offers);
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    };
+
+    // The ROM's own region comes first, each box labelled with its region.
+    let picker = open(make("cache"), cx);
+    let (captions, offers) = wait(&picker, cx);
+    assert_eq!(
+        cx.read(|cx| picker.read(cx).source().0),
+        ArtSource::LaunchBox
+    );
+    assert!(!offers);
+    let captions: Vec<String> = captions.iter().map(|c| c.to_string()).collect();
+    assert_eq!(captions, ["Europe", "North America"]);
+
+    // Without the game list yet, it offers to download it, and its button
+    // turns LaunchBox box art on (this store has nowhere to download from).
+    let picker = open(make("cache-empty"), cx);
+    let (captions, offers) = wait(&picker, cx);
+    assert!(captions.is_empty());
+    assert!(offers);
+    assert!(!backend.settings.app().launchbox);
+    cx.update(|cx| picker.update(cx, |p, cx| p.download_launchbox(cx)));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !backend.settings.app().launchbox {
+        assert!(Instant::now() < deadline, "the setting never turned on");
+        cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[gpui_kit::test]
+fn the_filters_popover_finds_a_value_by_name(cx: &mut TestAppContext) {
+    use crate::filters_panel::{FilterModel, FiltersPanel};
+
+    let _backend = start(cx);
+    let model = cx.update(|cx| cx.new(|_| FilterModel::new(crate::filter::ViewFilter::default())));
+    let (window, panel) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(800.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |_, cx| cx.new(|cx| FiltersPanel::new(model.clone(), cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    // Nothing searched: the sections, and no values worked out.
+    assert_eq!(cx.read(|cx| panel.read(cx).found_values(cx)), None);
+
+    // The play status is found by name, with its count. Tests share one
+    // state folder, so another test may have given some games a status.
+    cx.update_window(window, |_, window, cx| {
+        panel.update(cx, |p, cx| p.search_for("not pla", window, cx))
+    })
+    .unwrap();
+    draw(cx);
+    let found = cx
+        .read(|cx| panel.read(cx).found_values(cx))
+        .expect("searched");
+    assert!(
+        found.len() == 1 && found.iter().all(|(_, count)| *count > 0),
+        "{found:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn picking_a_range_with_the_keyboard(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.show_layout_for_test(irori_core::settings::LibraryLayout::List, cx)
+        })
+    });
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.read(cx).grid_focus_handle().focus(window, cx);
+    })
+    .unwrap();
+    draw(cx);
+    let state = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).selection_state());
+
+    // Shift+Down from the first game picks it and the ones stepped onto.
+    cx.simulate_keystrokes(window, "home shift-down shift-down");
+    draw(cx);
+    assert_eq!(
+        state(cx),
+        (
+            vec!["Alan Wake".into(), "Celeste".into(), "Hades".into()],
+            true
+        )
+    );
+    // Stepping back unpicks what the range leaves.
+    cx.simulate_keystrokes(window, "shift-up");
+    draw(cx);
+    assert_eq!(state(cx).0, ["Alan Wake", "Celeste"]);
+    // A plain move ends the range; Shift+Space ticks one game alone.
+    cx.simulate_keystrokes(window, "down down down shift-space");
+    draw(cx);
+    assert_eq!(state(cx).0, ["Alan Wake", "Celeste", "Outer Wilds"]);
+    // Shift+End picks from there to the last game.
+    cx.simulate_keystrokes(window, "up shift-end");
+    draw(cx);
+    assert_eq!(
+        state(cx).0,
+        ["Alan Wake", "Celeste", "Inside", "Outer Wilds"]
+    );
+}
+
+#[gpui_kit::test]
+fn the_view_follows_the_window_width_when_asked(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1600.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    let layout = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| view.read(cx).view_state(window).0)
+            .unwrap()
+    };
+    let resize = |cx: &mut TestAppContext, width: f32| {
+        cx.simulate_window_resize(window, size(px(width), px(800.)));
+        settle(cx);
+    };
+    settle(cx);
+    assert_eq!(layout(cx), LibraryLayout::Grid, "off: nothing switches");
+    cx.update(|cx| view.update(cx, |v, cx| v.set_auto_layout_for_test(true, cx)));
+    settle(cx);
+    assert_eq!(layout(cx), LibraryLayout::Focus, "wide: Focus");
+    resize(cx, 700.);
+    assert_eq!(layout(cx), LibraryLayout::Grid, "narrow: the grid");
+    // A view picked by hand holds while the window stays on its side.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Focus, cx)));
+    resize(cx, 720.);
+    assert_eq!(layout(cx), LibraryLayout::Focus);
+    resize(cx, 1600.);
+    assert_eq!(layout(cx), LibraryLayout::Focus);
+    cx.update(|cx| view.update(cx, |v, cx| v.set_auto_layout_for_test(false, cx)));
+}
+
+#[gpui_kit::test]
+fn the_art_picker_offers_vndb_while_it_is_on(cx: &mut TestAppContext) {
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+
+    let _backend = start(cx);
+    let open = |igdb_on: bool, vndb_on: bool, cx: &mut TestAppContext| {
+        cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| {
+                    ArtPicker::with_vndb(ArtKind::Cover, "", None, igdb_on, vndb_on, window, cx)
+                })
+            })
+        })
+        .expect("window opens")
+        .1
+    };
+    let source = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
+        cx.read(|cx| picker.read(cx).source())
+    };
 
     // VNDB alone, without a SteamGridDB key: VNDB first.
-    let picker = open_with(false, true, cx);
+    let picker = open(false, true, cx);
     cx.run_until_parked();
     assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
-    // Both on: IGDB first.
-    let picker = open_with(true, true, cx);
+    // With IGDB on too: IGDB first; VNDB stays a source of its own.
+    let picker = open(true, true, cx);
     cx.run_until_parked();
     assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::Vndb, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
 }

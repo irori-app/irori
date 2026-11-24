@@ -159,13 +159,19 @@ pub enum LibrarySort {
     DateAdded,
     /// Highest review score first.
     Score,
+    /// Most sessions first.
+    TimesPlayed,
+    /// The user's highest-rated first.
+    Rating,
 }
 
 impl LibrarySort {
-    pub const ALL: [LibrarySort; 8] = [
+    pub const ALL: [LibrarySort; 10] = [
         LibrarySort::Title,
         LibrarySort::LastPlayed,
         LibrarySort::Playtime,
+        LibrarySort::TimesPlayed,
+        LibrarySort::Rating,
         LibrarySort::DateAdded,
         LibrarySort::ReleaseDate,
         LibrarySort::Score,
@@ -183,6 +189,8 @@ impl LibrarySort {
             LibrarySort::ReleaseDate => "Release date",
             LibrarySort::DateAdded => "Date added",
             LibrarySort::Score => "Score",
+            LibrarySort::TimesPlayed => "Times played",
+            LibrarySort::Rating => "Your rating",
         }
     }
 }
@@ -216,6 +224,17 @@ impl LibraryFilter {
         library: &LibrarySnapshot,
         user: &UserData,
         updates: &std::collections::HashSet<GameId>,
+    ) -> Vec<Arc<GameInfo>> {
+        self.apply_with(library, user, updates, &crate::sessions::stats())
+    }
+
+    /// [`LibraryFilter::apply`] counting plays from `plays`.
+    pub fn apply_with(
+        &self,
+        library: &LibrarySnapshot,
+        user: &UserData,
+        updates: &std::collections::HashSet<GameId>,
+        plays: &crate::sessions::SessionStats,
     ) -> Vec<Arc<GameInfo>> {
         let category = self.category.as_ref().and_then(|c| user.categories.get(c));
         let mut out: Vec<(i64, Arc<GameInfo>)> = Vec::with_capacity(library.games.len());
@@ -288,6 +307,17 @@ impl LibraryFilter {
             if !parsed.modes_match(&g.game_modes) || !parsed.tags_match(&g.store_tags) {
                 continue;
             }
+            // An entry is in a category when any of its copies is.
+            if !parsed.categories.is_empty() {
+                let mut keys: Vec<String> =
+                    library.copies_of(&g.id()).iter().map(GameId::key).collect();
+                if keys.is_empty() {
+                    keys.push(key.clone());
+                }
+                if !parsed.categories_match(user, &keys) {
+                    continue;
+                }
+            }
             let score = match (&query, index) {
                 (Some(q), Some(index)) => match index.score(ix, q, g) {
                     Some(s) => s,
@@ -347,6 +377,17 @@ impl LibraryFilter {
             LibrarySort::ReleaseDate => return known_first(games, self.descending, released),
             LibrarySort::DateAdded => return known_first(games, self.descending, added),
             LibrarySort::Score => return known_first(games, self.descending, |g| g.rating),
+            // Never played and unrated games come last either way.
+            LibrarySort::TimesPlayed => {
+                return known_first(games, self.descending, |g| {
+                    plays.get(&g.id().key()).map(|p| p.count).filter(|n| *n > 0)
+                });
+            }
+            LibrarySort::Rating => {
+                return known_first(games, self.descending, |g| {
+                    user.ratings.get(&g.id().key()).copied()
+                });
+            }
         }
         if self.descending {
             games.reverse();
@@ -406,11 +447,35 @@ impl Backend {
             .collect()
     }
 
+    /// Every value of `field` the library's games have before the field
+    /// rules change them, most common first (the field manager's list).
+    /// Walks the stores' games; call off the UI thread.
+    pub fn field_values(
+        &self,
+        field: crate::field_rules::Field,
+    ) -> Vec<crate::field_rules::FieldValue> {
+        let shown = self.settings.app().ui.stores;
+        let games: Vec<Arc<GameInfo>> = self
+            .stores
+            .values()
+            .flat_map(|s| s.games())
+            .filter(|g| !g.is_dlc && shown.shows(g.runner()))
+            .map(|g| {
+                let mut g = (*g).clone();
+                self.facts.complete(&mut g);
+                self.store_facts.complete(&mut g);
+                Arc::new(g)
+            })
+            .collect();
+        crate::field_rules::values(&games, field)
+    }
+
     pub(crate) fn rebuild_library(&self) {
         let user = self.userdata.snapshot();
         let tag_language =
             irori_steam_api::achievements::steam_language(&self.settings.app().ui_language);
         let program_icons = self.settings.app().ui.program_icon_art;
+        let tag_limit = self.settings.app().steam_tag_limit;
         let mut games: Vec<Arc<GameInfo>> = self
             .stores
             .values()
@@ -439,7 +504,12 @@ impl Backend {
                     }
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
-                    self.steam_tags.complete(&mut g, tag_language);
+                    user.field_rules.apply(&mut g);
+                    // After what was learned elsewhere: the user's details win.
+                    o.apply_metadata(&mut g);
+                    let app = self.steam_links.linked(&g).app_id();
+                    self.steam_tags
+                        .complete(&mut g, tag_language, app, tag_limit);
                     if let Some(modes) = &o.game_modes {
                         g.game_modes = irori_core::game_mode::normalized(modes.clone());
                     }
@@ -452,15 +522,16 @@ impl Backend {
                     let mut g = (*g).clone();
                     self.facts.complete(&mut g);
                     self.store_facts.complete(&mut g);
-                    self.steam_tags.complete(&mut g, tag_language);
+                    user.field_rules.apply(&mut g);
+                    let app = self.steam_links.linked(&g).app_id();
+                    self.steam_tags
+                        .complete(&mut g, tag_language, app, tag_limit);
                     if program_icons {
                         self.program_icons.complete(&mut g);
                     }
-                    Arc::new(if g.sort_title.is_empty() {
-                        g.finalize()
-                    } else {
-                        g
-                    })
+                    // Always again: a store's cache may hold a key made
+                    // by an older Irori.
+                    Arc::new(g.finalize())
                 }
             })
             .collect();
@@ -470,12 +541,21 @@ impl Backend {
         games.retain(|g| shown.shows(g.runner()));
         // Learn missing release dates and scores in the background; the
         // library is rebuilt once they arrive.
+        self.seed_steam_links(&games);
         if self.is_online() {
             let (b, list) = (self.clone(), games.clone());
             self.spawn(async move {
                 let facts = b.facts.refresh(&list).await;
-                let tags = b.steam_tags.refresh(&list, tag_language).await;
+                let apps: Vec<u32> = list
+                    .iter()
+                    .filter_map(|g| b.steam_links.linked(g).app_id())
+                    .collect();
+                let tags = b.steam_tags.refresh(&apps, tag_language).await;
                 if facts || tags {
+                    b.rebuild_library();
+                }
+                // After the tags: a title found here brings its own.
+                if b.match_steam_titles(&list).await {
                     b.rebuild_library();
                 }
             });
@@ -491,6 +571,8 @@ impl Backend {
             });
         }
         let mut grouped = crate::copies::group(games, &user, self.settings.app().ui.group_copies);
+        // Edits of a favourite, status or rating reach every copy.
+        self.userdata.set_copy_groups(&grouped.groups);
         grouped.entries.sort_by(|a, b| {
             a.sort_title
                 .cmp(&b.sort_title)
@@ -594,6 +676,64 @@ mod tests {
     }
 
     #[test]
+    fn sorts_by_times_played_and_rating_unknown_last() {
+        use crate::sessions::{Session, SessionStats};
+        let mut games = vec![
+            game(Runner::Gog, "1", "Game 10", true),
+            game(Runner::Gog, "2", "Game 2", true),
+            game(Runner::Gog, "3", "Game 1", true),
+        ];
+        // As the library is built.
+        games.sort_by(|a, b| a.sort_title.cmp(&b.sort_title));
+        let lib = snapshot(games);
+        let session = |game: &str| Session {
+            game: game.into(),
+            started: "2026-10-23T10:00:00Z".into(),
+            seconds: 60,
+            crashed: false,
+            exit_code: None,
+        };
+        let plays =
+            SessionStats::from_sessions(&[session("gog:1"), session("gog:1"), session("gog:2")]);
+        let mut user = UserData::default();
+        user.ratings.insert("gog:3".into(), 5);
+        user.ratings.insert("gog:2".into(), 3);
+        let none = HashSet::new();
+        let order = |sort, descending| -> Vec<String> {
+            LibraryFilter {
+                sort,
+                descending,
+                ..Default::default()
+            }
+            .apply_with(&lib, &user, &none, &plays)
+            .iter()
+            .map(|g| g.title.clone())
+            .collect()
+        };
+        // Titles in number order.
+        assert_eq!(
+            order(LibrarySort::Title, false),
+            ["Game 1", "Game 2", "Game 10"]
+        );
+        assert_eq!(
+            order(LibrarySort::TimesPlayed, false),
+            ["Game 10", "Game 2", "Game 1"]
+        );
+        assert_eq!(
+            order(LibrarySort::TimesPlayed, true),
+            ["Game 2", "Game 10", "Game 1"]
+        );
+        assert_eq!(
+            order(LibrarySort::Rating, false),
+            ["Game 1", "Game 2", "Game 10"]
+        );
+        assert_eq!(
+            order(LibrarySort::Rating, true),
+            ["Game 2", "Game 1", "Game 10"]
+        );
+    }
+
+    #[test]
     fn filters_and_searches() {
         let lib = snapshot(vec![
             game(Runner::Gog, "1", "The Witcher 3", true),
@@ -690,6 +830,39 @@ mod tests {
         assert_eq!(found("mode:local mode:online"), ["Rocket League"]);
         assert_eq!(found("mode:multiplayer").len(), 2);
         assert!(found("mode:mmo").is_empty());
+    }
+
+    #[test]
+    fn category_terms_narrow_a_search_by_any_copy() {
+        let games = vec![
+            game(Runner::Steam, "620", "Portal 2", false),
+            game(Runner::Legendary, "p2", "Portal 2", true),
+            game(Runner::Gog, "1", "Celeste", false),
+            game(Runner::Gog, "2", "Portal", false),
+        ];
+        let mut user = UserData::default();
+        // The Steam copy is in the category; the entry shows the Epic one.
+        user.categories.insert(
+            "Co-op nights".into(),
+            ["steam:620".to_string(), "gog:1".to_string()].into(),
+        );
+        let lib = LibrarySnapshot::new(1, crate::copies::group(games, &user, true), HashMap::new());
+        let none = HashSet::new();
+        let found = |query: &str| -> Vec<String> {
+            let mut titles: Vec<String> = LibraryFilter {
+                query: query.into(),
+                ..Default::default()
+            }
+            .apply(&lib, &user, &none)
+            .iter()
+            .map(|g| g.title.clone())
+            .collect();
+            titles.sort();
+            titles
+        };
+        assert_eq!(found("category:coop-nights"), ["Celeste", "Portal 2"]);
+        assert_eq!(found("portal category:co-op"), ["Portal 2"]);
+        assert!(found("category:solo").is_empty());
     }
 
     #[test]

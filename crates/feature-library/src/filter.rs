@@ -7,9 +7,9 @@
 //! missing). The result
 //! is cached by library revision, user-data identity, category-index
 //! identity, update-set identity, availability identity and filter, so
-//! rendering never refilters an unchanged library. Grouping by play status,
-//! game mode, genre or category reorders that result into sections
-//! ([`StatusGroup`]) in the same pass.
+//! rendering never refilters an unchanged library. Grouping (by play status,
+//! game mode, genre, category, or a game's facts in [`crate::groups`])
+//! reorders that result into sections ([`StatusGroup`]) in the same pass.
 //!
 //! Saved views and the persisted view keep criteria this version doesn't
 //! know ([`ViewFilter::unknown`]), so a view a newer Irori saved keeps its
@@ -28,6 +28,8 @@ use irori_services::{
 };
 use irori_ui::i18n::{t, t_args};
 use serde::{Deserialize, Serialize};
+
+use crate::groups;
 
 /// Which install states to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -97,6 +99,95 @@ pub enum Grouping {
     /// name: each game in the section of its first category, games in none
     /// last ([`crate::categories::group_by_category`]).
     Category,
+    /// A section per store, in the store switcher's order.
+    Store,
+    /// A section per platform: the build installed, else the one that
+    /// would be installed here ([`crate::groups::platform_section`]).
+    Platform,
+    /// A section per developer by name, games whose store names none last.
+    Developer,
+    /// A section per publisher, as [`Grouping::Developer`].
+    Publisher,
+    /// A section per release year, newest first.
+    Year,
+    /// Sections of playtime ([`crate::groups::PlaytimeBand`]), most played
+    /// first.
+    Playtime,
+    /// Sections of size on disk ([`crate::groups::SizeBand`]), largest
+    /// first, games not installed last.
+    Size,
+}
+
+impl Grouping {
+    /// Every grouping, in the order the Group by menu offers them.
+    pub const ALL: [Grouping; 12] = [
+        Grouping::None,
+        Grouping::Status,
+        Grouping::Mode,
+        Grouping::Genre,
+        Grouping::Category,
+        Grouping::Store,
+        Grouping::Platform,
+        Grouping::Developer,
+        Grouping::Publisher,
+        Grouping::Year,
+        Grouping::Playtime,
+        Grouping::Size,
+    ];
+
+    /// The groupings by a game's facts that the command palette offers by
+    /// name ([`Grouping::palette_label`]); the others have rows of their
+    /// own there.
+    pub const BY_FACT: [Grouping; 7] = [
+        Grouping::Store,
+        Grouping::Platform,
+        Grouping::Developer,
+        Grouping::Publisher,
+        Grouping::Year,
+        Grouping::Playtime,
+        Grouping::Size,
+    ];
+
+    /// The Group by menu's name for it.
+    pub fn label(self) -> String {
+        t(match self {
+            Grouping::None => "library.toolbar.group.none",
+            Grouping::Status => "library.toolbar.group.status",
+            Grouping::Mode => "library.toolbar.group.mode",
+            Grouping::Genre => "library.toolbar.group.genre",
+            Grouping::Category => "library.toolbar.group.category",
+            Grouping::Store => "library.toolbar.group.store",
+            Grouping::Platform => "library.toolbar.group.platform",
+            Grouping::Developer => "library.toolbar.group.developer",
+            Grouping::Publisher => "library.toolbar.group.publisher",
+            Grouping::Year => "library.toolbar.group.year",
+            Grouping::Playtime => "library.toolbar.group.playtime",
+            Grouping::Size => "library.toolbar.group.size",
+        })
+        .to_string()
+    }
+
+    /// The command palette's row for grouping by it: "Group the library by
+    /// store", or "Stop grouping the library" while it groups by it.
+    /// `None` for the groupings that have rows of their own.
+    pub fn palette_label(self, current: Grouping) -> Option<String> {
+        if !Grouping::BY_FACT.contains(&self) {
+            return None;
+        }
+        if current == self {
+            return Some(t("library.group.palette.stop").to_string());
+        }
+        let key = match self {
+            Grouping::Store => "library.group.palette.store",
+            Grouping::Platform => "library.group.palette.platform",
+            Grouping::Developer => "library.group.palette.developer",
+            Grouping::Publisher => "library.group.palette.publisher",
+            Grouping::Year => "library.group.palette.year",
+            Grouping::Playtime => "library.group.palette.playtime",
+            _ => "library.group.palette.size",
+        };
+        Some(t(key).to_string())
+    }
 }
 
 /// Order of the game-mode sections: playing together on one screen first,
@@ -154,6 +245,15 @@ pub enum GroupKind {
     /// Games whose first category is this one, with its name; `None` for
     /// games in no category.
     Category(Option<(CategoryRef, Arc<str>)>),
+    Store(Runner),
+    Platform(InstallPlatform),
+    /// Games of this developer or publisher (as the library spells it
+    /// first); `None` for games whose store names none.
+    Company(Company, Option<Arc<str>>),
+    /// Games released this year; `None` for games of no known date.
+    Year(Option<i32>),
+    Playtime(crate::groups::PlaytimeBand),
+    Size(crate::groups::SizeBand),
 }
 
 /// How genres compare: stores spell the same one differently ("Action",
@@ -208,6 +308,69 @@ pub fn present_tags(library: &LibrarySnapshot) -> Vec<(String, String)> {
         common.into_iter().map(|(k, _, name)| (k, name)).collect();
     tags.sort_by_cached_key(|(key, name)| (name.to_lowercase(), key.clone()));
     tags
+}
+
+/// Who made or published a game: facets of the Filters popover, and two of
+/// the library's groupings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Company {
+    Developer,
+    Publisher,
+}
+
+impl Company {
+    /// The game's developer or publisher, when its store names one.
+    pub fn of(self, game: &GameInfo) -> Option<&str> {
+        match self {
+            Company::Developer => game.developer.as_deref(),
+            Company::Publisher => game.publisher.as_deref(),
+        }
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+    }
+}
+
+/// How company names compare: stores spell one differently ("Valve",
+/// "VALVE ").
+pub fn company_key(company: &str) -> String {
+    company.trim().to_lowercase()
+}
+
+/// Developers or publishers the Filters popover offers: the commonest in
+/// the library (a big library names hundreds). Picked ones stay offered.
+pub const SHOWN_COMPANIES: usize = 30;
+
+/// Pick `name` in `set`, or unpick every spelling of `key` (as `fold`
+/// compares names) when one is picked.
+pub fn toggle_named(set: &mut BTreeSet<String>, key: &str, name: String, fold: fn(&str) -> String) {
+    let before = set.len();
+    set.retain(|n| fold(n) != key);
+    if set.len() == before {
+        set.insert(name);
+    }
+}
+
+/// The [`SHOWN_COMPANIES`] commonest developers or publishers among the
+/// library's games, as (key, the name it is shown with: the library's first
+/// spelling), by name.
+pub fn present_companies(library: &LibrarySnapshot, company: Company) -> Vec<(String, String)> {
+    let mut counts: HashMap<String, (usize, String)> = HashMap::new();
+    for name in library.games.iter().filter_map(|g| company.of(g)) {
+        counts
+            .entry(company_key(name))
+            .or_insert_with(|| (0, name.to_owned()))
+            .0 += 1;
+    }
+    let mut common: Vec<(String, usize, String)> = counts
+        .into_iter()
+        .map(|(k, (n, name))| (k, n, name))
+        .collect();
+    common.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    common.truncate(SHOWN_COMPANIES);
+    let mut shown: Vec<(String, String)> =
+        common.into_iter().map(|(k, _, name)| (k, name)).collect();
+    shown.sort_by_cached_key(|(key, name)| (name.to_lowercase(), key.clone()));
+    shown
 }
 
 /// The first spelling of each genre key among `games`.
@@ -397,6 +560,14 @@ pub struct ViewFilter {
     /// leaves no key behind for a deleted category's id to come back from.
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub smart_categories: BTreeSet<String>,
+    /// Games in any of these categories are left out, whatever else picks
+    /// them. A category is picked or left out, never both.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub excluded_categories: BTreeSet<CategoryFilter>,
+    /// Smart categories (by id) whose games are left out, as
+    /// [`ViewFilter::excluded_categories`].
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub excluded_smart_categories: BTreeSet<String>,
     pub released: ReleaseWindow,
     /// Emulated games of these systems only (systems catalog ids); empty
     /// shows every game.
@@ -409,6 +580,14 @@ pub struct ViewFilter {
     pub max_age: Option<u8>,
     /// With an age limit, also show games no board rated.
     pub include_unrated: bool,
+    /// Games a controller plays at least this well; `None` shows every
+    /// game.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "irori_core::controller_support::lenient"
+    )]
+    pub controller: Option<irori_core::ControllerSupport>,
     /// Games with any of these modes; empty shows every game.
     #[serde(deserialize_with = "deserialize_modes")]
     pub modes: BTreeSet<GameMode>,
@@ -418,6 +597,12 @@ pub struct ViewFilter {
     /// Games with any of these store tags (Steam's), as shown when picked
     /// and compared by `tag_key`; empty shows every game.
     pub tags: BTreeSet<String>,
+    /// Games made by any of these developers, as shown when picked and
+    /// compared by [`company_key`]; empty shows every game.
+    pub developers: BTreeSet<String>,
+    /// Games published by any of these, as [`ViewFilter::developers`].
+    pub publishers: BTreeSet<String>,
+    #[serde(deserialize_with = "deserialize_sort")]
     pub sort: LibrarySort,
     pub descending: bool,
     /// Sections the list is split into. Like sorting, it orders rather than
@@ -436,6 +621,24 @@ where
     D: serde::Deserializer<'de>,
 {
     Ok(irori_core::game_mode::lenient(d)?.into_iter().collect())
+}
+
+/// A sort order; one this version doesn't know sorts by title, and the
+/// rest of the view still reads.
+fn deserialize_sort<'de, D>(d: D) -> Result<LibrarySort, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Known(LibrarySort),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Repr::deserialize(d)? {
+        Repr::Known(s) => s,
+        Repr::Other(_) => LibrarySort::Title,
+    })
 }
 
 /// A grouping; one this version doesn't know shows one list.
@@ -469,13 +672,17 @@ impl ViewFilter {
             self.updates_only,
             self.hide_unavailable,
             self.has_categories(),
+            self.has_excluded_categories(),
             self.released != ReleaseWindow::Any,
             !self.systems.is_empty(),
             !self.statuses.is_empty(),
             self.max_age.is_some(),
             !self.modes.is_empty(),
+            self.controller.is_some(),
             !self.genres.is_empty(),
             !self.tags.is_empty(),
+            !self.developers.is_empty(),
+            !self.publishers.is_empty(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -606,6 +813,16 @@ impl ViewFilter {
             let names: Vec<&str> = self.tags.iter().map(String::as_str).collect();
             out.push(names.join(&t("library.filter.list_separator")));
         }
+        for (picked, key) in [
+            (&self.developers, "library.filter.describe.developers"),
+            (&self.publishers, "library.filter.describe.publishers"),
+        ] {
+            if !picked.is_empty() {
+                let names: Vec<&str> = picked.iter().map(String::as_str).collect();
+                let names = names.join(&t("library.filter.list_separator"));
+                out.push(t_args(key, &[("names", &names)]).to_string());
+            }
+        }
         let heading = self.category_heading(user);
         match self.category_names(user).len() {
             0 => {}
@@ -616,14 +833,78 @@ impl ViewFilter {
                 t_args("library.filter.describe.categories", &[("names", &heading)]).to_string(),
             ),
         }
+        if let Some(level) = self.controller {
+            out.push(controller_label(level).to_string());
+        }
+        let left_out = self.excluded_names(user);
+        if !left_out.is_empty() {
+            let names = left_out.join(&t("library.filter.list_separator"));
+            out.push(
+                t_args(
+                    "library.filter.describe.not_in_categories",
+                    &[("names", &names)],
+                )
+                .to_string(),
+            );
+        }
         out
     }
 
-    /// Add or remove one category from the selection.
+    /// Add or remove one category from the selection. Picking one that was
+    /// left out stops leaving it out.
     pub fn toggle_category(&mut self, category: CategoryFilter) {
+        self.excluded_categories.remove(&category);
         if !self.categories.remove(&category) {
             self.categories.insert(category);
         }
+    }
+
+    /// Whether any category of either kind is left out.
+    pub fn has_excluded_categories(&self) -> bool {
+        !self.excluded_categories.is_empty() || !self.excluded_smart_categories.is_empty()
+    }
+
+    /// Whether `category` is left out.
+    pub fn excludes_category(&self, category: &CategoryRef) -> bool {
+        match category {
+            CategoryRef::Manual(name) => self
+                .excluded_categories
+                .contains(&CategoryFilter::Named(name.clone())),
+            CategoryRef::Smart(id) => self.excluded_smart_categories.contains(id),
+        }
+    }
+
+    /// Leave a category of either kind out, or stop leaving it out. Leaving
+    /// out a picked category unpicks it.
+    pub fn toggle_excluded(&mut self, category: &CategoryRef) {
+        match category {
+            CategoryRef::Manual(name) => {
+                let entry = CategoryFilter::Named(name.clone());
+                self.categories.remove(&entry);
+                if !self.excluded_categories.remove(&entry) {
+                    self.excluded_categories.insert(entry);
+                }
+            }
+            CategoryRef::Smart(id) => {
+                self.smart_categories.remove(id);
+                if !self.excluded_smart_categories.remove(id) {
+                    self.excluded_smart_categories.insert(id.clone());
+                }
+            }
+        }
+    }
+
+    /// The names of the categories left out, as [`Self::category_names`].
+    fn excluded_names(&self, user: &UserData) -> Vec<String> {
+        self.excluded_categories
+            .iter()
+            .map(CategoryFilter::label)
+            .chain(
+                self.excluded_smart_categories
+                    .iter()
+                    .filter_map(|id| Some(user.smart_categories.get(id)?.name.clone())),
+            )
+            .collect()
     }
 
     /// Whether any category of either kind is picked.
@@ -648,6 +929,7 @@ impl ViewFilter {
                 self.toggle_category(CategoryFilter::Named(name.clone()));
             }
             CategoryRef::Smart(id) => {
+                self.excluded_smart_categories.remove(id);
                 if !self.smart_categories.remove(id) {
                     self.smart_categories.insert(id.clone());
                 }
@@ -666,17 +948,22 @@ impl ViewFilter {
     pub fn clear_categories(&mut self) {
         self.categories.clear();
         self.smart_categories.clear();
+        self.excluded_categories.clear();
+        self.excluded_smart_categories.clear();
     }
 
     /// Drop a deleted smart category from the selection.
     pub fn forget_smart(&mut self, id: &str) {
         self.smart_categories.remove(id);
+        self.excluded_smart_categories.remove(id);
     }
 
     /// Drop smart categories `user` no longer has (deleted here or on
     /// another computer).
     pub fn forget_missing_smart(&mut self, user: &UserData) {
         self.smart_categories
+            .retain(|id| user.smart_categories.contains_key(id));
+        self.excluded_smart_categories
             .retain(|id| user.smart_categories.contains_key(id));
     }
 
@@ -696,12 +983,10 @@ impl ViewFilter {
 
     /// Follow a category rename in the selection.
     pub fn rename_category(&mut self, from: &str, to: &str) {
-        if self
-            .categories
-            .remove(&CategoryFilter::Named(from.to_string()))
-        {
-            self.categories
-                .insert(CategoryFilter::Named(to.to_string()));
+        for set in [&mut self.categories, &mut self.excluded_categories] {
+            if set.remove(&CategoryFilter::Named(from.to_string())) {
+                set.insert(CategoryFilter::Named(to.to_string()));
+            }
         }
     }
 
@@ -709,6 +994,8 @@ impl ViewFilter {
     /// selected, the library returns to every game.
     pub fn forget_category(&mut self, name: &str) {
         self.categories
+            .remove(&CategoryFilter::Named(name.to_string()));
+        self.excluded_categories
             .remove(&CategoryFilter::Named(name.to_string()));
     }
 
@@ -842,6 +1129,14 @@ pub fn present_systems(library: &LibrarySnapshot) -> Vec<String> {
     present
 }
 
+/// What a controller filter or fact is called.
+pub fn controller_label(level: irori_core::ControllerSupport) -> gpui_kit::SharedString {
+    t(match level {
+        irori_core::ControllerSupport::Partial => "library.controller.any",
+        irori_core::ControllerSupport::Full => "library.controller.full",
+    })
+}
+
 /// The age limits the Filters popover offers, after "Any": PEGI's steps,
 /// which ESRB's, USK's and the others' ages fall between.
 pub const AGE_LIMITS: [u8; 4] = [3, 7, 12, 16];
@@ -907,6 +1202,29 @@ pub fn apply_in(
                 || smart.iter().any(|s| categories.contains(s, &id))
         });
     }
+    let left_out: Vec<&String> = filter
+        .excluded_smart_categories
+        .iter()
+        .filter(|id| user.smart_categories.contains_key(*id))
+        .collect();
+    if !filter.excluded_categories.is_empty() || !left_out.is_empty() {
+        games.retain(|g| {
+            let id = g.id();
+            !in_categories(&filter.excluded_categories, user, &id.key())
+                && !left_out.iter().any(|s| categories.contains(s, &id))
+        });
+    }
+    // `smart:` search terms: in one of the categories each names (the index
+    // holds every copy of an entry).
+    let terms = irori_services::search::ParsedQuery::new(&filter.query).smart_ids(user);
+    if !terms.is_empty() {
+        games.retain(|g| {
+            let id = g.id();
+            terms
+                .iter()
+                .all(|any| any.iter().any(|s| categories.contains(s, &id)))
+        });
+    }
     if let Some(account) = &filter.account
         && filter.shown_store(stores) == Some(account.runner)
         && library.owners.keys().any(|id| id.runner == account.runner)
@@ -936,6 +1254,9 @@ pub fn apply_in(
     if !filter.modes.is_empty() {
         games.retain(|g| g.game_modes.iter().any(|m| filter.modes.contains(m)));
     }
+    if let Some(level) = filter.controller {
+        games.retain(|g| g.controller_support.is_some_and(|c| c.meets(level)));
+    }
     if !filter.genres.is_empty() {
         let wanted: HashSet<String> = filter.genres.iter().map(|g| genre_key(g)).collect();
         games.retain(|g| g.genres.iter().any(|x| wanted.contains(&genre_key(x))));
@@ -944,6 +1265,19 @@ pub fn apply_in(
         use irori_services::search::tag_key;
         let wanted: HashSet<String> = filter.tags.iter().map(|t| tag_key(t)).collect();
         games.retain(|g| g.store_tags.iter().any(|x| wanted.contains(&tag_key(x))));
+    }
+    for (picked, company) in [
+        (&filter.developers, Company::Developer),
+        (&filter.publishers, Company::Publisher),
+    ] {
+        if !picked.is_empty() {
+            let wanted: HashSet<String> = picked.iter().map(|c| company_key(c)).collect();
+            games.retain(|g| {
+                company
+                    .of(g)
+                    .is_some_and(|c| wanted.contains(&company_key(c)))
+            });
+        }
     }
     if filter.released != ReleaseWindow::Any {
         let year = chrono::Datelike::year(&chrono::Local::now());
@@ -959,6 +1293,8 @@ struct CacheKey {
     categories: usize,
     updates: usize,
     missing: usize,
+    /// The play history's revision, for sorting by times played.
+    plays: u64,
     stores: Vec<Runner>,
     filter: ViewFilter,
 }
@@ -1014,6 +1350,7 @@ impl FilteredGames {
             categories: Arc::as_ptr(categories) as usize,
             updates: Arc::as_ptr(updates) as usize,
             missing: Arc::as_ptr(missing) as usize,
+            plays: irori_services::sessions::stats().revision,
             stores: stores.to_vec(),
             filter: filter.clone(),
         };
@@ -1027,6 +1364,20 @@ impl FilteredGames {
                 Grouping::Category => {
                     crate::categories::group_by_category(&mut games, user, categories).into()
                 }
+                Grouping::Store => groups::group_by_store(&mut games).into(),
+                Grouping::Platform => {
+                    let host = irori_core::HostPlatform::current().native();
+                    groups::group_by_platform(&mut games, host).into()
+                }
+                Grouping::Developer => {
+                    groups::group_by_company(&mut games, Company::Developer).into()
+                }
+                Grouping::Publisher => {
+                    groups::group_by_company(&mut games, Company::Publisher).into()
+                }
+                Grouping::Year => groups::group_by_year(&mut games).into(),
+                Grouping::Playtime => groups::group_by_playtime(&mut games, user).into(),
+                Grouping::Size => groups::group_by_size(&mut games).into(),
             };
             let games: Arc<[Arc<GameInfo>]> = games.into();
             self.positions = games.iter().enumerate().map(|(i, g)| (g.id(), i)).collect();
@@ -1163,6 +1514,61 @@ pub(crate) mod tests {
         // Saved views from before tags existed still read.
         let old: ViewFilter = serde_json::from_str(r#"{"genres":["Action"]}"#).unwrap();
         assert!(old.tags.is_empty());
+    }
+
+    fn made_by(app: &str, title: &str, developer: &str, publisher: &str) -> Arc<GameInfo> {
+        let mut g = (*of_genres(app, title, &[])).clone();
+        g.developer = (!developer.is_empty()).then(|| developer.to_string());
+        g.publisher = (!publisher.is_empty()).then(|| publisher.to_string());
+        Arc::new(g)
+    }
+
+    #[test]
+    fn filters_by_developer_and_publisher() {
+        let library = snapshot(vec![
+            made_by("1", "Portal 2", "Valve", "Valve"),
+            made_by("2", "Half-Life", "VALVE ", "Sierra"),
+            made_by("3", "Hades", "Supergiant Games", "Supergiant Games"),
+            made_by("4", "Mystery", "", ""),
+        ]);
+        let user = Arc::new(UserData::default());
+        let none = Arc::new(HashSet::new());
+        // One developer spelled two ways is offered once, as first seen.
+        let offered: Vec<String> = present_companies(&library, Company::Developer)
+            .into_iter()
+            .map(|(_, n)| n)
+            .collect();
+        assert_eq!(offered, ["Supergiant Games", "Valve"]);
+        let f = ViewFilter {
+            developers: ["valve".to_string()].into(),
+            ..Default::default()
+        };
+        let shown = apply(&f, &[], &library, &user, &none, &none);
+        let mut shown = titles(&shown);
+        shown.sort_unstable();
+        assert_eq!(shown, ["Half-Life", "Portal 2"]);
+        assert_eq!(f.active_count(), 1);
+        assert_eq!(f.describe(&UserData::default()).len(), 1);
+        // Both facets narrow together.
+        let f = ViewFilter {
+            developers: ["Valve".to_string()].into(),
+            publishers: ["Sierra".to_string()].into(),
+            ..Default::default()
+        };
+        let shown = apply(&f, &[], &library, &user, &none, &none);
+        assert_eq!(titles(&shown), ["Half-Life"]);
+        let mut reset = f.clone();
+        reset.reset_filters();
+        assert!(reset.developers.is_empty() && reset.publishers.is_empty());
+        // Picking a spelling again unpicks every spelling of it.
+        let mut picked = BTreeSet::from(["VALVE".to_string()]);
+        toggle_named(&mut picked, "valve", "Valve".into(), company_key);
+        assert!(picked.is_empty());
+        toggle_named(&mut picked, "valve", "Valve".into(), company_key);
+        assert_eq!(picked, BTreeSet::from(["Valve".to_string()]));
+        // Views saved before these facets read as before.
+        let old: ViewFilter = serde_json::from_str(r#"{"genres":["Action"]}"#).unwrap();
+        assert!(old.developers.is_empty() && old.unknown.is_empty());
     }
 
     #[test]
@@ -1303,9 +1709,13 @@ pub(crate) mod tests {
         // A view a newer Irori saved: a facet and a mode this one doesn't
         // know, and a grouping it doesn't have.
         let json = r#"{"favourites_only": true, "modes": ["coop", "vr"],
-            "group": "decade", "price": {"max": 10}, "moods": ["cozy"]}"#;
+            "group": "decade", "sort": "Metacritic", "price": {"max": 10},
+            "moods": ["cozy"]}"#;
         let f: ViewFilter = serde_json::from_str(json).unwrap();
         assert!(f.favourites_only);
+        assert_eq!(f.sort, LibrarySort::Title);
+        let times: ViewFilter = serde_json::from_str(r#"{"sort": "TimesPlayed"}"#).unwrap();
+        assert_eq!(times.sort, LibrarySort::TimesPlayed);
         assert_eq!(f.modes, [GameMode::Coop].into());
         assert_eq!(f.group, Grouping::None);
         assert_eq!(f.unknown.len(), 2);
@@ -1559,6 +1969,79 @@ pub(crate) mod tests {
             titles(&apply(&f, &stores, &lib, &user, &none, &none)),
             vec!["The Witcher 3", "Alan Wake", "Itch game"]
         );
+    }
+
+    #[test]
+    fn categories_left_out_win_over_what_picks_their_games() {
+        let lib = sample();
+        let mut user = UserData::default();
+        user.categories
+            .entry("RPG".into())
+            .or_default()
+            .insert("gog:1".into());
+        user.categories
+            .entry("Played".into())
+            .or_default()
+            .extend(["gog:1".to_string(), "legendary:b".to_string()]);
+        let none = HashSet::new();
+        let stores = Runner::ALL.to_vec();
+        let rpg = CategoryRef::Manual("RPG".into());
+
+        let mut f = ViewFilter::default();
+        f.toggle_excluded(&rpg);
+        assert!(f.excludes_category(&rpg));
+        assert_eq!(f.active_count(), 1);
+        assert_eq!(
+            titles(&apply(&f, &stores, &lib, &user, &none, &none)),
+            vec!["Alan Wake", "Hades", "Itch game"]
+        );
+        // Picked and left out at once: what is left out wins.
+        f.toggle(&CategoryRef::Manual("Played".into()));
+        assert_eq!(
+            titles(&apply(&f, &stores, &lib, &user, &none, &none)),
+            vec!["Hades"]
+        );
+        // Picking a left-out category stops leaving it out, and back.
+        f.toggle(&rpg);
+        assert!(!f.excludes_category(&rpg) && f.shows_category(&rpg));
+        f.toggle_excluded(&rpg);
+        assert!(f.excludes_category(&rpg) && !f.shows_category(&rpg));
+        // Renames and deletes follow, and the file keeps the choice.
+        f.rename_category("RPG", "Role-playing");
+        assert!(f.excludes_category(&CategoryRef::Manual("Role-playing".into())));
+        let back: ViewFilter = serde_json::from_str(&serde_json::to_string(&f).unwrap()).unwrap();
+        assert_eq!(back, f);
+        f.forget_category("Role-playing");
+        assert!(f.excluded_categories.is_empty());
+        f.toggle_excluded(&CategoryRef::Smart("s-1".into()));
+        f.forget_missing_smart(&user);
+        assert!(!f.has_excluded_categories());
+        // Nothing left out writes no key.
+        let text = serde_json::to_string(&ViewFilter::default()).unwrap();
+        assert!(!text.contains("excluded"));
+    }
+
+    #[test]
+    fn the_controller_filter_keeps_games_a_controller_plays() {
+        use irori_core::ControllerSupport;
+        let mut lib = sample();
+        let mut games: Vec<GameInfo> = lib.games.iter().map(|g| (**g).clone()).collect();
+        games[0].controller_support = Some(ControllerSupport::Full);
+        games[2].controller_support = Some(ControllerSupport::Partial);
+        lib.games = games.into_iter().map(Arc::new).collect();
+        let (user, none, stores) = (UserData::default(), HashSet::new(), Runner::ALL.to_vec());
+        let mut f = ViewFilter {
+            controller: Some(ControllerSupport::Partial),
+            ..Default::default()
+        };
+        assert_eq!(apply(&f, &stores, &lib, &user, &none, &none).len(), 2);
+        f.controller = Some(ControllerSupport::Full);
+        assert_eq!(apply(&f, &stores, &lib, &user, &none, &none).len(), 1);
+        assert_eq!(f.active_count(), 1);
+        let back: ViewFilter = serde_json::from_str(&serde_json::to_string(&f).unwrap()).unwrap();
+        assert_eq!(back.controller, Some(ControllerSupport::Full));
+        let unknown: ViewFilter = serde_json::from_str(r#"{"controller": "gyro"}"#).unwrap();
+        assert_eq!(unknown.controller, None);
     }
 
     #[test]

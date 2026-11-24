@@ -43,20 +43,24 @@ pub(crate) const ACCOUNT_STORES: [Runner; 7] = [
 /// Narrowest an account card gets before the grid drops a column, in rem.
 const MIN_CARD_REM: f32 = 20.;
 
-/// Icon used for a store across the management screens.
-pub(crate) fn store_icon(runner: Runner) -> IconName {
-    match runner {
-        Runner::Legendary => IconName::Gamepad2,
-        Runner::Gog => IconName::Store,
-        Runner::Nile => IconName::ShoppingBag,
-        Runner::Zoom => IconName::Package,
-        Runner::Itch => IconName::Gem,
-        Runner::Xbox => IconName::GamepadDirectional,
-        Runner::Steam => IconName::Joystick,
-        Runner::Sideload => IconName::FolderOpen,
-        Runner::Emulation => IconName::Gamepad,
-        Runner::Launchers => IconName::Rocket,
-    }
+/// Icon used for a store across the management screens: its mark where
+/// Irori has one (`irori_ui::components::StoreLogo`), else a generic icon.
+pub(crate) fn store_icon(runner: Runner) -> Icon {
+    irori_ui::components::runner_icon(
+        runner,
+        match runner {
+            Runner::Legendary => IconName::Gamepad2,
+            Runner::Gog => IconName::Store,
+            Runner::Nile => IconName::ShoppingBag,
+            Runner::Zoom => IconName::Package,
+            Runner::Itch => IconName::Gem,
+            Runner::Xbox => IconName::GamepadDirectional,
+            Runner::Steam => IconName::Joystick,
+            Runner::Sideload => IconName::FolderOpen,
+            Runner::Emulation => IconName::Gamepad,
+            Runner::Launchers => IconName::Rocket,
+        },
+    )
 }
 
 /// Whether an opt-in store is turned on (stores without a switch always are).
@@ -101,6 +105,8 @@ pub(crate) struct StoreCard {
     pub steam_client: Option<irori_steam::ClientLibraryState>,
     /// Steam: what the card says about the games hidden in Steam.
     pub steam_hidden: Option<SharedString>,
+    /// Steam: the shortcut changes waiting for Steam to close.
+    pub steam_waiting: Option<SharedString>,
 }
 
 /// Cards for the stores this build has, in display order.
@@ -145,8 +151,24 @@ pub(crate) fn store_cards(cx: &App) -> Vec<StoreCard> {
                 .and_then(|s| {
                     crate::steam_library::hidden_games_text(&s, library.snapshot.hidden_locked)
                 }),
+            steam_waiting: (runner == Runner::Steam)
+                .then(|| steam_waiting_text(b.steam_shortcuts_waiting()))
+                .flatten(),
         })
         .collect()
+}
+
+/// What the Steam card says about shortcut changes waiting for Steam to
+/// close; nothing when none wait.
+pub(crate) fn steam_waiting_text(waiting: usize) -> Option<SharedString> {
+    match waiting {
+        0 => None,
+        1 => Some(t("manage.steam_shortcuts.waiting_one")),
+        n => Some(t_args(
+            "manage.steam_shortcuts.waiting_other",
+            &[("count", &n.to_string())],
+        )),
+    }
 }
 
 /// An account's name, or a stand-in when the store gave none.
@@ -653,7 +675,7 @@ impl AccountsView {
             .child(
                 h_flex()
                     .gap_2()
-                    .child(Icon::new(store_icon(runner)).text_color(theme.muted_foreground))
+                    .child(store_icon(runner).text_color(theme.muted_foreground))
                     .child(
                         div()
                             .flex_1()
@@ -771,6 +793,16 @@ impl AccountsView {
                         .text_sm()
                         .text_color(cx.theme().muted_foreground)
                         .child(text)
+                }))
+                .children(card_data.steam_waiting.clone().map(|text| {
+                    h_flex()
+                        .debug_selector(|| "steam-shortcuts-waiting".into())
+                        .gap_2()
+                        .min_w_0()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(Icon::new(IconName::Clock).small())
+                        .child(div().min_w_0().child(text))
                 }))
                 .children(
                     card_data

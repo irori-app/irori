@@ -316,6 +316,12 @@ impl BigPictureView {
             } else {
                 out.push(one(Confirm, "bigpicture.hint.select"));
             }
+            if !editor.history.is_empty() {
+                out.push(one(PrevPage, "bigpicture.hint.undo"));
+            }
+            if !editor.undone.is_empty() {
+                out.push(one(NextPage, "bigpicture.hint.redo"));
+            }
             out.push(one(Back, "bigpicture.hint.done"));
             return out;
         }
@@ -493,15 +499,20 @@ fn face_colour(input: GamepadInput, kind: ControllerKind, c: Colors) -> Option<H
         kind,
         ControllerKind::PlayStation4 | ControllerKind::PlayStation5
     );
-    Some(match input {
-        GamepadInput::Confirm if playstation => c.blue,
-        GamepadInput::Alt if playstation => c.magenta,
-        GamepadInput::Menu if playstation => c.green,
-        GamepadInput::Confirm => c.green,
-        GamepadInput::Back => c.red,
-        GamepadInput::Alt => c.blue,
-        _ => c.yellow,
-    })
+    // The colour belongs to the button, whichever job the user gave it.
+    use crate::gamepad::PadButton;
+    Some(
+        match gamepad::bindings::current().button_for(input, kind)? {
+            PadButton::South if playstation => c.blue,
+            PadButton::West if playstation => c.magenta,
+            PadButton::North if playstation => c.green,
+            PadButton::South => c.green,
+            PadButton::East => c.red,
+            PadButton::West => c.blue,
+            PadButton::North => c.yellow,
+            _ => return None,
+        },
+    )
 }
 
 fn arrow(input: GamepadInput, c: Colors) -> AnyElement {

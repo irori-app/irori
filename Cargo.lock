@@ -5047,6 +5047,7 @@ dependencies = [
  "url",
  "uuid 1.28.0",
  "windows-registry 0.6.1",
+ "windows-sys 0.61.2",
  "winresource",
 ]
 
@@ -5120,12 +5121,14 @@ dependencies = [
  "libc",
  "once_cell",
  "parking_lot",
+ "raw-window-handle",
  "regex",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "tracing",
+ "which 8.0.6",
  "windows-sys 0.61.2",
 ]
 
@@ -5193,6 +5196,7 @@ dependencies = [
  "irori-core",
  "irori-depot",
  "irori-engines",
+ "irori-extras",
  "irori-retroachievements-api",
  "irori-secrets",
  "notify",
@@ -5206,6 +5210,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "zip",
 ]
 
 [[package]]
@@ -5305,6 +5310,7 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "plist",
+ "quick-xml 0.42.0",
  "regex",
  "reqwest",
  "rusqlite",
@@ -5319,6 +5325,7 @@ dependencies = [
  "tracing",
  "url",
  "windows-registry 0.6.1",
+ "zip",
 ]
 
 [[package]]
@@ -5377,6 +5384,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "windows-registry 0.6.1",
 ]
 
 [[package]]
@@ -5429,6 +5437,8 @@ dependencies = [
  "irori-core",
  "irori-depot",
  "irori-itch-api",
+ "irori-mods",
+ "irori-runtime",
  "irori-secrets",
  "once_cell",
  "parking_lot",
@@ -5530,6 +5540,7 @@ name = "irori-manage"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "futures",
  "gpui-kit",
  "gpui-pre",
@@ -5549,6 +5560,7 @@ dependencies = [
  "irori-ui",
  "irori-xbox",
  "regex",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -5701,6 +5713,7 @@ dependencies = [
  "once_cell",
  "open",
  "parking_lot",
+ "plist",
  "regex",
  "reqwest",
  "serde",
@@ -5776,6 +5789,7 @@ dependencies = [
  "chrono",
  "dirs 6.0.0",
  "discord-rich-presence",
+ "flate2",
  "fs4",
  "futures",
  "fuzzy-matcher",
@@ -5791,6 +5805,7 @@ dependencies = [
  "irori-scripts",
  "irori-secrets",
  "irori-steam-api",
+ "notify",
  "once_cell",
  "parking_lot",
  "plist",
@@ -5801,6 +5816,7 @@ dependencies = [
  "serde_yaml_ng",
  "sha2 0.10.9",
  "sysinfo 0.39.6",
+ "tar",
  "tempfile",
  "tokio",
  "tokio-util",
@@ -5812,6 +5828,7 @@ dependencies = [
  "windows-registry 0.6.1",
  "windows-sys 0.61.2",
  "x11rb",
+ "zip",
 ]
 
 [[package]]
@@ -5823,6 +5840,7 @@ dependencies = [
  "gpui-pre",
  "irori-bigpicture",
  "irori-core",
+ "irori-emulation",
  "irori-epic",
  "irori-extras",
  "irori-reshade",
@@ -5838,6 +5856,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

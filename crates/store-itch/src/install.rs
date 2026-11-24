@@ -1,6 +1,7 @@
 //! Install, update and repair: choose the upload, download it through
 //! [`irori_depot`] into `<base>/.itch-download/<app>/` (resumable), unpack
-//! it, find the program and record the install.
+//! it (or run it, when it is a Windows setup program: `setup.rs`), find the
+//! program and record the install.
 //!
 //! A first install unpacks straight into the game folder. An update or
 //! repair unpacks into a sibling folder first and swaps it in once that
@@ -11,10 +12,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail};
-use irori_core::{InstallPlatform, InstallProgress, OpContext, Outcome, util};
+use irori_core::{
+    GameId, GameSettings, GameSettingsOverrides, InstallPlatform, InstallProgress, OpContext,
+    Outcome, Paths, Runner, Store as _, json_store, util,
+};
 use irori_itch_api::{Client, OwnedKey, Upload};
 
 use crate::records::InstalledRecord;
+use crate::setup::{self, Setup};
 use crate::{ItchStore, detect, extract, os_of, session_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +83,17 @@ pub(crate) fn folder_size(dir: &Path) -> u64 {
         .sum()
 }
 
+/// The game's effective settings: the caller's, else the defaults with its
+/// saved overrides (for the Wine build and prefix a setup program runs in).
+fn game_settings(id: &GameId, app: &irori_core::AppSettings, ctx: &OpContext) -> GameSettings {
+    if let Some(settings) = &ctx.settings {
+        return (**settings).clone();
+    }
+    let overrides: GameSettingsOverrides =
+        json_store::read_or_default(&Paths::get().game_settings_file(id));
+    overrides.apply(&app.game)
+}
+
 fn log_line(ctx: &OpContext, line: &str) {
     if let Some(log) = &ctx.log_file {
         use std::io::Write as _;
@@ -135,10 +151,23 @@ impl ItchStore {
         app: &str,
         platform: InstallPlatform,
     ) -> Result<(OwnedKey, Upload)> {
+        self.choose_upload_preferring(app, platform, 0).await
+    }
+
+    /// Like [`Self::choose_upload`], keeping to upload `installed` (the one
+    /// the installed files came from) while the game still offers it.
+    pub(crate) async fn choose_upload_preferring(
+        &self,
+        app: &str,
+        platform: InstallPlatform,
+        installed: u64,
+    ) -> Result<(OwnedKey, Upload)> {
         let key = self.key_of(app)?;
         let game_id = key.game.as_ref().map_or(key.game_id, |g| g.id);
         let uploads = self.api()?.uploads(game_id, key.id).await?;
-        let upload = irori_itch_api::best_upload(&uploads, os_of(platform)?)
+        let os = os_of(platform)?;
+        let upload = crate::receipt::installed_upload(&uploads, installed)
+            .or_else(|| irori_itch_api::best_upload(&uploads, os))
             .cloned()
             .with_context(|| {
                 let title = key.game.as_ref().map_or("This game", |g| g.title.as_str());
@@ -188,7 +217,13 @@ impl ItchStore {
         ctx: &OpContext,
     ) -> Result<Outcome> {
         (ctx.step)("Fetching file list");
-        let (key, upload) = self.choose_upload(app, platform).await?;
+        let installed = match mode {
+            Mode::Update => self.record(app).map_or(0, |r| r.upload_id),
+            Mode::Install => 0,
+        };
+        let (key, upload) = self
+            .choose_upload_preferring(app, platform, installed)
+            .await?;
         let title = key
             .game
             .as_ref()
@@ -289,15 +324,17 @@ impl ItchStore {
                 fresh
             }
         };
-        let unpacked = {
-            let (from, to, filename, cancel) = (
-                downloaded.clone(),
-                target.clone(),
-                upload.filename.clone(),
-                ctx.cancel.clone(),
-            );
-            Self::blocking(move || extract::unpack(&from, &filename, &to, &cancel)).await?
-        };
+        let unpacked = self
+            .unpack(
+                app,
+                &downloaded,
+                &upload.filename,
+                &target,
+                platform,
+                &staging,
+                ctx,
+            )
+            .await;
         if let Err(e) = unpacked {
             self.discard(&target).await;
             if ctx.cancel.is_cancelled() {
@@ -380,6 +417,107 @@ impl ItchStore {
     }
 
     /// Remove a folder this pipeline created and failed to fill.
+    /// Put the downloaded upload into `target`: unpack an archive, copy out
+    /// a disk image, run a Windows setup program, or copy the file in.
+    #[allow(clippy::too_many_arguments)] // one step of the pipeline, with its context
+    async fn unpack(
+        &self,
+        app: &str,
+        downloaded: &Path,
+        name: &str,
+        target: &Path,
+        platform: InstallPlatform,
+        staging: &Path,
+        ctx: &OpContext,
+    ) -> Result<()> {
+        let blocking_unpack = || {
+            let (from, to, filename, cancel) = (
+                downloaded.to_path_buf(),
+                target.to_path_buf(),
+                name.to_string(),
+                ctx.cancel.clone(),
+            );
+            Self::blocking(move || extract::unpack(&from, &filename, &to, &cancel))
+        };
+        match extract::classify(name) {
+            extract::Kind::SevenZip | extract::Kind::Rar => {
+                irori_mods::archive::extract(downloaded, target, &ctx.cancel).await
+            }
+            extract::Kind::Dmg => extract::unpack_dmg(downloaded, target, &ctx.cancel).await,
+            extract::Kind::Plain if platform == InstallPlatform::Windows => {
+                let (file, filename) = (downloaded.to_path_buf(), name.to_string());
+                match Self::blocking(move || setup::detect(&file, &filename)).await? {
+                    Some(kind) => {
+                        self.run_setup(app, kind, downloaded, target, staging, ctx)
+                            .await
+                    }
+                    None => blocking_unpack().await?,
+                }
+            }
+            _ => blocking_unpack().await?,
+        }
+    }
+
+    /// Run a Windows setup program silently into `dir`: through Wine in the
+    /// game's prefix, or directly on Windows.
+    async fn run_setup(
+        &self,
+        app: &str,
+        kind: Setup,
+        file: &Path,
+        dir: &Path,
+        staging: &Path,
+        ctx: &OpContext,
+    ) -> Result<()> {
+        use irori_core::process::{CommandSpec, RunOptions, run};
+        tokio::fs::create_dir_all(dir)
+            .await
+            .with_context(|| format!("creating {}", dir.display()))?;
+        let log = staging.join("setup.log");
+        let _ = tokio::fs::remove_file(&log).await;
+        let native = cfg!(windows);
+        let argv = setup::command(kind, file, dir, &log, native);
+        (ctx.step)("Running the installer");
+        (ctx.progress)(InstallProgress::default());
+        log_line(ctx, &format!("running {kind:?} setup: {}", argv.join(" ")));
+        let result = if native {
+            let spec = CommandSpec::new(&argv[0]).args(&argv[1..]).cwd(staging);
+            run(&spec, RunOptions::default().cancel(ctx.cancel.clone())).await
+        } else {
+            let app_settings = (self.settings)();
+            let id = GameId::new(Runner::Itch, app);
+            let game = self
+                .game(app)
+                .with_context(|| format!("{app} is not in your itch.io library"))?;
+            let settings = game_settings(&id, &app_settings, ctx);
+            let target = irori_runtime::Target {
+                id: &id,
+                game: &game,
+                platform: InstallPlatform::Windows,
+            };
+            irori_runtime::run_in_prefix(&app_settings, &settings, target, argv, true, ctx.clone())
+                .await
+        }
+        .context("Could not run the game's setup program")?;
+        if let Ok(text) = tokio::fs::read(&log).await {
+            log_line(ctx, &String::from_utf8_lossy(&text));
+        }
+        if result.aborted || ctx.cancel.is_cancelled() {
+            bail!("cancelled");
+        }
+        if !result.success() {
+            bail!(
+                "The game's setup program failed (exit code {}): {}",
+                result
+                    .code
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "none".into()),
+                result.error_summary()
+            );
+        }
+        Ok(())
+    }
+
     async fn discard(&self, dir: &Path) {
         let (dir, app) = (dir.to_path_buf(), (self.settings)());
         let _ = Self::blocking(move || {

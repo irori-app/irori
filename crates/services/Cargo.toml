@@ -25,6 +25,8 @@ anyhow.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
 tokio-util.workspace = true
+# Watches the files a store writes on an unlock while a game runs.
+notify.workspace = true
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -47,6 +49,11 @@ sha2.workspace = true
 # handshake. ring, as reqwest's rustls already uses, so no second provider.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 hex.workspace = true
+# The ffmpeg build downloaded on Windows comes as a zip, as do Irori's own
+# Windows and macOS packages; the Linux one is a tarball (`self_update`).
+zip.workspace = true
+flate2.workspace = true
+tar.workspace = true
 uuid.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 
@@ -61,6 +68,8 @@ x11rb = { version = "0.13.1", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
+    # Hiding a graphics card from a game (`gpu_hide`): Configuration Manager.
+    "Win32_Devices_DeviceAndDriverInstallation",
     # The displays, their modes and HDR (`displays`).
     "Win32_Devices_Display",
     "Win32_Foundation",
@@ -69,10 +78,14 @@ windows-sys = { version = "0.61", features = [
     "Win32_Networking_WinSock",
     "Win32_System_LibraryLoader",
     "Win32_System_Power",
+    # `SHELLEXECUTEINFOW`, which starts `gpu_hide`'s elevated helper.
+    "Win32_System_Registry",
     # Big Picture's power menu: the shutdown privilege and `ExitWindowsEx`.
     "Win32_Security",
     "Win32_System_Shutdown",
     "Win32_System_Threading",
+    # Storage cleanups move items to the Recycle Bin (`trash`).
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 # The in-game overlay's volumes (Core Audio, a COM API), at the version GPUI
@@ -81,6 +94,13 @@ windows = { version = "0.62", features = [
     # The sound outputs' names, for switching the output.
     "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",
+    # Screenshots through Desktop Duplication (Direct3D 11 and DXGI).
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    # An output's description names its monitor (`HMONITOR`).
+    "Win32_Graphics_Gdi",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
     "Win32_System_Com",

@@ -5,9 +5,12 @@
 //! installing with a Lutris script, and saving and managing library views.
 
 pub mod categories;
+pub mod duplicates;
 pub mod edit_game;
+pub mod fields;
 pub mod folder;
 pub mod lutris;
+pub mod metadata;
 pub mod sideload;
 pub mod smart;
 pub mod steamgrid;

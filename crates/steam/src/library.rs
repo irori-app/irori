@@ -89,6 +89,9 @@ pub struct AppDetails {
     pub controller_support: Option<String>,
     pub metacritic: Option<Metacritic>,
     pub screenshots: Vec<Screenshot>,
+    /// Trailers; entries that aren't objects are left out.
+    #[serde(deserialize_with = "movies")]
+    pub movies: Vec<Movie>,
     /// Background art without the store's tint.
     pub background_raw: String,
     /// HTML, with the languages that have full audio marked.
@@ -137,6 +140,87 @@ pub struct Screenshot {
     pub path_full: String,
 }
 
+/// A trailer on the store page. Older pages name MP4 and WebM files by
+/// height (`480`, `max`); newer ones name adaptive streams instead.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Movie {
+    #[serde(deserialize_with = "lenient_string")]
+    pub id: String,
+    pub name: String,
+    /// A still of the trailer.
+    pub thumbnail: String,
+    #[serde(deserialize_with = "renditions")]
+    pub mp4: Vec<(String, String)>,
+    #[serde(deserialize_with = "renditions")]
+    pub webm: Vec<(String, String)>,
+    /// An HLS playlist of H.264 renditions.
+    pub hls_h264: String,
+    /// A DASH manifest of H.264 renditions.
+    pub dash_h264: String,
+    /// The store's pick among several.
+    pub highlight: bool,
+}
+
+impl Movie {
+    /// The address that plays the trailer most cheaply at a small size:
+    /// the 480p MP4 or WebM, else a stream (which starts small), else the
+    /// largest file. Always `https`: the store still writes some CDN
+    /// addresses as `http`, which its CDN also serves securely.
+    pub fn stream_url(&self) -> Option<String> {
+        let file = |list: &[(String, String)], size: &str| {
+            list.iter().find(|(k, _)| k == size).map(|(_, v)| v.clone())
+        };
+        [
+            file(&self.mp4, "480"),
+            file(&self.webm, "480"),
+            Some(self.hls_h264.clone()),
+            Some(self.dash_h264.clone()),
+            file(&self.mp4, "max"),
+            file(&self.webm, "max"),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|u| secure(u.trim()))
+        .find(|u| u.starts_with("https://"))
+    }
+
+    /// The still's address, `https` only.
+    pub fn thumbnail_url(&self) -> Option<String> {
+        Some(secure(self.thumbnail.trim())).filter(|u| u.starts_with("https://"))
+    }
+}
+
+/// `http://` turned into `https://`; anything else as it is.
+fn secure(url: &str) -> String {
+    match url.strip_prefix("http://") {
+        Some(rest) => format!("https://{rest}"),
+        None => url.to_string(),
+    }
+}
+
+/// Files by size: an object of texts; anything else is none.
+fn renditions<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<(String, String)>, D::Error> {
+    let Value::Object(sizes) = Value::deserialize(d)? else {
+        return Ok(Vec::new());
+    };
+    Ok(sizes
+        .into_iter()
+        .filter_map(|(k, v)| Some((k, v.as_str()?.to_string())))
+        .collect())
+}
+
+fn movies<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Movie>, D::Error> {
+    let Value::Array(items) = Value::deserialize(d)? else {
+        return Ok(Vec::new());
+    };
+    Ok(items
+        .into_iter()
+        .filter(Value::is_object)
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect())
+}
+
 /// System requirements for one operating system, as HTML.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -160,6 +244,18 @@ pub struct ReleaseDate {
     pub coming_soon: bool,
     /// As the store shows it, in the requested language ("21 Aug, 2012").
     pub date: String,
+}
+
+impl ReleaseDate {
+    /// The year in the date: its four-digit number from 1950 on ("21 Aug,
+    /// 2012", "2012年8月21日"); `None` for "Coming soon" and the like.
+    pub fn year(&self) -> Option<u32> {
+        self.date
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|w| w.len() == 4)
+            .filter_map(|w| w.parse().ok())
+            .find(|y| (1950..=2200).contains(y))
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -367,6 +463,21 @@ mod tests {
 
     const STEAMID: u64 = 76561197960265729;
 
+    #[test]
+    fn release_years_in_any_language() {
+        let year = |date: &str| {
+            ReleaseDate {
+                coming_soon: false,
+                date: date.into(),
+            }
+            .year()
+        };
+        assert_eq!(year("21 Aug, 2012"), Some(2012));
+        assert_eq!(year("2012年8月21日"), Some(2012));
+        assert_eq!(year("Coming soon"), None);
+        assert_eq!(year("Q4 0000"), None);
+    }
+
     fn client(server: &TestServer) -> Client {
         Client::with_endpoints(Endpoints {
             api: server.base(),
@@ -569,6 +680,18 @@ mod tests {
                         {"id": 0, "path_thumbnail": "https://cdn.example/s0.116x65.jpg",
                          "path_full": "https://cdn.example/s0.1920x1080.jpg"}
                     ],
+                    "movies": [
+                        {"id": 256, "name": "Trailer", "highlight": true,
+                         "thumbnail": "http://cdn.example/movie.jpg",
+                         "webm": {"480": "http://cdn.example/movie480.webm"},
+                         "mp4": {"480": "http://cdn.example/movie480.mp4",
+                                 "max": "http://cdn.example/movie_max.mp4"}},
+                        {"id": "257", "name": "Gameplay",
+                         "hls_h264": "https://video.example/hls_264_master.m3u8",
+                         "dash_h264": "https://video.example/dash_h264.mpd"},
+                        {"id": 258, "name": "Nothing to play", "mp4": []},
+                        "not a movie"
+                    ],
                     "background_raw": "https://cdn.example/page_bg_raw.jpg",
                     "supported_languages": "English<strong>*</strong>, German",
                     "pc_requirements": {"minimum": "<ul>1.2 GHz</ul>", "recommended": "<ul>2 GHz</ul>"},
@@ -630,6 +753,23 @@ mod tests {
             "https://cdn.example/s0.1920x1080.jpg"
         );
         assert_eq!(d.background_raw, "https://cdn.example/page_bg_raw.jpg");
+        // The small file first, made secure; else the stream.
+        assert_eq!(d.movies.len(), 3);
+        assert_eq!(
+            d.movies[0].stream_url().as_deref(),
+            Some("https://cdn.example/movie480.mp4")
+        );
+        assert_eq!(
+            d.movies[0].thumbnail_url().as_deref(),
+            Some("https://cdn.example/movie.jpg")
+        );
+        assert!(d.movies[0].highlight);
+        assert_eq!(d.movies[1].id, "257");
+        assert_eq!(
+            d.movies[1].stream_url().as_deref(),
+            Some("https://video.example/hls_264_master.m3u8")
+        );
+        assert_eq!(d.movies[2].stream_url(), None);
         assert!(d.supported_languages.starts_with("English"));
         assert_eq!(
             d.pc_requirements.recommended.as_deref(),

@@ -57,7 +57,13 @@ pub(super) struct Editor {
     /// The name field, while it has the keyboard.
     pub naming: bool,
     pub name: gpui_kit::Entity<InputState>,
+    /// The draft before each change, newest last, and the changes undone.
+    pub history: Vec<(Theme, HomeLayout)>,
+    pub undone: Vec<(Theme, HomeLayout)>,
 }
+
+/// Changes the editor can undo.
+const UNDO_STEPS: usize = 100;
 
 impl Editor {
     /// The rows, Delete only for the user's own themes.
@@ -95,17 +101,51 @@ impl Editor {
         self.source = source;
         self.original = theme.clone();
         self.draft = theme;
+        // Another theme: its changes start afresh.
+        self.history.clear();
+        self.undone.clear();
     }
 
     /// Change the value of `row` one step. Returns whether it changed.
     pub fn change(&mut self, row: EditorRow, forward: bool) -> bool {
-        change_draft(
+        let before = (self.draft.clone(), self.layout);
+        let changed = change_draft(
             &mut self.draft,
             &mut self.layout,
             self.picture.as_ref(),
             row,
             forward,
-        )
+        );
+        if changed {
+            self.history.push(before);
+            if self.history.len() > UNDO_STEPS {
+                self.history.remove(0);
+            }
+            self.undone.clear();
+        }
+        changed
+    }
+
+    /// Take back the last change. Returns whether there was one.
+    pub fn undo(&mut self) -> bool {
+        let Some(previous) = self.history.pop() else {
+            return false;
+        };
+        let current = std::mem::replace(&mut self.draft, previous.0);
+        self.undone.push((current, self.layout));
+        self.layout = previous.1;
+        true
+    }
+
+    /// Make the last change taken back again. Returns whether there was one.
+    pub fn redo(&mut self) -> bool {
+        let Some(next) = self.undone.pop() else {
+            return false;
+        };
+        let current = std::mem::replace(&mut self.draft, next.0);
+        self.history.push((current, self.layout));
+        self.layout = next.1;
+        true
     }
 
     /// The text of `row`'s value.
@@ -236,6 +276,8 @@ impl BigPictureView {
             draft: theme,
             ix: 0,
             naming: false,
+            history: Vec::new(),
+            undone: Vec::new(),
             name,
         });
         self.overlay = None;
@@ -276,6 +318,17 @@ impl BigPictureView {
                 self.activate_editor_row(rows[ix], window, cx)
             }
             GamepadInput::Back | GamepadInput::Menu => self.close_editor(cx),
+            GamepadInput::PrevPage | GamepadInput::NextPage => {
+                let done = if input == GamepadInput::PrevPage {
+                    editor.undo()
+                } else {
+                    editor.redo()
+                };
+                if done {
+                    // Shelves may have changed.
+                    self.refresh(cx);
+                }
+            }
             _ => {}
         }
         cx.notify();

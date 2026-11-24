@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 
 use crate::app::SideloadPlatform;
 
+/// Other programs offered per game folder.
+const MAX_OTHERS: usize = 12;
 /// How deep a game's folder is searched for its program.
 const MAX_DEPTH: usize = 4;
 /// Entries read per folder before giving up on it (a folder of assets).
@@ -42,6 +44,9 @@ pub struct FoundGame {
     /// A local icon or picture named by a desktop entry.
     pub icon: Option<PathBuf>,
     pub kind: FoundKind,
+    /// The other programs of the game's folder, most likely first, for the
+    /// user to start the game with instead (a launcher, a 32-bit build).
+    pub others: Vec<(PathBuf, SideloadPlatform)>,
 }
 
 /// The games in `root`, sorted by title. Reads the disk: call it off the
@@ -88,6 +93,7 @@ pub fn scan_folder(root: &Path) -> Vec<FoundGame> {
             install_folder: Some(root.to_path_buf()),
             icon: None,
             kind: FoundKind::Program,
+            others: Vec::new(),
         });
     } else {
         found.extend(loose.into_iter().map(|(path, platform)| FoundGame {
@@ -98,6 +104,7 @@ pub fn scan_folder(root: &Path) -> Vec<FoundGame> {
             install_folder: None,
             icon: None,
             kind: FoundKind::Program,
+            others: Vec::new(),
         }));
     }
     // A program named by a desktop entry or shortcut is that entry's game,
@@ -141,6 +148,7 @@ pub fn game_of_file(path: &Path) -> Option<FoundGame> {
         install_folder: None,
         icon: None,
         kind: FoundKind::Program,
+        others: Vec::new(),
     })
 }
 
@@ -305,10 +313,10 @@ fn game_in_folder(dir: &Path) -> Option<FoundGame> {
     let mut candidates = Vec::new();
     collect_programs(dir, 0, &mut candidates);
     let wanted = squash(&folder);
-    let (path, platform, _) = candidates
+    let mut ranked: Vec<_> = candidates
         .into_iter()
-        .max_by_key(|(path, platform, depth)| {
-            let name = squash(&stem(path));
+        .map(|(path, platform, depth)| {
+            let name = squash(&stem(&path));
             let similar = if name == wanted {
                 3
             } else if !name.is_empty() && (wanted.contains(&name) || name.contains(&wanted)) {
@@ -324,17 +332,20 @@ fn game_in_folder(dir: &Path) -> Option<FoundGame> {
                 .any(|t| name.contains(t) && !wanted.contains(t));
             // 64-bit builds before 32-bit ones; native builds where both exist.
             let bits = path.to_string_lossy().to_lowercase().contains("64");
-            let native = *platform != SideloadPlatform::Windows;
-            let size = std::fs::metadata(path).map_or(0, |m| m.len()) / (1 << 20);
-            (
-                !tool,
-                similar,
-                std::cmp::Reverse(*depth),
-                native,
-                bits,
-                size,
-            )
-        })?;
+            let native = platform != SideloadPlatform::Windows;
+            let size = std::fs::metadata(&path).map_or(0, |m| m.len()) / (1 << 20);
+            let rank = (!tool, similar, std::cmp::Reverse(depth), native, bits, size);
+            (rank, path, platform)
+        })
+        .collect();
+    // Best first. Of equal ranks the one read last leads, as it always has.
+    ranked.reverse();
+    ranked.sort_by_key(|a| std::cmp::Reverse(a.0));
+    let mut ranked = ranked
+        .into_iter()
+        .map(|(_, path, platform)| (path, platform));
+    let (path, platform) = ranked.next()?;
+    let others = ranked.take(MAX_OTHERS).collect();
     Some(FoundGame {
         title: pretty_title(&folder),
         executable: path,
@@ -343,6 +354,7 @@ fn game_in_folder(dir: &Path) -> Option<FoundGame> {
         install_folder: Some(dir.to_path_buf()),
         icon: None,
         kind: FoundKind::Program,
+        others,
     })
 }
 
@@ -384,6 +396,7 @@ fn app_bundle(path: &Path) -> FoundGame {
         install_folder: None,
         icon: None,
         kind: FoundKind::AppBundle,
+        others: Vec::new(),
     }
 }
 
@@ -438,6 +451,7 @@ fn desktop_entry(path: &Path) -> Option<FoundGame> {
             .map(PathBuf::from)
             .filter(|p| p.is_absolute() && p.is_file()),
         kind: FoundKind::DesktopEntry,
+        others: Vec::new(),
     })
 }
 
@@ -514,6 +528,7 @@ fn shortcut(path: &Path) -> Option<FoundGame> {
         executable,
         icon: None,
         kind: FoundKind::Shortcut,
+        others: Vec::new(),
     })
 }
 
@@ -1433,6 +1448,15 @@ mod tests {
         );
         assert!(games[1].executable.ends_with("OuterWilds.exe"));
         assert_eq!(games[2].install_folder, None);
+        // The folder's other programs stay on offer, the launcher first;
+        // installers and redistributables don't.
+        let others: Vec<String> = games[0]
+            .others
+            .iter()
+            .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(others, ["Launcher.exe"]);
+        assert!(games[2].others.is_empty());
     }
 
     #[test]

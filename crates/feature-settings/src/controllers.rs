@@ -1,4 +1,4 @@
-//! The "Connected controllers" panel of General → Controller.
+//! The "Connected controllers" panel of Settings → Controller.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};

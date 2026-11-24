@@ -120,7 +120,7 @@ impl Backend {
         Ok(())
     }
 
-    fn igdb_lookup(&self, game: &GameInfo) -> Lookup {
+    pub(crate) fn igdb_lookup(&self, game: &GameInfo) -> Lookup {
         let chosen = self.settings.game(&game.id()).igdb_id;
         Lookup {
             runner: game.runner(),

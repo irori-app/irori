@@ -260,8 +260,11 @@ impl GamePage {
             InfoTab::Extras => self.render_extras(game, window, cx),
             InfoTab::Mods => self.render_mods(game, window, cx),
         };
+        let trailer = self.render_trailer(cx);
         let strip = self.render_screenshot_strip(window, cx);
         let details = self.render_details_panel(game, cx);
+        let copies = self.render_copies(cx);
+        let possible = self.render_possible_copies(cx);
         let timeline = self.render_timeline(window, cx);
         let related = self.render_related(game, cx);
         let page = self.page_rem(window).unwrap_or(f32::MAX);
@@ -272,6 +275,7 @@ impl GamePage {
             .min_w_0()
             .w_full()
             .gap_8()
+            .children(trailer)
             .children(strip)
             .child(v_flex().w_full().gap_4().child(bar).child(content))
             .child(timeline)
@@ -279,6 +283,9 @@ impl GamePage {
         let side = v_flex()
             .gap_4()
             .child(details)
+            .children(copies)
+            .children(possible)
+            .when(game.is_installed, |v| v.children(self.setup.clone()))
             .children(self.overlay.clone());
         let row = |d: gpui_kit::Div| d.w_full().flex().flex_row().items_start().gap_8();
         let body = match layout {
@@ -647,6 +654,7 @@ impl GamePage {
             );
         v_flex()
             .gap_2()
+            .children(self.render_pc_check(cx))
             .child(header)
             .children(extra.requirements.iter().map(|r| {
                 h_flex()

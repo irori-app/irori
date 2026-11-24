@@ -1,4 +1,9 @@
 //! PCGamingWiki: page lookup (by GOG ID, else search) and wikitext scraping.
+//!
+//! Only bare facts are kept from a page (the wiki's text is CC BY-NC-SA):
+//! ids, scores, versions, genres, modes, and [`PcFacts`]: which PC features
+//! a game supports and how, its engines, its save folders and how many
+//! fixes its page lists.
 
 use std::time::Duration;
 
@@ -42,6 +47,221 @@ pub struct PcGamingWikiInfo {
         deserialize_with = "irori_core::game_mode::lenient"
     )]
     pub game_modes: Vec<GameMode>,
+    /// PC features, engines, save folders and fixes (see [`pc_facts`]).
+    pub pc: PcFacts,
+    /// Which fields the scrape read; an older answer is read again
+    /// ([`PARSE_VERSION`]).
+    pub version: u32,
+}
+
+/// [`PcGamingWikiInfo::version`] of a scrape that reads [`PcFacts`].
+pub const PARSE_VERSION: u32 = 1;
+
+/// How far a game supports a PC feature, as the wiki rates it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Support {
+    Full,
+    Limited,
+    /// Only with a fix ("hackable").
+    WithFix,
+}
+
+impl Support {
+    /// A rating: `true` or `always on` (full), `limited`, `hackable` (with a
+    /// fix); `false`, `unknown` and `n/a` say nothing.
+    fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "true" | "always on" => Some(Self::Full),
+            "limited" => Some(Self::Limited),
+            "hackable" => Some(Self::WithFix),
+            _ => None,
+        }
+    }
+}
+
+/// A folder the wiki says a game keeps its saves in, for one platform.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SaveFolder {
+    /// As the wiki names it: `Windows`, `Linux`, `OS X`, `Steam`…
+    pub platform: String,
+    /// With the wiki's path tokens spelt out (`%APPDATA%`, `<path-to-game>`).
+    pub path: String,
+}
+
+/// The PC facts of a page.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PcFacts {
+    pub ultrawide: Option<Support>,
+    pub hdr: Option<Support>,
+    /// 120 frames a second or more.
+    pub high_fps: Option<Support>,
+    pub uhd_4k: Option<Support>,
+    /// Limited when the game can't be played with a controller alone.
+    pub controller: Option<Support>,
+    pub engines: Vec<String>,
+    pub saves: Vec<SaveFolder>,
+    /// The fixes (`{{Fixbox}}`) the page lists.
+    pub fixes: u32,
+}
+
+impl PcFacts {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// At most this many save folders are kept, each this long at most.
+const MAX_SAVES: usize = 6;
+const MAX_PATH: usize = 300;
+
+/// The rating in a page's `|<name> = <value>` field, for the first of
+/// `names` the page has.
+fn rating(text: &str, names: &[&str]) -> Option<Support> {
+    names.iter().find_map(|name| {
+        let prefix = format!("|{name}");
+        text.lines().find_map(|line| {
+            let rest = line.trim_start().strip_prefix(&prefix)?;
+            let value = rest.trim_start().strip_prefix('=')?;
+            let value = value.split(['|', '}', '<']).next().unwrap_or("");
+            Some(Support::parse(value))
+        })?
+    })
+}
+
+static ENGINE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\{\{Infobox game/row/engine\s*\|\s*([^|}\n]+)").unwrap());
+static FIXBOX: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\{\{\s*fixbox").unwrap());
+static REFS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?s)<ref[^>]*/>|<ref[^>]*>.*?</ref>").unwrap());
+static PATH_TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{\{\s*[pP]\s*\|([^}|]*)\}\}").unwrap());
+
+/// The wiki's path token `{{p|<name>}}` spelt out.
+fn path_token(name: &str) -> String {
+    let name = name.trim();
+    let split = name.find(['\\', '/']).unwrap_or(name.len());
+    let (head, rest) = name.split_at(split);
+    let spelt = match head.to_ascii_lowercase().as_str() {
+        "game" => "<path-to-game>",
+        "uid" => "<user-id>",
+        "steam" => "<Steam-folder>",
+        "username" => "<user-name>",
+        "userprofile" => "%USERPROFILE%",
+        "appdata" => "%APPDATA%",
+        "localappdata" => "%LOCALAPPDATA%",
+        "programdata" => "%PROGRAMDATA%",
+        "public" => "%PUBLIC%",
+        "windir" => "%WINDIR%",
+        "hkcu" => "HKEY_CURRENT_USER",
+        "hklm" => "HKEY_LOCAL_MACHINE",
+        "wow64" => "WOW6432Node",
+        "linuxhome" | "osxhome" => "~",
+        "xdgdatahome" => "~/.local/share",
+        "xdgconfighome" => "~/.config",
+        _ => return format!("<{name}>"),
+    };
+    format!("{spelt}{rest}")
+}
+
+/// The arguments of every `{{<name>|…}}` in `text`, split at the `|`s that
+/// aren't inside a nested template.
+fn template_args<'a>(text: &'a str, name: &str) -> Vec<Vec<&'a str>> {
+    let open = format!("{{{{{name}|");
+    let bytes = text.as_bytes();
+    let mut all = Vec::new();
+    let mut from = 0;
+    while let Some(at) = text[from..].find(&open) {
+        let start = from + at + open.len();
+        let (mut depth, mut i, mut arg) = (0usize, start, start);
+        let mut args = Vec::new();
+        while i + 1 < bytes.len() {
+            match (bytes[i], bytes[i + 1]) {
+                (b'{', b'{') => {
+                    depth += 1;
+                    i += 2;
+                    continue;
+                }
+                (b'}', b'}') if depth == 0 => {
+                    args.push(&text[arg..i]);
+                    break;
+                }
+                (b'}', b'}') => {
+                    depth -= 1;
+                    i += 2;
+                    continue;
+                }
+                (b'|', _) if depth == 0 => {
+                    args.push(&text[arg..i]);
+                    arg = i + 1;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        from = i.max(start);
+        all.push(args);
+    }
+    all
+}
+
+/// The save folders of a page's `{{Game data/saves|<platform>|<path>|…}}`
+/// rows, with path tokens spelt out and references left out.
+fn save_folders(text: &str) -> Vec<SaveFolder> {
+    let mut saves = Vec::new();
+    for args in template_args(text, "Game data/saves") {
+        let Some((platform, paths)) = args.split_first() else {
+            continue;
+        };
+        for path in paths {
+            let path = REFS.replace_all(path, "");
+            let path = PATH_TOKEN.replace_all(&path, |c: &regex::Captures| path_token(&c[1]));
+            let path = path.trim();
+            if path.is_empty() || path.contains("{{") || path.len() > MAX_PATH {
+                continue;
+            }
+            saves.push(SaveFolder {
+                platform: platform.trim().to_owned(),
+                path: path.to_owned(),
+            });
+            if saves.len() == MAX_SAVES {
+                return saves;
+            }
+        }
+    }
+    saves
+}
+
+/// The PC facts of a page: `{{Video}}`'s ultra-wide, HDR, 120+ FPS and 4K
+/// ratings, `{{Input}}`'s controller support (limited when a full
+/// controller isn't), the infobox's engines, the saves' folders and the
+/// fixes it lists.
+pub fn pc_facts(text: &str) -> PcFacts {
+    let controller = rating(text, &["controller support"]).map(|support| {
+        match (support, rating(text, &["full controller"])) {
+            (Support::Full, Some(Support::Full)) => Support::Full,
+            (Support::Full, _) => Support::Limited,
+            (other, _) => other,
+        }
+    });
+    let mut engines: Vec<String> = Vec::new();
+    for c in ENGINE.captures_iter(text) {
+        let name = c[1].trim().to_owned();
+        if !name.is_empty() && !engines.contains(&name) {
+            engines.push(name);
+        }
+    }
+    PcFacts {
+        ultrawide: rating(text, &["ultrawidescreen"]),
+        hdr: rating(text, &["hdr"]),
+        high_fps: rating(text, &["120 fps", "high frame rate"]),
+        uhd_4k: rating(text, &["4k ultra hd"]),
+        controller,
+        engines,
+        saves: save_folders(text),
+        fixes: FIXBOX.find_iter(text).count().min(999) as u32,
+    }
 }
 
 impl PcGamingWikiInfo {
@@ -155,6 +375,8 @@ pub fn parse_wikitext(page_id: u64, text: &str) -> PcGamingWikiInfo {
             .map(|c| format!("{}: {}", &c[1], &c[2]))
             .collect(),
         game_modes: game_modes(text),
+        pc: pc_facts(text),
+        version: PARSE_VERSION,
     }
 }
 
@@ -176,13 +398,15 @@ struct SearchHit {
     title: String,
 }
 
-/// Page ID from a search response: the exact (case-insensitive) title match,
-/// else the first hit.
+/// Page ID from a search response: the hit whose title folds to the same
+/// key (case, punctuation, accents and trademark signs aside), else the
+/// first hit.
 pub fn pick_search_result(json: &serde_json::Value, title: &str) -> Option<u64> {
     let resp: SearchResponse = serde_json::from_value(json.clone()).ok()?;
     let hits = resp.query?.search;
+    let wanted = irori_core::text::title_key(title);
     hits.iter()
-        .find(|h| h.title.to_lowercase() == title.to_lowercase())
+        .find(|h| !wanted.is_empty() && irori_core::text::title_key(&h.title) == wanted)
         .or(hits.first())
         .map(|h| h.pageid)
 }
@@ -347,6 +571,58 @@ mod tests {
         assert!(game_modes(WIKITEXT).is_empty());
     }
 
+    /// Rows as pages have them, aligned, with notes and references.
+    const PC_FACTS: &str = "{{Infobox game/row/engine|Unreal Engine 4|ref=<ref>x</ref>}}\n\
+{{Infobox game/row/engine|Unreal Engine 4}}\n{{Infobox game/row/engine|Havok}}\n\
+{{Game data/saves|Windows|{{p|localappdata}}\\Hades\\Saved\\{{p|uid}}<ref>Checked.</ref>|{{p|game}}\\save}}\n\
+{{Game data/saves|Steam|}}\n{{Game data/saves|OS X|{{p|osxhome}}/Library/Hades/}}\n\
+{{Fixbox|description=Skip intro|ref=|fix=}}\n{{fixbox|description=FOV}}\n\
+{{Video\n|ultrawidescreen           = hackable\n|ultrawidescreen notes     = {{Fixbox|description=Ultrawide}}\n\
+|ultrawidescreen wsgf award = gold\n|4k ultra hd               = true\n|120 fps                   = limited\n\
+|hdr                       = false\n|hdr notes                 = None.\n}}\n\
+{{Input\n|controller support        = true\n|full controller           = false\n}}\n";
+
+    #[test]
+    fn reads_pc_facts() {
+        let facts = parse_wikitext(1, PC_FACTS).pc;
+        assert_eq!(facts.ultrawide, Some(Support::WithFix));
+        assert_eq!(facts.uhd_4k, Some(Support::Full));
+        assert_eq!(facts.high_fps, Some(Support::Limited));
+        assert_eq!(facts.hdr, None, "false says nothing");
+        assert_eq!(
+            facts.controller,
+            Some(Support::Limited),
+            "not a full controller"
+        );
+        assert_eq!(facts.engines, ["Unreal Engine 4", "Havok"]);
+        assert_eq!(facts.fixes, 3);
+        assert_eq!(
+            facts.saves,
+            [
+                SaveFolder {
+                    platform: "Windows".into(),
+                    path: "%LOCALAPPDATA%\\Hades\\Saved\\<user-id>".into()
+                },
+                SaveFolder {
+                    platform: "Windows".into(),
+                    path: "<path-to-game>\\save".into()
+                },
+                SaveFolder {
+                    platform: "OS X".into(),
+                    path: "~/Library/Hades/".into()
+                },
+            ]
+        );
+        let full = "{{Input\n|controller support = true\n|full controller = true\n}}";
+        assert_eq!(pc_facts(full).controller, Some(Support::Full));
+        assert!(pc_facts("nothing here").is_empty());
+        assert_eq!(
+            path_token("userprofile\\Documents"),
+            "%USERPROFILE%\\Documents"
+        );
+        assert_eq!(path_token("odd"), "<odd>");
+    }
+
     #[test]
     fn empty_wikitext_gives_empty_lists() {
         let info = parse_wikitext(1, "nothing here");
@@ -366,6 +642,12 @@ mod tests {
             None
         );
         assert_eq!(search_hits(&json), [1, 2]);
+        let accents = serde_json::json!({"query": {"search": [
+            {"pageid": 1, "title": "Pokémon Ranger"}, {"pageid": 2, "title": "Pokémon Mystery Dungeon"}]}});
+        assert_eq!(
+            pick_search_result(&accents, "Pokemon™ Mystery Dungeon"),
+            Some(2)
+        );
     }
 
     #[test]

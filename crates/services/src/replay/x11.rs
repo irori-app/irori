@@ -1,9 +1,11 @@
-//! The clip and screenshot keys on an X11 session without the desktop
-//! portal's global shortcuts: Irori grabs Alt+F10 and Alt+F12 on the root
-//! window (`XGrabKey`), so the X server hands them to Irori whichever window
-//! has the focus. Only the X server is asked: keyboards are never read from
-//! `/dev/input`. A key another program already grabbed fails the whole grab,
-//! and Irori falls back to the commands the user binds instead.
+//! The clip, screenshot and quick launcher keys on an X11 session without
+//! the desktop portal's global shortcuts: Irori grabs Alt+F10, Alt+F12 and
+//! Ctrl+Alt+K on the root window (`XGrabKey`), so the X server hands them to
+//! Irori whichever window has the focus. Only the X server is asked:
+//! keyboards are never read from `/dev/input`. A clip or screenshot key
+//! another program already grabbed fails the whole grab, and Irori falls
+//! back to the commands the user binds instead; the quick launcher's key is
+//! taken when it is free, else its command is offered alone.
 
 use std::time::{Duration, Instant};
 
@@ -18,11 +20,13 @@ use x11rb::protocol::xproto::{ConnectionExt as _, GrabMode, ModMask};
 pub(crate) enum Action {
     Clip,
     Screenshot,
+    QuickLaunch,
 }
 
 /// X keysyms of the keys Irori grabs (`X11/keysymdef.h`).
 const XK_F10: u32 = 0xffc7;
 const XK_F12: u32 = 0xffc9;
+const XK_K: u32 = 0x006b;
 
 /// A key held down repeats; a second clip a moment later is never meant.
 const REPEAT_GAP: Duration = Duration::from_millis(800);
@@ -51,7 +55,7 @@ fn lock_variants() -> [ModMask; 4] {
 /// Lets one press of each action through per [`REPEAT_GAP`].
 #[derive(Debug, Default)]
 pub(crate) struct Debounce {
-    last: [Option<Instant>; 2],
+    last: [Option<Instant>; 3],
 }
 
 impl Debounce {
@@ -67,8 +71,9 @@ impl Debounce {
 
 /// Grab the keys on the X server named by `DISPLAY` and listen for them on
 /// a thread of their own, which blocks until the server sends an event and
-/// ends when the receiver is dropped or the server goes away.
-pub(crate) fn grab() -> Result<UnboundedReceiver<Action>> {
+/// ends when the receiver is dropped or the server goes away. Says whether
+/// the quick launcher's key was free to grab too.
+pub(crate) fn grab() -> Result<(UnboundedReceiver<Action>, bool)> {
     let (conn, screen) = x11rb::connect(None).context("connecting to the X server")?;
     let setup = conn.setup();
     let root = setup.roots.get(screen).context("no X screen")?.root;
@@ -79,7 +84,7 @@ pub(crate) fn grab() -> Result<UnboundedReceiver<Action>> {
         .context("reading the keyboard mapping")?;
     let code = |keysym| {
         keycode_for(&mapping.keysyms, mapping.keysyms_per_keycode, min, keysym)
-            .context("the keyboard has no F10 or F12 key")
+            .context("the keyboard has no F10, F12 or K key")
     };
     let (clip, screenshot) = (code(XK_F10)?, code(XK_F12)?);
     for key in [clip, screenshot] {
@@ -96,6 +101,20 @@ pub(crate) fn grab() -> Result<UnboundedReceiver<Action>> {
             .context("another program holds the keys")?;
         }
     }
+    // Optional: a key another program holds leaves the others working.
+    let quick = code(XK_K).ok().filter(|&key| {
+        lock_variants().into_iter().all(|locks| {
+            conn.grab_key(
+                false,
+                root,
+                ModMask::CONTROL | ModMask::M1 | locks,
+                key,
+                GrabMode::ASYNC,
+                GrabMode::ASYNC,
+            )
+            .is_ok_and(|cookie| cookie.check().is_ok())
+        })
+    });
     conn.flush()?;
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     std::thread::Builder::new()
@@ -109,6 +128,7 @@ pub(crate) fn grab() -> Result<UnboundedReceiver<Action>> {
                 let action = match press.detail {
                     k if k == clip => Action::Clip,
                     k if k == screenshot => Action::Screenshot,
+                    k if Some(k) == quick => Action::QuickLaunch,
                     _ => continue,
                 };
                 if debounce.accept(action, Instant::now()) && tx.send(action).is_err() {
@@ -117,7 +137,7 @@ pub(crate) fn grab() -> Result<UnboundedReceiver<Action>> {
             }
         })
         .context("starting the key listener")?;
-    Ok(rx)
+    Ok((rx, quick.is_some()))
 }
 
 #[cfg(test)]
@@ -147,6 +167,7 @@ mod tests {
         assert!(debounce.accept(Action::Screenshot, start + Duration::from_millis(40)));
         assert!(debounce.accept(Action::Clip, start + REPEAT_GAP));
         assert!(!debounce.accept(Action::Screenshot, start + Duration::from_millis(100)));
+        assert!(debounce.accept(Action::QuickLaunch, start + Duration::from_millis(100)));
     }
 
     #[test]

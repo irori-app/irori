@@ -6,6 +6,12 @@
 //!   picked up again, new games); the most played games as covers.
 //! - **Backlog**: the games beaten and abandoned in a year on a timeline, the
 //!   yearly goal and its pace, and the library grouped by play status.
+//! - **Journeys**: a lane per game over the period (days played, where it
+//!   started, beaten or abandoned), games played at once, days to beat and
+//!   pace; a week shows its month.
+//! - **Discoveries**: the period in sentences scored by how unusual they are
+//!   (pin or hide each kind), milestones reached and next, a year ago, and
+//!   "Copy summary".
 //! - **Album**: the screenshots the user took in the period, by game.
 //! - **Journal**: the notes the user wrote on days in the period.
 //!
@@ -17,6 +23,9 @@
 //!
 //! Below both, the storage section shows the installed games by drive.
 //!
+//! Any game on the page (top games, insights, the backlog's covers) opens
+//! its sheet: its numbers over the period shown (`sheet`, `sheet_view`).
+//!
 //! The session history and the screenshots are read off the UI thread when a
 //! session ends; the numbers are derived from them when they, the library or
 //! the chosen period change, never while drawing.
@@ -25,14 +34,21 @@ mod achievements_view;
 pub(crate) mod album;
 mod album_view;
 pub(crate) mod backlog;
+mod backlog_extras_view;
 mod backlog_view;
+pub(crate) mod discoveries;
+mod discoveries_view;
 mod hero;
 pub(crate) mod journal;
 mod journal_view;
+pub(crate) mod journeys;
+mod journeys_view;
 pub(crate) mod model;
 pub(crate) mod overview;
 mod overview_view;
 pub(crate) mod period;
+pub(crate) mod sheet;
+mod sheet_view;
 pub(crate) mod storage;
 mod storage_view;
 mod text;
@@ -46,19 +62,21 @@ use std::sync::Arc;
 
 use chrono::{Datelike as _, Local, NaiveDate};
 use gpui_kit::assets::IconName;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{VirtualListScrollHandle, v_flex};
 use gpui_kit::{
-    AnyElement, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
-    Render, Size, Styled as _, Subscription, Window, div, px,
+    AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Pixels, Render, Size, Styled as _, Subscription, Window, div, px,
 };
-use irori_core::GameId;
+use irori_core::{GameId, Paths, json_store};
 use irori_services::{ScreenshotIndex, UserData};
 use irori_ui::art::LruImageCache;
 use irori_ui::components::EmptyState;
 use irori_ui::i18n::t;
 use irori_ui::{backend, models};
+use serde::{Deserialize, Serialize};
 
 use album::{Album, Shot};
 use album_view::{AlbumItem, GridLayout};
@@ -72,9 +90,25 @@ use storage::{DriveUsage, InstalledGame};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tab {
     Overview,
+    Journeys,
     Backlog,
+    Discoveries,
     Album,
     Journal,
+}
+
+/// What the stats page keeps between runs (`state/stats-page.json`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+struct StatsPrefs {
+    /// Kinds of discovery that lead, in the order pinned.
+    pinned: Vec<String>,
+    /// Kinds of discovery not shown.
+    hidden: Vec<String>,
+}
+
+fn prefs_file() -> std::path::PathBuf {
+    Paths::get().state_dir().join("stats-page.json")
 }
 
 pub struct StatsView {
@@ -89,6 +123,18 @@ pub struct StatsView {
     history: Option<Arc<History>>,
     overview: Option<Overview>,
     backlog: Option<Backlog>,
+    /// The period's journeys; `None` until the history is first read.
+    journeys: Option<Arc<journeys::Journeys>>,
+    lane_filter: journeys::LaneFilter,
+    lane_sort: journeys::LaneSort,
+    journey_sizes: Rc<Vec<Size<Pixels>>>,
+    journey_scroll: VirtualListScrollHandle,
+    /// What stood out in the period, its milestones and a year ago.
+    discoveries: Option<Arc<discoveries::Discoveries>>,
+    /// The discoveries pinned and hidden, kept between runs.
+    prefs: StatsPrefs,
+    /// The backlog's queue, shelf, pile and How Long To Beat cards.
+    backlog_extras: Option<backlog::Extras>,
     /// The user's screenshots; `None` until first read.
     screenshots: Option<Arc<ScreenshotIndex>>,
     album: Option<Album>,
@@ -105,6 +151,8 @@ pub struct StatsView {
     album_scroll: VirtualListScrollHandle,
     /// The journal tab's notes; `None` until the history is first read.
     journal: Option<Arc<journal::JournalPage>>,
+    /// The journal tab's search field.
+    journal_query: Entity<InputState>,
     journal_sizes: Rc<Vec<Size<Pixels>>>,
     journal_scroll: VirtualListScrollHandle,
     /// Years with play, newest first, for the Year in review.
@@ -125,7 +173,14 @@ impl StatsView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let sessions = models(cx).sessions.clone();
         let library = models(cx).library.clone();
+        let journal_query =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("library.stats.journal.search")));
         let subscriptions = vec![
+            cx.subscribe(&journal_query, |this, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.derive(cx);
+                }
+            }),
             // A finished session adds to the history.
             cx.observe_in(&sessions, window, |this, _, _, cx| this.reload(cx)),
             // A library refresh (which games count), playtime synced from the
@@ -150,6 +205,14 @@ impl StatsView {
             history: None,
             overview: None,
             backlog: None,
+            backlog_extras: None,
+            discoveries: None,
+            prefs: StatsPrefs::default(),
+            journeys: None,
+            lane_filter: journeys::LaneFilter::default(),
+            lane_sort: journeys::LaneSort::default(),
+            journey_sizes: Rc::default(),
+            journey_scroll: VirtualListScrollHandle::new(),
             screenshots: None,
             album: None,
             album_game: None,
@@ -160,6 +223,7 @@ impl StatsView {
             album_width: px(0.),
             album_scroll: VirtualListScrollHandle::new(),
             journal: None,
+            journal_query,
             journal_sizes: Rc::default(),
             journal_scroll: VirtualListScrollHandle::new(),
             years: Vec::new(),
@@ -172,7 +236,63 @@ impl StatsView {
         };
         view.reload(cx);
         view.reload_storage(cx);
+        view.load_prefs(cx);
         view
+    }
+
+    /// Read the page's kept choices, off the UI thread.
+    fn load_prefs(&mut self, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let task = irori_ui::state::run_infallible(cx, async move {
+            b.spawn_blocking(|| json_store::read_or_default::<StatsPrefs>(&prefs_file()))
+                .await
+                .ok()
+        });
+        cx.spawn(async move |this, cx| {
+            if let Some(Some(prefs)) = task.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.prefs = prefs;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Keep the page's choices, off the UI thread.
+    fn save_prefs(&mut self, cx: &mut Context<Self>) {
+        let prefs = self.prefs.clone();
+        let b = backend(cx);
+        irori_ui::state::run_infallible(cx, async move {
+            let _ = b
+                .spawn_blocking(move || {
+                    if let Err(e) = json_store::write(&prefs_file(), &prefs) {
+                        tracing::warn!("saving the stats page's choices: {e:#}");
+                    }
+                })
+                .await;
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Pin a kind of discovery (it leads from then on), or unpin it.
+    fn toggle_pin(&mut self, kind: &str, cx: &mut Context<Self>) {
+        if let Some(ix) = self.prefs.pinned.iter().position(|p| p == kind) {
+            self.prefs.pinned.remove(ix);
+        } else {
+            self.prefs.pinned.push(kind.to_string());
+        }
+        self.save_prefs(cx);
+    }
+
+    /// Stop showing a kind of discovery.
+    fn hide_kind(&mut self, kind: &str, cx: &mut Context<Self>) {
+        self.prefs.pinned.retain(|p| p != kind);
+        if !self.prefs.hidden.iter().any(|h| h == kind) {
+            self.prefs.hidden.push(kind.to_string());
+        }
+        self.save_prefs(cx);
     }
 
     fn today() -> NaiveDate {
@@ -216,7 +336,7 @@ impl StatsView {
         })
         .detach();
         let task = irori_ui::state::run_infallible(cx, async move {
-            Arc::new(History::new(b.visible_sessions(), model::local_day))
+            Arc::new(History::new(b.visible_sessions(), model::local_start))
         });
         cx.spawn(async move |this, cx| {
             if let Some(history) = task.await {
@@ -247,12 +367,30 @@ impl StatsView {
             |id| snapshot.get(id).is_some(),
             today,
         ));
+        self.journeys = Some(Arc::new(journeys::compute(
+            &history,
+            self.period(),
+            &user,
+            |id| snapshot.get(id).is_some(),
+            today,
+        )));
+        self.discoveries = self.overview.as_ref().map(|o| {
+            Arc::new(discoveries::compute(
+                &history,
+                o,
+                &user,
+                |id| snapshot.get(id).is_some(),
+                today,
+            ))
+        });
+        let query = self.journal_query.read(cx).value().to_string();
         self.journal = Some(Arc::new(journal::compute(
             &user.journal,
             &history,
             self.period(),
             |id| snapshot.get(id).is_some(),
             today,
+            &query,
         )));
         let mut years: Vec<i32> = history.sessions.iter().map(|p| p.day.year()).collect();
         years.dedup();
@@ -263,6 +401,16 @@ impl StatsView {
             &history,
             &user,
             keys.iter().map(String::as_str),
+            self.year(),
+            today,
+        ));
+        // Main-story hours learned with games' wiki info, kept in memory.
+        let hltb = backend(cx).hltb_times();
+        self.backlog_extras = Some(backlog::extras(
+            &history,
+            &user,
+            keys.iter().map(String::as_str),
+            &hltb.hours,
             self.year(),
             today,
         ));
@@ -294,7 +442,7 @@ impl StatsView {
     fn step(&mut self, by: i32, cx: &mut Context<Self>) {
         let today = Self::today();
         match self.tab {
-            Tab::Overview | Tab::Album | Tab::Journal => {
+            Tab::Overview | Tab::Journeys | Tab::Discoveries | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let to = if by < 0 {
                     period.previous()
@@ -334,7 +482,7 @@ impl StatsView {
                 .min();
         }
         match self.tab {
-            Tab::Overview | Tab::Album | Tab::Journal => {
+            Tab::Overview | Tab::Journeys | Tab::Discoveries | Tab::Album | Tab::Journal => {
                 let period = self.period();
                 let back = period
                     .previous()
@@ -426,6 +574,14 @@ impl Render for StatsView {
                 .image_cache(self.images.clone())
                 .child(self.render_album_page(window, cx));
         }
+        // So are the journeys.
+        if self.tab == Tab::Journeys && self.history.is_some() && !self.is_blank(cx) {
+            return v_flex()
+                .size_full()
+                .min_h_0()
+                .image_cache(self.images.clone())
+                .child(self.render_journeys(window, cx));
+        }
         // So is a journal with notes.
         let journal_page = self.tab == Tab::Journal
             && self.history.is_some()
@@ -461,6 +617,8 @@ impl Render for StatsView {
                     .child(self.render_overview(window, cx))
                     .into_any_element(),
                 Tab::Backlog => self.render_backlog(window, cx),
+                Tab::Discoveries => self.render_discoveries(window, cx),
+                Tab::Journeys => self.render_journeys(window, cx),
                 Tab::Album => self.render_album(window, cx),
                 Tab::Journal => self.render_journal(window, cx),
             }

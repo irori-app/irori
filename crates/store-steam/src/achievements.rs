@@ -103,6 +103,35 @@ pub(crate) fn merge(
 }
 
 impl SteamStore {
+    /// The stats file Steam writes when `app_name` unlocks an achievement:
+    /// the signed-in account's, else the latest one written for the app.
+    /// Empty when Steam has none and no account names it yet.
+    pub(crate) async fn achievement_files(&self, app_name: &str) -> Vec<std::path::PathBuf> {
+        if app_name.parse::<u32>().is_err() {
+            return Vec::new();
+        }
+        // The saved sign-in names the account; no need to renew it here.
+        let account = self
+            .session
+            .read()
+            .as_ref()
+            .and_then(|s| s.steamid().ok())
+            .map(|id| id.saturating_sub(STEAMID64_BASE) as u32);
+        let steam_dir = self.steam_dir();
+        let app = app_name.to_string();
+        tokio::task::spawn_blocking(move || {
+            let found = stats_file::player_path(&steam_dir, &app, account);
+            let named = account.map(|account| {
+                steam_dir
+                    .join("appcache/stats")
+                    .join(format!("UserGameStats_{account}_{app}.bin"))
+            });
+            found.or(named).into_iter().collect()
+        })
+        .await
+        .unwrap_or_default()
+    }
+
     /// A game's achievements; see the module docs.
     pub(crate) async fn game_achievements(
         &self,

@@ -393,6 +393,17 @@ pub fn preferred_systems(ui_language: &str, system_locale: Option<&str>) -> Vec<
         .collect()
 }
 
+/// `systems` with the board the user chose (`ageRatingBoard`, a board's
+/// name) moved first; unchanged when `board` is empty or names no board.
+pub fn lead_with(mut systems: Vec<RatingSystem>, board: &str) -> Vec<RatingSystem> {
+    let Some(chosen) = RatingSystem::from_key(board.trim()) else {
+        return systems;
+    };
+    systems.retain(|s| *s != chosen);
+    systems.insert(0, chosen);
+    systems
+}
+
 /// The board of a country (ISO 3166 code).
 fn by_region(region: &str) -> RatingSystem {
     match region {
@@ -435,6 +446,18 @@ mod tests {
 
     fn rating(system: RatingSystem, label: &str) -> AgeRating {
         AgeRating::new(system, label, Vec::new(), None).unwrap()
+    }
+
+    #[test]
+    fn the_chosen_board_leads() {
+        let regional = preferred_systems("de", None);
+        assert_eq!(regional[0], RatingSystem::Usk);
+        let chosen = lead_with(regional.clone(), "PEGI");
+        assert_eq!(chosen[0], RatingSystem::Pegi);
+        assert_eq!(chosen[1], RatingSystem::Usk);
+        assert_eq!(chosen.len(), regional.len());
+        assert_eq!(lead_with(regional.clone(), ""), regional);
+        assert_eq!(lead_with(regional.clone(), "nonsense"), regional);
     }
 
     #[test]

@@ -1,4 +1,5 @@
-//! macOS: the default output's volume through `osascript`'s volume
+//! macOS: the default output's volume and the microphone's level through
+//! `osascript`'s volume
 //! settings (Standard Additions, which need no permission). macOS has no
 //! per-program volume, so a game's own can't be read or changed.
 
@@ -23,11 +24,64 @@ async fn system() -> Result<Volume> {
     parse_volume_settings(&text).context("This sound output has no volume of its own")
 }
 
+/// The level a microphone muted by Irori had, for unmuting one whose device
+/// has no mute switch of its own (its level went to 0 instead).
+static MUTED_LEVEL: parking_lot::Mutex<Option<u32>> = parking_lot::Mutex::new(None);
+
+/// The default microphone: its level from `osascript`, muted when its
+/// device says so (Core Audio), else when its level is 0.
+async fn microphone(settings: &str) -> Option<Volume> {
+    let percent = parse_input_volume(settings)?;
+    let muted = tokio::task::spawn_blocking(devices::input_muted)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(percent == 0);
+    Some(Volume { percent, muted })
+}
+
 pub(super) async fn audio(_game: Option<GameProcess>) -> Result<GameAudio> {
+    let text = osascript(&["get volume settings"]).await?;
+    let system =
+        parse_volume_settings(&text).context("This sound output has no volume of its own")?;
     Ok(GameAudio {
-        system: Some(system().await?),
+        system: Some(system),
         game: None,
+        microphone: microphone(&text).await,
     })
+}
+
+async fn change_microphone(change: Change) -> Result<()> {
+    let text = osascript(&["get volume settings"]).await?;
+    let now = microphone(&text)
+        .await
+        .context("There is no microphone to change")?;
+    let set_level = |level: u32| format!("set volume input volume {level}");
+    match change {
+        Change::Step(step) => {
+            osascript(&[&set_level(stepped(now.percent, step))]).await?;
+            if now.muted {
+                let _ = tokio::task::spawn_blocking(|| devices::set_input_muted(false)).await;
+            }
+        }
+        Change::ToggleMute => {
+            let switched =
+                tokio::task::spawn_blocking(move || devices::set_input_muted(!now.muted))
+                    .await
+                    .unwrap_or(false);
+            if !switched {
+                // A device without a mute switch: its level stands in.
+                if now.muted {
+                    let level = MUTED_LEVEL.lock().take().unwrap_or(50);
+                    osascript(&[&set_level(level)]).await?;
+                } else {
+                    *MUTED_LEVEL.lock() = Some(now.percent);
+                    osascript(&[&set_level(0)]).await?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(super) async fn change(
@@ -35,8 +89,12 @@ pub(super) async fn change(
     target: VolumeTarget,
     change: Change,
 ) -> Result<()> {
-    if target == VolumeTarget::Game {
-        bail!("macOS has no volume per program; change the system volume instead");
+    match target {
+        VolumeTarget::Game => {
+            bail!("macOS has no volume per program; change the system volume instead")
+        }
+        VolumeTarget::Microphone => return change_microphone(change).await,
+        VolumeTarget::System => {}
     }
     let now = system().await?;
     match change {
@@ -88,6 +146,9 @@ mod devices {
     const UID: u32 = code(b"uid ");
     const GLOBAL: u32 = code(b"glob");
     const OUTPUT: u32 = code(b"outp");
+    const INPUT: u32 = code(b"inpt");
+    const DEFAULT_INPUT: u32 = code(b"dIn ");
+    const MUTE: u32 = code(b"mute");
     const MAIN: u32 = 0;
     const UTF8: u32 = 0x0800_0100;
 
@@ -166,14 +227,87 @@ mod devices {
         ids
     }
 
-    /// Whether `device` plays sound (has output streams).
-    pub fn is_output(device: AudioObjectId) -> bool {
+    /// Whether sound goes out of a device or into it.
+    #[derive(Clone, Copy)]
+    pub enum Flow {
+        Output,
+        Input,
+    }
+
+    impl Flow {
+        fn scope(self) -> u32 {
+            match self {
+                Flow::Output => OUTPUT,
+                Flow::Input => INPUT,
+            }
+        }
+
+        fn default_selector(self) -> u32 {
+            match self {
+                Flow::Output => DEFAULT_OUTPUT,
+                Flow::Input => DEFAULT_INPUT,
+            }
+        }
+    }
+
+    /// Whether `device` plays (`Output`) or records (`Input`) sound: it has
+    /// streams that way.
+    pub fn has_streams(device: AudioObjectId, flow: Flow) -> bool {
         let address = Address {
             selector: STREAMS,
-            scope: OUTPUT,
+            scope: flow.scope(),
             element: MAIN,
         };
         size_of(device, &address).is_some_and(|s| s > 0)
+    }
+
+    fn mute_address() -> Address {
+        Address {
+            selector: MUTE,
+            scope: INPUT,
+            element: MAIN,
+        }
+    }
+
+    /// Whether the default microphone is muted; `None` when it has no mute
+    /// switch.
+    pub fn input_muted() -> Option<bool> {
+        let device = default_device(Flow::Input)?;
+        let mut muted: u32 = 0;
+        let mut size = std::mem::size_of::<u32>() as u32;
+        // SAFETY: `muted` has room for the one UInt32 the property holds.
+        let status = unsafe {
+            AudioObjectGetPropertyData(
+                device,
+                &mute_address(),
+                0,
+                std::ptr::null(),
+                &mut size,
+                (&raw mut muted).cast(),
+            )
+        };
+        (status == 0).then_some(muted != 0)
+    }
+
+    /// Mute or unmute the default microphone; false when it has no mute
+    /// switch (or there is no microphone).
+    pub fn set_input_muted(muted: bool) -> bool {
+        let Some(device) = default_device(Flow::Input) else {
+            return false;
+        };
+        let value = u32::from(muted);
+        // SAFETY: passes one UInt32, the size the property takes.
+        let status = unsafe {
+            AudioObjectSetPropertyData(
+                device,
+                &mute_address(),
+                0,
+                std::ptr::null(),
+                std::mem::size_of::<u32>() as u32,
+                (&raw const value).cast(),
+            )
+        };
+        status == 0
     }
 
     fn string(device: AudioObjectId, selector: u32) -> Option<String> {
@@ -222,22 +356,22 @@ mod devices {
         string(device, UID)
     }
 
-    fn default_address() -> Address {
+    fn default_address(flow: Flow) -> Address {
         Address {
-            selector: DEFAULT_OUTPUT,
+            selector: flow.default_selector(),
             scope: GLOBAL,
             element: MAIN,
         }
     }
 
-    pub fn default_output() -> Option<AudioObjectId> {
+    pub fn default_device(flow: Flow) -> Option<AudioObjectId> {
         let mut device: AudioObjectId = 0;
         let mut size = std::mem::size_of::<AudioObjectId>() as u32;
         // SAFETY: `device` has room for the one id the property holds.
         let status = unsafe {
             AudioObjectGetPropertyData(
                 SYSTEM_OBJECT,
-                &default_address(),
+                &default_address(flow),
                 0,
                 std::ptr::null(),
                 &mut size,
@@ -247,12 +381,12 @@ mod devices {
         (status == 0 && device != 0).then_some(device)
     }
 
-    pub fn set_default_output(device: AudioObjectId) -> bool {
+    pub fn set_default_device(flow: Flow, device: AudioObjectId) -> bool {
         // SAFETY: passes one device id, the size the property takes.
         let status = unsafe {
             AudioObjectSetPropertyData(
                 SYSTEM_OBJECT,
-                &default_address(),
+                &default_address(flow),
                 0,
                 std::ptr::null(),
                 std::mem::size_of::<AudioObjectId>() as u32,
@@ -264,10 +398,14 @@ mod devices {
 }
 
 fn list_outputs() -> Vec<AudioOutput> {
-    let current = devices::default_output();
+    list(devices::Flow::Output)
+}
+
+fn list(flow: devices::Flow) -> Vec<AudioOutput> {
+    let current = devices::default_device(flow);
     devices::all()
         .into_iter()
-        .filter(|d| devices::is_output(*d))
+        .filter(|d| devices::has_streams(*d, flow))
         .filter_map(|d| {
             let id = devices::uid(d)?;
             Some(AudioOutput {
@@ -291,13 +429,34 @@ pub(super) async fn set_output(_game: Option<GameProcess>, id: String) -> Result
             .into_iter()
             .find(|d| devices::uid(*d).as_deref() == Some(id.as_str()))
             .context("That sound output isn't connected anymore")?;
-        if !devices::set_default_output(device) {
+        if !devices::set_default_device(devices::Flow::Output, device) {
             bail!("macOS didn't switch the sound output");
         }
         Ok(())
     })
     .await
     .context("The sound output couldn't be switched")?
+}
+
+pub(super) async fn inputs() -> Result<Vec<AudioOutput>> {
+    tokio::task::spawn_blocking(|| list(devices::Flow::Input))
+        .await
+        .context("The microphones couldn't be read")
+}
+
+pub(super) async fn set_input(id: String) -> Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let device = devices::all()
+            .into_iter()
+            .find(|d| devices::uid(*d).as_deref() == Some(id.as_str()))
+            .context("That microphone isn't connected anymore")?;
+        if !devices::set_default_device(devices::Flow::Input, device) {
+            bail!("macOS didn't switch the microphone");
+        }
+        Ok(())
+    })
+    .await
+    .context("The microphone couldn't be switched")?
 }
 
 #[cfg(test)]

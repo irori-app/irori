@@ -56,6 +56,22 @@ pub struct SgdbImage {
     pub id: u64,
     pub url: String,
     pub thumb: String,
+    /// The full-size picture's size in pixels, when the source says it
+    /// (SteamGridDB does).
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+}
+
+impl SgdbImage {
+    /// Width and height, when both are known.
+    pub fn size(&self) -> Option<(u32, u32)> {
+        Some((
+            self.width.filter(|w| *w > 0)?,
+            self.height.filter(|h| *h > 0)?,
+        ))
+    }
 }
 
 /// Optional filters for artwork listings.
@@ -239,6 +255,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(imgs[0].thumb, "https://x/t.png");
+        assert_eq!(imgs[0].size(), None);
+        let sized: Vec<SgdbImage> = unwrap_envelope(
+            br#"{"success":true,"data":[{"id":6,"url":"u","thumb":"t","width":600,"height":900}]}"#,
+            "grids",
+        )
+        .unwrap();
+        assert_eq!(sized[0].size(), Some((600, 900)));
         let err = unwrap_envelope::<Vec<SgdbGame>>(
             br#"{"success":false,"errors":["Game not found"]}"#,
             "grids",

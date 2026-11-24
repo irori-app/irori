@@ -1,6 +1,11 @@
 //! What the backlog tab shows for one year: the games beaten and abandoned
-//! in it (on the day their status was set), the yearly goal and the pace
-//! towards it, and the whole library grouped by play status.
+//! in it (on the day their status was set, by its history of changes, so a
+//! game beaten in March still counts after it is played again), the yearly
+//! goal and the pace towards it, and the whole library grouped by play
+//! status. Beside them ([`extras`]): the queue of Plan to play games with
+//! when each would be done at the user's pace, the shelf of games in play or
+//! on hold without a session for 30 days, the pile (added, started, beaten
+//! each month) and the year's beaten games against How Long To Beat.
 
 use std::collections::BTreeMap;
 
@@ -89,14 +94,29 @@ pub fn compute<'a>(
         *by_status.entry(user.effective_status(key)).or_default() += 1;
         in_library.insert(key.to_string());
     }
+    let keys: std::collections::BTreeSet<&String> = user
+        .play_status
+        .keys()
+        .chain(user.status_history.keys())
+        .filter(|k| in_library.contains(k.as_str()))
+        .collect();
+    // A game counts once a year, on the last day of the year it got the
+    // status.
     let marks = |wanted: PlayStatus| -> Vec<Mark> {
-        let mut list: Vec<Mark> = user
-            .play_status
+        let mut list: Vec<Mark> = keys
             .iter()
-            .filter(|(key, r)| r.status == wanted && in_library.contains(key.as_str()))
-            .filter_map(|(key, r)| {
-                let day = rfc3339_day(&r.since)?;
-                (day.year() == year).then_some(Mark {
+            .filter_map(|key| {
+                let changes = user.status_history.get(*key).map_or(&[][..], Vec::as_slice);
+                let day = irori_services::play_status::times_set(
+                    changes,
+                    user.play_status.get(*key),
+                    wanted,
+                )
+                .into_iter()
+                .filter_map(rfc3339_day)
+                .filter(|d| d.year() == year)
+                .max()?;
+                Some(Mark {
                     id: game_id(key)?,
                     day,
                 })
@@ -147,6 +167,241 @@ pub fn compute<'a>(
             .map(|s| (s, by_status.get(&s).copied().unwrap_or(0)))
             .collect(),
         median_days_to_beat,
+    }
+}
+
+/// Weeks of play the pace of the queue is measured over.
+const PACE_WEEKS: u64 = 12;
+/// A game in play or on hold without a session for this many days is on
+/// the shelf.
+pub const SHELF_DAYS: u32 = 30;
+
+/// A game waiting in the queue (Plan to play), with how long it should take
+/// and when it would be done at the user's pace, one after another.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Queued {
+    pub id: GameId,
+    /// Hours to beat it: How Long To Beat's main story, else the middle of
+    /// the user's own beaten games (`guessed`).
+    pub hours: Option<f32>,
+    pub guessed: bool,
+    pub done: Option<NaiveDate>,
+}
+
+/// A game in play or on hold that hasn't been played for a while.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shelved {
+    pub id: GameId,
+    pub status: PlayStatus,
+    pub last: Option<NaiveDate>,
+    /// Days since it was last played; `None` when it never was.
+    pub idle_days: Option<u32>,
+}
+
+/// The pile in one month: games added, first played and beaten.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PileMonth {
+    pub month: NaiveDate,
+    pub added: usize,
+    pub started: usize,
+    pub beaten: usize,
+}
+
+/// A game beaten in the year beside How Long To Beat's main story.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AgainstHltb {
+    pub id: GameId,
+    pub hours: f32,
+    pub hltb: u32,
+}
+
+/// The backlog's other cards for one year.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Extras {
+    /// Hours a week over the last twelve weeks.
+    pub weekly_hours: f32,
+    /// Oldest wish first.
+    pub queue: Vec<Queued>,
+    /// Longest idle first.
+    pub shelf: Vec<Shelved>,
+    /// Each month of the year up to today.
+    pub pile: Vec<PileMonth>,
+    pub against_hltb: Vec<AgainstHltb>,
+}
+
+/// The queue, shelf, pile and hours against How Long To Beat of `year`.
+/// `hltb` holds main-story hours by game key.
+pub fn extras<'a>(
+    history: &History,
+    user: &UserData,
+    library: impl IntoIterator<Item = &'a str>,
+    hltb: &std::collections::HashMap<String, u32>,
+    year: i32,
+    today: NaiveDate,
+) -> Extras {
+    let keys: Vec<&str> = library.into_iter().collect();
+    let since = today - chrono::Days::new(PACE_WEEKS * 7);
+    let recent: u64 = history
+        .between(
+            since.succ_opt().unwrap_or(since),
+            today.succ_opt().unwrap_or(today),
+        )
+        .iter()
+        .map(|p| p.seconds)
+        .sum();
+    let weekly_hours = recent as f32 / 3600. / PACE_WEEKS as f32;
+    let hours_of = |key: &str| {
+        user.playtime.get(key).map_or(0., |r| {
+            (r.total_minutes * 60 + r.extra_seconds) as f32 / 3600.
+        })
+    };
+    let beaten_now = |key: &str| user.play_status(key) == Some(PlayStatus::Beaten);
+    let mut own: Vec<f32> = keys
+        .iter()
+        .filter(|k| beaten_now(k))
+        .map(|k| hours_of(k))
+        .filter(|h| *h > 0.)
+        .collect();
+    own.sort_by(f32::total_cmp);
+    let middle = own.get(own.len() / 2).copied();
+
+    // The queue, oldest wish first, done one after another.
+    let mut wishes: Vec<(&str, &str)> = keys
+        .iter()
+        .filter_map(|k| {
+            let r = user.play_status.get(*k)?;
+            (r.status == PlayStatus::PlanToPlay).then_some((*k, r.since.as_str()))
+        })
+        .collect();
+    wishes.sort_by(|a, b| a.1.cmp(b.1).then(a.0.cmp(b.0)));
+    let mut ahead = 0.;
+    let queue = wishes
+        .into_iter()
+        .filter_map(|(key, _)| {
+            let (hours, guessed) = match hltb.get(key) {
+                Some(h) if *h > 0 => (Some(*h as f32), false),
+                _ => (middle, true),
+            };
+            let done = hours.filter(|_| weekly_hours > 0.).map(|h| {
+                ahead += h;
+                today + chrono::Days::new((ahead / weekly_hours * 7.).ceil() as u64)
+            });
+            Some(Queued {
+                id: game_id(key)?,
+                hours,
+                guessed: guessed && hours.is_some(),
+                done,
+            })
+        })
+        .collect();
+
+    let mut shelf: Vec<Shelved> = keys
+        .iter()
+        .filter_map(|key| {
+            let status = user.play_status(key)?;
+            if !matches!(status, PlayStatus::Playing | PlayStatus::OnHold) {
+                return None;
+            }
+            let id = game_id(key)?;
+            let session = history
+                .sessions
+                .iter()
+                .rev()
+                .find(|p| p.game == id)
+                .map(|p| p.day);
+            let recorded = user
+                .playtime
+                .get(*key)
+                .and_then(|r| r.last_played.as_deref())
+                .and_then(rfc3339_day);
+            let last = session.max(recorded);
+            let idle_days = last.map(|d| (today - d).num_days().max(0) as u32);
+            idle_days
+                .is_none_or(|d| d >= SHELF_DAYS)
+                .then_some(Shelved {
+                    id,
+                    status,
+                    last,
+                    idle_days,
+                })
+        })
+        .collect();
+    shelf.sort_by(|a, b| {
+        a.last
+            .cmp(&b.last)
+            .then_with(|| a.id.key().cmp(&b.id.key()))
+    });
+
+    let months = if year < today.year() {
+        12
+    } else if year == today.year() {
+        today.month()
+    } else {
+        0
+    };
+    let mut pile: Vec<PileMonth> = (1..=months)
+        .filter_map(|m| {
+            Some(PileMonth {
+                month: NaiveDate::from_ymd_opt(year, m, 1)?,
+                added: 0,
+                started: 0,
+                beaten: 0,
+            })
+        })
+        .collect();
+    let slot = |pile: &[PileMonth], day: NaiveDate| -> Option<usize> {
+        (day.year() == year)
+            .then(|| day.month() as usize - 1)
+            .filter(|ix| *ix < pile.len())
+    };
+    for key in &keys {
+        if let Some(day) = user.first_seen.get(*key).and_then(|t| rfc3339_day(t))
+            && let Some(ix) = slot(&pile, day)
+        {
+            pile[ix].added += 1;
+        }
+        if let Some(id) = game_id(key)
+            && let Some(day) = history.first_played(&id, &user.playtime)
+            && let Some(ix) = slot(&pile, day)
+        {
+            pile[ix].started += 1;
+        }
+        let changes = user.status_history.get(*key).map_or(&[][..], Vec::as_slice);
+        let months: std::collections::BTreeSet<usize> = irori_services::play_status::times_set(
+            changes,
+            user.play_status.get(*key),
+            PlayStatus::Beaten,
+        )
+        .into_iter()
+        .filter_map(rfc3339_day)
+        .filter_map(|d| slot(&pile, d))
+        .collect();
+        for ix in months {
+            pile[ix].beaten += 1;
+        }
+    }
+
+    let beaten_keys: Vec<String> = compute(history, user, keys.iter().copied(), year, today)
+        .beaten
+        .iter()
+        .map(|m| m.id.key())
+        .collect();
+    let against_hltb = beaten_keys
+        .iter()
+        .filter_map(|key| {
+            let hltb = *hltb.get(key).filter(|h| **h > 0)?;
+            let hours = hours_of(key);
+            let id = game_id(key)?;
+            (hours > 0.).then_some(AgainstHltb { id, hours, hltb })
+        })
+        .collect();
+
+    Extras {
+        weekly_hours,
+        queue,
+        shelf,
+        pile,
+        against_hltb,
     }
 }
 
@@ -295,5 +550,84 @@ mod tests {
         assert_eq!(b.goal, Some(2));
         assert_eq!(b.verdict, Some(Verdict::Reached));
         assert_eq!(b.median_days_to_beat, None);
+    }
+
+    #[test]
+    fn a_game_beaten_then_played_again_still_counts_in_its_year() {
+        let mut user = UserData::default();
+        set(&mut user, "gog:1", PlayStatus::Playing, "2026-06-01");
+        user.status_history.insert(
+            "gog:1".into(),
+            vec![
+                irori_services::StatusChange {
+                    at: "2026-03-10T12:00:00Z".into(),
+                    status: Some(PlayStatus::Beaten),
+                },
+                irori_services::StatusChange {
+                    at: "2026-06-01T12:00:00Z".into(),
+                    status: Some(PlayStatus::Playing),
+                },
+            ],
+        );
+        let b = compute(&history(vec![]), &user, ["gog:1"], 2026, day("2026-10-01"));
+        assert_eq!(b.beaten.len(), 1);
+        assert_eq!(b.beaten[0].day, day("2026-03-10"));
+        let before = compute(&history(vec![]), &user, ["gog:1"], 2025, day("2026-10-01"));
+        assert!(before.beaten.is_empty());
+    }
+
+    #[test]
+    fn the_queue_shelf_pile_and_how_long_to_beat() {
+        let today = day("2026-10-25");
+        let mut user = UserData::default();
+        set(&mut user, "gog:q1", PlayStatus::PlanToPlay, "2026-01-01");
+        set(&mut user, "gog:q2", PlayStatus::PlanToPlay, "2026-02-01");
+        set(&mut user, "gog:idle", PlayStatus::OnHold, "2026-03-01");
+        set(&mut user, "gog:busy", PlayStatus::Playing, "2026-03-01");
+        set(&mut user, "gog:done", PlayStatus::Beaten, "2026-09-10");
+        user.first_seen
+            .insert("gog:q1".into(), "2026-01-05T12:00:00Z".into());
+        user.playtime.insert(
+            "gog:done".into(),
+            PlaytimeRecord {
+                total_minutes: 30 * 60,
+                ..Default::default()
+            },
+        );
+        // Twelve weeks of 2 h a week.
+        let mut sessions: Vec<_> = (0..12)
+            .map(|w| {
+                let d = today - chrono::Days::new(7 * w + 1);
+                session("gog:busy", &d.format("%Y-%m-%d").to_string(), 120)
+            })
+            .collect();
+        sessions.push(session("gog:idle", "2026-08-01", 60));
+        sessions.push(session("gog:done", "2026-07-20", 60));
+        let h = history(sessions);
+        let hltb = std::collections::HashMap::from([
+            ("gog:q1".to_string(), 10u32),
+            ("gog:done".to_string(), 25u32),
+        ]);
+        let keys = ["gog:q1", "gog:q2", "gog:idle", "gog:busy", "gog:done"];
+        let e = extras(&h, &user, keys, &hltb, 2026, today);
+        assert!((e.weekly_hours - 2.).abs() < 0.01);
+        // 10 h at 2 h a week: 5 weeks; then the median of beaten games (30 h),
+        // 20 weeks from today in all.
+        assert_eq!(e.queue.len(), 2);
+        assert_eq!(e.queue[0].hours, Some(10.));
+        assert_eq!(e.queue[0].done, Some(day("2026-11-29")));
+        assert!(e.queue[1].guessed);
+        assert_eq!(e.queue[1].hours, Some(30.));
+        assert_eq!(e.queue[1].done, Some(day("2027-03-14")));
+        // The game on hold went quiet; the one played every week didn't.
+        assert_eq!(e.shelf.len(), 1);
+        assert_eq!(e.shelf[0].id.app_name.as_ref(), "idle");
+        assert_eq!(e.shelf[0].idle_days, Some(85));
+        assert_eq!(e.pile.len(), 10);
+        assert_eq!(e.pile[0].added, 1);
+        assert_eq!(e.pile[8].beaten, 1);
+        assert!(e.pile.iter().map(|m| m.started).sum::<usize>() >= 3);
+        assert_eq!(e.against_hltb.len(), 1);
+        assert_eq!((e.against_hltb[0].hours, e.against_hltb[0].hltb), (30., 25));
     }
 }

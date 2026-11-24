@@ -12,6 +12,7 @@
 mod achievements;
 mod age_rating;
 mod compat;
+mod copies;
 mod details;
 mod drawer;
 mod extras;
@@ -19,12 +20,16 @@ mod game_modes;
 mod hero;
 mod info;
 mod journal;
+mod left_off;
 mod menu;
 mod overlay;
+mod pc_check;
+mod reception;
 mod related;
 mod sandbox;
 mod screenshots;
 mod timeline;
+mod trailer;
 
 use std::cell::Cell;
 use std::collections::HashSet;
@@ -33,6 +38,7 @@ use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::select::SelectEvent;
 use gpui_kit::component::{ActiveTheme as _, StyledExt as _, WindowExt as _, v_flex};
@@ -55,8 +61,8 @@ use crate::hooks::{self, CompatibilityInfo};
 use crate::load::Load;
 use crate::state::{ActionInputs, PrimaryAction};
 use crate::{
-    CancelLaunch, OpenGameLog, OpenGameSettingsAction, RunPrimaryAction, ToggleFavourite,
-    TroubleshootLaunch, ops,
+    BackToGame, CancelLaunch, OpenGameLog, OpenGameSettingsAction, RunPrimaryAction,
+    ToggleFavourite, ToggleTrailer, TroubleshootLaunch, ops,
 };
 
 pub use achievements::AchievementFilter;
@@ -85,6 +91,9 @@ pub enum GamePageEvent {
     /// A game-mode chip was chosen: show the library's games of that mode
     /// (`irori_library::show_game_mode`).
     ShowGameMode(irori_core::GameMode),
+    /// A Steam tag chip was chosen: show the library's games with that tag
+    /// (`irori_library::show_tag`).
+    ShowTag(SharedString),
 }
 
 /// A small uppercase label over the page ("SCREENSHOTS", "DETAILS"), in
@@ -133,6 +142,11 @@ pub struct GamePage {
     /// Offline installers and goodies, fetched when the Extras tab opens.
     extras: Load<Arc<Vec<irori_core::ExtraFile>>>,
     achievement_filter: AchievementFilter,
+    achievement_sort: achievements::AchievementSort,
+    /// The achievements list's search.
+    achievement_query: Entity<InputState>,
+    /// The journal's search field.
+    journal_query: Entity<InputState>,
     achievement_view: achievements::RowsCache,
     /// Hidden achievements the user chose to see.
     achievement_reveal: achievements::Reveal,
@@ -140,12 +154,32 @@ pub struct GamePage {
     launch_select: Entity<ChoiceSelect>,
     selected_option: Option<LaunchOption>,
     compat: Load<CompatibilityInfo>,
+    /// How the game's Steam app is received (reviews, players now);
+    /// `Ready(None)` for a game Steam doesn't sell.
+    reception: Load<Option<irori_services::steam_reception::SteamReception>>,
+    /// This computer's memory, processor and graphics, read once.
+    this_pc: Option<irori_extras::pc_check::ThisPc>,
+    /// The store page's requirements compared with this computer, worked
+    /// out when either changes.
+    pc_check: Option<irori_extras::pc_check::PcCheck>,
+    /// The game's Steam app as of the last library change; when it changes
+    /// the store details and compatibility data are read again.
+    steam_link: irori_services::SteamLink,
     /// EOS overlay controls (Epic Windows installs with a store handle).
     overlay: Option<Entity<EosOverlayPanel>>,
+    /// What the game's settings change, from the settings feature (an
+    /// installed game's page only).
+    setup: Option<gpui_kit::AnyView>,
     /// The Mods tab, made when first opened.
     mods: Option<Entity<crate::mods::ModsPanel>>,
     files_available: bool,
     shortcuts_exist: Option<bool>,
+    /// The install folder's size measured on disk, for a game whose store
+    /// gives none.
+    measured_size: Option<u64>,
+    /// Games that may be other copies of this one, as of the last library
+    /// change.
+    possible_copies: Vec<Arc<GameInfo>>,
     tab: InfoTab,
     launch_pending: bool,
     /// Commands in flight, keyed by command name (for loading states).
@@ -164,6 +198,10 @@ pub struct GamePage {
     sticky: bool,
     /// The whole changelog is shown, not just its latest entries.
     changelog_expanded: bool,
+    /// The trailer player, made once the store page names trailers.
+    trailer: Option<Entity<irori_ui::trailer::TrailerPlayer>>,
+    /// Every Steam tag chip is shown, not just the strongest.
+    tags_expanded: bool,
     /// Index of the screenshot open in the viewer.
     viewer: Option<usize>,
     viewer_focus: FocusHandle,
@@ -223,7 +261,21 @@ impl GamePage {
             .cloned()
             .or_else(|| backend(cx).game(&id));
         let launch_select = choice_select(Vec::new(), None, window, cx);
+        let achievement_query =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("game.achievements.search")));
+        let journal_query =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("game.journal.search")));
         let subscriptions = vec![
+            cx.subscribe(&achievement_query, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }),
+            cx.subscribe(&journal_query, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }),
             cx.observe_in(&m.library, window, |this, _, window, cx| {
                 this.on_library_changed(window, cx)
             }),
@@ -239,6 +291,7 @@ impl GamePage {
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&m.settings, |this, _, cx| {
                 this.sandbox = sandbox::configured(&this.id, cx);
+                this.possible_copies = backend(cx).possible_copies(&this.id);
                 cx.notify()
             }),
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
@@ -258,6 +311,11 @@ impl GamePage {
             window.focus(&focus, cx);
         }
         let was_installed = game.as_ref().is_some_and(|g| g.is_installed);
+        let steam_link = game
+            .as_ref()
+            .map_or(irori_services::SteamLink::Unknown, |g| {
+                backend(cx).steam_link(g)
+            });
         let mut this = Self {
             id,
             panel,
@@ -267,16 +325,26 @@ impl GamePage {
             achievements: Load::Idle,
             extras: Load::Idle,
             achievement_filter: AchievementFilter::All,
+            achievement_sort: achievements::AchievementSort::default(),
+            achievement_query,
+            journal_query,
             achievement_view: achievements::RowsCache::default(),
             achievement_reveal: achievements::Reveal::default(),
             launch_options: Vec::new(),
             launch_select,
             selected_option: None,
             compat: Load::Idle,
+            reception: Load::Idle,
+            this_pc: None,
+            pc_check: None,
+            steam_link,
             overlay: None,
+            setup: None,
             mods: None,
             files_available: true,
             shortcuts_exist: None,
+            measured_size: None,
+            possible_copies: Vec::new(),
             tab: InfoTab::About,
             launch_pending: false,
             pending: HashSet::new(),
@@ -288,7 +356,9 @@ impl GamePage {
             page_width: Rc::new(Cell::new(px(0.))),
             sticky: false,
             changelog_expanded: false,
+            tags_expanded: false,
             viewer: None,
+            trailer: None,
             viewer_focus: cx.focus_handle(),
             viewer_strip: ScrollHandle::new(),
             timeline: timeline::TimelineView::default(),
@@ -339,6 +409,8 @@ impl GamePage {
         self.load_extra(window, cx);
         self.load_achievements(window, cx);
         self.load_compat(window, cx);
+        self.load_reception(window, cx);
+        self.load_this_pc(window, cx);
         self.load_install_state(window, cx);
         self.load_timeline(window, cx);
     }
@@ -352,16 +424,24 @@ impl GamePage {
             let game = game.clone();
             cx.new(|cx| EosOverlayPanel::new(game, window, cx))
         });
+        if game.is_installed && self.setup.is_none() {
+            self.setup = irori_ui::hooks::game_setup(self.id.clone(), window, cx);
+        }
         if !game.is_installed {
             self.launch_options.clear();
             self.selected_option = None;
             self.files_available = true;
             self.shortcuts_exist = None;
+            self.measured_size = None;
             return;
         }
         let b = backend(cx);
         let id = self.id.clone();
         let browser = game.browser_url.is_some();
+        let measure = game
+            .install
+            .as_ref()
+            .is_some_and(|i| i.install_size_bytes == 0 && i.install_size.trim().is_empty());
         let task = irori_ui::run(cx, {
             let game = game.clone();
             async move {
@@ -371,16 +451,21 @@ impl GamePage {
                 let options = store.launch_options(&id.app_name).await.unwrap_or_default();
                 let available = browser || store.is_available(&id.app_name).await;
                 let shortcuts = irori_extras::shortcuts::exists(&game).await;
-                Ok((options, available, shortcuts))
+                let size = match measure {
+                    true => b.install_folder_size(&id).await,
+                    false => None,
+                };
+                Ok((options, available, shortcuts, size))
             }
         });
         cx.spawn_in(window, async move |this, cx| {
-            let Ok((options, available, shortcuts)) = task.await else {
+            let Ok((options, available, shortcuts, size)) = task.await else {
                 return;
             };
             let _ = this.update_in(cx, |this, window, cx| {
                 this.files_available = available;
                 this.shortcuts_exist = Some(shortcuts);
+                this.measured_size = size;
                 this.set_launch_options(options, window, cx);
                 cx.notify();
             });
@@ -430,12 +515,8 @@ impl GamePage {
     }
 
     pub(super) fn load_extra(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // An added game's page has only what the user wrote, unless IGDB
-        // or VNDB may fill it in.
-        let app = backend(cx).settings.app();
-        if self.id.runner == irori_core::Runner::Sideload && !app.igdb && !app.vndb {
-            return;
-        }
+        // An added game's page is asked too: what the user wrote, filled in
+        // by IGDB when it is on and by the Steam app the game is linked to.
         self.extra = Load::Loading;
         let b = backend(cx);
         let id = self.id.clone();
@@ -449,6 +530,8 @@ impl GamePage {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 this.extra = Load::from_result(result);
+                this.refresh_pc_check();
+                this.sync_trailer(cx);
                 cx.notify();
             });
         })
@@ -498,12 +581,13 @@ impl GamePage {
             return;
         };
         // PC compatibility data (ProtonDB, Steam Deck) says nothing about
-        // emulated games, and a title match would be another game.
-        if matches!(
-            game.runner(),
-            irori_core::Runner::Sideload | irori_core::Runner::Emulation
-        ) {
-            return;
+        // emulated games, and for an added game a title match would be
+        // another game, unless the user linked it to its Steam app.
+        let linked = matches!(self.steam_link, irori_services::SteamLink::Chosen(_));
+        match game.runner() {
+            irori_core::Runner::Emulation => return,
+            irori_core::Runner::Sideload if !linked => return,
+            _ => {}
         }
         let Some(task) = hooks::fetch_compatibility(game, cx) else {
             return;
@@ -533,10 +617,26 @@ impl GamePage {
             _ => false,
         };
         self.game = next;
+        let link = self
+            .game
+            .as_ref()
+            .map_or(irori_services::SteamLink::Unknown, |g| {
+                backend(cx).steam_link(g)
+            });
+        let relinked = std::mem::replace(&mut self.steam_link, link) != link;
+        self.possible_copies = backend(cx).possible_copies(&self.id);
         if first {
             self.load_all(window, cx);
-        } else if title_changed && let Some(t) = self.title() {
-            cx.emit(GamePageEvent::TitleChanged(t));
+        } else {
+            if title_changed && let Some(t) = self.title() {
+                cx.emit(GamePageEvent::TitleChanged(t));
+            }
+            // Steam's details and ProtonDB follow the game's Steam app.
+            if relinked {
+                self.load_extra(window, cx);
+                self.reload_compat(window, cx);
+                self.load_reception(window, cx);
+            }
         }
         let installed = self.game.as_ref().is_some_and(|g| g.is_installed);
         if installed != self.was_installed {
@@ -686,6 +786,12 @@ impl GamePage {
         }
     }
 
+    fn on_back_to_game(&mut self, _: &BackToGame, window: &mut Window, cx: &mut Context<Self>) {
+        if models(cx).statuses.read(cx).is_playing(&self.id) {
+            irori_ui::game_window::back_to_game(self.id.clone(), window, cx);
+        }
+    }
+
     fn on_troubleshoot(
         &mut self,
         _: &TroubleshootLaunch,
@@ -718,6 +824,14 @@ impl GamePage {
         }
         cx.propagate();
     }
+
+    fn on_toggle_trailer(&mut self, _: &ToggleTrailer, _: &mut Window, cx: &mut Context<Self>) {
+        if self.has_trailer(cx) {
+            self.toggle_trailer(cx);
+        } else {
+            cx.propagate();
+        }
+    }
 }
 
 impl Render for GamePage {
@@ -731,7 +845,9 @@ impl Render for GamePage {
             .on_action(cx.listener(Self::on_open_log))
             .on_action(cx.listener(Self::on_open_settings))
             .on_action(cx.listener(Self::on_troubleshoot))
+            .on_action(cx.listener(Self::on_back_to_game))
             .on_action(cx.listener(Self::on_cancel_launch))
+            .on_action(cx.listener(Self::on_toggle_trailer))
             .size_full()
             .when(self.panel.is_none(), |d| d.bg(cx.theme().background))
             .text_color(cx.theme().foreground);

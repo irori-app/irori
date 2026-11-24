@@ -1,13 +1,13 @@
 //! The library's toolbar: what narrows the shown games (search, store,
 //! account, filters, views, sort, grouping) apart from how they are shown
-//! (cover size, view, selection). With a top row ("Continue playing",
+//! (cover size, view, the look of the covers and background, selection). With a top row ("Continue playing",
 //! favourites), which no filter changes, the toolbar sits under that row in
 //! the list and stays at the list's top once the row scrolls away.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup};
 use gpui_kit::component::input::Input;
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::slider::Slider;
 use gpui_kit::component::{ActiveTheme as _, Icon, Selectable as _, Sizable as _, h_flex};
@@ -17,12 +17,15 @@ use gpui_kit::{
     Pixels, SharedString, Styled as _, Window, canvas, div, point, px, rems,
 };
 use irori_core::Runner;
-use irori_core::settings::LibraryLayout;
+use irori_core::settings::{
+    CoverCaption, CoverCorners, CoverFit, CoverHover, CoverShape, FocusCoverSize,
+    LibraryBackground, LibraryLayout, UiPrefs,
+};
 use irori_services::StoreFilter;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
 
-use super::{Item, LibraryView, item_rem, layout_button, quick};
+use super::{Item, LibraryView, item_rem, layout_button, persist_ui, quick};
 use crate::filter::{Grouping, ViewFilter};
 use crate::{grid, layouts};
 
@@ -123,17 +126,17 @@ impl LibraryView {
                     .dropdown_menu({
                         let model = self.filters.clone();
                         move |menu, _, _| {
-                            let options = [
-                                (Grouping::None, "library.toolbar.group.none"),
-                                (Grouping::Status, "library.toolbar.group.status"),
-                                (Grouping::Mode, "library.toolbar.group.mode"),
-                                (Grouping::Genre, "library.toolbar.group.genre"),
-                                (Grouping::Category, "library.toolbar.group.category"),
-                            ];
-                            options.into_iter().fold(menu, |menu, (option, key)| {
+                            Grouping::ALL.into_iter().fold(menu, |menu, option| {
                                 let model = model.clone();
+                                // The groupings by a game's facts follow
+                                // the user's own after a line.
+                                let menu = if option == Grouping::Store {
+                                    menu.separator()
+                                } else {
+                                    menu
+                                };
                                 menu.item(
-                                    PopupMenuItem::new(t(key))
+                                    PopupMenuItem::new(option.label())
                                         .checked(option == group)
                                         .on_click(move |_, _, cx| {
                                             model.update(cx, |m, cx| {
@@ -194,6 +197,7 @@ impl LibraryView {
                         }
                     })),
             )
+            .child(look_button(&self.ui_prefs))
             .child(
                 Button::new("library-select")
                     .small()
@@ -458,9 +462,198 @@ pub(super) fn nearest_offset(
     }
 }
 
+/// The library's look in one menu beside the layout switch: the background
+/// and the cover options, the same settings Appearance holds, changed in
+/// place so the effect shows at once.
+fn look_button(ui: &UiPrefs) -> impl IntoElement + use<> {
+    let ui = ui.clone();
+    Button::new("library-look")
+        .small()
+        .outline()
+        .icon(IconName::Palette)
+        .tooltip(t("library.look.tooltip"))
+        .dropdown_menu(move |menu, _, _| look_menu(menu, &ui))
+}
+
+/// Whether the look menu offers `background`: a picture needs choosing
+/// first, in Settings, unless it is already the one shown.
+fn offers_background(ui: &UiPrefs, background: LibraryBackground) -> bool {
+    background != LibraryBackground::Picture
+        || !ui.library_background_picture.trim().is_empty()
+        || ui.library_background == background
+}
+
+/// One choice of the look menu: its value, its label's key and what it
+/// writes.
+type LookRow<V> = (V, &'static str, fn(&mut UiPrefs));
+
+/// The rows of [`look_button`]'s menu; each writes one interface setting.
+fn look_menu(menu: PopupMenu, ui: &UiPrefs) -> PopupMenu {
+    let set = |label: SharedString, checked: bool, f: fn(&mut UiPrefs)| {
+        PopupMenuItem::new(label)
+            .checked(checked)
+            .on_click(move |_, _, cx| persist_ui(cx, f))
+    };
+    let mut menu = menu.label(t("library.look.background"));
+    let backgrounds: [LookRow<LibraryBackground>; 3] = [
+        (
+            LibraryBackground::None,
+            "library.look.background_none",
+            |u| u.library_background = LibraryBackground::None,
+        ),
+        (
+            LibraryBackground::GameArt,
+            "library.look.background_art",
+            |u| u.library_background = LibraryBackground::GameArt,
+        ),
+        (
+            LibraryBackground::Picture,
+            "library.look.background_picture",
+            |u| u.library_background = LibraryBackground::Picture,
+        ),
+    ];
+    for (value, key, f) in backgrounds {
+        if offers_background(ui, value) {
+            menu = menu.item(set(t(key), ui.library_background == value, f));
+        }
+    }
+    menu = menu.separator().label(t("library.look.under_covers"));
+    let captions: [LookRow<CoverCaption>; 3] = [
+        (CoverCaption::Full, "library.look.caption_full", |u| {
+            u.cover_caption = CoverCaption::Full
+        }),
+        (CoverCaption::Title, "library.look.caption_title", |u| {
+            u.cover_caption = CoverCaption::Title
+        }),
+        (CoverCaption::None, "library.look.caption_none", |u| {
+            u.cover_caption = CoverCaption::None
+        }),
+    ];
+    for (value, key, f) in captions {
+        menu = menu.item(set(t(key), ui.cover_caption == value, f));
+    }
+    menu = menu.separator().label(t("library.look.shape"));
+    let shapes: [LookRow<CoverShape>; 3] = [
+        (CoverShape::Portrait, "library.look.shape_portrait", |u| {
+            u.cover_shape = CoverShape::Portrait
+        }),
+        (CoverShape::Square, "library.look.shape_square", |u| {
+            u.cover_shape = CoverShape::Square
+        }),
+        (CoverShape::Banner, "library.look.shape_banner", |u| {
+            u.cover_shape = CoverShape::Banner
+        }),
+    ];
+    for (value, key, f) in shapes {
+        menu = menu.item(set(t(key), ui.cover_shape == value, f));
+    }
+    menu = menu.separator().label(t("library.look.fit"));
+    let fits: [LookRow<CoverFit>; 2] = [
+        (CoverFit::Crop, "library.look.fit_crop", |u| {
+            u.cover_fit = CoverFit::Crop
+        }),
+        (CoverFit::Whole, "library.look.fit_whole", |u| {
+            u.cover_fit = CoverFit::Whole
+        }),
+    ];
+    for (value, key, f) in fits {
+        menu = menu.item(set(t(key), ui.cover_fit == value, f));
+    }
+    menu = menu.separator().label(t("library.look.corners"));
+    let corners: [LookRow<CoverCorners>; 3] = [
+        (CoverCorners::Square, "library.look.corners_square", |u| {
+            u.cover_corners = CoverCorners::Square
+        }),
+        (CoverCorners::Rounded, "library.look.corners_rounded", |u| {
+            u.cover_corners = CoverCorners::Rounded
+        }),
+        (CoverCorners::Round, "library.look.corners_round", |u| {
+            u.cover_corners = CoverCorners::Round
+        }),
+    ];
+    for (value, key, f) in corners {
+        menu = menu.item(set(t(key), ui.cover_corners == value, f));
+    }
+    menu = menu.separator().label(t("library.look.focus_size"));
+    let focus_sizes: [LookRow<FocusCoverSize>; 3] = [
+        (FocusCoverSize::Small, "library.look.focus_small", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Small
+        }),
+        (FocusCoverSize::Medium, "library.look.focus_medium", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Medium
+        }),
+        (FocusCoverSize::Large, "library.look.focus_large", |u| {
+            u.library_focus_cover_size = FocusCoverSize::Large
+        }),
+    ];
+    for (value, key, f) in focus_sizes {
+        menu = menu.item(set(t(key), ui.library_focus_cover_size == value, f));
+    }
+    let rises = ui.cover_hover == CoverHover::Lift;
+    menu.separator()
+        .item(set(
+            t("library.look.rise"),
+            rises,
+            if rises {
+                |u| u.cover_hover = CoverHover::Outline
+            } else {
+                |u| u.cover_hover = CoverHover::Lift
+            },
+        ))
+        .item(set(t("library.look.star"), ui.cover_favourite, |u| {
+            u.cover_favourite = !u.cover_favourite
+        }))
+        .item(set(t("library.look.badges"), ui.show_store_badges, |u| {
+            u.show_store_badges = !u.show_store_badges
+        }))
+        .when(ui.show_store_badges, |menu| {
+            menu.item(set(
+                t("library.look.badges_always"),
+                ui.store_badges_always,
+                |u| u.store_badges_always = !u.store_badges_always,
+            ))
+        })
+        .item(set(
+            t("library.look.categories"),
+            ui.cover_categories,
+            |u| u.cover_categories = !u.cover_categories,
+        ))
+        .item(set(
+            t("library.look.open_details"),
+            ui.library_open_details_on_select,
+            |u| u.library_open_details_on_select = !u.library_open_details_on_select,
+        ))
+        .item(set(
+            t("library.look.auto_layout"),
+            ui.library_auto_layout,
+            |u| u.library_auto_layout = !u.library_auto_layout,
+        ))
+        .separator()
+        .item(
+            PopupMenuItem::new(t("library.look.more")).on_click(|_, _, cx| {
+                irori_ui::navigate(irori_ui::Route::Settings("appearance".into()), cx)
+            }),
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_look_menu_offers_a_picture_only_once_one_is_chosen() {
+        let mut ui = UiPrefs::default();
+        assert!(offers_background(&ui, LibraryBackground::None));
+        assert!(offers_background(&ui, LibraryBackground::GameArt));
+        assert!(!offers_background(&ui, LibraryBackground::Picture));
+        ui.library_background_picture = "/pictures/sky.png".into();
+        assert!(offers_background(&ui, LibraryBackground::Picture));
+        let ui = UiPrefs {
+            library_background: LibraryBackground::Picture,
+            ..UiPrefs::default()
+        };
+        assert!(offers_background(&ui, LibraryBackground::Picture));
+    }
 
     #[test]
     fn rows_scroll_clear_of_the_held_toolbar() {

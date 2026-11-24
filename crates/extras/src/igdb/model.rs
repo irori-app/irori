@@ -2,7 +2,7 @@
 //! matching a library title to a search result and filling a store page's
 //! gaps with what IGDB knows.
 
-use irori_core::ExtraInfo;
+use irori_core::{AgeRating, CriticScore, ExtraInfo, RatingSystem};
 use serde::{Deserialize, Serialize};
 
 use crate::wiki::hltb;
@@ -14,7 +14,12 @@ const IMAGE_BASE: &str = "https://images.igdb.com/igdb/image/upload";
 /// picker use, nothing more.
 pub(crate) const GAME_FIELDS: &str = "name,summary,storyline,first_release_date,genres.name,\
      involved_companies.company.name,involved_companies.developer,\
-     involved_companies.publisher,cover.image_id,artworks.image_id,screenshots.image_id,url";
+     involved_companies.publisher,cover.image_id,artworks.image_id,screenshots.image_id,url,\
+     age_ratings.organization.name,age_ratings.rating_category.rating,\
+     age_ratings.rating_content_descriptions.description,\
+     version_parent.age_ratings.organization.name,\
+     version_parent.age_ratings.rating_category.rating,aggregated_rating,\
+     aggregated_rating_count";
 
 /// Search results asked for at once.
 pub(crate) const SEARCH_LIMIT: u32 = 10;
@@ -40,6 +45,11 @@ pub struct IgdbGame {
     pub screenshots: Vec<String>,
     /// The game's page on igdb.com.
     pub url: Option<String>,
+    /// The boards' ratings; an edition without its own has its parent
+    /// game's.
+    pub age_ratings: Vec<AgeRating>,
+    /// The critics' rating, 0–100, when critics reviewed the game.
+    pub critic_rating: Option<u8>,
 }
 
 impl IgdbGame {
@@ -142,6 +152,80 @@ struct Involved {
     publisher: bool,
 }
 
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RatingCategory {
+    rating: String,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Description {
+    description: String,
+}
+
+/// One board's rating as the API sends it: the board and its rating are
+/// records of their own.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RawRating {
+    organization: Option<Named>,
+    rating_category: Option<RatingCategory>,
+    rating_content_descriptions: Vec<Description>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Parent {
+    age_ratings: Vec<RawRating>,
+}
+
+/// IGDB's spelling of a rating (`Twelve`, `MA15`, `ALL`) as the boards
+/// write it.
+fn rating_code(rating: &str) -> String {
+    let rating = rating.trim();
+    let number = match rating.to_ascii_lowercase().as_str() {
+        "three" => "3",
+        "six" => "6",
+        "seven" => "7",
+        "ten" => "10",
+        "twelve" => "12",
+        "fourteen" => "14",
+        "fifteen" => "15",
+        "sixteen" => "16",
+        "eighteen" => "18",
+        _ => rating,
+    };
+    number.to_string()
+}
+
+/// The ratings of `raw` Irori knows the board of.
+fn age_ratings(raw: &[RawRating]) -> Vec<AgeRating> {
+    let mut out: Vec<AgeRating> = Vec::new();
+    for r in raw {
+        let Some(system) = r
+            .organization
+            .as_ref()
+            .and_then(|o| RatingSystem::from_key(&o.name.replace(['_', ' '], "")))
+        else {
+            continue;
+        };
+        let Some(rating) = r.rating_category.as_ref().map(|c| rating_code(&c.rating)) else {
+            continue;
+        };
+        let descriptors = r
+            .rating_content_descriptions
+            .iter()
+            .map(|d| d.description.clone());
+        if let Some(rating) = AgeRating::new(system, &rating, descriptors, None)
+            && !out.iter().any(|o| o.system == rating.system)
+        {
+            out.push(rating);
+        }
+    }
+    out
+}
+
 /// A game as the API sends it: expanded fields arrive as objects.
 #[derive(Deserialize, Default)]
 #[serde(default)]
@@ -157,6 +241,10 @@ struct RawGame {
     artworks: Vec<Image>,
     screenshots: Vec<Image>,
     url: Option<String>,
+    age_ratings: Vec<RawRating>,
+    version_parent: Option<Parent>,
+    aggregated_rating: Option<f64>,
+    aggregated_rating_count: u32,
 }
 
 fn nonempty(s: Option<String>) -> Option<String> {
@@ -213,6 +301,19 @@ impl From<RawGame> for IgdbGame {
                 .filter(|g| !g.is_empty())
                 .collect(),
             url: nonempty(raw.url).filter(|u| u.starts_with("https://")),
+            critic_rating: raw
+                .aggregated_rating
+                .filter(|_| raw.aggregated_rating_count > 0)
+                .and_then(|r| CriticScore::new(SOURCE_NAME, r))
+                .map(|s| s.score),
+            age_ratings: match age_ratings(&raw.age_ratings) {
+                own if !own.is_empty() => own,
+                _ => raw
+                    .version_parent
+                    .as_ref()
+                    .map(|p| age_ratings(&p.age_ratings))
+                    .unwrap_or_default(),
+            },
         }
     }
 }
@@ -270,6 +371,10 @@ pub fn fill_extra(info: &mut ExtraInfo, game: &IgdbGame) -> bool {
         info.release_date = Some(date.clone());
         filled = true;
     }
+    if info.age_ratings.is_empty() && !game.age_ratings.is_empty() {
+        info.age_ratings = game.age_ratings.clone();
+        filled = true;
+    }
     if info.screenshots.is_empty() && !game.screenshots.is_empty() {
         info.screenshots = game
             .screenshots
@@ -280,6 +385,12 @@ pub fn fill_extra(info: &mut ExtraInfo, game: &IgdbGame) -> bool {
     }
     if filled {
         info.note_source(SOURCE_NAME);
+    }
+    // A score names its own source, so it doesn't make the page IGDB's.
+    if info.score.is_none() {
+        info.score = game
+            .critic_rating
+            .and_then(|r| CriticScore::new(SOURCE_NAME, f64::from(r)));
     }
     filled
 }
@@ -322,6 +433,43 @@ mod tests {
         );
         let json = serde_json::to_value(g).unwrap();
         assert_eq!(serde_json::from_value::<IgdbGame>(json).unwrap(), *g);
+    }
+
+    #[test]
+    fn reads_age_ratings_and_an_editions_parents() {
+        let answer = r#"[{
+            "id": 1, "name": "Hades",
+            "age_ratings": [
+                {"id": 1, "organization": {"id": 2, "name": "PEGI"},
+                 "rating_category": {"id": 9, "rating": "Twelve"},
+                 "rating_content_descriptions": [{"id": 3, "description": "Violence"}]},
+                {"id": 2, "organization": {"id": 1, "name": "ESRB"},
+                 "rating_category": {"id": 4, "rating": "T"}},
+                {"id": 3, "organization": {"id": 6, "name": "CLASS_IND"},
+                 "rating_category": {"id": 30, "rating": "Fourteen"}},
+                {"id": 4, "organization": {"id": 99, "name": "A board from later"},
+                 "rating_category": {"id": 99, "rating": "X"}}
+            ]
+        }, {
+            "id": 2, "name": "Hades: Deluxe Edition",
+            "version_parent": {"id": 1, "age_ratings": [
+                {"organization": {"name": "USK"}, "rating_category": {"rating": "Sixteen"}}
+            ]}
+        }]"#;
+        let games = parse_games(answer.as_bytes()).unwrap();
+        let titles: Vec<String> = games[0].age_ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(titles, ["PEGI 12", "ESRB T", "ClassInd 14"]);
+        assert_eq!(games[0].age_ratings[0].descriptors, ["Violence"]);
+        assert_eq!(games[0].age_ratings[0].age, Some(12));
+        let edition: Vec<String> = games[1].age_ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(edition, ["USK 16"]);
+
+        // They fill a store page that names none, and never replace one.
+        let mut info = ExtraInfo::default();
+        assert!(fill_extra(&mut info, &games[1]));
+        assert_eq!(info.age_ratings.len(), 1);
+        assert!(!fill_extra(&mut info, &games[0]));
+        assert_eq!(info.age_ratings[0].system, RatingSystem::Usk);
     }
 
     #[test]

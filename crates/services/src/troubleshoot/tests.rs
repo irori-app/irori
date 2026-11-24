@@ -293,6 +293,53 @@ fn anticheat_entries_explain_what_the_log_cant() {
     assert!(diagnose(&f, &HashSet::new()).fixes.is_empty());
 }
 
+/// Heroic #6046: Rockstar's launcher offers to buy a game Epic started when
+/// Yama keeps Wine from reading its parent's memory.
+#[test]
+fn a_strict_ptrace_scope_is_explained_for_rockstar_titles_from_epic() {
+    let mut f = facts(&["Starting"]);
+    f.context = wine();
+    f.ptrace_scope = Some(2);
+    // Only Rockstar titles from Epic check their parent this way.
+    assert!(hints(&diagnose(&f, &HashSet::new())).is_empty());
+    f.rockstar_from_epic = true;
+    let d = diagnose(&f, &HashSet::new());
+    assert_eq!(hints(&d), [LaunchHint::PtraceScope]);
+    assert!(!d.findings[0].confirmed);
+    assert_eq!(
+        d.findings[0].detail,
+        Some(Detail::PtraceScope { current: 2 })
+    );
+    assert_eq!(offered(&d), [Fix::PtraceScope(2)]);
+    // The launcher's own log confirms it.
+    f.launcher_lines = vec![
+        "[minmode] Starting up normally.".into(),
+        "Epic Games Launcher not detected as parent process.".into(),
+    ];
+    let d = diagnose(&f, &HashSet::new());
+    assert!(d.findings[0].confirmed);
+    assert_eq!(
+        d.findings[0].line(),
+        Some("Epic Games Launcher not detected as parent process.")
+    );
+    // The default scope lets Wine trace its own processes.
+    f.ptrace_scope = Some(1);
+    assert!(hints(&diagnose(&f, &HashSet::new())).is_empty());
+}
+
+#[test]
+fn ptrace_scope_commands_respect_a_locked_scope() {
+    use super::analysis::{parse_ptrace_scope, ptrace_scope_commands};
+    assert_eq!(parse_ptrace_scope("2\n"), Some(2));
+    assert_eq!(parse_ptrace_scope("x"), None);
+    assert_eq!(ptrace_scope_commands(2).len(), 2);
+    assert!(ptrace_scope_commands(2)[0].contains("sysctl -w kernel.yama.ptrace_scope=1"));
+    // Scope 3 can't be lowered until a restart: only the lasting setting.
+    let locked = ptrace_scope_commands(3);
+    assert_eq!(locked.len(), 1);
+    assert!(locked[0].contains("/etc/sysctl.d/"));
+}
+
 #[test]
 fn a_low_map_count_is_explained() {
     let mut f = facts(&["Starting"]);

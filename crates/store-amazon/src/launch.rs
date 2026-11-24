@@ -110,7 +110,10 @@ pub fn build_launch_plan(i: &LaunchInputs<'_>) -> Result<LaunchPlan> {
                 .args(args);
             (cmd, true)
         }
-        None if cfg!(windows) => (CommandSpec::new(&exe).args(args), false),
+        // A native replacement program set for the game runs directly.
+        None if cfg!(windows) || i.environment.without_wine => {
+            (CommandSpec::new(&exe).args(args), false)
+        }
         None => bail!("Choose a Wine or Proton version in the game's settings to run Amazon games"),
     };
     let command = command
@@ -196,6 +199,7 @@ mod tests {
 
     fn env_with(wine: Option<WineLaunch>, wrappers: Vec<Vec<String>>) -> LaunchEnvironment {
         LaunchEnvironment {
+            without_wine: false,
             env: BTreeMap::from([("WINEPREFIX".to_string(), "/p".to_string())]),
             env_remove: Vec::new(),
             wrappers,

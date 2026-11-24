@@ -28,16 +28,19 @@ mod commands;
 mod dialogs;
 mod filter;
 mod filters_panel;
-mod format;
+pub mod format;
 mod grid;
+mod groups;
 mod i18n;
 mod launch;
+mod launchbox;
 mod layouts;
 mod quick;
 mod random;
 mod selection;
 mod stats;
 mod top;
+mod value_search;
 mod view;
 mod views;
 
@@ -48,10 +51,13 @@ use irori_core::GameId;
 use irori_sideload::SideloadStore;
 
 pub use commands::{GameCommand, GameState};
-pub use dialogs::categories::open_categories_dialog;
+pub use dialogs::categories::{export_categories, import_categories, open_categories_dialog};
+pub use dialogs::duplicates::open_duplicates_dialog;
 pub use dialogs::edit_game::open_edit_game_dialog;
+pub use dialogs::fields::open_fields_dialog;
 pub use dialogs::folder::open_add_folder_dialog;
 pub use dialogs::lutris::open_lutris_installer;
+pub use dialogs::metadata::open_metadata_dialog;
 pub use dialogs::sideload::open_add_game_dialog;
 pub use dialogs::sideload::open_play_as_pc_game_dialog;
 pub use dialogs::smart::open_smart_category_editor;
@@ -60,10 +66,16 @@ pub use dialogs::views::{open_manage_views_dialog, open_save_view_dialog};
 pub use filter::{CategoryFilter, GroupKind, Grouping, HiddenMode, InstallFilter, ViewFilter};
 pub use filters_panel::active_filters;
 pub use i18n::CATALOGS;
-pub use random::open_random_game;
+pub use launchbox::{download_launchbox, offers_launchbox};
+pub use random::{
+    Pool as RandomPool, open_random_game, pick_from as pick_random_from, pools as random_pools,
+};
 pub use stats::StatsView;
 pub use stats::year_view::{YEAR_REVIEW_CONTEXT, YearReviewView};
 pub use view::LibraryView;
+pub use view::details::{
+    edit_picked_metadata, link_picked_to_steam, picked_count, refresh_picked_details,
+};
 pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
@@ -96,6 +108,18 @@ gpui_kit::actions!(
         SelectLast,
         SelectPageUp,
         SelectPageDown,
+        /// Move like the Select actions and pick the games from where
+        /// these steps began to the focused one (Shift with the keys).
+        ExtendLeft,
+        ExtendRight,
+        ExtendUp,
+        ExtendDown,
+        ExtendFirst,
+        ExtendLast,
+        ExtendPageUp,
+        ExtendPageDown,
+        /// Pick or unpick the focused game for bulk actions.
+        PickFocused,
         /// Open the focused game's page.
         OpenSelected,
         /// Run the focused game's primary action (Play, Stop or Install).
@@ -121,6 +145,20 @@ gpui_kit::actions!(
         NextLibraryView,
         /// Open the grid's drawer on the focused game, or close it.
         ToggleDrawer,
+        /// Move through the art picker's pictures (arrows, a controller's
+        /// directions).
+        ArtPickerUp,
+        ArtPickerDown,
+        ArtPickerLeft,
+        ArtPickerRight,
+        /// Use the picture the art picker's cursor is on.
+        UseArt,
+        /// Move to the art picker's search field.
+        SearchArt,
+        /// Show the previous or next source's pictures (a controller's
+        /// shoulders).
+        PrevArtSource,
+        NextArtSource,
     ]
 );
 
@@ -158,6 +196,18 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("end", SelectLast, grid),
         KeyBinding::new("pageup", SelectPageUp, grid),
         KeyBinding::new("pagedown", SelectPageDown, grid),
+        KeyBinding::new("shift-left", ExtendLeft, grid),
+        KeyBinding::new("shift-right", ExtendRight, grid),
+        KeyBinding::new("shift-up", ExtendUp, grid),
+        KeyBinding::new("shift-down", ExtendDown, grid),
+        KeyBinding::new("shift-home", ExtendFirst, grid),
+        KeyBinding::new("shift-end", ExtendLast, grid),
+        KeyBinding::new("shift-pageup", ExtendPageUp, grid),
+        KeyBinding::new("shift-pagedown", ExtendPageDown, grid),
+        // Shift+Space everywhere; Ctrl+Space as file managers have it,
+        // though macOS may keep it for switching input sources.
+        KeyBinding::new("shift-space", PickFocused, grid),
+        KeyBinding::new("ctrl-space", PickFocused, grid),
         KeyBinding::new("enter", OpenSelected, grid),
         KeyBinding::new("i", ToggleDrawer, grid),
         KeyBinding::new("space", ActivateSelected, grid),
@@ -165,6 +215,18 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("ctrl-a", SelectAllGames, grid),
         KeyBinding::new("delete", RemovePicked, grid),
         KeyBinding::new("escape", EndSelection, grid),
+    ]);
+    let art = Some(dialogs::steamgrid::ART_PICKER_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("up", ArtPickerUp, art),
+        KeyBinding::new("down", ArtPickerDown, art),
+        KeyBinding::new("left", ArtPickerLeft, art),
+        KeyBinding::new("right", ArtPickerRight, art),
+        KeyBinding::new("enter", UseArt, art),
+        KeyBinding::new("ctrl-enter", SearchArt, art),
+        KeyBinding::new("ctrl-f", SearchArt, art),
+        KeyBinding::new("pageup", PrevArtSource, art),
+        KeyBinding::new("pagedown", NextArtSource, art),
     ]);
 }
 
@@ -317,6 +379,21 @@ pub fn set_groups_by_category(on: bool, cx: &mut App) {
     }
 }
 
+/// How the library splits its games into sections; `None` until a library
+/// view exists.
+pub fn grouping(cx: &App) -> Option<Grouping> {
+    let model = filters_panel::active_filters(cx)?;
+    Some(model.read(cx).filter().group)
+}
+
+/// Group the library by `group` (the palette's rows for a game's facts).
+/// Does nothing until a library view exists.
+pub fn set_grouping(group: Grouping, cx: &mut App) {
+    if let Some(model) = filters_panel::active_filters(cx) {
+        model.update(cx, |m, cx| m.update(|f| f.group = group, cx));
+    }
+}
+
 /// Every category of both kinds with its count, pinned first (the command
 /// palette's "Show category" rows).
 pub fn category_list(cx: &App) -> Vec<irori_ui::categories::CategoryEntry> {
@@ -353,6 +430,20 @@ pub fn show_game_mode(mode: irori_core::GameMode, cx: &mut App) {
         move |f| {
             f.reset_filters();
             f.modes = [mode].into();
+        },
+        cx,
+    );
+    irori_ui::navigate(irori_ui::Route::Library, cx);
+}
+
+/// Show the library's games with Steam tag `tag` (a game page's tag
+/// chip): the Filters popover's criteria give way to that tag alone, while
+/// the search, store, sort and grouping stay.
+pub fn show_tag(tag: String, cx: &mut App) {
+    filters_panel::change_filters(
+        move |f| {
+            f.reset_filters();
+            f.tags = [tag].into();
         },
         cx,
     );

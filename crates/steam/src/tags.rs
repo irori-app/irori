@@ -1,6 +1,7 @@
 //! The store's user tags ("Puzzle", "Co-op", "Great Soundtrack"): each
-//! app's strongest tags from `IStoreBrowseService/GetItems`, and their names
-//! in a language from `IStoreService/GetTagList`. Neither needs a key.
+//! app's strongest tags with their votes from `IStoreBrowseService/GetItems`,
+//! and their names in a language from `IStoreService/GetTagList`. Neither
+//! needs a key.
 
 use std::collections::HashMap;
 
@@ -32,25 +33,41 @@ struct RawTag {
     weight: u64,
 }
 
-/// An app's tag ids, strongest first: by the votes `tags` carries, else in
-/// `tagids`' order (which the store already ranks).
-fn ranked(item: RawItem) -> Vec<u32> {
+/// One of an app's tags and how many players gave it (0 when the store
+/// sent only the tag's place).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TagVotes {
+    pub id: u32,
+    pub votes: u64,
+}
+
+/// An app's tags, strongest first: by the votes `tags` carries, else in
+/// `tagids`' order (which the store already ranks), without votes.
+fn ranked(item: RawItem) -> Vec<TagVotes> {
     if item.tags.is_empty() {
-        return item.tagids.into_iter().take(TAGS_PER_APP).collect();
+        return item
+            .tagids
+            .into_iter()
+            .take(TAGS_PER_APP)
+            .map(|id| TagVotes { id, votes: 0 })
+            .collect();
     }
     let mut tags = item.tags;
     tags.sort_by_key(|t| std::cmp::Reverse(t.weight));
     tags.into_iter()
-        .map(|t| t.tagid)
+        .map(|t| TagVotes {
+            id: t.tagid,
+            votes: t.weight,
+        })
         .take(TAGS_PER_APP)
         .collect()
 }
 
 impl Client {
-    /// The strongest tag ids of `appids`, keyed by app id. Apps the store
+    /// The strongest tags of `appids`, keyed by app id. Apps the store
     /// doesn't know are left out; one it knows without tags maps to an
     /// empty list.
-    pub async fn app_tags(&self, appids: &[u32]) -> Result<HashMap<u32, Vec<u32>>> {
+    pub async fn app_tags(&self, appids: &[u32]) -> Result<HashMap<u32, Vec<TagVotes>>> {
         #[derive(Deserialize, Default)]
         #[serde(default)]
         struct Items {
@@ -153,13 +170,16 @@ mod tests {
                 },
             ],
         };
-        assert_eq!(ranked(item), [2, 3, 1]);
+        let ids: Vec<u32> = ranked(item).iter().map(|t| t.id).collect();
+        assert_eq!(ids, [2, 3, 1]);
         let plain = RawItem {
             appid: 620,
             tagids: (0..30).collect(),
             tags: vec![],
         };
-        assert_eq!(ranked(plain).len(), TAGS_PER_APP);
+        let plain = ranked(plain);
+        assert_eq!(plain.len(), TAGS_PER_APP);
+        assert!(plain.iter().all(|t| t.votes == 0));
     }
 
     #[tokio::test]
@@ -191,8 +211,20 @@ mod tests {
         })
         .unwrap();
         let tags = api.app_tags(&[620, 7]).await.unwrap();
-        assert_eq!(tags[&620], [4182, 1625]);
-        assert_eq!(tags[&7], Vec::<u32>::new());
+        assert_eq!(
+            tags[&620],
+            [
+                TagVotes {
+                    id: 4182,
+                    votes: 604
+                },
+                TagVotes {
+                    id: 1625,
+                    votes: 588
+                }
+            ]
+        );
+        assert!(tags[&7].is_empty());
         let names = api.tag_names("german").await.unwrap();
         assert_eq!(names[&1625], "Plattformer");
         assert!(!names.contains_key(&9));

@@ -15,6 +15,44 @@ use std::path::{Path, PathBuf};
 use crate::lutris_import::{ImportKind, PlannedGame};
 pub use crate::lutris_import::{LutrisPlan, SkipReason};
 
+/// The folders every Lutris, Bottles and Faugus Launcher installation of
+/// this user keeps games, prefixes and Wine builds in, by launcher, read
+/// from their own data (only read). Reads files: call it off the async
+/// runtime.
+pub fn found_folders() -> Vec<(&'static str, Vec<PathBuf>)> {
+    let mut lutris = Vec::new();
+    for dirs in crate::lutris_import::LutrisDirs::discover() {
+        lutris.push(dirs.data_dir.join("runners"));
+        match crate::lutris_import::plan(&dirs) {
+            Ok(plan) => lutris.extend(plan.folders()),
+            Err(e) => tracing::debug!("reading Lutris' folders: {e:#}"),
+        }
+    }
+    let mut bottles = Vec::new();
+    for dirs in bottles::BottlesDirs::discover() {
+        bottles.push(dirs.runners_dir.clone());
+        match bottles::plan(&dirs) {
+            Ok((plan, found)) => {
+                bottles.extend(found.into_iter().map(|b| b.path));
+                bottles.extend(plan.folders());
+            }
+            Err(e) => tracing::debug!("reading Bottles' folders: {e:#}"),
+        }
+    }
+    let mut faugus = Vec::new();
+    for file in faugus::discover() {
+        match faugus::plan(&file) {
+            Ok(plan) => faugus.extend(plan.folders()),
+            Err(e) => tracing::debug!("reading Faugus Launcher's folders: {e:#}"),
+        }
+    }
+    vec![
+        ("Lutris", lutris),
+        ("Bottles", bottles),
+        ("Faugus Launcher", faugus),
+    ]
+}
+
 /// The XDG data or config folder under `home`, honouring `var`.
 fn xdg(home: &Path, var: &str, default: &str) -> PathBuf {
     std::env::var_os(var)
