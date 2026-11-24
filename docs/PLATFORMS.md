@@ -429,7 +429,11 @@ protontricks only knows Steam app IDs, so games Irori runs itself keep using win
 
 Each configuration root has one running Irori instance, protected by an OS file
 lock. Subsequent invocations forward arguments over authenticated loopback IPC.
-The tray uses the desktop's native integration. macOS uses Command shortcuts and a native app menu; Windows/Linux retain Control shortcuts. Games inhibit sleep through the
+The tray uses the desktop's native integration. With "Minimize when a game starts" and
+"Close to tray" both on and a tray icon running (not in Steam's Game Mode), a game
+starting closes the window to the tray instead of minimizing it, and the window opens
+again where it was once the games it closed for have ended, unless the user opened it
+meanwhile; Big Picture stays open behind the game. macOS uses Command shortcuts and a native app menu; Windows/Linux retain Control shortcuts. Games inhibit sleep through the
 Linux portal, macOS caffeinate, or Windows thread execution state. Desktop/menu
 shortcuts use `.desktop`, Finder app bundles, or Windows shell links respectively.
 Windows cancellation uses `taskkill /T /F`; games that deliberately escape their

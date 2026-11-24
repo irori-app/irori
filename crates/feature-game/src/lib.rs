@@ -47,6 +47,7 @@ mod steam_match;
 mod sync_saves;
 #[cfg(test)]
 mod ui_tests;
+mod vndb_match;
 mod windows_file;
 
 use gpui_kit::{App, KeyBinding};

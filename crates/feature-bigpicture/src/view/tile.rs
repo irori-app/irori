@@ -19,7 +19,10 @@ use gpui_kit::{
     Window, div, point, px, rems,
 };
 use irori_core::{GameId, GameInfo, StatusKind};
-use irori_ui::components::{ArtImage, art_image, art_loading, missing_art_fill, physical_width};
+use irori_ui::components::{
+    ArtImage, art_image, art_loading, missing_art_fill, physical_width, program_icon_cover,
+    program_icon_img,
+};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
 use irori_ui::motion::{HOVER_SPRING, fade_in};
@@ -176,6 +179,9 @@ impl BigPictureView {
             Some(url) => art_image(url, physical_width(rems(width * scale), window), false, cx),
             None => ArtImage::Missing,
         };
+        let icon = matches!(image, ArtImage::Missing)
+            .then(|| program_icon_img(&game, rems(width * scale), shape.ratio(), window, cx))
+            .flatten();
 
         let badge = if state.playing {
             Some(Tag::primary().small().child(t("bigpicture.badge.playing")))
@@ -228,6 +234,14 @@ impl BigPictureView {
                         .when(dim, |img| img.opacity(0.5)),
                 ),
                 ArtImage::Loading => d.child(art_loading()),
+                ArtImage::Missing if let Some(icon) = icon => d.child(program_icon_cover(
+                    icon,
+                    &game.title.clone().into(),
+                    rems(width * scale),
+                    shape.ratio(),
+                    c.foreground,
+                    cx,
+                )),
                 ArtImage::Missing => d.child(
                     v_flex()
                         .size_full()

@@ -25,8 +25,12 @@ pub struct LaunchProgram {
     pub path: String,
     /// Its arguments, split like a shell does.
     pub args: String,
-    /// Seconds after the game starts; 0 starts it with the game.
+    /// Seconds after the game starts; 0 starts it with the game. For a
+    /// program started before the game, the seconds the game waits for it.
     pub delay_seconds: u32,
+    /// Start it before the game, which waits `delay_seconds` for it. Off
+    /// starts it with (or after) the game.
+    pub start_before_game: bool,
     /// Run it with the game's Wine or Proton build, in the game's prefix
     /// (Windows programs). Off runs it as a program of this computer.
     pub in_prefix: bool,
@@ -43,6 +47,7 @@ impl Default for LaunchProgram {
             path: String::new(),
             args: String::new(),
             delay_seconds: 0,
+            start_before_game: false,
             in_prefix: false,
             stop_with_game: true,
             enabled: true,
@@ -280,7 +285,7 @@ mod tests {
     #[test]
     fn programs_keep_their_defaults_from_older_files() {
         let p: LaunchProgram = serde_json::from_str(r#"{"path": "/opt/discord"}"#).unwrap();
-        assert!(p.enabled && p.stop_with_game && !p.in_prefix);
+        assert!(p.enabled && p.stop_with_game && !p.in_prefix && !p.start_before_game);
         assert_eq!(p.label(), "discord");
         let p = LaunchProgram {
             name: " Trainer ".into(),

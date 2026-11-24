@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Obrázky ze SteamGridDB",
   "library.art.attribution_igdb": "Grafika z IGDB",
+  "library.art.attribution_vndb": "Grafika z VNDB",
   "library.art.attribution_launchbox": "Obaly z databáze LaunchBox Games Database",
   "library.art.attribution_sources": "Zdroje obrázků: {sources}",
   "library.art.image_label_captioned": "Obrázek {number}, {caption}",

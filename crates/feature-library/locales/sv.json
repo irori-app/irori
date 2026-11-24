@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Bilder från SteamGridDB",
   "library.art.attribution_igdb": "Bilder från IGDB",
+  "library.art.attribution_vndb": "Bilder från VNDB",
   "library.art.attribution_launchbox": "Omslag från LaunchBox Games Database",
   "library.art.attribution_sources": "Bilder från {sources}",
   "library.art.image_label_captioned": "Bild {number}, {caption}",

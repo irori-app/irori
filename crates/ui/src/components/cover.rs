@@ -94,6 +94,82 @@ pub fn art_missing(cx: &App) -> AnyElement {
         .into_any_element()
 }
 
+/// The icon of the game's own program, when it has one, it is ready and
+/// the game has no cover art, for a stand-in cover `width` wide and `ratio`
+/// times as tall. Starts producing the thumbnail when it isn't on disk yet.
+pub fn program_icon_img(
+    game: &GameInfo,
+    width: Rems,
+    ratio: f32,
+    window: &Window,
+    cx: &mut App,
+) -> Option<Img> {
+    if game.cover_art().is_some() {
+        return None;
+    }
+    let url = game.program_icon.as_deref()?;
+    let px = physical_width(icon_side(width, ratio), window);
+    art_img(url, px, true, cx)
+}
+
+/// Side of a program icon on a stand-in cover `width` wide and `ratio`
+/// times as tall: about half the cover, most of it on a thumbnail too small
+/// for a title.
+fn icon_side(width: Rems, ratio: f32) -> Rems {
+    let short = width.0.min(width.0 * ratio);
+    if width.0 < 5. {
+        rems(short * 0.75)
+    } else {
+        rems((short * 0.45).min(8.))
+    }
+}
+
+/// A stand-in cover `width` wide and `ratio` times as tall with the game's
+/// program icon centred on the quiet wash, whole and never stretched (icons
+/// are small), and the title, in `text`, under it when there is room.
+pub fn program_icon_cover(
+    icon: Img,
+    title: &SharedString,
+    width: Rems,
+    ratio: f32,
+    text: Hsla,
+    cx: &App,
+) -> AnyElement {
+    let side = icon_side(width, ratio);
+    let icon = icon.w(side).h(side).object_fit(ObjectFit::Contain);
+    if width.0 < 5. {
+        return v_flex()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .bg(missing_art_fill(cx))
+            .child(icon)
+            .into_any_element();
+    }
+    v_flex()
+        .size_full()
+        .p_3()
+        .gap_2()
+        .bg(missing_art_fill(cx))
+        .child(
+            v_flex()
+                .flex_1()
+                .min_h_0()
+                .items_center()
+                .justify_center()
+                .child(icon),
+        )
+        .child(
+            div()
+                .when_else(width.0 < 9., |d| d.text_sm(), |d| d.text_lg())
+                .font_bold()
+                .line_clamp(3)
+                .text_color(text)
+                .child(title.clone()),
+        )
+        .into_any_element()
+}
+
 /// A `#rrggbb` colour of the systems catalog.
 fn catalog_color(hex: &str) -> Option<Hsla> {
     let v = u32::from_str_radix(hex.strip_prefix('#')?, 16).ok()?;
@@ -175,8 +251,9 @@ pub fn cover_art_for(game: &GameInfo, shape: CoverShape) -> Option<&str> {
     }
 }
 
-/// A 2:3 cover tile (or another [`CoverShape`]). Pulses while its art
-/// loads; a game without cover art gets its title on a quiet wash instead.
+/// A 2:3 cover tile. Pulses while its art loads; a game without cover art
+/// gets its title on a quiet wash instead, under its program's icon when it
+/// has one ([`program_icon_cover`]).
 #[derive(IntoElement)]
 pub struct GameCover {
     game: Arc<GameInfo>,
@@ -235,6 +312,9 @@ impl RenderOnce for GameCover {
             ),
             None => (ArtImage::Missing, false),
         };
+        let icon = matches!(image, ArtImage::Missing)
+            .then(|| program_icon_img(&self.game, self.width, 1.5, window, cx))
+            .flatten();
         let theme = cx.theme();
         let radius = self.radius.unwrap_or(theme.radius_lg);
         let base = div()
@@ -257,6 +337,14 @@ impl RenderOnce for GameCover {
                     .object_fit(ObjectFit::Cover),
             )),
             ArtImage::Loading => base.child(art_loading()),
+            ArtImage::Missing if let Some(icon) = icon => base.child(program_icon_cover(
+                icon,
+                &self.game.title.clone().into(),
+                self.width,
+                1.5,
+                theme.foreground,
+                cx,
+            )),
             // Tiny thumbnails (download rows, sidebar) have no room for a title.
             ArtImage::Missing if self.width.0 < 5. => base.child(art_missing(cx)),
             ArtImage::Missing

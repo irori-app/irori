@@ -1734,3 +1734,35 @@ fn the_view_follows_the_window_width_when_asked(cx: &mut TestAppContext) {
     assert_eq!(layout(cx), LibraryLayout::Focus);
     cx.update(|cx| view.update(cx, |v, cx| v.set_auto_layout_for_test(false, cx)));
 }
+
+#[gpui_kit::test]
+fn the_art_picker_offers_vndb_while_it_is_on(cx: &mut TestAppContext) {
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+
+    let _backend = start(cx);
+    let open = |igdb_on: bool, vndb_on: bool, cx: &mut TestAppContext| {
+        cx.update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| {
+                    ArtPicker::with_vndb(ArtKind::Cover, "", None, igdb_on, vndb_on, window, cx)
+                })
+            })
+        })
+        .expect("window opens")
+        .1
+    };
+    let source = |picker: &Entity<ArtPicker>, cx: &mut TestAppContext| {
+        cx.read(|cx| picker.read(cx).source())
+    };
+
+    // VNDB alone, without a SteamGridDB key: VNDB first.
+    let picker = open(false, true, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
+    // With IGDB on too: IGDB first; VNDB stays a source of its own.
+    let picker = open(true, true, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::Vndb, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
+}

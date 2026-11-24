@@ -474,6 +474,7 @@ impl Backend {
         let user = self.userdata.snapshot();
         let tag_language =
             irori_steam_api::achievements::steam_language(&self.settings.app().ui_language);
+        let program_icons = self.settings.app().ui.program_icon_art;
         let tag_limit = self.settings.app().steam_tag_limit;
         let mut games: Vec<Arc<GameInfo>> = self
             .stores
@@ -512,6 +513,9 @@ impl Backend {
                     if let Some(modes) = &o.game_modes {
                         g.game_modes = irori_core::game_mode::normalized(modes.clone());
                     }
+                    if program_icons {
+                        self.program_icons.complete(&mut g);
+                    }
                     Arc::new(g.finalize())
                 }
                 None => {
@@ -522,6 +526,9 @@ impl Backend {
                     let app = self.steam_links.linked(&g).app_id();
                     self.steam_tags
                         .complete(&mut g, tag_language, app, tag_limit);
+                    if program_icons {
+                        self.program_icons.complete(&mut g);
+                    }
                     // Always again: a store's cache may hold a key made
                     // by an older Irori.
                     Arc::new(g.finalize())
@@ -549,6 +556,16 @@ impl Backend {
                 }
                 // After the tags: a title found here brings its own.
                 if b.match_steam_titles(&list).await {
+                    b.rebuild_library();
+                }
+            });
+        }
+        // Read the icons of programs new or changed since the last rebuild;
+        // the library is rebuilt once they are there.
+        if program_icons {
+            let (b, list) = (self.clone(), games.clone());
+            self.spawn_blocking(move || {
+                if b.program_icons.refresh(&list) {
                     b.rebuild_library();
                 }
             });

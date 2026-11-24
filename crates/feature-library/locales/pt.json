@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Imagens do SteamGridDB",
   "library.art.attribution_igdb": "Imagens do IGDB",
+  "library.art.attribution_vndb": "Imagens do VNDB",
   "library.art.attribution_launchbox": "Capas da LaunchBox Games Database",
   "library.art.attribution_sources": "Imagens de: {sources}",
   "library.art.image_label_captioned": "Imagem {number}, {caption}",

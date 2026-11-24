@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Artwork from SteamGridDB",
   "library.art.attribution_igdb": "Artwork from IGDB",
+  "library.art.attribution_vndb": "Art from VNDB",
   "library.art.attribution_launchbox": "Box art from the LaunchBox Games Database",
   "library.art.attribution_sources": "Artwork from {sources}",
   "library.art.image_label_captioned": "Image {number}, {caption}",

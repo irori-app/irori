@@ -381,6 +381,11 @@ pub struct GameSettings {
     /// Irori-only.
     #[serde(rename = "iroriIgdbId")]
     pub igdb_id: String,
+    /// The game's VNDB id (`v17`), when the user chose its match ("Change
+    /// VNDB match"), or `none` for no match; empty finds one by title. Per
+    /// game only. Irori-only.
+    #[serde(rename = "iroriVndbId")]
+    pub vndb_id: String,
     /// The Steam app the game is linked to, when the user chose one, or
     /// `none` for none: Steam's tags, store details, ProtonDB and the
     /// achievements read from game files follow it, and umu names the game
@@ -646,6 +651,7 @@ impl Default for GameSettings {
             ludusavi_title: String::new(),
             hltb_id: String::new(),
             igdb_id: String::new(),
+            vndb_id: String::new(),
             steam_app_id: String::new(),
             umu_id: String::new(),
             replay: ReplaySettings::default(),
@@ -1003,6 +1009,12 @@ pub struct AppSettings {
     /// off by default. Irori-only.
     #[serde(rename = "iroriIgdb")]
     pub igdb: bool,
+    /// Fill what store pages and IGDB leave out of visual novels
+    /// (descriptions, release dates, developers, covers, screenshots) from
+    /// VNDB, and offer its covers in the art picker. VNDB's public API
+    /// needs no account; off by default. Irori-only.
+    #[serde(rename = "iroriVndb")]
+    pub vndb: bool,
     /// Box art for the ROM library from the LaunchBox Games Database: its
     /// game list (about 110 MB) is downloaded, and again once a week while
     /// the ROM library has games. Off by default; the art picker's and the
@@ -1101,6 +1113,7 @@ impl Default for AppSettings {
             achievement_toast: AchievementToastPrefs::default(),
             file_achievements: false,
             igdb: false,
+            vndb: false,
             launchbox: false,
             steam_title_match: false,
             steam_tag_limit: DEFAULT_STEAM_TAG_LIMIT,
@@ -1736,6 +1749,9 @@ pub struct UiPrefs {
     /// Copies of one game from several stores are one library entry
     /// (`groupCopies`, on unless turned off).
     pub group_copies: bool,
+    /// A game without cover art shows the icon of its Windows program on its
+    /// stand-in cover (`programIconArt`, on unless turned off).
+    pub program_icon_art: bool,
     /// A game page's first trailer starts on its own, muted
     /// (`trailerAutoplay`, off unless turned on).
     pub trailer_autoplay: bool,
@@ -2088,6 +2104,7 @@ impl Default for UiPrefs {
             show_store_badges: true,
             cover_categories: false,
             group_copies: true,
+            program_icon_art: true,
             trailer_autoplay: false,
             library_quick_controls: true,
             sidebar_collapsed: false,
@@ -2172,6 +2189,7 @@ mod tests {
         assert!(ui.library_quick_controls);
         assert!(!ui.cover_categories);
         assert!(ui.group_copies);
+        assert!(ui.program_icon_art);
         assert!(!ui.wallpaper_colors);
         assert!(ui.wallpaper_colors_file.is_empty());
         let json = serde_json::to_value(UiPrefs {

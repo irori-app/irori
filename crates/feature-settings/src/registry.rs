@@ -2787,6 +2787,24 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_group_copies.help")
     .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
     app(
+        "iroriUi.programIconArt",
+        "settings.field.ui_program_icon_art.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_program_icon_art.help")
+    .keywords(&[
+        "icon",
+        "exe",
+        "program",
+        "cover",
+        "art",
+        "missing",
+        "placeholder",
+        "lutris",
+    ]),
+    app(
         "iroriUi.showAgeRatings",
         "settings.field.ui_show_age_ratings.label",
         Appearance,
@@ -3103,6 +3121,23 @@ pub static FIELDS: &[FieldSpec] = &[
         Panel(PanelKind::Igdb),
     )
     .keywords(&["igdb", "twitch", "client id", "client secret"]),
+    app(
+        "iroriVndb",
+        "settings.field.vndb.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.vndb.help")
+    .keywords(&[
+        "vndb",
+        "visual novel",
+        "metadata",
+        "description",
+        "developer",
+        "cover",
+        "screenshots",
+    ]),
     app(
         "iroriLaunchBox",
         "settings.field.launchbox.label",

@@ -335,6 +335,14 @@ impl GamePage {
                 chips(vec![d.clone()]),
                 muted,
             ));
+        } else if let Some(names) = self
+            .extra
+            .ready()
+            .map(|e| e.developers.clone())
+            .filter(|d| !d.is_empty())
+        {
+            // A source that filled the page's gaps (VNDB) named them.
+            rows.push(row(t("game.details.developer"), chips(names), muted));
         }
         if let Some(p) = game.publisher.as_ref().filter(|p| {
             !p.is_empty() && game.developer.as_ref() != Some(p) && shows(DetailRow::Publisher)

@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "SteamGridDB のアートワーク",
   "library.art.attribution_igdb": "IGDB の画像",
+  "library.art.attribution_vndb": "VNDB の画像",
   "library.art.attribution_launchbox": "パッケージ画像: LaunchBox Games Database",
   "library.art.attribution_sources": "{sources} のアートワーク",
   "library.art.image_label_captioned": "画像 {number}、{caption}",

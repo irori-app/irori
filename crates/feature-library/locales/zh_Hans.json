@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "图片来自 SteamGridDB",
   "library.art.attribution_igdb": "图片来自 IGDB",
+  "library.art.attribution_vndb": "图片来自 VNDB",
   "library.art.attribution_launchbox": "包装图来自 LaunchBox Games Database",
   "library.art.attribution_sources": "图片来自 {sources}",
   "library.art.image_label_captioned": "图片 {number}，{caption}",

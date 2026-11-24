@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Görseller SteamGridDB’den",
   "library.art.attribution_igdb": "Görseller IGDB’den",
+  "library.art.attribution_vndb": "Görseller VNDB’den",
   "library.art.attribution_launchbox": "Kutu görselleri LaunchBox Games Database’den",
   "library.art.attribution_sources": "Görsel kaynakları: {sources}",
   "library.art.image_label_captioned": "Görsel {number}, {caption}",

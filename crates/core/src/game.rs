@@ -33,6 +33,11 @@ pub struct GameInfo {
     pub art_logo: Option<String>,
     pub art_background: Option<String>,
     pub art_icon: Option<String>,
+    /// `file://` URL of the icon of the game's own program, which covers
+    /// show when the game has no cover art. Filled by services at each
+    /// library rebuild, never stored by a store.
+    #[serde(skip)]
+    pub program_icon: Option<String>,
     pub is_installed: bool,
     pub install: Option<InstalledInfo>,
     /// False for entries that are owned but cannot be installed (e.g. browser-only).
@@ -377,6 +382,10 @@ pub struct ExtraInfo {
         deserialize_with = "crate::game_mode::lenient"
     )]
     pub game_modes: Vec<crate::GameMode>,
+    /// Developers named by a source that filled the store page's gaps
+    /// (VNDB), for games whose library entry names none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub developers: Vec<String>,
     /// How a controller plays it, when a source says ([`crate::controller_support`]).
     #[serde(
         default,
@@ -384,8 +393,9 @@ pub struct ExtraInfo {
         deserialize_with = "crate::controller_support::lenient"
     )]
     pub controller_support: Option<crate::ControllerSupport>,
-    /// The source that filled what the store page lacked (`"IGDB"`), named
-    /// on the game page; `None` when everything is the store's.
+    /// The sources that filled what the store page lacked (`"IGDB"`, or
+    /// several joined by `", "`: `"IGDB, VNDB"`), named on the game page;
+    /// `None` when everything is the store's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details_from: Option<String>,
     /// A critics' score the store page or a source filling it gives
@@ -424,6 +434,27 @@ pub struct Video {
     pub thumbnail: Option<String>,
     /// What plays: an `https` file or stream address.
     pub url: String,
+}
+
+impl ExtraInfo {
+    /// Whether `source` filled any of the page.
+    pub fn filled_by(&self, source: &str) -> bool {
+        self.details_from
+            .as_deref()
+            .is_some_and(|from| from.split(", ").any(|s| s == source))
+    }
+
+    /// Note that `source` filled some of the page, after any source noted
+    /// before it.
+    pub fn note_source(&mut self, source: &str) {
+        if self.filled_by(source) {
+            return;
+        }
+        self.details_from = Some(match self.details_from.take() {
+            Some(from) if !from.is_empty() => format!("{from}, {source}"),
+            _ => source.to_string(),
+        });
+    }
 }
 
 /// One row of system requirements.
@@ -741,6 +772,18 @@ pub type PlaytimeMap = BTreeMap<String, PlaytimeRecord>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notes_each_source_once_in_order() {
+        let mut info = ExtraInfo::default();
+        assert!(!info.filled_by("IGDB"));
+        info.note_source("IGDB");
+        info.note_source("VNDB");
+        info.note_source("IGDB");
+        assert_eq!(info.details_from.as_deref(), Some("IGDB, VNDB"));
+        assert!(info.filled_by("VNDB") && info.filled_by("IGDB"));
+        assert!(!info.filled_by("VND"));
+    }
 
     #[test]
     fn titles_sort_in_natural_order() {

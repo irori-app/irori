@@ -261,6 +261,7 @@ impl Backend {
         let mut info = store.extra_info(&id.app_name).await?;
         self.fill_from_steam(id, &mut info).await;
         self.fill_from_igdb(id, &mut info).await;
+        self.fill_from_vndb(id, &mut info).await;
         if self.store_facts.learn_store_page(id.key(), &info) {
             self.rebuild_library();
         }

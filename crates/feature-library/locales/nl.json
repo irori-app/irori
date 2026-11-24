@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Afbeeldingen van SteamGridDB",
   "library.art.attribution_igdb": "Afbeeldingen van IGDB",
+  "library.art.attribution_vndb": "Afbeeldingen van VNDB",
   "library.art.attribution_launchbox": "Hoesjes uit de LaunchBox Games Database",
   "library.art.attribution_sources": "Afbeeldingen van {sources}",
   "library.art.image_label_captioned": "Afbeelding {number}, {caption}",

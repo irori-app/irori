@@ -384,7 +384,7 @@ pub fn fill_extra(info: &mut ExtraInfo, game: &IgdbGame) -> bool {
         filled = !info.screenshots.is_empty() || filled;
     }
     if filled {
-        info.details_from = Some(SOURCE_NAME.to_string());
+        info.note_source(SOURCE_NAME);
     }
     // A score names its own source, so it doesn't make the page IGDB's.
     if info.score.is_none() {

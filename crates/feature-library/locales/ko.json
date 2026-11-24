@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "SteamGridDB의 아트워크",
   "library.art.attribution_igdb": "IGDB의 이미지",
+  "library.art.attribution_vndb": "VNDB의 이미지",
   "library.art.attribution_launchbox": "LaunchBox Games Database의 박스 아트",
   "library.art.attribution_sources": "{sources}의 아트워크",
   "library.art.image_label_captioned": "이미지 {number}, {caption}",

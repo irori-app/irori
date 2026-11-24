@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Зображення з SteamGridDB",
   "library.art.attribution_igdb": "Зображення з IGDB",
+  "library.art.attribution_vndb": "Зображення з VNDB",
   "library.art.attribution_launchbox": "Обкладинки з LaunchBox Games Database",
   "library.art.attribution_sources": "Джерела зображень: {sources}",
   "library.art.image_label_captioned": "Зображення {number}, {caption}",

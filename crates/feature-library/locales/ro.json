@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Imagini de pe SteamGridDB",
   "library.art.attribution_igdb": "Imagini din IGDB",
+  "library.art.attribution_vndb": "Imagini din VNDB",
   "library.art.attribution_launchbox": "Coperți din LaunchBox Games Database",
   "library.art.attribution_sources": "Surse de imagini: {sources}",
   "library.art.image_label_captioned": "Imaginea {number}, {caption}",

@@ -54,6 +54,7 @@ mod other_launchers;
 pub mod play_status;
 pub mod power;
 pub mod prefixes;
+mod program_icons;
 mod programs;
 pub mod related;
 pub mod renodx;
@@ -85,6 +86,7 @@ pub mod troubleshoot;
 pub mod updates;
 pub mod user_actions;
 pub mod userdata;
+mod vndb;
 mod windows_files;
 
 use std::collections::BTreeMap;
@@ -195,6 +197,7 @@ pub struct Inner {
     facts: facts::FactsService,
     store_facts: store_facts::StoreFactsService,
     steam_tags: steam_tags::SteamTagsService,
+    program_icons: program_icons::ProgramIcons,
     steam_links: steam_link::SteamLinkService,
     hidden_lock: hidden_lock::HiddenLock,
     pub statuses: StatusRegistry,
@@ -249,6 +252,8 @@ pub struct Inner {
     troubleshoot: troubleshoot::TroubleshootState,
     /// The user's IGDB application.
     igdb: igdb::IgdbState,
+    /// The VNDB client, shared so requests stay spaced.
+    vndb: vndb::VndbState,
 }
 
 impl Deref for Backend {
@@ -322,6 +327,7 @@ impl Backend {
             facts: facts::FactsService::load(),
             store_facts: store_facts::StoreFactsService::load(),
             steam_tags: steam_tags::SteamTagsService::load(),
+            program_icons: program_icons::ProgramIcons::load(),
             steam_links: steam_link::SteamLinkService::load(),
             hidden_lock: hidden_lock::HiddenLock::load(),
             statuses: StatusRegistry::new(bus.clone()),
@@ -354,6 +360,7 @@ impl Backend {
             sunshine: Default::default(),
             troubleshoot: Default::default(),
             igdb: Default::default(),
+            vndb: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {
@@ -534,7 +541,8 @@ impl Backend {
         });
 
         // Rebuild the aggregated library when stores or user data change, the
-        // user shows or hides a store, or turns grouping copies on or off.
+        // user shows or hides a store, or turns grouping copies or program
+        // icons on or off.
         let b = self.clone();
         self.spawn(async move {
             let mut rx = b.subscribe();
@@ -543,6 +551,7 @@ impl Backend {
             let switches = |a: &irori_core::AppSettings| [a.zoom_platform, a.itch_io];
             let mut on = switches(&b.settings.app());
             let mut copies = b.settings.app().ui.group_copies;
+            let mut icons = b.settings.app().ui.program_icon_art;
             let mut tag_limit = b.settings.app().steam_tag_limit;
             let mut proton_to_steam = b.settings.app().download_proton_to_steam;
             let mut network_mode = b.settings.app().network_mode;
@@ -589,11 +598,13 @@ impl Backend {
                         if app.ui.stores != shown
                             || now != on
                             || app.ui.group_copies != copies
+                            || app.ui.program_icon_art != icons
                             || app.steam_tag_limit != tag_limit
                         {
                             shown = app.ui.stores;
                             on = now;
                             copies = app.ui.group_copies;
+                            icons = app.ui.program_icon_art;
                             tag_limit = app.steam_tag_limit;
                             b.rebuild_library();
                         }

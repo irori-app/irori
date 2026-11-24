@@ -207,7 +207,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
 | `crates/reshade` | `irori-reshade` | Graphics mods per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, ReShade and RenoDX downloads from the official sources, journaled installs |
-| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, IGDB, deals, Heroic import, Lutris import planning |
+| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, IGDB, VNDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
 | `crates/ui` | `irori-ui` | Shared UI: backend bridge, models, navigation, art, theme and translucency, components, i18n |
 | `crates/feature-library` | `irori-library` | Library grid/list, search, filters, categories, stats page, sideload dialogs, the Lutris script installer |
@@ -781,6 +781,23 @@ commands without a window.
   shows its size, SteamGridDB's from its API, the others' read from their first bytes
   (`irori_extras::image_size`, a range request). Nothing is asked while the setting is
   off; the Modify dialog's title and art overrides win over everything.
+- **VNDB** (`vndb.rs`, client in `irori-extras::vndb`, opt-in `iroriVndb`, Settings →
+  Advanced → Artwork): visual novels from VNDB's public API ("Kana",
+  `POST api.vndb.org/kana/vn` with `filters`, `fields`, `results`; no account),
+  requests spaced 1.5 s apart (VNDB allows 200 in five minutes). Any game may match
+  while it is on: the user's choice (per-game `iroriVndbId`, `v17`, `none` for no
+  match; "Change VNDB match" on the game page, `irori_game::vndb_match`, results with
+  their year, another name and cover), else the search result one of whose names
+  (title, original and romanized titles, aliases) folds like the game's title, the
+  release year deciding between several; cached in `<cache>/vndb` (a month, a week
+  for "not found"). `Backend::extra_info` fills, after IGDB, only what is still empty:
+  the description as plain text (`vndb::plain_text`: links' text kept, spoilers and
+  other codes dropped), release date, developers (`ExtraInfo::developers`, shown only
+  when the library names none) and screenshots, naming VNDB in
+  `ExtraInfo::details_from` (`note_source`, joined after IGDB). Images keep VNDB's
+  flags: one rated sexual above 0, violent above 1 or not rated is never kept, nor one
+  off `https://*.vndb.org`. The art picker offers the cover and screenshots
+  (`ArtSource::Vndb`). Nothing is asked while the setting is off.
 - **Store media for other stores' games**: `Backend::extra_info` fills a non-Steam
   game's page from the store page of its Steam link (see Steam link; one `appdetails`
   fetch per linked app, cached a week, `Backend::fill_from_steam`) before IGDB: its
@@ -1313,10 +1330,20 @@ commands without a window.
      silicon fails with it too. `iroriMetalFxDlss` (macOS) is set up in the
      prefix by `irori_runtime::metalfx` only for builds that ship the
      translation, and taken back out from its record otherwise.
-  6. `process::spawn`, with a capped game log, then the programs started
-     alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
-     Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);
-     a Steam game's Proton prefix is reached only through `protontricks-launch`.
+  6. The programs set to start before the game (`programs.rs`,
+     `iroriLaunchPrograms`' `startBeforeGame`), in order, the game waiting each
+     one's delay (cancelled with the launch; a launch that fails stops them),
+     then `process::spawn`, with a capped game log, then the programs started
+     alongside, each after its delay. Windows ones run with the game's Wine
+     layer and prefix (`PROTON_VERB=run`); a Steam game's Proton prefix is
+     reached only through `protontricks-launch`. Under umu every `umu-run`
+     starts a Steam runtime container of its own, so the game and the Windows
+     programs started with it get `UMU_CONTAINER_NSENTER=1`
+     (`programs::shares_container`): the game's container offers Steam's
+     launcher service and the programs enter it, seeing the game's processes
+     (the game starts a few seconds later while umu looks for a container).
+     Programs started before the game keep a container of their own: the game
+     never enters theirs, since a program that exits would take it down.
   7. Sleep inhibition, the replay buffer, then session tracking. When the started
      program exits but left processes running (a crack's or publisher's launcher
      handing over to the game), the session follows them (`follow::Handoff`): on Unix
@@ -1431,6 +1458,19 @@ cx.spawn_in(window, async move |this, cx| {
   original with its thumbnails) go least recently used first. Art the store hands out
   is noted with `art_cache::note_used` and never removed; each trim dates its files to
   now, so recency survives restarts without file writes on the UI thread.
+- A game without cover art (`cover_art()` empty after the user's overrides, not a ROM)
+  whose program is a Windows `.exe` gets that program's icon as
+  `GameInfo::program_icon`, a `file://` URL (`irori-services`' `program_icons.rs`,
+  `iroriUi.programIconArt`, on by default). The icon is read off the rebuild, on a
+  blocking thread, by `irori_extras::program_icon` (the bounded PE resource reader
+  `shortcuts::pe_icon` under `#![forbid(unsafe_code)]`: the first `RT_GROUP_ICON`, its
+  largest `RT_ICON`, PNG or bitmap, small ones enlarged by whole multiples), stored as
+  `<cache>/program-icons/<digest of path, size, modified time>.png` and noted with
+  every game's answer (none included) in `<cache>/program-icons.json`, so the rebuild
+  reads no file; a new answer rebuilds the library. `GameCover` and Big Picture's tiles
+  draw it whole, centred on the stand-in wash above the title
+  (`components::program_icon_cover`); the user's and the store's art always win.
+  Native Linux and macOS programs give none (ELF carries no icon; `.icns` isn't read).
 
 **Theme and translucency:**
 
@@ -1585,6 +1625,12 @@ Other parts:
   (`tray-icon`, kept on the main thread). On Windows the tray's pop-up menu is drawn in
   Irori's light or dark (`menu_theme.rs`: uxtheme's `SetPreferredAppMode`, build 18362
   and later), following the theme as it changes.
+  `tray_hide.rs`: with
+  `minimizeOnLaunch` and `exitToTray` on and a tray running, a game starting
+  closes the main window to the tray (`AppHandles::hidden` keeps the games it
+  closed for) and the app reopens it, on the route it showed, once none of them
+  plays; opening the window any other way forgets that. Without a tray, or in
+  Big Picture, it minimizes or stays as before (`tray_hide::on_launch`).
 - `title_bar.rs`: on Linux with client-side decorations, when the desktop's button
   layout (`App::button_layout`, GNOME's `button-layout`) isn't gpui-kit's minimize,
   maximize, close on the right, the shell draws this bar with the buttons where the

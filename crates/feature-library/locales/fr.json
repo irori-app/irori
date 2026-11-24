@@ -1,6 +1,7 @@
 {
   "library.art.attribution": "Images de SteamGridDB",
   "library.art.attribution_igdb": "Illustrations d’IGDB",
+  "library.art.attribution_vndb": "Illustrations de VNDB",
   "library.art.attribution_launchbox": "Jaquettes de la LaunchBox Games Database",
   "library.art.attribution_sources": "Images de {sources}",
   "library.art.image_label_captioned": "Image {number}, {caption}",
