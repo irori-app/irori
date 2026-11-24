@@ -437,6 +437,8 @@ fn programs_alongside_start_and_stop_with_the_game() {
     isolate_paths();
     let dir = tempfile::tempdir().unwrap();
     let marks = dir.path().join("marks");
+    let before = dir.path().join("before");
+    let seen = dir.path().join("seen");
     let game = Arc::new(
         GameInfo {
             runner: Some(Runner::Sideload),
@@ -455,7 +457,15 @@ fn programs_alongside_start_and_stop_with_the_game() {
     let id = game.id();
     let store: irori_core::DynStore = Arc::new(PlayStore {
         game,
-        command: irori_core::process::CommandSpec::new("sh").args(["-c", "sleep 2"]),
+        // The game notes whether the program started before it is running.
+        command: irori_core::process::CommandSpec::new("sh").args([
+            "-c".to_string(),
+            format!(
+                "test -f '{}' && touch '{}'; sleep 2",
+                before.display(),
+                seen.display()
+            ),
+        ]),
         saves_fail: false,
     });
     let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
@@ -468,6 +478,13 @@ fn programs_alongside_start_and_stop_with_the_game() {
             "args": format!("-c 'echo \"$IRORI_GAME_TITLE\" > {}; exec sleep 60'", marks.display()),
         },
         {"name": "Trainer", "path": "sh", "args": "-c true", "delaySeconds": 30},
+        {
+            "name": "Server",
+            "path": "sh",
+            "args": format!("-c 'touch {}; exec sleep 60'", before.display()),
+            "startBeforeGame": true,
+            "delaySeconds": 1,
+        },
     ]);
     b.settings
         .set_game_value(&id, "iroriLaunchPrograms", Some(programs));
@@ -499,6 +516,12 @@ fn programs_alongside_start_and_stop_with_the_game() {
         log.contains("Not starting Trainer: the game ended first"),
         "{log}"
     );
+    assert!(
+        seen.exists(),
+        "the game started after the program before it"
+    );
+    assert!(log.contains("Waiting 1 s for Server"), "{log}");
+    assert!(log.contains("Stopping Server: the game ended"), "{log}");
 }
 
 /// A backend with one added game that runs `script` through `sh -c`.

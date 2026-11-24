@@ -601,6 +601,20 @@ impl Backend {
 
         // Programs alongside run with the Wine layer the store gets.
         let request_env = environment.clone();
+        let mut programs = self
+            .plan_programs(id, &game, &settings, &request_env)
+            .map(|plan| crate::programs::Programs::prepare(plan, &log_file));
+        // Under umu, a game whose programs join its container offers it.
+        if crate::programs::shares_container(
+            &settings.launch_programs,
+            &environment,
+            irori_core::HostPlatform::current(),
+        ) {
+            environment
+                .env
+                .entry(crate::programs::UMU_NSENTER.into())
+                .or_insert_with(|| "1".into());
+        }
         let request = LaunchRequest {
             option,
             extra_args,
@@ -658,6 +672,11 @@ impl Backend {
             append_log(&log_file, &note);
         }
 
+        // Programs started before the game; the game waits for each. A
+        // launch that fails from here drops them, which stops them.
+        if let Some(programs) = &mut programs {
+            programs.start_before(&cancel).await;
+        }
         // The game writes its own output; past the cap, cut the log back to
         // the details above (Wine warnings in a loop can add 100 MiB/s).
         let header = std::fs::metadata(&log_file).map(|m| m.len()).unwrap_or(0);
@@ -686,7 +705,9 @@ impl Backend {
                 log_cap::GAME_LOG_CAP,
             ))
         });
-        let programs = self.start_programs(id, &game, &settings, &request_env, &log_file);
+        if let Some(programs) = &mut programs {
+            programs.start_with_game();
+        }
         let awake = self.spawn(Inhibitor::acquire_owned(format!("Playing {}", game.title)));
         // A game another program owns is followed through it below. A browser
         // opened through `xdg-open` may start the user's whole browser, which
@@ -952,16 +973,15 @@ impl Backend {
         });
     }
 
-    /// Start the game's programs alongside, if it has any. Steam games reach
+    /// Plan the game's programs alongside, if it has any. Steam games reach
     /// Steam's Proton prefix through `protontricks-launch`.
-    fn start_programs(
+    fn plan_programs(
         &self,
         id: &GameId,
         game: &GameInfo,
         settings: &irori_core::GameSettings,
         environment: &irori_core::LaunchEnvironment,
-        log_file: &Path,
-    ) -> Option<crate::programs::Programs> {
+    ) -> Option<crate::programs::Plan> {
         let programs = &settings.launch_programs;
         if !programs.iter().any(|p| p.enabled) {
             return None;
@@ -987,7 +1007,7 @@ impl Backend {
             identity: crate::programs::identity_env(game),
             steam_launch,
         });
-        Some(crate::programs::Programs::start(plan, log_file))
+        Some(plan)
     }
 
     /// Queue an install of `id` with default options into the default install

@@ -897,10 +897,20 @@ commands without a window.
      (`programs::script_alongside`), stopped when the session ends or the launch
      fails.
   5. `store.launch` builds the `LaunchPlan`.
-  6. `process::spawn`, with a capped game log, then the programs started
-     alongside (`programs.rs`, `iroriLaunchPrograms`), each after its delay.
-     Windows ones run with the game's Wine layer and prefix (`PROTON_VERB=run`);
-     a Steam game's Proton prefix is reached only through `protontricks-launch`.
+  6. The programs set to start before the game (`programs.rs`,
+     `iroriLaunchPrograms`' `startBeforeGame`), in order, the game waiting each
+     one's delay (cancelled with the launch; a launch that fails stops them),
+     then `process::spawn`, with a capped game log, then the programs started
+     alongside, each after its delay. Windows ones run with the game's Wine
+     layer and prefix (`PROTON_VERB=run`); a Steam game's Proton prefix is
+     reached only through `protontricks-launch`. Under umu every `umu-run`
+     starts a Steam runtime container of its own, so the game and the Windows
+     programs started with it get `UMU_CONTAINER_NSENTER=1`
+     (`programs::shares_container`): the game's container offers Steam's
+     launcher service and the programs enter it, seeing the game's processes
+     (the game starts a few seconds later while umu looks for a container).
+     Programs started before the game keep a container of their own: the game
+     never enters theirs, since a program that exits would take it down.
   7. Sleep inhibition, the replay buffer, then session tracking. When the started
      program exits but left processes running (a crack's or publisher's launcher
      handing over to the game), the session follows them (`follow::Handoff`): on Unix

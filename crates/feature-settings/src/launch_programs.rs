@@ -53,6 +53,7 @@ struct Editor {
     delay: Entity<InputState>,
     in_prefix: bool,
     stop_with_game: bool,
+    start_before_game: bool,
     /// The switch was set by hand, so picking a file leaves it alone.
     prefix_chosen: bool,
     error: Option<SharedString>,
@@ -202,6 +203,7 @@ impl LaunchProgramsPanel {
             delay,
             in_prefix: program.in_prefix && self.prefix_possible,
             stop_with_game: program.stop_with_game,
+            start_before_game: program.start_before_game,
             prefix_chosen: index.is_some(),
             error: None,
             _subscriptions: subscriptions,
@@ -233,6 +235,7 @@ impl LaunchProgramsPanel {
             path: path.trim().to_string(),
             args: editor.args.read(cx).value().trim().to_string(),
             delay_seconds,
+            start_before_game: editor.start_before_game,
             in_prefix: editor.in_prefix && self.prefix_possible,
             stop_with_game: editor.stop_with_game,
             enabled,
@@ -297,14 +300,14 @@ impl LaunchProgramsPanel {
         let (border, muted_fg) = (theme.border, theme.muted_foreground);
         let mono = theme.mono_font_family.clone();
         let label = program.label();
-        let mut tags: Vec<SharedString> = vec![if program.delay_seconds == 0 {
-            t("settings.programs.with_game")
-        } else {
-            t_args(
-                "settings.programs.after",
-                &[("seconds", &program.delay_seconds.to_string())],
-            )
-        }];
+        let seconds = program.delay_seconds.to_string();
+        let mut tags: Vec<SharedString> =
+            vec![match (program.start_before_game, program.delay_seconds) {
+                (true, 0) => t("settings.programs.before"),
+                (true, _) => t_args("settings.programs.before_seconds", &[("seconds", &seconds)]),
+                (false, 0) => t("settings.programs.with_game"),
+                (false, _) => t_args("settings.programs.after", &[("seconds", &seconds)]),
+            }];
         if program.in_prefix && self.prefix_possible {
             tags.push(t("settings.programs.in_prefix_tag"));
         }
@@ -453,9 +456,34 @@ impl LaunchProgramsPanel {
                         Input::new(&editor.name).into_any_element(),
                     )))
                     .child(div().w_48().child(field(
-                        t("settings.programs.delay"),
+                        if editor.start_before_game {
+                            t("settings.programs.delay_before")
+                        } else {
+                            t("settings.programs.delay")
+                        },
                         Input::new(&editor.delay).into_any_element(),
                     ))),
+            )
+            .child(
+                Switch::new("program-before")
+                    .checked(editor.start_before_game)
+                    .label(t("settings.programs.start_before"))
+                    .on_change(cx.listener(|this, on: &bool, _, cx| {
+                        if let Some(editor) = &mut this.editor {
+                            editor.start_before_game = *on;
+                            cx.notify();
+                        }
+                    })),
+            )
+            .child(muted(t("settings.programs.start_before_help"), cx).text_xs())
+            // umu runs only on Linux, and never for Steam's games.
+            .when(
+                cfg!(target_os = "linux")
+                    && self.prefix_possible
+                    && !self.steam
+                    && editor.in_prefix
+                    && editor.start_before_game,
+                |col| col.child(muted(t("settings.programs.start_before_umu_help"), cx).text_xs()),
             )
             .when(self.prefix_possible, |col| {
                 col.child(
@@ -481,6 +509,10 @@ impl LaunchProgramsPanel {
                     )
                     .text_xs(),
                 )
+                // umu runs only on Linux, and never for Steam's games.
+                .when(cfg!(target_os = "linux") && !self.steam, |col| {
+                    col.child(muted(t("settings.programs.in_prefix_umu_help"), cx).text_xs())
+                })
             })
             .child(
                 Switch::new("program-stop")
