@@ -2092,6 +2092,7 @@ fi
             prefix: dir.path().join("prefixes/Battle.net"),
             wine: fake_wine(dir.path(), false),
             set_up_at: String::new(),
+            settings: Default::default(),
         };
         let exe = Launcher::BattleNet.exe_in_prefix(&windows_root(&setup));
         std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
