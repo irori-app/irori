@@ -323,13 +323,14 @@ impl GameSettingsView {
     /// The sections that apply to the game. Steam starts its games itself,
     /// so a Steam game has no Wine, graphics or prefix settings, and no game
     /// log; Wine & Proton becomes its Steam Play choice (Linux), Performance
-    /// keeps only the replay buffer (Linux), and Tools is shown for a Windows
-    /// build (ReShade, RenoDX, OptiScaler).
+    /// keeps the replay buffer (Linux) and the in-game stats (Linux and
+    /// macOS), and Tools is shown for a Windows build (ReShade, RenoDX,
+    /// OptiScaler).
     fn sections(&self, cx: &Context<Self>) -> Vec<GameSection> {
         if self.id.runner != Runner::Steam {
             return GameSection::ALL.to_vec();
         }
-        let linux = cfg!(target_os = "linux");
+        let has_performance = cfg!(any(target_os = "linux", target_os = "macos"));
         let graphics_mods = backend(cx)
             .game(&self.id)
             .is_some_and(|g| irori_services::supports_reshade(&g));
@@ -338,7 +339,7 @@ impl GameSettingsView {
             .filter(|s| match s {
                 GameSection::Changed => true,
                 GameSection::Wine => self.steam_compat.is_some(),
-                GameSection::Performance => linux,
+                GameSection::Performance => has_performance,
                 GameSection::Launch | GameSection::CloudSaves | GameSection::Artwork => true,
                 GameSection::Tools => graphics_mods,
                 GameSection::Gpu | GameSection::Log => false,

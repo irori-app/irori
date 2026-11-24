@@ -231,6 +231,16 @@ fn main() -> Result<()> {
             );
         }
 
+        // Pre-warm Linux HUD hardware detection in the background so opening
+        // Performance HUD settings shows real GPU/CPU names on the first frame.
+        #[cfg(target_os = "linux")]
+        backend.spawn(async {
+            let _ = tokio::task::spawn_blocking(
+                irori_runtime::hud::hardware_linux::detect_linux_hud_env,
+            )
+            .await;
+        });
+
         // Steam's Game Mode has no tray to come back from. A game launched
         // with no window asked for none: the game is what shows, and
         // starting Irori again brings the window.
@@ -336,12 +346,14 @@ fn open_main_window(app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
     let existing = app.lock().window;
     if let Some(handle) = existing
         && handle
-            .update(cx, |_, window, _| {
+            .update(cx, |_, window, cx| {
                 // Windows activates by simulating an Alt press, which an
                 // active window takes as a press of its own: it waits in menu
                 // mode and stops painting until the next input.
                 if !window.is_window_active() {
                     window.activate_window();
+                    irori_ui::state::run_infallible(cx, irori_services::power::activate_window())
+                        .detach();
                 }
             })
             .is_ok()

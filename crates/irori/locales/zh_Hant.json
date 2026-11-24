@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "從其他遊戲中挑選",
   "shell.palette.random_empty": "這裡沒有可挑選的遊戲",
   "shell.palette.preview_enter_play": "按 Enter 開始遊玩，執行中則返回遊戲；按 Shift+Enter 在 Irori 中顯示；按 → 列出其動作",
-  "shell.quick_launch.failed": "無法開啟快速啟動器"
+  "shell.quick_launch.failed": "無法開啟快速啟動器",
+  "shell.palette.performance_hud": "遊戲內統計",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆蓋層 overlay fps 幀時間 計數器 效能 遊戲內統計 統計 in-game stats"
 }

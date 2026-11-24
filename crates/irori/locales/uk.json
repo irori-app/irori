@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Вибирати з інших ігор",
   "shell.palette.random_empty": "Тут немає ігор для вибору",
   "shell.palette.preview_enter_play": "Enter запускає гру або повертає до неї, поки вона працює; Shift+Enter показує її в Irori; → — її дії",
-  "shell.quick_launch.failed": "Не вдалося відкрити швидкий запуск"
+  "shell.quick_launch.failed": "Не вдалося відкрити швидкий запуск",
+  "shell.palette.performance_hud": "Статистика в грі",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime лічильник продуктивність статистика в грі in-game stats"
 }

@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "다른 게임 중에서 고르기",
   "shell.palette.random_empty": "여기에는 고를 게임이 없습니다",
   "shell.palette.preview_enter_play": "Enter 키로 실행하거나 실행 중이면 돌아가기, Shift+Enter 키로 Irori에서 보기, → 키로 작업 보기",
-  "shell.quick_launch.failed": "빠른 실행을 열 수 없습니다"
+  "shell.quick_launch.failed": "빠른 실행을 열 수 없습니다",
+  "shell.palette.performance_hud": "게임 내 통계",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 오버레이 fps 프레임타임 카운터 성능 게임 내 통계 in-game stats"
 }

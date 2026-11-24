@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Aus anderen Spielen wählen",
   "shell.palette.random_empty": "Hier gibt es keine Spiele zur Auswahl",
   "shell.palette.preview_enter_play": "Eingabe startet es oder kehrt zu ihm zurück, während es läuft; Umschalt+Eingabe zeigt es in Irori; → zeigt seine Aktionen",
-  "shell.quick_launch.failed": "Der Schnellstarter konnte nicht geöffnet werden"
+  "shell.quick_launch.failed": "Der Schnellstarter konnte nicht geöffnet werden",
+  "shell.palette.performance_hud": "Statistiken im Spiel",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime zähler leistung statistiken im spiel in-game stats"
 }

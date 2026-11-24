@@ -16,8 +16,10 @@ use std::time::{Duration, Instant};
 
 use tokio::process::Child;
 
-/// How often the game's processes are looked for.
+/// How often the game's processes are looked for when kernel exit events aren't available.
 const POLL: Duration = Duration::from_secs(3);
+/// Maximum time a single kernel `pidfd_open` wait blocks before re-checking.
+const KERNEL_WAIT: Duration = Duration::from_secs(60);
 /// How long the launcher gets to start the game before the session is the
 /// launcher's own.
 const START_GRACE: Duration = Duration::from_secs(180);
@@ -45,6 +47,10 @@ fn game_running(folder: &str) -> bool {
 
 /// Whether the followed game runs right now. Blocking.
 pub(crate) type Probe = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// Blocks until the tracked game processes exit using OS exit notifications, if
+/// supported. Blocking.
+pub(crate) type WaitFn = Arc<dyn Fn(Duration) -> bool + Send + Sync>;
 
 /// A probe for the game whose processes run from `folder`.
 pub(crate) fn folder_probe(folder: String) -> Probe {
@@ -205,14 +211,31 @@ pub(crate) async fn wait_while(probe: Probe) {
 /// Wait for the followed game to end: once `probe` saw it and no longer
 /// does, or — when it never shows up — once the launcher exits or the grace
 /// period passes. Returns the launcher's exit status when it ended.
-pub(crate) async fn follow(child: &mut Child, probe: Probe) -> Option<ExitStatus> {
+pub(crate) async fn follow(
+    child: &mut Child,
+    probe: Probe,
+    wait: Option<WaitFn>,
+) -> Option<ExitStatus> {
     let started = Instant::now();
     let mut seen = false;
     let mut launcher: Option<Option<ExitStatus>> = None;
     loop {
-        tokio::select! {
-            status = child.wait(), if launcher.is_none() => launcher = Some(status.ok()),
-            _ = tokio::time::sleep(POLL) => {}
+        if seen
+            && launcher.is_some()
+            && let Some(wait) = &wait
+        {
+            let w = wait.clone();
+            let waited = tokio::task::spawn_blocking(move || w(KERNEL_WAIT))
+                .await
+                .unwrap_or(false);
+            if !waited {
+                tokio::time::sleep(POLL).await;
+            }
+        } else {
+            tokio::select! {
+                status = child.wait(), if launcher.is_none() => launcher = Some(status.ok()),
+                _ = tokio::time::sleep(POLL) => {}
+            }
         }
         let p = probe.clone();
         let running = tokio::task::spawn_blocking(move || p())

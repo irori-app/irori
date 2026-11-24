@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Uit andere games kiezen",
   "shell.palette.random_empty": "Hier zijn geen games om uit te kiezen",
   "shell.palette.preview_enter_play": "Enter speelt hem, of gaat ernaar terug terwijl hij draait; Shift+Enter toont hem in Irori; → toont de acties",
-  "shell.quick_launch.failed": "De snelstarter kon niet worden geopend"
+  "shell.quick_launch.failed": "De snelstarter kon niet worden geopend",
+  "shell.palette.performance_hud": "Statistieken in het spel",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime teller prestaties statistieken in het spel in-game stats"
 }

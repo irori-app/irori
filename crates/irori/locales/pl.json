@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Losuj spośród innych gier",
   "shell.palette.random_empty": "Nie ma tu gier do wylosowania",
   "shell.palette.preview_enter_play": "Enter uruchamia grę albo do niej wraca, gdy działa; Shift+Enter pokazuje ją w Irori; → pokazuje jej działania",
-  "shell.quick_launch.failed": "Nie udało się otworzyć szybkiego programu uruchamiającego"
+  "shell.quick_launch.failed": "Nie udało się otworzyć szybkiego programu uruchamiającego",
+  "shell.palette.performance_hud": "Statystyki w grze",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal nakładka overlay fps frametime licznik wydajność statystyki w grze in-game stats"
 }

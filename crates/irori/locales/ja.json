@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "別のゲームの中から選ぶ",
   "shell.palette.random_empty": "ここには選べるゲームがありません",
   "shell.palette.preview_enter_play": "Enter で起動、実行中ならゲームに戻る。Shift+Enter で Irori に表示、→ でアクションを表示",
-  "shell.quick_launch.failed": "クイックランチャーを開けませんでした"
+  "shell.quick_launch.failed": "クイックランチャーを開けませんでした",
+  "shell.palette.performance_hud": "ゲーム内統計",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal オーバーレイ fps フレームタイム カウンター パフォーマンス ゲーム内統計 統計 in-game stats"
 }

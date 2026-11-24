@@ -262,6 +262,8 @@ pub enum PanelKind {
     SaveBackups,
     /// The replay buffer's recorder, ways to save a clip and memory use.
     Replay,
+    /// Per-game Performance HUD overrides (MangoHud on Linux, Metal HUD on macOS).
+    PerformanceHud,
     /// Sunshine: found or not, its login, syncing now, the last sync.
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
@@ -565,6 +567,20 @@ impl FieldSpec {
             "iroriGpu" if host == HostPlatform::Windows => return false,
             _ => {}
         }
+        // Legacy showMangohud toggle is superseded by the native Performance HUD
+        // panel; its FieldSpec entry stays registered so preset labels resolve.
+        if self.path == "showMangohud" {
+            return false;
+        }
+        // Per-game Performance HUD is available on Linux (MangoHud) and macOS
+        // (Metal HUD), hidden on Windows.
+        if self.path == "panel.performance-hud" {
+            return irori_core::HudBackend::current().is_supported();
+        }
+        // DXVK_HUD=fps is Linux-only.
+        if self.path == "showFps" {
+            return host == HostPlatform::Linux;
+        }
         // A portable Irori never adds itself to the Start menu.
         if self.path == "addStartMenuShortcuts" && irori_core::paths::is_portable() {
             return false;
@@ -626,7 +642,7 @@ impl FieldSpec {
         host != HostPlatform::Windows
             || (self.section != FieldSection::Wine
                 && self.path != "iroriCompatToolsPath"
-                && !matches!(self.path, "showFps" | "enableDXVKFpsLimit" | "DXVKFpsCap"))
+                && !matches!(self.path, "enableDXVKFpsLimit" | "DXVKFpsCap"))
     }
 
     /// Whether the field still does something for a Steam game. Steam starts
@@ -639,6 +655,7 @@ impl FieldSpec {
             || matches!(
                 self.path,
                 "panel.replay"
+                    | "panel.performance-hud"
                     | "launcherArgs"
                     | "iroriInSunshine"
                     | "iroriDiscordPresence"
@@ -3325,6 +3342,24 @@ pub static FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["fps", "hud", "dxvk", "counter"]),
+    game_only(
+        "panel.performance-hud",
+        "settings.field.panel_performance_hud.label",
+        Performance,
+        "settings.group.performance_hud",
+        Panel(PanelKind::PerformanceHud),
+    )
+    .keywords(&[
+        "hud",
+        "mangohud",
+        "metal",
+        "overlay",
+        "fps",
+        "frametime",
+        "performance",
+        "in-game stats",
+        "stats",
+    ]),
     game(
         "panel.replay",
         "settings.field.panel_replay.label",
@@ -4643,6 +4678,7 @@ mod tests {
             "beforeLaunchScriptPath",
             "iroriBeforeLaunchScriptAlongside",
             "panel.launchPrograms",
+            "panel.performance-hud",
             "iroriReplay.enabled",
             "panel.save-backups",
             "panel.artwork",
@@ -4663,5 +4699,23 @@ mod tests {
         ] {
             assert!(!applies(path), "{path}");
         }
+    }
+
+    #[test]
+    fn performance_hud_and_legacy_overlay_visibility() {
+        let hud = find("panel.performance-hud").expect("panel.performance-hud");
+        assert_eq!(hud.section, FieldSection::Performance);
+        assert_eq!(hud.scope, Scope::GameOnly);
+        assert!(hud.applies_to_steam());
+        assert_eq!(
+            hud.supported_on_host(),
+            cfg!(any(target_os = "linux", target_os = "macos"))
+        );
+
+        let legacy_mango = find("showMangohud").expect("showMangohud");
+        assert!(!legacy_mango.supported_on_host());
+
+        let show_fps = find("showFps").expect("showFps");
+        assert_eq!(show_fps.supported_on_host(), cfg!(target_os = "linux"));
     }
 }

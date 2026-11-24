@@ -11,11 +11,12 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Decorations, Entity, FocusHandle,
-    Focusable, InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, rems,
+    Focusable, InteractiveElement, IntoElement, MouseButton, NavigationDirection,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Task, Window, div, rems,
 };
 use irori_core::{GameId, NoticeLevel, Runner, StatusKind};
-use irori_ui::components::BrandMark;
+use irori_ui::components::{BrandMark, BrandWordmark};
 use irori_ui::glass::{self, Glass};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models::{self, models};
@@ -153,6 +154,10 @@ impl AppShell {
             this.show_notices(&m.notices, window, cx);
             this.on_sessions(&m.sessions, window, cx);
             this.app_update.show(window, cx);
+            if *navigator(cx).read(cx).current() == Route::BigPicture {
+                irori_ui::state::run_infallible(cx, irori_services::power::activate_window())
+                    .detach();
+            }
         });
         let collapsed = m.settings.read(cx).app.ui.sidebar_collapsed;
         let reduce = irori_ui::style::reduce_motion(cx);
@@ -235,7 +240,9 @@ impl AppShell {
     }
 
     fn minimize_on_launch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.minimized_for.is_some() || !models(cx).settings.read(cx).app.minimize_on_launch {
+        let enabled = models(cx).settings.read(cx).app.minimize_on_launch;
+        let route = navigator(cx).read(cx).current();
+        if !should_minimize_on_launch(enabled, route, self.minimized_for.is_some()) {
             return;
         }
         let playing = models(cx).statuses.read(cx).playing().next().cloned();
@@ -252,10 +259,16 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) {
         let exited: Vec<_> = sessions.update(cx, |s, _| s.exited.drain(..).collect());
+        let route = navigator(cx).read(cx).current().clone();
         for exit in exited {
+            let activate = should_activate_on_exit(self.minimized_for.as_ref(), &exit.id, &route);
             if self.minimized_for.as_ref() == Some(&exit.id) {
                 self.minimized_for = None;
+            }
+            if activate {
                 window.activate_window();
+                irori_ui::state::run_infallible(cx, irori_services::power::activate_window())
+                    .detach();
             }
             if exit.crashed {
                 irori_game::open_launch_problem_sheet(exit.id, exit.exit_code, window, cx);
@@ -441,18 +454,20 @@ impl AppShell {
             .child(
                 h_flex()
                     .h(rems(4.5))
-                    .gap_2p5()
+                    .items_center()
+                    .gap_2()
                     .px_1()
                     .when(collapsed, |d| d.justify_center().px_0())
-                    .child(BrandMark::new(rems(2.)))
+                    .child(BrandMark::new(if collapsed {
+                        rems(2.)
+                    } else {
+                        rems(2.15)
+                    }))
                     .when(!collapsed, |this| {
-                        this.child(
-                            div()
-                                .font_extrabold()
-                                .text_xl()
-                                .text_color(irori_ui::style::SidebarPalette::new(cx).text)
-                                .child("Irori"),
-                        )
+                        this.child(BrandWordmark::new(
+                            rems(1.45),
+                            irori_ui::style::SidebarPalette::new(cx).text,
+                        ))
                     }),
             )
             .child(item(
@@ -707,6 +722,27 @@ impl Focusable for AppShell {
     }
 }
 
+/// Bind hardware mouse back/forward buttons to window navigation history.
+fn bind_mouse_navigation<E: InteractiveElement>(el: E, enabled: bool) -> E {
+    if !enabled {
+        return el;
+    }
+    el.on_mouse_down(
+        MouseButton::Navigate(NavigationDirection::Back),
+        |_, _, cx| {
+            nav::go_back(cx);
+            cx.stop_propagation();
+        },
+    )
+    .on_mouse_down(
+        MouseButton::Navigate(NavigationDirection::Forward),
+        |_, _, cx| {
+            nav::go_forward(cx);
+            cx.stop_propagation();
+        },
+    )
+}
+
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !Self::is_narrow(window) {
@@ -744,6 +780,7 @@ impl Render for AppShell {
             .text_color(cx.theme().foreground)
             .on_action(cx.listener(|_, _: &GoBack, _, cx| nav::go_back(cx)))
             .on_action(cx.listener(|_, _: &GoForward, _, cx| nav::go_forward(cx)))
+            .map(|this| bind_mouse_navigation(this, !fullscreen_mode))
             .on_action(cx.listener(|this, _: &OpenPalette, window, cx| {
                 this.palette.open(window, cx);
             }))
@@ -873,6 +910,20 @@ fn wants_onboarding(cx: &App) -> bool {
     irori_manage::should_show_onboarding(cx) && !has_sideload
 }
 
+/// Whether starting a game should minimize the window: only when the user
+/// enabled the setting, no game already minimized it, and Irori is not in
+/// Big Picture (which stays fullscreen behind the game so the compositor
+/// returns focus to it when the game exits).
+fn should_minimize_on_launch(enabled: bool, route: &Route, already_minimized: bool) -> bool {
+    enabled && !already_minimized && *route != Route::BigPicture
+}
+
+/// Whether a game exiting should bring Irori's window to the front: when
+/// this game minimized it on launch, or while Big Picture is open.
+fn should_activate_on_exit(minimized_for: Option<&GameId>, exited: &GameId, route: &Route) -> bool {
+    minimized_for == Some(exited) || *route == Route::BigPicture
+}
+
 /// Where to go once the stores have loaded, if not where the user is.
 fn route_once_loaded(current: &Route, wants_onboarding: bool) -> Option<Route> {
     (*current == Route::Onboarding && !wants_onboarding).then_some(Route::Library)
@@ -891,6 +942,31 @@ mod start_tests {
         assert_eq!(route_once_loaded(&Route::Onboarding, true), None);
         assert_eq!(route_once_loaded(&Route::Library, false), None);
         assert_eq!(route_once_loaded(&Route::BigPicture, false), None);
+    }
+
+    #[test]
+    fn big_picture_skips_minimize_on_launch_and_activates_on_exit() {
+        let game = GameId::new(Runner::Gog, "123");
+        let other = GameId::new(Runner::Legendary, "other");
+
+        assert!(should_minimize_on_launch(true, &Route::Library, false));
+        assert!(!should_minimize_on_launch(true, &Route::Library, true));
+        assert!(!should_minimize_on_launch(false, &Route::Library, false));
+        assert!(!should_minimize_on_launch(true, &Route::BigPicture, false));
+
+        assert!(should_activate_on_exit(Some(&game), &game, &Route::Library));
+        assert!(!should_activate_on_exit(
+            Some(&game),
+            &other,
+            &Route::Library
+        ));
+        assert!(!should_activate_on_exit(None, &game, &Route::Library));
+        assert!(should_activate_on_exit(None, &game, &Route::BigPicture));
+        assert!(should_activate_on_exit(
+            Some(&other),
+            &game,
+            &Route::BigPicture
+        ));
     }
 }
 
@@ -1115,6 +1191,105 @@ pub(crate) mod title_bar_tests {
             narrow_after.search.size.width > px(120.),
             "the search button stays usable: {:?}",
             narrow_after.search
+        );
+    }
+
+    struct MouseNavHarness {
+        enabled: bool,
+        occluded: bool,
+    }
+
+    impl Render for MouseNavHarness {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            bind_mouse_navigation(
+                div().id("mouse-nav-root").relative().size_full(),
+                self.enabled,
+            )
+            .when(self.occluded, |this| {
+                this.child(
+                    div()
+                        .id("mouse-nav-occluder")
+                        .absolute()
+                        .inset_0()
+                        .occlude(),
+                )
+            })
+        }
+    }
+
+    #[gpui_kit::test]
+    fn mouse_side_buttons_navigate_history_unless_occluded_or_disabled(cx: &mut TestAppContext) {
+        let _ = start(cx);
+        let window = cx.open_window(size(px(400.), px(300.)), |_, _| MouseNavHarness {
+            enabled: true,
+            occluded: false,
+        });
+        let mut vcx = VisualTestContext::from_window(window.into(), cx);
+        vcx.update(|window, cx| {
+            nav::navigate(Route::Updates, cx);
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+
+        let pos = gpui_kit::point(px(100.), px(100.));
+        let mods = gpui_kit::Modifiers::default();
+
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Library
+        );
+
+        vcx.simulate_mouse_down(
+            pos,
+            MouseButton::Navigate(NavigationDirection::Forward),
+            mods,
+        );
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
+        );
+
+        // An occluded overlay (dialog, sheet, palette) must absorb pointer clicks.
+        window
+            .update(&mut vcx, |view, _, cx| {
+                view.occluded = true;
+                cx.notify();
+            })
+            .expect("update mouse nav harness");
+        vcx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
+        );
+
+        // Disabled (Big Picture mode) ignores mouse side buttons.
+        window
+            .update(&mut vcx, |view, _, cx| {
+                view.occluded = false;
+                view.enabled = false;
+                cx.notify();
+            })
+            .expect("disable mouse nav harness");
+        vcx.update(|window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+        vcx.run_until_parked();
+        vcx.simulate_mouse_down(pos, MouseButton::Navigate(NavigationDirection::Back), mods);
+        vcx.run_until_parked();
+        assert_eq!(
+            vcx.read(|cx| navigator(cx).read(cx).current().clone()),
+            Route::Updates
         );
     }
 }

@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Elegir entre otros juegos",
   "shell.palette.random_empty": "Aquí no hay juegos entre los que elegir",
   "shell.palette.preview_enter_play": "Intro lo juega, o vuelve a él mientras se ejecuta; Mayús+Intro lo muestra en Irori; → muestra sus acciones",
-  "shell.quick_launch.failed": "No se pudo abrir el lanzador rápido"
+  "shell.quick_launch.failed": "No se pudo abrir el lanzador rápido",
+  "shell.palette.performance_hud": "Estadísticas en el juego",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal superposición fps frametime contador rendimiento estadísticas en el juego in-game stats"
 }

@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Scegli tra altri giochi",
   "shell.palette.random_empty": "Qui non ci sono giochi tra cui scegliere",
   "shell.palette.preview_enter_play": "Invio lo avvia, o ci torna mentre è in esecuzione; Maiusc+Invio lo mostra in Irori; → ne mostra le azioni",
-  "shell.quick_launch.failed": "Impossibile aprire l’avvio rapido"
+  "shell.quick_launch.failed": "Impossibile aprire l’avvio rapido",
+  "shell.palette.performance_hud": "Statistiche in gioco",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime contatore prestazioni statistiche in gioco in-game stats"
 }

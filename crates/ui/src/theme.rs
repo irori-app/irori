@@ -34,6 +34,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc;
 use gpui_kit::component::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
 use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Task, Window, WindowAppearance, px};
+use irori_core::ThemeHudColors;
 use irori_core::settings::{ThemePreference, UiPrefs};
 use tokio::runtime::Runtime;
 
@@ -933,6 +934,40 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     lift_modal_dim(cx);
+    let hud_colors = theme_hud_colors(Theme::global(cx));
+    if let Some(backend) = crate::state::try_backend(cx)
+        && backend.settings.app().hud.cached_theme_colors.as_ref() != Some(&hud_colors)
+    {
+        backend.settings.update_app(|a| {
+            a.hud.cached_theme_colors = Some(hud_colors);
+        });
+    }
+}
+
+/// Convert a GPUI [`Hsla`] color into 6 uppercase RGB hex digits (`RRGGBB`)
+/// with no `#` prefix and no alpha suffix.
+pub fn hsla_to_hex6(color: Hsla) -> String {
+    let rgb = color.to_rgb();
+    let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!("{:02X}{:02X}{:02X}", byte(rgb.r), byte(rgb.g), byte(rgb.b))
+}
+
+/// Extract a MangoHud-compatible 6-digit hex color palette from the active GPUI
+/// [`Theme`].
+pub fn theme_hud_colors(theme: &Theme) -> ThemeHudColors {
+    ThemeHudColors {
+        background_color: hsla_to_hex6(theme.background),
+        text_color: hsla_to_hex6(theme.foreground),
+        gpu_color: hsla_to_hex6(theme.chart_3),
+        cpu_color: hsla_to_hex6(theme.chart_1),
+        vram_color: hsla_to_hex6(theme.chart_5),
+        ram_color: hsla_to_hex6(theme.info),
+        engine_color: hsla_to_hex6(theme.chart_2),
+        frametime_color: hsla_to_hex6(theme.success),
+        io_color: hsla_to_hex6(theme.chart_4),
+        battery_color: hsla_to_hex6(theme.warning),
+        accent_color: hsla_to_hex6(theme.primary),
+    }
 }
 
 /// The theme's dim behind dialogs and sheets, kept out of its reach.
@@ -2203,6 +2238,54 @@ mod tests {
             for (name, _) in family_members(json) {
                 assert!(!name.starts_with("Default "), "{name}");
             }
+        }
+    }
+
+    #[test]
+    fn hsla_to_hex6_strips_hash_and_alpha() {
+        let mut translucent: Hsla = gpui_kit::rgb(0x2e9762).into();
+        translucent.a = 0.35;
+        let hex = hsla_to_hex6(translucent);
+        assert_eq!(hex.len(), 6);
+        assert!(!hex.starts_with('#'));
+        assert!(hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'A'..=b'F')));
+        assert_eq!(hex, "2E9762");
+
+        let mut pure_black: Hsla = gpui_kit::rgb(0x000000).into();
+        pure_black.a = 0.0;
+        assert_eq!(hsla_to_hex6(pure_black), "000000");
+
+        let mut pure_white: Hsla = gpui_kit::rgb(0xffffff).into();
+        pure_white.a = 0.5;
+        assert_eq!(hsla_to_hex6(pure_white), "FFFFFF");
+    }
+
+    #[gpui_kit::test]
+    fn theme_hud_colors_emit_six_digit_uppercase_hex(cx: &mut TestAppContext) {
+        setup(cx);
+        cx.update(|cx| apply(&prefs(ThemePreference::Dark, DEFAULT_DARK), None, cx));
+        let colors = cx.read(|cx| theme_hud_colors(cx.theme()));
+
+        let all = [
+            &colors.background_color,
+            &colors.text_color,
+            &colors.gpu_color,
+            &colors.cpu_color,
+            &colors.vram_color,
+            &colors.ram_color,
+            &colors.engine_color,
+            &colors.frametime_color,
+            &colors.io_color,
+            &colors.battery_color,
+            &colors.accent_color,
+        ];
+        for hex in all {
+            assert_eq!(hex.len(), 6, "expected 6 hex digits, got {hex}");
+            assert!(!hex.starts_with('#'), "unexpected # prefix in {hex}");
+            assert!(
+                hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'A'..=b'F')),
+                "expected uppercase hex in {hex}"
+            );
         }
     }
 }

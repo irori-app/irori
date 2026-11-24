@@ -476,7 +476,7 @@ fn open_for_controller(cx: &mut App) {
         return;
     }
     if let Some(handle) = cx.windows().into_iter().next() {
-        let _ = handle.update(cx, |_, window, _| window.activate_window());
+        activate_window_handle(handle, cx);
     }
     nav::navigate(Route::BigPicture, cx);
 }
@@ -643,6 +643,13 @@ fn hides_pointer(cx: &App) -> bool {
         .is_none_or(|m| m.settings.read(cx).app.controller.hide_pointer)
 }
 
+fn activate_window_handle(handle: AnyWindowHandle, cx: &mut App) {
+    let _ = handle.update(cx, |_, window, cx| {
+        window.activate_window();
+        irori_ui::state::run_infallible(cx, irori_services::power::activate_window()).detach();
+    });
+}
+
 fn active_window(cx: &mut App) -> Option<AnyWindowHandle> {
     if let Some(window) = cx.active_window() {
         return Some(window);
@@ -666,7 +673,7 @@ pub fn dispatch_input(input: GamepadInput, cx: &mut App) {
         }
         None if input == GamepadInput::Guide && !game_running(cx) => {
             if let Some(handle) = cx.windows().into_iter().next() {
-                let _ = handle.update(cx, |_, window, _| window.activate_window());
+                activate_window_handle(handle, cx);
                 if navigator(cx).read(cx).current() != &Route::BigPicture {
                     nav::navigate(Route::BigPicture, cx);
                 }

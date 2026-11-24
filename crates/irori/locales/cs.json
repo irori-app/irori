@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Vybírat z jiných her",
   "shell.palette.random_empty": "Tady nejsou žádné hry k výběru",
   "shell.palette.preview_enter_play": "Enter hru spustí, nebo se do ní vrátí, když běží; Shift+Enter ji ukáže v Irori; → zobrazí její akce",
-  "shell.quick_launch.failed": "Rychlý spouštěč se nepodařilo otevřít"
+  "shell.quick_launch.failed": "Rychlý spouštěč se nepodařilo otevřít",
+  "shell.palette.performance_hud": "Statistiky ve hře",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal překrytí fps frametime počítadlo výkon statistiky ve hře in-game stats"
 }

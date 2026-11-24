@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Pick from other games",
   "shell.palette.random_empty": "There are no games here to pick from",
   "shell.palette.preview_enter_play": "Enter plays it, or goes back to it while it runs; Shift+Enter shows it in Irori; → lists its actions",
-  "shell.quick_launch.failed": "The quick launcher couldn’t open"
+  "shell.quick_launch.failed": "The quick launcher couldn’t open",
+  "shell.palette.performance_hud": "In-game stats",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime counter performance in-game stats"
 }

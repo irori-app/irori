@@ -228,5 +228,7 @@
   "shell.palette.pick_other_games": "Başka oyunlardan seç",
   "shell.palette.random_empty": "Burada seçilecek oyun yok",
   "shell.palette.preview_enter_play": "Enter oyunu başlatır ya da çalışırken ona döner; Shift+Enter onu Irori’de gösterir; → eylemlerini listeler",
-  "shell.quick_launch.failed": "Hızlı başlatıcı açılamadı"
+  "shell.quick_launch.failed": "Hızlı başlatıcı açılamadı",
+  "shell.palette.performance_hud": "Oyun içi istatistikler",
+  "shell.palette.performance_hud_keywords": "hud mangohud metal katman overlay fps frametime sayaç performans oyun içi istatistikler in-game stats"
 }
