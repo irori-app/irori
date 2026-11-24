@@ -184,7 +184,7 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/store-emulation` | `irori-emulation` | The ROM library (`Runner::Emulation`): scanned folders, played with emulators |
 | `crates/mods` | `irori-mods` | Per-game mod manager: mod storage and load order, deployment (overlay or recorded links) and undeployment, conflicts, archives, FOMOD installers, Thunderstore and Nexus Mods |
 | `crates/reshade` | `irori-reshade` | Graphics mods per game: PE reader (architecture, imports), program and render API detection, ReShade's `Compatibility.ini`, ReShade and RenoDX downloads from the official sources, journaled installs |
-| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, IGDB, deals, Heroic import, Lutris import planning |
+| `crates/extras` | `irori-extras` | Shortcuts, PCGamingWiki/HLTB/ProtonDB/anticheat info, known fixes, SteamGridDB, IGDB, VNDB, deals, Heroic import, Lutris import planning |
 | `crates/services` | `irori-services` | The `Backend` facade: library, settings, user data, download queue, launching, playtime, Lutris script installs (`scripts.rs`) |
 | `crates/ui` | `irori-ui` | Shared UI: backend bridge, models, navigation, art, theme and translucency, components, i18n |
 | `crates/feature-library` | `irori-library` | Library grid/list, search, filters, categories, stats page, sideload dialogs, the Lutris script installer |
@@ -589,6 +589,23 @@ commands without a window.
   art picker offers IGDB's covers and artworks (no square art or logos). Nothing is
   asked while the setting is off; the Modify dialog's title and art overrides win
   over everything.
+- **VNDB** (`vndb.rs`, client in `irori-extras::vndb`, opt-in `iroriVndb`, Settings →
+  Advanced → Artwork): visual novels from VNDB's public API ("Kana",
+  `POST api.vndb.org/kana/vn` with `filters`, `fields`, `results`; no account),
+  requests spaced 1.5 s apart (VNDB allows 200 in five minutes). Any game may match
+  while it is on: the user's choice (per-game `iroriVndbId`, `v17`, `none` for no
+  match; "Change VNDB match" on the game page, `irori_game::vndb_match`, results with
+  their year, another name and cover), else the search result one of whose names
+  (title, original and romanized titles, aliases) folds like the game's title, the
+  release year deciding between several; cached in `<cache>/vndb` (a month, a week
+  for "not found"). `Backend::extra_info` fills, after IGDB, only what is still empty:
+  the description as plain text (`vndb::plain_text`: links' text kept, spoilers and
+  other codes dropped), release date, developers (`ExtraInfo::developers`, shown only
+  when the library names none) and screenshots, naming VNDB in
+  `ExtraInfo::details_from` (`note_source`, joined after IGDB). Images keep VNDB's
+  flags: one rated sexual above 0, violent above 1 or not rated is never kept, nor one
+  off `https://*.vndb.org`. The art picker offers the cover and screenshots
+  (`ArtSource::Vndb`). Nothing is asked while the setting is off.
 - **Play status** (`play_status.rs`): the user's own `PlayStatus` per game (not played,
   plan to play, playing, on hold, beaten, abandoned) with the date it was set. Nothing
   sets one automatically. `UserData::effective_status` adds `Played` for games with
