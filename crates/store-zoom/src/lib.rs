@@ -300,19 +300,39 @@ impl ZoomStore {
     async fn fetch_library(&self, api: &ZoomApi) -> Result<Vec<ZoomGame>> {
         let mut page = api.library_page(None).await?;
         let mut games = std::mem::take(&mut page.games);
-        let mut current = page.current_page.max(1);
+        // The API is undocumented and its first answer may number itself 0
+        // or 1, so the pages after it are asked by that number, as Heroic
+        // does. Rounding 0 up to 1 skipped the second page (#154).
+        let first = page.current_page;
         let total = page.total_pages.min(1000);
-        while current < total {
+        let mut requested = first;
+        let mut pages = 1;
+        while requested < total {
+            requested += 1;
             tokio::time::sleep(self.opts.page_delay).await;
-            let mut next = api.library_page(Some(current + 1)).await?;
+            let mut next = match api.library_page(Some(requested)).await {
+                Ok(next) => next,
+                // Counted from 0, the last page is `total - 1`: one past it
+                // may be refused rather than answered empty.
+                Err(e) if first == 0 && requested == total => {
+                    tracing::debug!("ZOOM library page {requested}: {e:#}");
+                    break;
+                }
+                Err(e) => return Err(e),
+            };
             if next.games.is_empty() {
                 break;
             }
+            pages += 1;
             games.append(&mut next.games);
-            current = next.current_page.max(current + 1);
         }
+        let listed = games.len();
         let mut seen = std::collections::HashSet::new();
         games.retain(|g| !g.id.is_empty() && seen.insert(g.id.clone()));
+        tracing::info!(
+            "ZOOM library: {} games from {pages} pages ({listed} listed; first page {first}, {total} in all)",
+            games.len()
+        );
         Ok(games)
     }
 
