@@ -150,6 +150,7 @@ fn downloads_show_items_of_every_store_in_queue_order(cx: &mut TestAppContext) {
                 ],
                 finished: vec![queued(Runner::Nile, "d", DownloadState::Failed)],
                 paused: false,
+                ..Default::default()
             };
             cx.notify();
         });

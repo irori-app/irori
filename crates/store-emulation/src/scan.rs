@@ -51,8 +51,9 @@ pub struct RomEntry {
 
 /// The version of the detection rules. A file detected under older rules is
 /// looked at again, so a newer Irori recognises what an older one didn't
-/// (1: disc images by their marker files).
-pub const DETECTION_RULES: u32 = 1;
+/// (1: disc images by their marker files; 2: Dreamcast, PS Vita and Switch,
+/// and the tracks a `.gdi` lists).
+pub const DETECTION_RULES: u32 = 2;
 
 /// What a file was detected as last time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -240,6 +241,7 @@ fn scan_files(
     for (path, _, _) in &files {
         match extension(path).as_deref() {
             Some("cue") => owned.extend(cue_tracks(path)),
+            Some("gdi") => owned.extend(gdi_tracks(path)),
             Some("m3u") => owned.extend(playlist_entries(path)),
             _ => {}
         }
@@ -569,6 +571,31 @@ fn cue_tracks(cue: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Track files a Dreamcast `.gdi` lists: after the track count, one line per
+/// track of `number start type sector-size file offset`, the file quoted when
+/// its name holds spaces.
+fn gdi_tracks(gdi: &Path) -> Vec<PathBuf> {
+    let Ok(text) = std::fs::read_to_string(gdi) else {
+        return Vec::new();
+    };
+    let dir = gdi.parent().unwrap_or(Path::new("."));
+    text.lines()
+        .skip(1)
+        .filter_map(|line| {
+            let mut rest = line.trim();
+            // Number, start sector, type and sector size come first.
+            for _ in 0..4 {
+                rest = rest.split_once(char::is_whitespace)?.1.trim_start();
+            }
+            let name = match rest.strip_prefix('"') {
+                Some(r) => r.split('"').next()?,
+                None => rest.split_whitespace().next()?,
+            };
+            (!name.is_empty()).then(|| dir.join(name))
+        })
+        .collect()
+}
+
 /// Files an `.m3u` playlist lists.
 fn playlist_entries(m3u: &Path) -> Vec<PathBuf> {
     let Ok(text) = std::fs::read_to_string(m3u) else {
@@ -599,6 +626,63 @@ mod tests {
     fn touch(path: &Path, bytes: &[u8]) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn scans_dreamcast_vita_and_switch_games() {
+        use irori_engines::sfo;
+        let dir = tempfile::tempdir().unwrap();
+        let roms = dir.path().join("roms");
+        // A GD-ROM dump: the `.gdi` owns its tracks, quoted names included.
+        let gdi = "3\n1 0 4 2352 track01.bin 0\n2 756 0 2352 \"track 02.raw\" 0\n\
+                   3 45000 4 2352 track03.bin 0\n";
+        touch(
+            &roms.join("dreamcast/Shenmue (USA)/Shenmue (USA).gdi"),
+            gdi.as_bytes(),
+        );
+        for track in ["track01.bin", "track 02.raw", "track03.bin"] {
+            touch(&roms.join("dreamcast/Shenmue (USA)").join(track), b"x");
+        }
+        touch(&roms.join("Sega Dreamcast/Ikaruga (Japan).cdi"), b"x");
+        // Vita3K's own app folder: each game is its title id's folder.
+        touch(&roms.join("ux0/app/PCSE00000/eboot.bin"), b"x");
+        touch(
+            &roms.join("ux0/app/PCSE00000/sce_sys/param.sfo"),
+            &sfo::build(&[("TITLE", "Gravity Rush"), ("TITLE_ID", "PCSE00000")]),
+        );
+        touch(&roms.join("switch/Some Game [0100000000010000].nsp"), b"x");
+        touch(&roms.join("loose/Other Game.xci"), b"x");
+
+        let found = scan(
+            std::slice::from_ref(&roms),
+            &ScanCache::new(),
+            &dir.path().join("playlists"),
+            &|_| {},
+        );
+        let mut got: Vec<(&str, &str, String)> = found
+            .entries
+            .iter()
+            .map(|e| {
+                let file = e.path.file_name().unwrap().to_string_lossy().into_owned();
+                (e.system.as_str(), e.title.as_str(), file)
+            })
+            .collect();
+        got.sort();
+        assert_eq!(
+            got,
+            [
+                ("dreamcast", "Ikaruga", "Ikaruga (Japan).cdi".to_string()),
+                ("dreamcast", "Shenmue", "Shenmue (USA).gdi".to_string()),
+                ("psvita", "Gravity Rush", "eboot.bin".to_string()),
+                ("switch", "Other Game", "Other Game.xci".to_string()),
+                (
+                    "switch",
+                    "Some Game",
+                    "Some Game [0100000000010000].nsp".to_string()
+                ),
+            ]
+        );
+        assert_eq!(found.unrecognized, 0);
     }
 
     #[test]

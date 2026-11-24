@@ -4,7 +4,8 @@
 //! Steam reads `shortcuts.vdf` at startup and rewrites it when its own
 //! shortcuts change, so the file is only edited while Steam is not running.
 //! When Steam is running the report says so ([`SteamReport::steam_running`])
-//! and nothing is written; the caller asks the user to close Steam.
+//! and nothing is written; the caller queues the change ([`queue`]), which is
+//! made once Steam has closed.
 //!
 //! Entries start the game with `irori --launch <runner>/<app> --wait`, so
 //! Steam follows the game's session, not a launcher that hands over and
@@ -12,6 +13,7 @@
 //! fields ([`sync`]); every write is backed up first and read back.
 
 pub mod art;
+pub mod queue;
 pub mod shortcuts_file;
 pub mod sync;
 pub mod vdf;
@@ -263,6 +265,8 @@ pub struct SyncReport {
     /// Entries whose command, tag or icon Irori brought up to date.
     pub updated: usize,
     pub removed: usize,
+    /// Games whose change waits for Steam to close ([`queue`]).
+    pub queued: usize,
     /// Steam users whose `shortcuts.vdf` was rewritten.
     pub users_changed: usize,
     /// Per-user problems (corrupt files, write errors).
@@ -277,7 +281,11 @@ struct Prepared<'a> {
 }
 
 /// The entries for `games`, with their icons from Irori's art store.
-async fn prepare<'a>(games: &[SteamGame<'a>], launcher: &LauncherCommand) -> Vec<Prepared<'a>> {
+async fn prepare<'a>(
+    games: &[SteamGame<'a>],
+    launcher: &LauncherCommand,
+    from_exe: bool,
+) -> Vec<Prepared<'a>> {
     let mut prepared = Vec::with_capacity(games.len());
     let mut seen = HashSet::new();
     for g in games {
@@ -287,7 +295,7 @@ async fn prepare<'a>(games: &[SteamGame<'a>], launcher: &LauncherCommand) -> Vec
             continue;
         }
         let cmd = EntryCommand::new(launcher, &id);
-        let icon = match icon::ensure_icon(game).await {
+        let icon = match icon::ensure_icon(game, from_exe).await {
             Ok(p) => p.map(|p| p.to_string_lossy().into_owned()),
             Err(e) => {
                 tracing::warn!("no icon for the Steam shortcut of {}: {e:#}", game.title);
@@ -349,7 +357,12 @@ pub async fn sync(
             ..Default::default()
         });
     }
-    let prepared = prepare(games, &LauncherCommand::detect()).await;
+    let prepared = prepare(
+        games,
+        &LauncherCommand::detect(),
+        app.shortcut_icon_from_exe,
+    )
+    .await;
     sync_users(&users, &prepared, gone).await
 }
 

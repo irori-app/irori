@@ -1,6 +1,6 @@
 //! What the journal tab shows for one period: the notes the user wrote on
-//! days in it, newest first, each with the time the game was played that
-//! day.
+//! days in it (those holding the words searched for, when there are some),
+//! newest first, each with the time the game was played that day.
 
 use chrono::{Days, NaiveDate};
 use irori_core::GameId;
@@ -26,20 +26,26 @@ pub struct JournalPage {
     pub notes: Vec<Note>,
     /// Games with a note in the period.
     pub games: usize,
+    /// The words searched for, as typed.
+    pub query: String,
 }
 
-/// The notes of `period` for games still in the library.
+/// The notes of `period` for games still in the library that hold every
+/// word of `query` (accents and case ignored).
 pub fn compute(
     journal: &Journal,
     history: &History,
     period: Period,
     is_game: impl Fn(&GameId) -> bool,
     today: NaiveDate,
+    query: &str,
 ) -> JournalPage {
     let end = period.end(today);
+    let folded = irori_services::search::fold(query);
     let mut notes: Vec<Note> = irori_services::journal::all(journal)
         .into_iter()
         .filter(|(_, day, _)| *day >= period.start && *day < end)
+        .filter(|(_, _, entry)| entry.matches(&folded))
         .filter_map(|(key, day, entry)| {
             let id = game_id(key).filter(&is_game)?;
             let next = day.checked_add_days(Days::new(1)).unwrap_or(day);
@@ -57,6 +63,7 @@ pub fn compute(
             })
         })
         .collect();
+    // Newest day first; a day's notes stay in the day's order.
     notes.sort_by(|a, b| b.day.cmp(&a.day).then_with(|| a.id.key().cmp(&b.id.key())));
     let mut games: Vec<&GameId> = notes.iter().map(|n| &n.id).collect();
     games.sort_by_key(|id| id.key());
@@ -65,6 +72,7 @@ pub fn compute(
         period,
         games: games.len(),
         notes,
+        query: query.to_string(),
     }
 }
 
@@ -83,11 +91,11 @@ mod tests {
     use crate::stats::model::tests::{day, history, session};
     use crate::stats::period::Span;
 
-    fn note(text: &str) -> JournalEntry {
-        JournalEntry {
+    fn note(text: &str) -> Vec<JournalEntry> {
+        vec![JournalEntry {
             text: text.into(),
             ..Default::default()
-        }
+        }]
     }
 
     #[test]
@@ -117,6 +125,7 @@ mod tests {
             period,
             |id| id.app_name.as_ref() != "gone",
             day("2026-10-25"),
+            "",
         );
         let texts: Vec<&str> = page.notes.iter().map(|n| n.entry.text.as_str()).collect();
         assert_eq!(texts, ["b", "a"]);
@@ -125,5 +134,11 @@ mod tests {
         assert_eq!(page.games, 2);
         assert_eq!(first_day(&journal), Some(day("2026-09-30")));
         assert_eq!(first_day(&Journal::new()), None);
+
+        // A search keeps the notes holding its words.
+        let found = compute(&journal, &h, period, |_| true, day("2026-10-25"), "B");
+        let texts: Vec<&str> = found.notes.iter().map(|n| n.entry.text.as_str()).collect();
+        assert_eq!(texts, ["b"]);
+        assert_eq!(found.query, "B");
     }
 }

@@ -12,6 +12,7 @@
 mod achievements;
 mod age_rating;
 mod compat;
+mod copies;
 mod details;
 mod drawer;
 mod extras;
@@ -19,8 +20,11 @@ mod game_modes;
 mod hero;
 mod info;
 mod journal;
+mod left_off;
 mod menu;
 mod overlay;
+mod pc_check;
+mod reception;
 mod related;
 mod sandbox;
 mod screenshots;
@@ -141,6 +145,8 @@ pub struct GamePage {
     achievement_sort: achievements::AchievementSort,
     /// The achievements list's search.
     achievement_query: Entity<InputState>,
+    /// The journal's search field.
+    journal_query: Entity<InputState>,
     achievement_view: achievements::RowsCache,
     /// Hidden achievements the user chose to see.
     achievement_reveal: achievements::Reveal,
@@ -148,6 +154,14 @@ pub struct GamePage {
     launch_select: Entity<ChoiceSelect>,
     selected_option: Option<LaunchOption>,
     compat: Load<CompatibilityInfo>,
+    /// How the game's Steam app is received (reviews, players now);
+    /// `Ready(None)` for a game Steam doesn't sell.
+    reception: Load<Option<irori_services::steam_reception::SteamReception>>,
+    /// This computer's memory, processor and graphics, read once.
+    this_pc: Option<irori_extras::pc_check::ThisPc>,
+    /// The store page's requirements compared with this computer, worked
+    /// out when either changes.
+    pc_check: Option<irori_extras::pc_check::PcCheck>,
     /// The game's Steam app as of the last library change; when it changes
     /// the store details and compatibility data are read again.
     steam_link: irori_services::SteamLink,
@@ -160,6 +174,12 @@ pub struct GamePage {
     mods: Option<Entity<crate::mods::ModsPanel>>,
     files_available: bool,
     shortcuts_exist: Option<bool>,
+    /// The install folder's size measured on disk, for a game whose store
+    /// gives none.
+    measured_size: Option<u64>,
+    /// Games that may be other copies of this one, as of the last library
+    /// change.
+    possible_copies: Vec<Arc<GameInfo>>,
     tab: InfoTab,
     launch_pending: bool,
     /// Commands in flight, keyed by command name (for loading states).
@@ -243,8 +263,15 @@ impl GamePage {
         let launch_select = choice_select(Vec::new(), None, window, cx);
         let achievement_query =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("game.achievements.search")));
+        let journal_query =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("game.journal.search")));
         let subscriptions = vec![
             cx.subscribe(&achievement_query, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }),
+            cx.subscribe(&journal_query, |_, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
                 }
@@ -264,6 +291,7 @@ impl GamePage {
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&m.settings, |this, _, cx| {
                 this.sandbox = sandbox::configured(&this.id, cx);
+                this.possible_copies = backend(cx).possible_copies(&this.id);
                 cx.notify()
             }),
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
@@ -299,18 +327,24 @@ impl GamePage {
             achievement_filter: AchievementFilter::All,
             achievement_sort: achievements::AchievementSort::default(),
             achievement_query,
+            journal_query,
             achievement_view: achievements::RowsCache::default(),
             achievement_reveal: achievements::Reveal::default(),
             launch_options: Vec::new(),
             launch_select,
             selected_option: None,
             compat: Load::Idle,
+            reception: Load::Idle,
+            this_pc: None,
+            pc_check: None,
             steam_link,
             overlay: None,
             setup: None,
             mods: None,
             files_available: true,
             shortcuts_exist: None,
+            measured_size: None,
+            possible_copies: Vec::new(),
             tab: InfoTab::About,
             launch_pending: false,
             pending: HashSet::new(),
@@ -375,6 +409,8 @@ impl GamePage {
         self.load_extra(window, cx);
         self.load_achievements(window, cx);
         self.load_compat(window, cx);
+        self.load_reception(window, cx);
+        self.load_this_pc(window, cx);
         self.load_install_state(window, cx);
         self.load_timeline(window, cx);
     }
@@ -396,11 +432,16 @@ impl GamePage {
             self.selected_option = None;
             self.files_available = true;
             self.shortcuts_exist = None;
+            self.measured_size = None;
             return;
         }
         let b = backend(cx);
         let id = self.id.clone();
         let browser = game.browser_url.is_some();
+        let measure = game
+            .install
+            .as_ref()
+            .is_some_and(|i| i.install_size_bytes == 0 && i.install_size.trim().is_empty());
         let task = irori_ui::run(cx, {
             let game = game.clone();
             async move {
@@ -410,16 +451,21 @@ impl GamePage {
                 let options = store.launch_options(&id.app_name).await.unwrap_or_default();
                 let available = browser || store.is_available(&id.app_name).await;
                 let shortcuts = irori_extras::shortcuts::exists(&game).await;
-                Ok((options, available, shortcuts))
+                let size = match measure {
+                    true => b.install_folder_size(&id).await,
+                    false => None,
+                };
+                Ok((options, available, shortcuts, size))
             }
         });
         cx.spawn_in(window, async move |this, cx| {
-            let Ok((options, available, shortcuts)) = task.await else {
+            let Ok((options, available, shortcuts, size)) = task.await else {
                 return;
             };
             let _ = this.update_in(cx, |this, window, cx| {
                 this.files_available = available;
                 this.shortcuts_exist = Some(shortcuts);
+                this.measured_size = size;
                 this.set_launch_options(options, window, cx);
                 cx.notify();
             });
@@ -484,6 +530,7 @@ impl GamePage {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
                 this.extra = Load::from_result(result);
+                this.refresh_pc_check();
                 this.sync_trailer(cx);
                 cx.notify();
             });
@@ -577,6 +624,7 @@ impl GamePage {
                 backend(cx).steam_link(g)
             });
         let relinked = std::mem::replace(&mut self.steam_link, link) != link;
+        self.possible_copies = backend(cx).possible_copies(&self.id);
         if first {
             self.load_all(window, cx);
         } else {
@@ -587,6 +635,7 @@ impl GamePage {
             if relinked {
                 self.load_extra(window, cx);
                 self.reload_compat(window, cx);
+                self.load_reception(window, cx);
             }
         }
         let installed = self.game.as_ref().is_some_and(|g| g.is_installed);

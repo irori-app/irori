@@ -220,6 +220,9 @@ pub enum CustomKind {
     ThemeName,
     /// Graphics card picker fed by `irori_runtime::graphics`.
     GpuCard,
+    /// The graphics card Windows hides from a game, fed by
+    /// `Backend::hideable_gpus`.
+    HiddenGpu,
     /// Release picker of a tool installed into Wine prefixes.
     ToolVersion(DxTool),
     /// Base font size slider (interface zoom).
@@ -272,6 +275,8 @@ pub enum PanelKind {
     LaunchBox,
     /// A Steam game's launch options in Steam itself.
     SteamLaunchOptions,
+    /// How a game's next launch starts: command, wrappers, variables.
+    HowItStarts,
     /// One game's umu id: the one used, its source, a database search.
     Umu,
     /// What each controller button does, drawn on the controller, with the
@@ -279,6 +284,8 @@ pub enum PanelKind {
     ButtonMap,
     /// The quick launcher's shortcut: its keys, or the lines to bind.
     QuickLaunch,
+    /// Named folders games install into, and moving their games.
+    LibraryFolders,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -355,7 +362,7 @@ pub struct NeedContext<'a> {
     pub graphics: Option<&'a irori_runtime::graphics::HostGraphics>,
     /// A graphics card is chosen for the game.
     pub chosen_gpu: bool,
-    /// One game's settings, installed as a native Linux build.
+    /// One game's settings, installed as this system's own build.
     pub native_game: bool,
 }
 
@@ -430,7 +437,9 @@ pub struct FieldSpec {
     pub requires: &'static [Condition],
     /// What the computer or game must have; checked before `requires`.
     pub needs: &'static [Need],
-    /// Only shown in the settings of a game installed as a native Linux build.
+    /// In a game's settings, only shown when the game is installed as this
+    /// system's own build (Linux on Linux, Mac on macOS); a field shared
+    /// with the game defaults shows there too.
     pub native_only: bool,
 }
 
@@ -556,6 +565,8 @@ impl FieldSpec {
                 | "advertiseAvxForRosetta"
                 | "iroriRetinaMode"
                 | "iroriCrossoverBottlesPath"
+                | "iroriRosetta"
+                | "iroriMetalFxDlss"
         );
         if mac_only && host != HostPlatform::Mac {
             return false;
@@ -563,7 +574,10 @@ impl FieldSpec {
         // Windows' own graphics preference stands in for the card chooser
         // there, which only Linux can apply.
         match self.path {
-            "iroriWindowsGpu" | "iroriOverlay.backStart" => return host == HostPlatform::Windows,
+            "iroriWindowsGpu" | "iroriHideGpu" | "iroriOverlay.backStart" => {
+                return host == HostPlatform::Windows;
+            }
+            "iroriOverlay.screenshotKey" => return host != HostPlatform::Linux,
             "iroriGpu" if host == HostPlatform::Windows => return false,
             _ => {}
         }
@@ -631,10 +645,12 @@ impl FieldSpec {
                     | "iroriFsr4Upgrade"
                     | "iroriXessUpgrade"
                     | "downloadProtonToSteam"
+                    | "iroriProtonCpuLevel"
                     | "showValveProton"
                     | "iroriShaderCacheSize"
                     | "iroriSandbox.noNetwork"
                     | "iroriSandbox.noHome"
+                    | "iroriSteamOverlay"
             )
         {
             return false;
@@ -782,6 +798,21 @@ const TOP_SECTION: &[ChoiceOption] = &[
     ),
 ];
 
+const NETWORK_MODE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.network_mode.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("online"),
+        Key("settings.option.network_mode.online"),
+    ),
+    opt(
+        ChoiceValue::Str("offline"),
+        Key("settings.option.network_mode.offline"),
+    ),
+];
+
 const THEME_MODE: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("system"),
@@ -880,6 +911,23 @@ const BIG_PICTURE_HOLD: &[ChoiceOption] = &[
     ),
 ];
 
+/// The board shown first (`ageRatingBoard`): the region's, or one by name.
+const AGE_RATING_BOARDS: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str(""),
+        Key("settings.option.age_rating_board.auto"),
+    ),
+    opt(ChoiceValue::Str("PEGI"), Verbatim("PEGI")),
+    opt(ChoiceValue::Str("ESRB"), Verbatim("ESRB")),
+    opt(ChoiceValue::Str("USK"), Verbatim("USK")),
+    opt(ChoiceValue::Str("ACB"), Verbatim("ACB")),
+    opt(ChoiceValue::Str("CERO"), Verbatim("CERO")),
+    opt(ChoiceValue::Str("ClassInd"), Verbatim("ClassInd")),
+    opt(ChoiceValue::Str("GRAC"), Verbatim("GRAC")),
+    opt(ChoiceValue::Str("CSRR"), Verbatim("CSRR")),
+    opt(ChoiceValue::Str("GOG"), Verbatim("GOG")),
+];
+
 const COVER_CORNERS: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("square"),
@@ -903,6 +951,21 @@ const COVER_FIT: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("whole"),
         Key("settings.option.cover_fit.whole"),
+    ),
+];
+
+const COVER_SHAPE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("portrait"),
+        Key("settings.option.cover_shape.portrait"),
+    ),
+    opt(
+        ChoiceValue::Str("square"),
+        Key("settings.option.cover_shape.square"),
+    ),
+    opt(
+        ChoiceValue::Str("banner"),
+        Key("settings.option.cover_shape.banner"),
     ),
 ];
 
@@ -940,6 +1003,21 @@ const FOCUS_COLUMNS: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(1), Verbatim("1")),
     opt(ChoiceValue::Num(2), Verbatim("2")),
     opt(ChoiceValue::Num(3), Verbatim("3")),
+];
+
+const FOCUS_COVER_SIZE: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("small"),
+        Key("settings.option.focus_cover_size.small"),
+    ),
+    opt(
+        ChoiceValue::Str("medium"),
+        Key("settings.option.focus_cover_size.medium"),
+    ),
+    opt(
+        ChoiceValue::Str("large"),
+        Key("settings.option.focus_cover_size.large"),
+    ),
 ];
 
 const DENSITY: &[ChoiceOption] = &[
@@ -1302,6 +1380,11 @@ const NEEDS_STORE_BADGES: &[Condition] = &[when(
     true,
     "settings.requires.store_badges",
 )];
+const NEEDS_AGE_RATINGS: &[Condition] = &[when(
+    "iroriUi.showAgeRatings",
+    true,
+    "settings.requires.age_ratings",
+)];
 const NEEDS_TRAY: &[Condition] = &[when("noTrayIcon", false, "settings.requires.tray_icon")];
 const NEEDS_EXIT_TO_TRAY: &[Condition] = &[
     when("noTrayIcon", false, "settings.requires.tray_icon"),
@@ -1345,6 +1428,20 @@ const FPS_LIMITER: &[ChoiceOption] = &[
     opt(ChoiceValue::Str("gamescope"), Verbatim("gamescope")),
     opt(ChoiceValue::Str("mangohud"), Verbatim("MangoHud")),
     opt(ChoiceValue::Str("dxvk"), Verbatim("DXVK")),
+];
+const PROTON_CPU_LEVEL: &[ChoiceOption] = &[
+    opt(
+        ChoiceValue::Str("auto"),
+        Key("settings.option.proton_cpu_level.auto"),
+    ),
+    opt(
+        ChoiceValue::Str("baseline"),
+        Key("settings.option.proton_cpu_level.baseline"),
+    ),
+    opt(
+        ChoiceValue::Str("v3"),
+        Key("settings.option.proton_cpu_level.v3"),
+    ),
 ];
 const NEEDS_NVAPI: &[Condition] = &[when(
     "autoInstallDxvkNvapi",
@@ -1520,6 +1617,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.install_per_store.help")
     .keywords(&["path", "directory", "folder", "store", "install"]),
     app(
+        "panel.libraryFolders",
+        "settings.field.panel_library_folders.label",
+        General,
+        "settings.group.folders",
+        Panel(PanelKind::LibraryFolders),
+    )
+    .help("settings.field.panel_library_folders.help")
+    .keywords(&["library", "folders", "drive", "sd card", "move", "install"]),
+    app(
         "defaultWinePrefixDir",
         "settings.field.default_wine_prefix_dir.label",
         General,
@@ -1548,6 +1654,31 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.crossover_bottles_path.help")
     .placeholder(Verbatim("~/Library/Application Support/CrossOver/Bottles"))
     .keywords(&["crossover", "bottle", "bottles", "path", "mac"]),
+    app(
+        "iroriNetworkMode",
+        "settings.field.network_mode.label",
+        General,
+        "settings.group.network",
+        Choice(NETWORK_MODE),
+    )
+    .help("settings.field.network_mode.help")
+    .keywords(&[
+        "offline",
+        "online",
+        "network",
+        "internet",
+        "connection",
+        "airplane",
+    ]),
+    app(
+        "iroriNetworkTimeout",
+        "settings.field.network_timeout.label",
+        General,
+        "settings.group.network",
+        Text(TextKind::Number { min: 0, max: 600 }),
+    )
+    .help("settings.field.network_timeout.help")
+    .keywords(&["timeout", "slow", "network", "connection", "seconds"]),
     app(
         "iroriCheckForAppUpdates",
         "settings.field.check_for_app_updates.label",
@@ -1823,6 +1954,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.add_steam_shortcuts.help")
     .keywords(&["steam", "shortcut", "deck"]),
     app(
+        "iroriShortcutIconFromExe",
+        "settings.field.shortcut_icon_from_exe.label",
+        General,
+        "settings.group.new_installs",
+        Toggle,
+    )
+    .help("settings.field.shortcut_icon_from_exe.help")
+    .keywords(&["shortcut", "icon", "exe", "program"]),
+    app(
         "libraryTopSection",
         "settings.field.library_top_section.label",
         General,
@@ -1857,6 +1997,15 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.show_stores.help")
     .keywords(&["store", "hide", "amazon", "prime", "nile"]),
+    app(
+        "iroriDeals",
+        "settings.field.deals.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .help("settings.field.deals.help")
+    .keywords(&["deals", "sale", "discount", "price", "offers"]),
     app(
         "maxRecentGames",
         "settings.field.max_recent_games.label",
@@ -2371,6 +2520,17 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.overlay_screenshot_chord.help")
     .keywords(&["overlay", "guide", "rb", "r1", "screenshot", "shortcut"])
     .requires(NEEDS_OVERLAY),
+    // Its own key, so it needs no overlay: Windows and macOS (Linux binds
+    // `irori --screenshot` through the replay buffer's shortcuts).
+    app(
+        "iroriOverlay.screenshotKey",
+        "settings.field.overlay_screenshot_key.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_screenshot_key.help")
+    .keywords(&["screenshot", "shortcut", "hotkey", "key", "capture"]),
     app(
         "iroriOverlay.volumeChords",
         "settings.field.overlay_volume_chords.label",
@@ -2380,6 +2540,25 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.overlay_volume_chords.help")
     .keywords(&["overlay", "guide", "volume", "shortcut"])
+    .requires(NEEDS_OVERLAY),
+    app(
+        "iroriOverlay.momentChord",
+        "settings.field.overlay_moment_chord.label",
+        Controller,
+        "settings.group.overlay",
+        Toggle,
+    )
+    .help("settings.field.overlay_moment_chord.help")
+    .keywords(&[
+        "overlay",
+        "guide",
+        "y",
+        "triangle",
+        "journal",
+        "moment",
+        "screenshot",
+        "shortcut",
+    ])
     .requires(NEEDS_OVERLAY),
     app(
         "iroriOverlay.volumeStep",
@@ -2608,6 +2787,27 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.ui_group_copies.help")
     .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
     app(
+        "iroriUi.showAgeRatings",
+        "settings.field.ui_show_age_ratings.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_show_age_ratings.help")
+    .keywords(&["age", "rating", "pegi", "esrb", "usk", "cero", "board"]),
+    app(
+        "iroriUi.ageRatingBoard",
+        "settings.field.ui_age_rating_board.label",
+        Appearance,
+        "settings.group.library",
+        Choice(AGE_RATING_BOARDS),
+    )
+    .help("settings.field.ui_age_rating_board.help")
+    .keywords(&[
+        "age", "rating", "pegi", "esrb", "usk", "cero", "board", "region",
+    ])
+    .requires(NEEDS_AGE_RATINGS),
+    app(
         "iroriUi.trailerAutoplay",
         "settings.field.ui_trailer_autoplay.label",
         Appearance,
@@ -2645,6 +2845,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
     ]),
     app(
+        "iroriUi.coverShape",
+        "settings.field.ui_cover_shape.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_SHAPE),
+    )
+    .help("settings.field.ui_cover_shape.help")
+    .keywords(&[
+        "cover", "shape", "square", "banner", "wide", "hero", "aspect",
+    ]),
+    app(
         "iroriUi.coverCaption",
         "settings.field.ui_cover_caption.label",
         Appearance,
@@ -2670,6 +2881,40 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .help("settings.field.ui_focus_columns.help")
     .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
+    app(
+        "iroriUi.libraryFocusCoverSize",
+        "settings.field.ui_focus_cover_size.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COVER_SIZE),
+    )
+    .keywords(&["focus", "cover", "size", "small", "large", "column"]),
+    app(
+        "iroriUi.libraryOpenDetailsOnSelect",
+        "settings.field.ui_open_details_on_select.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_open_details_on_select.help")
+    .keywords(&["click", "drawer", "details", "select", "grid", "panel"]),
+    app(
+        "iroriUi.libraryAutoLayout",
+        "settings.field.ui_auto_layout.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_auto_layout.help")
+    .keywords(&[
+        "focus",
+        "grid",
+        "width",
+        "window",
+        "automatic",
+        "resize",
+        "layout",
+    ]),
     app(
         "iroriUi.coverFavourite",
         "settings.field.ui_cover_favourite.label",
@@ -2942,7 +3187,26 @@ pub static FIELDS: &[FieldSpec] = &[
         "settings.group.wine",
         Toggle,
     )
+    .help("settings.field.download_proton_to_steam.help")
     .keywords(&["proton", "steam", "compatibilitytools"]),
+    app(
+        "iroriProtonCpuLevel",
+        "settings.field.proton_cpu_level.label",
+        Advanced,
+        "settings.group.wine",
+        Choice(PROTON_CPU_LEVEL),
+    )
+    .help("settings.field.proton_cpu_level.help")
+    .keywords(&[
+        "proton",
+        "cachyos",
+        "wineland",
+        "v3",
+        "avx2",
+        "x86-64",
+        "cpu",
+        "processor",
+    ]),
     app(
         "allowInstallationBrokenAnticheat",
         "settings.field.allow_installation_broken_anticheat.label",
@@ -3006,6 +3270,33 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.action_import_faugus.help")
     .keywords(&["faugus", "import", "migrate", "proton", "umu"]),
     app(
+        "iroriLauncherImports.lutris",
+        "settings.field.launcher_sync_lutris.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["lutris", "sync", "import", "keep"]),
+    app(
+        "iroriLauncherImports.bottles",
+        "settings.field.launcher_sync_bottles.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["bottles", "sync", "import", "keep"]),
+    app(
+        "iroriLauncherImports.faugus",
+        "settings.field.launcher_sync_faugus.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["faugus", "sync", "import", "keep"]),
+    app(
         "action.import-playnite",
         "settings.field.action_import_playnite.label",
         Advanced,
@@ -3033,6 +3324,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.action_reset_settings.help")
     .keywords(&["reset", "defaults", "factory"]),
     // ---- Wine & Proton ----
+    game_only(
+        "iroriNoWine",
+        "settings.field.no_wine.label",
+        Wine,
+        "settings.group.compatibility_layer",
+        Toggle,
+    )
+    .help("settings.field.no_wine.help")
+    .keywords(&["wine", "proton", "native", "openjk", "port", "replacement"]),
     game(
         "wineVersion",
         "settings.field.wine_version.label",
@@ -3170,6 +3470,27 @@ pub static FIELDS: &[FieldSpec] = &[
     .tag(Verbatim("macOS"))
     .help("settings.field.retina_mode.help")
     .keywords(&["retina", "hidpi", "resolution", "scaling", "mac"]),
+    game(
+        "iroriMetalFxDlss",
+        "settings.field.metal_fx_dlss.label",
+        Wine,
+        "settings.group.display",
+        Toggle,
+    )
+    .tag(Verbatim("macOS"))
+    .help("settings.field.metal_fx_dlss.help")
+    .keywords(&[
+        "dlss",
+        "metalfx",
+        "upscaling",
+        "nvidia",
+        "d3dmetal",
+        "dxmt",
+        "game porting toolkit",
+        "gptk",
+        "crossover",
+        "mac",
+    ]),
     game(
         "enableWineWayland",
         "settings.field.enable_wine_wayland.label",
@@ -3702,6 +4023,26 @@ pub static FIELDS: &[FieldSpec] = &[
         "discrete",
         "UserGpuPreferences",
     ]),
+    // Windows has no per-program way to hide a card: it is disabled for the
+    // session (`irori_services::gpu_hide`), one game at a time.
+    game_only(
+        "iroriHideGpu",
+        "settings.field.hide_gpu.label",
+        Gpu,
+        "settings.group.graphics_card",
+        Custom(CustomKind::HiddenGpu),
+    )
+    .help("settings.field.hide_gpu.help")
+    .keywords(&[
+        "gpu",
+        "graphics card",
+        "hide",
+        "disable",
+        "device manager",
+        "integrated",
+        "discrete",
+        "wrong gpu",
+    ]),
     game(
         "nvidiaPrime",
         "settings.field.nvidia_prime.label",
@@ -3894,6 +4235,23 @@ pub static FIELDS: &[FieldSpec] = &[
     .placeholder(Verbatim("-nolauncher"))
     .keywords(&["arguments", "args", "parameters", "command line"]),
     game_only(
+        "panel.howItStarts",
+        "settings.field.panel_how_it_starts.label",
+        Launch,
+        "settings.group.command",
+        Panel(PanelKind::HowItStarts),
+    )
+    .help("settings.field.panel_how_it_starts.help")
+    .keywords(&[
+        "how it starts",
+        "command",
+        "preview",
+        "variables",
+        "environment",
+        "wrappers",
+        "copy",
+    ]),
+    game_only(
         "panel.steamLaunchOptions",
         "settings.field.panel_steam_launch.label",
         Launch,
@@ -3975,6 +4333,15 @@ pub static FIELDS: &[FieldSpec] = &[
     .help("settings.field.discord_presence.help")
     .keywords(&["discord", "presence", "rpc", "rich presence", "hide"]),
     game_only(
+        "iroriSteamOverlay",
+        "settings.field.steam_overlay.label",
+        Launch,
+        "settings.group.integrations",
+        Toggle,
+    )
+    .help("settings.field.steam_overlay.help")
+    .keywords(&["steam", "overlay", "shortcut", "non-steam", "game mode"]),
+    game(
         "steamRuntime",
         "settings.field.steam_runtime.label",
         Launch,
@@ -3991,6 +4358,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "container",
         "steam",
     ])
+    .native_only(),
+    game_only(
+        "iroriRosetta",
+        "settings.field.rosetta.label",
+        Launch,
+        "settings.group.native_mac",
+        Toggle,
+    )
+    .tag(Verbatim("macOS"))
+    .help("settings.field.rosetta.help")
+    .keywords(&["rosetta", "intel", "x86", "apple silicon", "arch", "mac"])
     .native_only(),
     game(
         "wrapperOptions",
@@ -4234,6 +4612,17 @@ pub static FIELDS: &[FieldSpec] = &[
         "refresh",
     ]),
     // ---- Saves ----
+    app(
+        "iroriSaveSnapshots",
+        "settings.field.save_snapshots.label",
+        Saves,
+        "settings.group.save_sync",
+        Text(TextKind::Number { min: 0, max: 50 }),
+    )
+    .help("settings.field.save_snapshots.help")
+    .keywords(&[
+        "save", "snapshot", "cloud", "sync", "restore", "undo", "keep",
+    ]),
     app(
         "panel.ludusavi",
         "settings.field.panel_ludusavi.label",
@@ -4603,14 +4992,24 @@ mod tests {
     }
 
     #[test]
-    fn steam_runtime_is_a_native_per_game_choice() {
+    fn native_build_choices_are_per_game() {
         let natives: Vec<_> = FIELDS.iter().filter(|f| f.native_only).collect();
-        assert_eq!(natives.len(), 1);
-        let rt = natives[0];
-        assert_eq!(rt.path, "steamRuntime");
-        assert!(rt.applies_to_game(true));
-        assert!(!rt.applies_to_game(false));
-        assert_ne!(rt.section, FieldSection::Wine);
+        let paths: Vec<_> = natives.iter().map(|f| f.path).collect();
+        assert_eq!(paths, ["steamRuntime", "iroriRosetta"]);
+        for field in &natives {
+            assert!(field.applies_to_game(true));
+            assert_ne!(field.section, FieldSection::Wine);
+        }
+        // The game defaults offer the Steam runtime, so every native build
+        // can start in it without setting each game; Rosetta is per game.
+        assert!(natives[0].applies_to_game(false));
+        assert!(!natives[1].applies_to_game(false));
+        // Rosetta is a Mac's, the Steam runtime Linux's.
+        let rosetta = FIELDS.iter().find(|f| f.path == "iroriRosetta").unwrap();
+        assert_eq!(
+            rosetta.supported_on_host(),
+            irori_core::HostPlatform::current() == irori_core::HostPlatform::Mac
+        );
     }
 
     #[test]

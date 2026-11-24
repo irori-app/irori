@@ -796,7 +796,8 @@ impl Store for SideloadStore {
         ensure_file(&exe).await?;
         let args = launch::launch_args(app, request);
         match app.platform {
-            p if !p.install_platform().needs_wine() => {
+            // A native replacement program set for the app runs directly.
+            p if !p.install_platform().needs_wine() || request.environment.without_wine => {
                 ensure_executable(&exe).await;
                 Ok(launch::native_plan(&exe, args, &request.environment))
             }

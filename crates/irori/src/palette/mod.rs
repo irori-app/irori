@@ -19,7 +19,7 @@ use gpui_kit::{
 };
 use irori_core::settings::LibraryLayout;
 use irori_core::{GameId, GameInfo, Runner};
-use irori_library::InstallFilter;
+use irori_library::{Grouping, InstallFilter};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::SizeStep;
@@ -60,6 +60,8 @@ pub(crate) enum PaletteTarget {
     Hide(GameId, bool),
     /// Open a game's install folder in the file manager.
     OpenFolder(GameId),
+    /// Open the folder of a game's screenshots and clips.
+    CapturesFolder(GameId),
     Route(Route),
     Refresh,
     /// Choose which games to pick a random one from (a palette level).
@@ -69,10 +71,34 @@ pub(crate) enum PaletteTarget {
     SetUpEmulation,
     /// Add an emulator of the user's own.
     AddEmulator,
+    /// Start an emulator without a game (its id and name).
+    OpenEngine(String, SharedString),
+    /// Start a third-party launcher.
+    OpenLauncher(irori_launchers::LauncherKind),
+    /// Add desktop and menu shortcuts that open a third-party launcher.
+    LauncherShortcut(irori_launchers::LauncherKind),
+    /// A set-up launcher's Wine build and variables.
+    LauncherWine(irori_launchers::LauncherKind),
+    /// Review added games that are probably one game twice.
+    Duplicates,
+    /// The Getting started checklist.
+    GettingStarted,
+    /// Show (`true`) or hide the Stores page's deals.
+    Deals(bool),
+    /// The guided tour of the main window.
+    Tour,
+    /// Save the categories of both kinds to a file.
+    ExportCategories,
+    /// Merge the categories of a file.
+    ImportCategories,
+    /// The usual ROM folders found on this computer, to add.
+    FindRoms,
     /// The Steam friends window.
     SteamFriends,
     XboxOfflinePlay,
     XboxFriends,
+    /// Work offline (`true`) or follow the connection again.
+    WorkOffline(bool),
     /// Show a store's website in the store window.
     OpenStore(Runner),
     LutrisScript,
@@ -100,6 +126,9 @@ pub(crate) enum PaletteTarget {
     GroupByGenre(bool),
     /// Group the library by category (`true`) or stop, and show it.
     GroupByCategory(bool),
+    /// Group the library by one of a game's facts (store, year…), or stop
+    /// with `Grouping::None`, and show it.
+    GroupBy(Grouping),
     /// Show the library's games in one category of either kind.
     Category(irori_services::CategoryRef),
     /// Make a smart category.
@@ -110,6 +139,8 @@ pub(crate) enum PaletteTarget {
     SaveView,
     /// Pick a folder and add the games in it.
     AddFolder,
+    /// Rename, merge or remove genres and companies across the library.
+    ManageFields,
     /// Show the library as a grid, a list or in Focus view, and show it.
     LibraryView(LibraryLayout),
     /// Sync a game's cloud saves now.
@@ -120,6 +151,10 @@ pub(crate) enum PaletteTarget {
     RemovePicked,
     /// Read the picked games' details again.
     RefreshPicked,
+    /// Edit the developer, publisher and genres of the picked games.
+    EditPickedMetadata,
+    /// Edit the developer, publisher and genres of one game.
+    EditMetadata(GameId),
     /// Link the picked games to Steam by their titles.
     LinkPickedToSteam,
     /// Back up a game's saves with Ludusavi now.
@@ -140,6 +175,12 @@ pub(crate) enum PaletteTarget {
     SteamLink(GameId),
     /// Edit a game's own links.
     GameLinks(GameId),
+    /// Choose which rows the game page's Details show.
+    DetailRows,
+    /// Set a game's time played by hand.
+    EditPlaytime(GameId),
+    /// Install one copy of a game's entry.
+    InstallCopy(GameId),
     /// Turn a ROM library entry into an added PC game.
     PlayAsPcGame(GameId),
     /// Add a game to Steam as a non-Steam shortcut.
@@ -150,11 +191,18 @@ pub(crate) enum PaletteTarget {
     Sync,
     /// Save a clip of the replay buffer.
     SaveClip,
+    /// Pause or resume downloads, or choose what the computer does once
+    /// they finish.
+    Downloads(irori_manage::DownloadCommand),
     /// Make the interface larger, smaller or its default size.
     InterfaceSize(SizeStep),
     /// Report a problem, suggest an idea, ask a question or read the
     /// known issues, in the browser.
     Feedback(irori_settings::feedback::Feedback),
+    /// Download Irori's update, or restart into it once it is ready.
+    AppUpdate {
+        ready: bool,
+    },
 }
 
 /// The library's state that its palette commands change.
@@ -169,6 +217,9 @@ struct LibraryCommands<'a> {
     grouped_by_genre: Option<bool>,
     /// Whether the library groups by category, while a library view exists.
     grouped_by_category: Option<bool>,
+    /// How the library groups its games, while a library view exists: the
+    /// groupings by a game's facts are offered from it.
+    grouping: Option<Grouping>,
     /// Every category of both kinds, to show one.
     categories: &'a [irori_ui::categories::CategoryEntry],
     /// The saved library views, to show one.
@@ -215,6 +266,7 @@ impl Palette {
             grouped_by_mode,
             grouped_by_genre,
             grouped_by_category,
+            grouping,
             categories,
             views,
             layout,
@@ -395,6 +447,30 @@ impl Palette {
         }
         push(
             Entry::new()
+                .label(t("shell.palette.getting_started"))
+                .keywords([t("shell.palette.getting_started_keywords")])
+                .icon(IconName::Sparkles),
+            PaletteTarget::GettingStarted,
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.tour"))
+                .keywords([t("shell.palette.getting_started_keywords")])
+                .icon(IconName::Compass),
+            PaletteTarget::Tour,
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.find_roms"))
+                .keywords([t("shell.palette.find_roms_keywords")])
+                .icon(IconName::Search),
+            PaletteTarget::FindRoms,
+            targets,
+        );
+        push(
+            Entry::new()
                 .label(t("shell.palette.set_up_emulation"))
                 .keywords([t("shell.palette.set_up_emulation_keywords")])
                 .icon(IconName::Joystick),
@@ -415,6 +491,14 @@ impl Palette {
                 .keywords([t("shell.palette.add_folder_keywords")])
                 .icon(IconName::FolderPlus),
             PaletteTarget::AddFolder,
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.manage_fields"))
+                .keywords([t("shell.palette.manage_fields_keywords")])
+                .icon(IconName::ListFilter),
+            PaletteTarget::ManageFields,
             targets,
         );
         push(
@@ -553,6 +637,26 @@ impl Palette {
                 targets,
             );
         }
+        if let Some(current) = grouping {
+            for group in Grouping::BY_FACT {
+                let Some(label) = group.palette_label(current) else {
+                    continue;
+                };
+                let target = if current == group {
+                    Grouping::None
+                } else {
+                    group
+                };
+                push(
+                    Entry::new()
+                        .label(label)
+                        .keywords([group.label()])
+                        .icon(IconName::Rows3),
+                    PaletteTarget::GroupBy(target),
+                    targets,
+                );
+            }
+        }
         if grouped_by_category.is_some() {
             push(
                 Entry::new()
@@ -563,6 +667,24 @@ impl Palette {
                 targets,
             );
         }
+        if !categories.is_empty() {
+            push(
+                Entry::new()
+                    .label(t("shell.palette.export_categories"))
+                    .keywords([t("shell.palette.category_keywords")])
+                    .icon(IconName::Upload),
+                PaletteTarget::ExportCategories,
+                targets,
+            );
+        }
+        push(
+            Entry::new()
+                .label(t("shell.palette.import_categories"))
+                .keywords([t("shell.palette.category_keywords")])
+                .icon(IconName::Download),
+            PaletteTarget::ImportCategories,
+            targets,
+        );
         for entry in categories {
             push(
                 Entry::new()
@@ -715,6 +837,7 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         grouped_by_mode: irori_library::groups_by_mode(cx),
         grouped_by_genre: irori_library::groups_by_genre(cx),
         grouped_by_category: irori_library::groups_by_category(cx),
+        grouping: irori_library::grouping(cx),
         categories: &categories,
         views: &views,
         layout: irori_library::library_layout(cx),
@@ -761,6 +884,28 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::SyncSaves(game.id()));
     }
+    let update = models(cx).app_update.read(cx).status.clone();
+    if irori_settings::app_update::can_install(&update)
+        && let Some(release) = &update.available
+    {
+        let ready = matches!(update.install, irori_services::SelfInstall::Ready { .. });
+        let label = if ready {
+            "shell.palette.restart_update"
+        } else {
+            "shell.palette.install_update"
+        };
+        items.push(
+            Entry::new()
+                .label(t_args(label, &[("version", &release.version)]))
+                .keywords([t("shell.palette.install_update_keywords")])
+                .icon(if ready {
+                    IconName::RotateCw
+                } else {
+                    IconName::Download
+                }),
+        );
+        targets.push(PaletteTarget::AppUpdate { ready });
+    }
     if let Some(game) = with_trailer {
         items.push(
             Entry::new()
@@ -770,6 +915,22 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::Trailer(game.id()));
     }
+    let deals = models(cx).settings.read(cx).app.deals;
+    items.push(
+        Entry::new()
+            .label(t(if deals {
+                "shell.palette.hide_deals"
+            } else {
+                "shell.palette.show_deals"
+            }))
+            .keywords([t("shell.palette.deals_keywords"), t("shell.nav.stores")])
+            .icon(if deals {
+                IconName::EyeOff
+            } else {
+                IconName::Eye
+            }),
+    );
+    targets.push(PaletteTarget::Deals(!deals));
     if let Some(count) = irori_library::removable_picks(cx) {
         items.push(
             Entry::new()
@@ -793,11 +954,77 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         targets.push(PaletteTarget::RefreshPicked);
         items.push(
             Entry::new()
+                .label(t_args(
+                    "shell.palette.edit_picked_metadata",
+                    &[("count", &count)],
+                ))
+                .keywords([t("shell.palette.edit_metadata_keywords")])
+                .icon(IconName::Tags),
+        );
+        targets.push(PaletteTarget::EditPickedMetadata);
+        items.push(
+            Entry::new()
                 .label(t_args("shell.palette.link_picked", &[("count", &count)]))
                 .keywords([t("shell.palette.steam_link_keywords")])
                 .icon(IconName::Link),
         );
         targets.push(PaletteTarget::LinkPickedToSteam);
+    }
+    for engine in irori_manage::openable_engines(cx) {
+        items.push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.open_engine",
+                    &[("engine", &engine.name)],
+                ))
+                .keywords([
+                    t("shell.palette.open_engine_keywords"),
+                    t("shell.nav.emulators"),
+                ])
+                .icon(IconName::Joystick),
+        );
+        targets.push(PaletteTarget::OpenEngine(engine.id, engine.name));
+    }
+    for launcher in irori_manage::known_launchers(cx) {
+        let name = launcher.display_name();
+        items.push(
+            Entry::new()
+                .label(t_args("shell.palette.open_launcher", &[("launcher", name)]))
+                .keywords([t("shell.nav.stores")])
+                .icon(IconName::ExternalLink),
+        );
+        targets.push(PaletteTarget::OpenLauncher(launcher));
+        items.push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.launcher_shortcut",
+                    &[("launcher", name)],
+                ))
+                .keywords([t("shell.palette.launcher_shortcut_keywords")])
+                .icon(IconName::Link),
+        );
+        targets.push(PaletteTarget::LauncherShortcut(launcher));
+    }
+    items.push(
+        Entry::new()
+            .label(t("shell.palette.duplicates"))
+            .keywords([t("shell.palette.duplicates_keywords")])
+            .icon(IconName::Copy),
+    );
+    targets.push(PaletteTarget::Duplicates);
+    if !cfg!(windows) {
+        for launcher in irori_manage::wine_launchers(cx) {
+            items.push(
+                Entry::new()
+                    .label(t_args(
+                        "shell.palette.launcher_wine",
+                        &[("launcher", launcher.display_name())],
+                    ))
+                    .keywords([t("shell.palette.launcher_wine_keywords")])
+                    .icon(IconName::Wine),
+            );
+            targets.push(PaletteTarget::LauncherWine(launcher));
+        }
     }
     if irori_manage::steam_client_library_state(cx).is_some_and(|s| s.steam_found && !s.signed_in) {
         items.push(
@@ -826,6 +1053,33 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::XboxOfflinePlay);
     }
+    {
+        let offline = irori_ui::models::working_offline(cx);
+        items.push(
+            Entry::new()
+                .label(t(if offline {
+                    "shell.palette.work_online"
+                } else {
+                    "shell.palette.work_offline"
+                }))
+                .keywords([t("shell.palette.work_offline_keywords")])
+                .icon(if offline {
+                    IconName::Wifi
+                } else {
+                    IconName::WifiOff
+                }),
+        );
+        targets.push(PaletteTarget::WorkOffline(!offline));
+    }
+    for (label, icon, command) in irori_manage::download_commands(cx) {
+        items.push(
+            Entry::new()
+                .label(label)
+                .keywords([irori_manage::download_command_keywords()])
+                .icon(icon),
+        );
+        targets.push(PaletteTarget::Downloads(command));
+    }
     items
         .into_iter()
         .zip(targets)
@@ -841,8 +1095,24 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
         PaletteTarget::SetUpEmulation => irori_manage::open_emulation_setup(window, cx),
         PaletteTarget::AddEmulator => irori_manage::open_custom_engine_dialog(None, window, cx),
+        PaletteTarget::OpenEngine(id, name) => irori_manage::open_engine(id, name, window, cx),
+        PaletteTarget::OpenLauncher(launcher) => irori_manage::open_launcher(launcher, window, cx),
+        PaletteTarget::LauncherShortcut(launcher) => {
+            irori_manage::launcher_shortcut(launcher, true, window, cx)
+        }
+        PaletteTarget::LauncherWine(launcher) => {
+            irori_manage::open_launcher_wine_dialog(launcher, window, cx)
+        }
+        PaletteTarget::Duplicates => irori_library::open_duplicates_dialog(window, cx),
+        PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
+        PaletteTarget::Deals(shown) => irori_manage::set_deals_shown(shown, window, cx),
+        PaletteTarget::Tour => irori_ui::tour::start(window, cx),
+        PaletteTarget::ExportCategories => irori_library::export_categories(window, cx),
+        PaletteTarget::ImportCategories => irori_library::import_categories(window, cx),
+        PaletteTarget::FindRoms => irori_manage::open_rom_sources_dialog(window, cx),
         PaletteTarget::SteamFriends => irori_manage::open_steam_friends_dialog(window, cx),
         PaletteTarget::XboxOfflinePlay => irori_manage::open_offline_play_dialog(window, cx),
+        PaletteTarget::WorkOffline(offline) => irori_ui::models::set_working_offline(offline, cx),
         PaletteTarget::XboxFriends => {
             irori_manage::open_friends_dialog(irori_manage::FriendsSource::Xbox, window, cx)
         }
@@ -864,11 +1134,14 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Favourite(id, on) => irori_game::ops::set_favourite(&id, on, cx),
         PaletteTarget::Hide(id, on) => irori_game::ops::set_hidden(&id, on, cx),
         PaletteTarget::OpenFolder(id) => irori_game::ops::open_install_folder(&id, window, cx),
+        PaletteTarget::CapturesFolder(id) => irori_game::ops::open_captures_folder(&id, window, cx),
         // The palette's own levels; its view handles them.
         PaletteTarget::GameActions(_) | PaletteTarget::Back | PaletteTarget::RandomFrom(_) => {}
         PaletteTarget::PlayStatus(id, status) => irori_ui::play_status::set(&id, status, cx),
         PaletteTarget::View(id) => irori_library::apply_view(id, cx),
         PaletteTarget::AddFolder => irori_library::open_add_folder_dialog(window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::ManageFields => window.defer(cx, irori_library::open_fields_dialog),
         PaletteTarget::SaveView => {
             irori_ui::navigate(Route::Library, cx);
             // After the palette's own dialog has closed.
@@ -879,6 +1152,11 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         // After the palette's own dialog has closed.
         PaletteTarget::RemovePicked => window.defer(cx, irori_library::remove_picked_from_library),
         PaletteTarget::RefreshPicked => irori_library::refresh_picked_details(window, cx),
+        // After the palette's own dialog has closed.
+        PaletteTarget::EditPickedMetadata => window.defer(cx, irori_library::edit_picked_metadata),
+        PaletteTarget::EditMetadata(id) => window.defer(cx, move |window, cx| {
+            irori_library::open_metadata_dialog(vec![id], window, cx)
+        }),
         PaletteTarget::LinkPickedToSteam => irori_library::link_picked_to_steam(window, cx),
         PaletteTarget::BackUpSaves(id) => irori_ui::save_backups::back_up_now(&id, window, cx),
         PaletteTarget::SaveBackups(id) => {
@@ -889,8 +1167,16 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::UserAction(id, index) => irori_ui::user_actions::run(id, index, window, cx),
         PaletteTarget::EditActions(id) => irori_ui::user_actions::edit(&id, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
+        PaletteTarget::Downloads(command) => irori_manage::run_download_command(command, cx),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::Feedback(way) => irori_settings::feedback::open(way, window, cx).detach(),
+        PaletteTarget::AppUpdate { ready: true } => {
+            irori_settings::app_update::restart_into_update(window, cx)
+        }
+        PaletteTarget::AppUpdate { ready: false } => {
+            irori_settings::app_update::install_update(cx);
+            irori_ui::navigate(Route::Settings("about".into()), cx);
+        }
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         // After the palette's own dialog has closed.
         PaletteTarget::SteamLink(id) => window.defer(cx, move |window, cx| {
@@ -898,6 +1184,15 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }),
         PaletteTarget::GameLinks(id) => window.defer(cx, move |window, cx| {
             irori_game::open_links_dialog(id, window, cx)
+        }),
+        // After the palette's own dialog has closed.
+        PaletteTarget::DetailRows => window.defer(cx, irori_game::open_detail_rows_dialog),
+        PaletteTarget::EditPlaytime(id) => window.defer(cx, move |window, cx| {
+            irori_game::open_playtime_dialog(id, window, cx)
+        }),
+        // After the palette's own dialog has closed: the sheet is a dialog.
+        PaletteTarget::InstallCopy(id) => window.defer(cx, move |window, cx| {
+            irori_game::ops::install(&id, window, cx)
         }),
         PaletteTarget::PlayAsPcGame(id) => {
             irori_library::open_play_as_pc_game_dialog(&id, window, cx)
@@ -936,6 +1231,10 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::GroupByCategory(on) => {
             irori_library::set_groups_by_category(on, cx);
+            irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::GroupBy(group) => {
+            irori_library::set_grouping(group, cx);
             irori_ui::navigate(Route::Library, cx);
         }
         PaletteTarget::Category(category) => irori_library::show_category(category, cx),

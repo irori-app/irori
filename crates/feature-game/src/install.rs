@@ -23,6 +23,7 @@ use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
     ParentElement, Pixels, Render, SharedString, Styled, Subscription, Task, Window, div, relative,
 };
+use irori_core::settings::LibraryFolder;
 use irori_core::util::format_bytes;
 use irori_core::{
     GameId, GameInfo, InstallInfo, InstallInfoQuery, InstallPlatform, InstallRequest, Runner,
@@ -81,6 +82,9 @@ pub struct InstallSheet {
     /// The account to install with; the first owner by default.
     account: Option<String>,
     path: Entity<InputState>,
+    /// The library folders to install into, when there is more than the
+    /// default one (`iroriLibraryFolders`); picking one fills [`Self::path`].
+    library_folder: Option<Entity<ChoiceSelect>>,
     info: Load<InstallInfo>,
     info_rev: u64,
     dlc_sizes: HashMap<String, InstallSize>,
@@ -257,6 +261,19 @@ impl InstallSheet {
                 .placeholder(t("game.install.path_placeholder"))
                 .default_value(default_path)
         });
+        let folders: Vec<LibraryFolder> = app
+            .library_folders()
+            .into_iter()
+            .filter(|f| !f.path.trim().is_empty())
+            .collect();
+        let library_folder = (folders.len() > 1).then(|| {
+            let choices = folders
+                .iter()
+                .enumerate()
+                .map(|(ix, f)| Choice::new(ix.to_string(), irori_ui::library_folders::label(f)))
+                .collect();
+            choice_select(choices, Some("0"), window, cx)
+        });
         let password = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(t("game.install.password_placeholder"))
@@ -276,7 +293,29 @@ impl InstallSheet {
         let build_select = choice_select(Vec::new(), None, window, cx);
         let wine_select = choice_select(Vec::new(), None, window, cx);
 
-        let subscriptions = vec![
+        let mut subscriptions = Vec::new();
+        if let Some(select) = &library_folder {
+            let runner = id.runner;
+            subscriptions.push(cx.subscribe_in(
+                select,
+                window,
+                move |this, _, e: &SelectEvent<Vec<Choice>>, window, cx| {
+                    let SelectEvent::Confirm(Some(ix)) = e else {
+                        return;
+                    };
+                    let Some(folder) = ix.parse::<usize>().ok().and_then(|ix| folders.get(ix))
+                    else {
+                        return;
+                    };
+                    let app = irori_ui::models(cx).settings.read(cx).app.clone();
+                    let dir = app.install_folder_in(&folder.path, runner);
+                    this.path
+                        .update(cx, |state, cx| state.set_value(dir, window, cx));
+                    this.refresh_disk(window, cx);
+                },
+            ));
+        }
+        subscriptions.extend([
             cx.subscribe_in(&path, window, |this, _, e: &InputEvent, window, cx| {
                 if matches!(e, InputEvent::Change) {
                     this.refresh_disk(window, cx);
@@ -328,7 +367,7 @@ impl InstallSheet {
                     cx.notify();
                 },
             ),
-        ];
+        ]);
 
         let mut this = Self {
             id,
@@ -338,6 +377,7 @@ impl InstallSheet {
             owners,
             account,
             path,
+            library_folder,
             info: Load::Loading,
             info_rev: 0,
             dlc_sizes: HashMap::new(),
@@ -1436,6 +1476,19 @@ impl InstallSheet {
             v_flex()
                 .gap_2()
                 .child(Self::render_section(t("game.common.location"), cx))
+                .when_some(self.library_folder.as_ref(), |this, select| {
+                    this.child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .flex_shrink_0()
+                                    .child(t("game.install.library_folder")),
+                            )
+                            .child(div().flex_1().min_w_0().child(Select::new(select))),
+                    )
+                })
                 .child(
                     h_flex()
                         .gap_2()

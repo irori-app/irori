@@ -1,9 +1,13 @@
-//! Unpacking a downloaded upload into its install folder (blocking; run on
-//! the blocking pool). Zip and tar archives (plain, gzip, xz, bzip2) are
-//! unpacked in-process, refusing entries that would land outside the
-//! folder. A file that is not an archive (a portable `.exe`, an AppImage, a
-//! `.jar`) is copied in as it is. Disk images and 7-Zip or RAR archives are
-//! refused with an explanation.
+//! Unpacking a downloaded upload into its install folder. Zip and tar
+//! archives (plain, gzip, xz, bzip2) are unpacked in-process here (blocking;
+//! run on the blocking pool), refusing entries that would land outside the
+//! folder. 7-Zip and RAR archives go through `irori_mods::archive` (7-Zip in
+//! process, RAR through a program that reads it, every name checked first),
+//! and macOS disk images are mounted read-only and copied out
+//! ([`unpack_dmg`]); the install pipeline picks those. A file that is not
+//! an archive (a portable `.exe`, an AppImage, a `.jar`) is copied in as it
+//! is, unless it is a Windows setup program (`setup.rs`). Installer
+//! packages for macOS (`.pkg`) are refused with an explanation.
 
 use std::fs::File;
 use std::io::{self, BufReader};
@@ -20,9 +24,14 @@ pub(crate) enum Kind {
     TarGz,
     TarXz,
     TarBz2,
+    /// Unpacked by `irori_mods::archive`.
+    SevenZip,
+    Rar,
+    /// A macOS disk image, mounted and copied out.
+    Dmg,
     /// Copied as it is.
     Plain,
-    /// Disk images and archives Irori cannot read.
+    /// Installer packages Irori doesn't run.
     Unsupported,
 }
 
@@ -39,7 +48,13 @@ pub(crate) fn classify(name: &str) -> Kind {
         Kind::TarBz2
     } else if ends(&[".tar"]) {
         Kind::Tar
-    } else if ends(&[".dmg", ".7z", ".rar", ".pkg", ".msi"]) {
+    } else if ends(&[".7z"]) {
+        Kind::SevenZip
+    } else if ends(&[".rar"]) {
+        Kind::Rar
+    } else if ends(&[".dmg"]) {
+        Kind::Dmg
+    } else if ends(&[".pkg", ".mpkg"]) {
         Kind::Unsupported
     } else {
         Kind::Plain
@@ -75,10 +90,86 @@ pub(crate) fn unpack(
                 .with_context(|| format!("copying to {}", target.display()))?;
             Ok(())
         }
+        Kind::SevenZip | Kind::Rar | Kind::Dmg => {
+            bail!("{name} is unpacked by the install pipeline")
+        }
         Kind::Unsupported => bail!(
             "{name} is a kind of file Irori cannot unpack yet. Download it from the game's itch.io page instead."
         ),
     }
+}
+
+/// Copy what disk image `dmg` holds (an `.app`, its files) into `dest`:
+/// mounted read-only and hidden, copied with `ditto`, which keeps bundles
+/// as they are, and unmounted again. The image's link to `/Applications`
+/// and its hidden files stay behind.
+#[cfg(target_os = "macos")]
+pub(crate) async fn unpack_dmg(dmg: &Path, dest: &Path, cancel: &CancellationToken) -> Result<()> {
+    use irori_core::process::{CommandSpec, RunOptions, run};
+    tokio::fs::create_dir_all(dest)
+        .await
+        .with_context(|| format!("creating {}", dest.display()))?;
+    let mount = dest.with_file_name(format!(
+        ".{}.dmg-mount",
+        dest.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    let _ = tokio::fs::create_dir_all(&mount).await;
+    let attach = CommandSpec::new("hdiutil")
+        .arg("attach")
+        .args(["-nobrowse", "-readonly", "-noautoopen", "-mountpoint"])
+        .arg(&mount)
+        .arg(dmg);
+    run(&attach, RunOptions::default().cancel(cancel.clone()))
+        .await?
+        .check()
+        .context("the disk image could not be opened")?;
+    let copied = copy_mounted(&mount, dest, cancel).await;
+    let detach = CommandSpec::new("hdiutil")
+        .arg("detach")
+        .arg(&mount)
+        .arg("-force");
+    if let Err(e) = run(&detach, RunOptions::default()).await {
+        tracing::warn!("unmounting {}: {e:#}", mount.display());
+    }
+    let _ = tokio::fs::remove_dir(&mount).await;
+    copied
+}
+
+#[cfg(target_os = "macos")]
+async fn copy_mounted(mount: &Path, dest: &Path, cancel: &CancellationToken) -> Result<()> {
+    use irori_core::process::{CommandSpec, RunOptions, run};
+    let mut entries = tokio::fs::read_dir(mount)
+        .await
+        .context("the disk image could not be read")?;
+    let mut copied = 0;
+    while let Some(entry) = entries.next_entry().await? {
+        let name = entry.file_name();
+        let kind = entry.file_type().await?;
+        if name.to_string_lossy().starts_with('.') || kind.is_symlink() {
+            continue;
+        }
+        let ditto = CommandSpec::new("ditto")
+            .arg(entry.path())
+            .arg(dest.join(&name));
+        run(&ditto, RunOptions::default().cancel(cancel.clone()))
+            .await?
+            .check()
+            .with_context(|| format!("copying {}", name.to_string_lossy()))?;
+        copied += 1;
+    }
+    if copied == 0 {
+        bail!("the disk image is empty");
+    }
+    Ok(())
+}
+
+/// Disk images are macOS's own; elsewhere they can't be opened.
+#[cfg(not(target_os = "macos"))]
+pub(crate) async fn unpack_dmg(dmg: &Path, _: &Path, _: &CancellationToken) -> Result<()> {
+    bail!(
+        "{} is a macOS disk image, which only a Mac can open. Choose another download of the game.",
+        dmg.file_name().unwrap_or_default().to_string_lossy()
+    )
 }
 
 fn unzip(archive: &Path, dest: &Path, cancel: &CancellationToken) -> Result<()> {
@@ -216,7 +307,17 @@ pub(crate) mod tests {
         unpack(&plain, "Game-x86_64.AppImage", &dest, &cancel).unwrap();
         assert!(dest.join("Game-x86_64.AppImage").is_file());
 
-        assert!(unpack(&plain, "game.dmg", &dir.path().join("dmg"), &cancel).is_err());
+        assert!(unpack(&plain, "game.pkg", &dir.path().join("pkg"), &cancel).is_err());
+    }
+
+    #[test]
+    fn archive_kinds_by_name() {
+        assert_eq!(classify("Game.7z"), Kind::SevenZip);
+        assert_eq!(classify("game-win.RAR"), Kind::Rar);
+        assert_eq!(classify("Game-mac.dmg"), Kind::Dmg);
+        assert_eq!(classify("Game.pkg"), Kind::Unsupported);
+        assert_eq!(classify("game-setup.msi"), Kind::Plain, "a setup program");
+        assert_eq!(classify("game.tar.xz"), Kind::TarXz);
     }
 
     #[test]

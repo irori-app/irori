@@ -62,6 +62,7 @@ impl StatsView {
             .child(hero)
             .child(self.render_year(&b, &library, cx))
             .child(self.render_library_bar(&b, cx))
+            .children(self.render_backlog_extras(cx))
             .into_any_element()
     }
 
@@ -582,7 +583,9 @@ fn timeline(b: &Backlog, library: &LibrarySnapshot, cx: &mut Context<StatsView>)
                     .tooltip(move |window, cx| {
                         gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)
                     })
-                    .on_click(move |_, _, cx| navigate(Route::Game(id.clone()), cx))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_game_sheet(id.clone(), window, cx)
+                    }))
                     .child(GameCover::new(game).width(rems(MARK_REM)).radius(px(3.)))
                     .into_any_element(),
             );

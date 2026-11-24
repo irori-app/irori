@@ -160,6 +160,7 @@ mod tests {
 
     fn env(wrappers: Vec<Vec<&str>>, w: Option<WineLaunch>) -> LaunchEnvironment {
         LaunchEnvironment {
+            without_wine: false,
             env: Default::default(),
             env_remove: Vec::new(),
             wrappers: wrappers

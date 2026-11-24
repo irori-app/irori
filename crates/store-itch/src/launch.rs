@@ -54,7 +54,9 @@ pub(crate) fn build_plan(record: &InstalledRecord, request: &LaunchRequest) -> R
     let windows_exe = exe
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("exe") || e.eq_ignore_ascii_case("bat"));
-    let uses_wine = record.platform.needs_wine() || (windows_exe && !cfg!(windows));
+    // A native replacement program set for the game runs directly.
+    let uses_wine = !request.environment.without_wine
+        && (record.platform.needs_wine() || (windows_exe && !cfg!(windows)));
     let mut args: Vec<String> = arg_lines
         .iter()
         .flat_map(|line| split_program_args(uses_wine, line))
@@ -127,6 +129,7 @@ mod tests {
                 ..Default::default()
             },
             environment: LaunchEnvironment {
+                without_wine: false,
                 env: [("MY_VAR".to_string(), "1".to_string())].into(),
                 env_remove: Vec::new(),
                 wrappers: vec![vec!["gamemoderun".into()]],
@@ -198,6 +201,29 @@ mod tests {
             &a[a.len() - 3..],
             ["-saves", r"C:\Users\me\saves", "--extra"]
         );
+    }
+
+    /// Heroic #4608: a native replacement program set for a Windows build
+    /// starts directly, its arguments split by this system's rules.
+    #[test]
+    fn a_windows_build_started_without_wine_runs_its_program_directly() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("openjk"), b"#!/bin/sh\n").unwrap();
+        let record = InstalledRecord {
+            title: "Jedi Academy".into(),
+            install_path: dir.path().to_string_lossy().into_owned(),
+            platform: InstallPlatform::Windows,
+            executable: "jasp.exe".into(),
+            ..Default::default()
+        };
+        let mut req = request(None);
+        req.settings.target_exe = "openjk".into();
+        req.environment.without_wine = true;
+        let plan = build_plan(&record, &req).unwrap();
+        let a = args(&plan);
+        assert!(!plan.track_wineserver);
+        assert!(a[0].ends_with("openjk"), "{a:?}");
+        assert!(!plan.command.env.contains_key("WINEPREFIX"));
     }
 
     #[test]

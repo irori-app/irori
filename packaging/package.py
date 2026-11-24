@@ -112,11 +112,12 @@ Manager, so on another computer you sign in to your stores again.
 Delete this file to use the usual folders in your user profile instead.
 """
 
-# The AppImage bundles no libraries, so nothing leaks into the games Irori
-# starts through LD_LIBRARY_PATH. Irori uses the system's GPU and window
-# libraries, as the tarball does, and the sign-in window the system's
-# WebKitGTK: without it the window fails to start and Irori signs in through
-# the browser instead.
+# The AppImage sets no LD_LIBRARY_PATH, so nothing leaks into the games Irori
+# starts. Irori uses the system's GPU and window libraries, as the tarball
+# does, and the sign-in window the system's WebKitGTK: without it the window
+# fails to start and Irori signs in through the browser instead. The few
+# libraries in `APPIMAGE_BUNDLED` are carried and found through `irori`'s own
+# RUNPATH.
 APPIMAGE_RUN = """\
 #!/bin/sh
 here=$(dirname "$(readlink -f "$0")")
@@ -124,6 +125,42 @@ exec "$here/usr/bin/irori" "$@"
 """
 # Libraries Irori must start without (AGENTS.md, "WebKitGTK must stay optional").
 SIGN_IN_ONLY_LIBRARIES = ("libwebkit2gtk", "libjavascriptcoregtk", "libgtk-3", "libsoup")
+
+# Libraries every system an AppImage runs on is expected to have: AppImage's
+# excludelist (github.com/AppImageCommunity/pkg2appimage, `excludelist`), plus
+# arm64's loader. Shipping a copy of one of these breaks more systems than it
+# helps (glibc, the GPU driver's libraries).
+APPIMAGE_EXCLUDED = frozenset({
+    "ld-linux.so.2", "ld-linux-x86-64.so.2", "ld-linux-aarch64.so.1", "libanl.so.1",
+    "libBrokenLocale.so.1", "libcidn.so.1", "libc.so.6", "libdl.so.2", "libm.so.6",
+    "libmvec.so.1", "libnss_compat.so.2", "libnss_dns.so.2", "libnss_files.so.2",
+    "libnss_hesiod.so.2", "libnss_nisplus.so.2", "libnss_nis.so.2", "libpthread.so.0",
+    "libresolv.so.2", "librt.so.1", "libthread_db.so.1", "libutil.so.1", "libstdc++.so.6",
+    "libGL.so.1", "libEGL.so.1", "libGLdispatch.so.0", "libGLX.so.0", "libOpenGL.so.0",
+    "libdrm.so.2", "libglapi.so.0", "libgbm.so.1", "libxcb.so.1", "libX11.so.6",
+    "libX11-xcb.so.1", "libwayland-client.so.0", "libasound.so.2", "libfontconfig.so.1",
+    "libfreetype.so.6", "libharfbuzz.so.0", "libcom_err.so.2", "libexpat.so.1",
+    "libgcc_s.so.1", "libgpg-error.so.0", "libICE.so.6", "libSM.so.6", "libusb-1.0.so.0",
+    "libuuid.so.1", "libz.so.1", "libjack.so.0", "libpipewire-0.3.so.0",
+    "libxcb-dri3.so.0", "libxcb-dri2.so.0", "libfribidi.so.0", "libgmp.so.10",
+})
+# Libraries `irori` links that the excludelist leaves out. A minimal system (a
+# Wayland-only install without X11's keyboard libraries, a container or an
+# immutable image without udev's library) lacks them, and then the dynamic
+# loader stops Irori before it can show anything. They are small, keep a
+# stable ABI and read only data every distribution keeps in the same place
+# (`/usr/share/X11/xkb`, `/run/udev`), so a copy is safe. They go into
+# `usr/lib`, found through RUNPATH, which, unlike LD_LIBRARY_PATH, no program
+# Irori starts inherits. Anything else `irori` links fails the build, so a new
+# native dependency is a decision, not an accident.
+APPIMAGE_BUNDLED = frozenset({
+    "libxkbcommon.so.0", "libxkbcommon-x11.so.0", "libxcb-xkb.so.1", "libudev.so.1",
+    # What some builds of libudev link in turn.
+    "libcap.so.2",
+})
+# The build system's root; tests point it at a folder of stand-in libraries.
+SYSTEM_ROOT = Path("/")
+LINUX_TRIPLETS = {"x86_64": "x86_64-linux-gnu", "aarch64": "aarch64-linux-gnu"}
 
 # ELF machine numbers, and the names Linux gives those architectures
 # (`uname -m`, which AppImages and appimagetool's `ARCH` use too).
@@ -186,6 +223,67 @@ def validate_linux(binaries: list[Path]) -> str:
     return arches.pop()
 
 
+def find_system_library(name: str, arch: str) -> Path:
+    """The build system's copy of the library `name` (a soname)."""
+    triplet = LINUX_TRIPLETS[arch]
+    for directory in (f"usr/lib/{triplet}", f"lib/{triplet}", "usr/lib64", "lib64", "usr/lib", "lib"):
+        candidate = SYSTEM_ROOT / directory / name
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(f"The AppImage bundles {name}, but this system has none. Install it "
+                            "(see the Linux system libraries in .github/workflows/release.yml).")
+
+
+def appimage_libraries(binary: Path, arch: str) -> dict[str, Path]:
+    """The libraries the AppImage must carry for `binary`, by soname: those it
+    links, directly or through another bundled library, that the excludelist
+    doesn't cover. A library on neither list fails the build."""
+    bundled: dict[str, Path] = {}
+    pending = [(binary.name, name) for name in elf_needed(binary)]
+    unknown = []
+    while pending:
+        parent, name = pending.pop()
+        if name in APPIMAGE_EXCLUDED or name in bundled:
+            continue
+        if name not in APPIMAGE_BUNDLED:
+            unknown.append(f"{name} (linked by {parent})")
+            continue
+        bundled[name] = find_system_library(name, arch)
+        pending.extend((name, needed) for needed in elf_needed(bundled[name].resolve()))
+    if unknown:
+        raise RuntimeError("The AppImage would not start on systems without " + ", ".join(sorted(unknown))
+                           + ". Bundle it (APPIMAGE_BUNDLED in packaging/package.py) or stop linking it.")
+    return bundled
+
+
+def patchelf_command() -> str:
+    """patchelf, which gives `irori` and its bundled libraries their RUNPATH.
+    `IRORI_PATCHELF` names it, else `patchelf` on PATH."""
+    tool = os.environ.get("IRORI_PATCHELF") or shutil.which("patchelf")
+    if not tool:
+        raise FileNotFoundError("Install patchelf or set IRORI_PATCHELF to build the AppImage.")
+    return tool
+
+
+def bundle_libraries(appdir: Path, libraries: dict[str, Path]) -> None:
+    """Copies `libraries` into the AppDir's `usr/lib` and points `irori`'s
+    RUNPATH there, and each library's at its own folder for the libraries they
+    link in turn. `$ORIGIN` keeps both right wherever the AppImage is mounted."""
+    if not libraries:
+        return
+    tool = patchelf_command()
+    lib = appdir / "usr/lib"
+    lib.mkdir(parents=True, exist_ok=True)
+    for name, path in sorted(libraries.items()):
+        target = lib / name
+        shutil.copyfile(path.resolve(), target)
+        target.chmod(0o644)
+        subprocess.run([tool, "--set-rpath", "$ORIGIN", str(target)], check=True)
+    # patchelf writes DT_RUNPATH (not DT_RPATH) unless told `--force-rpath`:
+    # a user's LD_LIBRARY_PATH still comes first, and no child inherits it.
+    subprocess.run([tool, "--set-rpath", "$ORIGIN/../lib", str(appdir / "usr/bin/irori")], check=True)
+
+
 def appimage_update_information(arch: str) -> str:
     """Where AppImageUpdate finds new versions: the GitHub release marked
     latest, and its AppImage for the same architecture."""
@@ -208,7 +306,8 @@ def appimagetool_command(appdir: Path, appimage: Path, arch: str) -> list[str]:
 
 
 def make_appimage(root: Path, binaries: list[Path], output: Path, version: str, arch: str) -> Path:
-    """`Irori-X.Y.Z-<arch>.AppImage` and, for AppImageUpdate, its `.zsync`."""
+    """`Irori-X.Y.Z-<arch>.AppImage` and, for AppImageUpdate, its `.zsync`.
+    It carries `irori`'s libraries the excludelist leaves out (`APPIMAGE_BUNDLED`)."""
     appimage = output / f"Irori-{version}-{arch}.AppImage"
     if appimage.exists():
         raise FileExistsError(f"Never overwriting {appimage}")
@@ -219,6 +318,8 @@ def make_appimage(root: Path, binaries: list[Path], output: Path, version: str, 
             (appdir / directory).mkdir(parents=True)
         for binary in binaries:
             shutil.copy2(binary, appdir / "usr/bin" / binary.name)
+        irori = next(binary for binary in binaries if binary.name == "irori")
+        bundle_libraries(appdir, appimage_libraries(irori, arch))
         shutil.copy2(root / "packaging/irori.desktop", appdir / "usr/share/applications/irori.desktop")
         shutil.copy2(root / "packaging/irori.svg", appdir / "usr/share/icons/hicolor/scalable/apps/irori.svg")
         shutil.copy2(root / "packaging/linux/app.irori.Irori.metainfo.xml", appdir / "usr/share/metainfo")

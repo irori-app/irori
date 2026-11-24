@@ -232,7 +232,11 @@ mod test {
     use crate::tokens::TokenManager;
     use crate::tokens::device::ensure_device_credentials;
 
+    /// Registers a device with Microsoft and exchanges its token: it reaches
+    /// login.live.com, so it fails whenever that service is slow or refuses
+    /// the runner, and tests must not reach the network.
     #[tokio::test]
+    #[ignore = "reaches Microsoft's servers"]
     async fn test_get_xbox_live_dev_token() {
         let client = reqwest::Client::new();
 

@@ -44,6 +44,10 @@ pub(crate) fn is_emulator(runner: &str) -> bool {
             | "mame"
             | "mupen64plus"
             | "desmume"
+            | "flycast"
+            | "reicast"
+            | "ryujinx"
+            | "yuzu"
     )
 }
 
@@ -76,6 +80,10 @@ pub(crate) fn map(runner: &str, hints: &Hints<'_>) -> Result<EmulatorTarget, Ski
         "mame" => standalone("arcade", "mame"),
         "mupen64plus" => standalone("n64", "mupen64plus"),
         "desmume" => standalone("nds", "desmume"),
+        // Flycast is reicast's continuation and reads the same discs.
+        "flycast" | "reicast" => standalone("dreamcast", "flycast"),
+        // The Switch emulator Irori knows; both read the same game files.
+        "ryujinx" | "yuzu" => standalone("switch", "ryujinx"),
         other => return Err(SkipReason::UnknownRunner(other.to_string())),
     })
 }
@@ -104,6 +112,7 @@ fn core_system(core: &str, ext: &str) -> Option<&'static str> {
         "ppsspp" => "psp",
         "dosbox_pure" | "dosbox_core" => "dos",
         "scummvm" => "scummvm",
+        "flycast" => "dreamcast",
         _ => return None,
     })
 }

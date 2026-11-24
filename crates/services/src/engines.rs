@@ -1,7 +1,8 @@
 //! Emulators for the UI: the engines Irori knows, their installations,
 //! downloadable versions, installs, updates and removals, RetroArch cores,
-//! each system's default emulator and BIOS status. Every change emits
-//! [`Event::EnginesChanged`].
+//! each system's default emulator and BIOS status, starting one without a
+//! game, and the usual ROM folders found on this computer. Every change
+//! emits [`Event::EnginesChanged`].
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,10 +12,15 @@ use irori_core::{Event, OpContext};
 use irori_engines::bios::{self, BiosIndex, SystemBios};
 use irori_engines::custom::CustomEngine;
 use irori_engines::releases::{self, Release};
+use irori_engines::rom_sources::{self, Plan as RomPlan, RomSource};
 use irori_engines::state::{CoreInstall, ManagedInstall};
 use irori_engines::{EngineManifest, EngineRef, Installation, discovery, install, retroarch};
 
 use crate::Backend;
+
+/// How long an emulator opened on its own has to fail at start for the
+/// failure to reach the user (a missing library, a bad program).
+const OPEN_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// One engine with what this computer has of it.
 #[derive(Debug, Clone)]
@@ -191,6 +197,58 @@ impl Backend {
         Ok(())
     }
 
+    /// Start `engine` without a game (its default installation, with the
+    /// settings the global defaults give games). Its output goes to
+    /// `engine-<id>.log`; one that ends with an error within a few seconds
+    /// fails here, so the user hears why.
+    pub async fn open_engine(&self, engine: &str) -> Result<()> {
+        let manifest = irori_engines::engine(engine).context("unknown emulator")?;
+        let app = self.settings.app();
+        let defaults = &app.game;
+        let values_set: serde_json::Map<String, serde_json::Value> = defaults
+            .engine_options
+            .get(&manifest.id)
+            .cloned()
+            .unwrap_or_default();
+        let own_settings = defaults.engine_own_settings;
+        let m = manifest.clone();
+        let spec = self
+            .spawn_blocking(move || -> Result<_> {
+                let state = irori_engines::state::load();
+                let installs = discovery::find(&m, &state);
+                let installation = irori_engines::launch::resolve(
+                    &m,
+                    &installs,
+                    None,
+                    state.preferred.get(&m.id).map(String::as_str),
+                )?;
+                let values = m.option_values(&values_set.into_iter().collect());
+                irori_engines::open::command(&m, installation, &values, own_settings)
+            })
+            .await
+            .context("starting the emulator stopped")??;
+        let log = irori_core::Paths::get()
+            .logs_dir()
+            .join(format!("engine-{}.log", manifest.id));
+        let mut child = irori_core::process::spawn(&spec, Some(&log))
+            .with_context(|| format!("starting {}", manifest.name))?;
+        match tokio::time::timeout(OPEN_GRACE, child.wait()).await {
+            Ok(Ok(status)) if !status.success() => anyhow::bail!(
+                "{} stopped at once ({status}); its log is {}",
+                manifest.name,
+                log.display()
+            ),
+            Ok(_) => {}
+            // Still running, as it should: reap it whenever it ends.
+            Err(_) => {
+                self.spawn(async move {
+                    let _ = child.wait().await;
+                });
+            }
+        }
+        Ok(())
+    }
+
     /// Download a RetroArch core.
     pub async fn install_core(&self, core: &str, ctx: &OpContext) -> Result<Option<CoreInstall>> {
         let result = retroarch::install_core(core, ctx).await;
@@ -274,6 +332,78 @@ impl Backend {
         });
         self.refresh_store(irori_core::Runner::Emulation, false)
             .await
+    }
+
+    /// Add several ROM folders and scan once. Folders that are gone are
+    /// left out.
+    pub async fn add_rom_folders(&self, folders: Vec<PathBuf>) -> Result<()> {
+        let folders = self
+            .spawn_blocking(move || {
+                folders
+                    .into_iter()
+                    .filter(|f| f.is_dir())
+                    .collect::<Vec<_>>()
+            })
+            .await
+            .context("checking the folders stopped")?;
+        anyhow::ensure!(
+            !folders.is_empty(),
+            "none of these folders is there anymore"
+        );
+        self.settings.update_app(|s| {
+            for folder in &folders {
+                let text = folder.display().to_string();
+                if !s.rom_folders.contains(&text) {
+                    s.rom_folders.push(text);
+                }
+            }
+        });
+        self.refresh_store(irori_core::Runner::Emulation, false)
+            .await
+    }
+
+    /// The usual ROM folders on this computer (EmuDeck's, RetroDECK's, a
+    /// `ROMs` folder, at home and at the top of other disks) and what
+    /// adding them would add: only systems an emulator here plays or Irori
+    /// can download, and nothing the library already scans. Only reads.
+    pub async fn rom_sources(&self) -> (Vec<RomSource>, RomPlan) {
+        let existing: Vec<PathBuf> = self
+            .settings
+            .app()
+            .rom_folders
+            .iter()
+            .map(PathBuf::from)
+            .collect();
+        self.spawn_blocking(move || {
+            let home = dirs::home_dir().unwrap_or_default();
+            let sources = rom_sources::find(&home, &rom_sources::mount_roots());
+            if sources.is_empty() {
+                return (sources, RomPlan::default());
+            }
+            let state = irori_engines::state::load();
+            let host = irori_engines::Host::current();
+            let usable: Vec<Arc<EngineManifest>> = irori_engines::engines()
+                .iter()
+                .filter(|m| m.downloadable_on(host) || !discovery::find(m, &state).is_empty())
+                .cloned()
+                .collect();
+            let playable = |system: &str| {
+                let listed = irori_engines::systems::get(system)
+                    .map(|s| s.engines.clone())
+                    .unwrap_or_default();
+                usable.iter().any(|m| {
+                    m.systems.iter().any(|s| s == system)
+                        || listed
+                            .iter()
+                            .filter_map(|e| EngineRef::parse(e))
+                            .any(|e| e.engine == m.id)
+                })
+            };
+            let plan = rom_sources::plan(&sources, &existing, playable);
+            (sources, plan)
+        })
+        .await
+        .unwrap_or_default()
     }
 
     /// Stop scanning a ROM folder; its games leave the library. Files stay.

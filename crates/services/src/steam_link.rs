@@ -142,7 +142,8 @@ impl SteamLinkService {
         }
     }
 
-    fn client(&self) -> Result<Client> {
+    pub(crate) fn client(&self) -> Result<Client> {
+        irori_core::net::ensure_online()?;
         Client::with_endpoints(self.endpoints.lock().clone())
     }
 
@@ -436,6 +437,8 @@ struct SteamPage {
     screenshots: Vec<String>,
     /// Trailers, highlighted first.
     videos: Vec<Video>,
+    /// The Metacritic score the page shows.
+    metacritic: Option<u8>,
 }
 
 fn details_file(app: u32, language: &str) -> PathBuf {
@@ -470,6 +473,12 @@ fn fill_extra(info: &mut ExtraInfo, page: &SteamPage) -> bool {
     if info.videos.is_empty() {
         info.videos = page.videos.clone();
     }
+    // Nor does a score, which names its own source.
+    if info.score.is_none() {
+        info.score = page
+            .metacritic
+            .and_then(|s| irori_core::CriticScore::new("Metacritic", f64::from(s)));
+    }
     if filled && info.details_from.is_none() {
         info.details_from = Some("Steam".into());
     }
@@ -484,6 +493,7 @@ fn lacks_any(info: &ExtraInfo) -> bool {
         || info.genres.is_empty()
         || empty(&info.release_date)
         || (empty(&info.description) && empty(&info.short_description))
+        || info.score.is_none()
 }
 
 /// How "Find on Steam by title" went for a set of games.
@@ -541,6 +551,41 @@ impl Backend {
         {
             self.rebuild_library();
         }
+    }
+
+    /// Games that may be other copies of `id`'s entry: linked to the same
+    /// Steam app as one of its copies, yet left apart ([`crate::copies::possible`]).
+    /// Reads memory only.
+    pub fn possible_copies(&self, id: &GameId) -> Vec<Arc<GameInfo>> {
+        let library = self.library();
+        let mut group: Vec<GameId> = library.copies_of(id).to_vec();
+        if group.is_empty() {
+            group.push(id.clone());
+        }
+        let apps: Vec<u32> = group
+            .iter()
+            .filter_map(|copy| library.get(copy))
+            .filter_map(|g| self.steam_links.linked(g).app_id())
+            .collect();
+        if apps.is_empty() {
+            return Vec::new();
+        }
+        let user = self.userdata.snapshot();
+        let candidates = library.all_games().map(|g| crate::copies::Candidate {
+            steam_app: self.steam_links.linked(g).app_id(),
+            kept_apart: user
+                .overrides
+                .get(&g.id().key())
+                .is_some_and(|o| o.copy_of.as_deref() == Some("")),
+            game: g.clone(),
+        });
+        crate::copies::possible(&group, &apps, candidates, |copy| {
+            library
+                .copies_of(copy)
+                .first()
+                .cloned()
+                .unwrap_or_else(|| copy.clone())
+        })
     }
 
     /// Follow a change of `id`'s settings (the settings form edits the
@@ -796,6 +841,11 @@ impl Backend {
             release_date: d.release_date.date.trim().to_owned(),
             screenshots: crate::media::steam::screenshots_of(&d),
             videos: crate::media::steam::videos_of(&d),
+            metacritic: d
+                .metacritic
+                .as_ref()
+                .and_then(|m| u8::try_from(m.score).ok())
+                .filter(|s| (1..=100).contains(s)),
         });
         let stored = page.clone().unwrap_or(SteamPage {
             fetched: now,
@@ -966,6 +1016,7 @@ mod tests {
                 thumbnail: None,
                 url: "https://cdn.example/l.m3u8".into(),
             }],
+            metacritic: Some(88),
         };
         let mut info = ExtraInfo {
             description: Some("The store's own.".into()),
@@ -977,6 +1028,7 @@ mod tests {
         assert_eq!(info.screenshots, ["https://cdn.example/1.jpg"]);
         assert_eq!(info.details_from.as_deref(), Some("Steam"));
         assert_eq!(info.videos.len(), 1);
+        assert_eq!(info.score.as_ref().map(|s| s.score), Some(88));
         assert!(!lacks_any(&info));
         assert!(!fill_extra(&mut info, &page), "nothing left to fill");
     }

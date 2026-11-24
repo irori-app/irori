@@ -65,6 +65,7 @@ async fn shell_link(
     path: &Path,
     game: &GameInfo,
     launcher: Option<&LauncherCommand>,
+    icon: Option<&Path>,
 ) -> Result<bool> {
     let args = launcher.map(|l| {
         l.launch_args(&game.id())
@@ -75,7 +76,8 @@ async fn shell_link(
             .join(" ")
     });
     let data = serde_json::json!({"path": path, "owner": format!("Irori:{}", game.id().key()),
-        "program": launcher.map(|l| &l.program), "cwd": launcher.map(|l| &l.working_dir), "args": args});
+        "program": launcher.map(|l| &l.program), "cwd": launcher.map(|l| &l.working_dir), "args": args,
+        "icon": icon});
     const SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
 $d = $env:IRORI_SHORTCUT | ConvertFrom-Json
 $shell = New-Object -ComObject WScript.Shell
@@ -87,6 +89,7 @@ if ($null -ne $d.program) {
   $link.Arguments = $d.args
   $link.WorkingDirectory = $d.cwd
   $link.Description = $d.owner
+  if ($null -ne $d.icon) { $link.IconLocation = "$($d.icon),0" }
   $link.Save()
 } elseif ($exists) { Write-Output 'owned' }
 "#;
@@ -129,13 +132,40 @@ fn shell_arg(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-async fn write_shortcut(path: &Path, game: &GameInfo, launcher: &LauncherCommand) -> Result<()> {
+/// Turns a PNG icon into another icon format.
+type Convert = fn(&[u8]) -> Result<Vec<u8>>;
+
+/// The shortcut's own icon file beside the PNG one: `.ico` for Windows
+/// links, `.icns` for app bundles.
+async fn native_icon(png: &Path) -> Option<PathBuf> {
+    let bytes = tokio::fs::read(png).await.ok()?;
+    let (ext, convert): (&str, Convert) = if cfg!(windows) {
+        ("ico", super::icon::ico)
+    } else {
+        ("icns", super::icon::icns)
+    };
+    let out = png.with_extension(ext);
+    let data = tokio::task::spawn_blocking(move || convert(&bytes))
+        .await
+        .ok()?
+        .map_err(|e| tracing::debug!("shortcut icon of {}: {e:#}", png.display()))
+        .ok()?;
+    crate::util::write_atomic(&out, &data).await.ok()?;
+    Some(out)
+}
+
+async fn write_shortcut(
+    path: &Path,
+    game: &GameInfo,
+    launcher: &LauncherCommand,
+    icon: Option<&Path>,
+) -> Result<()> {
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
     #[cfg(windows)]
     {
-        shell_link(path, game, Some(launcher)).await?;
+        shell_link(path, game, Some(launcher), icon).await?;
     }
     #[cfg(target_os = "macos")]
     {
@@ -155,6 +185,15 @@ async fn write_shortcut(path: &Path, game: &GameInfo, launcher: &LauncherCommand
         crate::util::write_atomic(&script, format!("#!/bin/sh\nexec {argv}\n").as_bytes()).await?;
         tokio::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).await?;
         let mut info = plist::Dictionary::new();
+        if let Some(icon) = icon {
+            let resources = path.join("Contents/Resources");
+            tokio::fs::create_dir_all(&resources).await?;
+            tokio::fs::copy(icon, resources.join("icon.icns")).await?;
+            info.insert(
+                "CFBundleIconFile".into(),
+                plist::Value::String("icon".into()),
+            );
+        }
         for (key, value) in [
             ("CFBundleName", game.title.clone()),
             ("CFBundleExecutable", "launch".into()),
@@ -177,10 +216,14 @@ async fn write_shortcut(path: &Path, game: &GameInfo, launcher: &LauncherCommand
 pub async fn create(
     game: &GameInfo,
     launcher: &LauncherCommand,
-    _icon: Option<&Path>,
+    icon: Option<&Path>,
     desktop: bool,
     menu: bool,
 ) -> Result<CreatedEntries> {
+    let icon = match icon {
+        Some(png) => native_icon(png).await,
+        None => None,
+    };
     let _guard = LOCK.lock().await;
     let mut state = manifest().await;
     let mut created = CreatedEntries::default();
@@ -194,7 +237,7 @@ pub async fn create(
         let path = dir
             .context("No desktop folder is configured")?
             .join(file_name(game));
-        write_shortcut(&path, game, launcher).await?;
+        write_shortcut(&path, game, launcher, icon.as_deref()).await?;
         let files = state.games.entry(game.id().key()).or_default();
         if !files.contains(&path) {
             files.push(path.clone());
@@ -217,7 +260,7 @@ pub async fn remove(game: &GameInfo) -> Result<Vec<PathBuf>> {
             continue;
         }
         #[cfg(windows)]
-        let owned = shell_link(&path, game, None).await.unwrap_or(false);
+        let owned = shell_link(&path, game, None, None).await.unwrap_or(false);
         #[cfg(target_os = "macos")]
         let owned = owned_bundle(&path, game);
         if !owned {
@@ -326,7 +369,7 @@ mod tests {
             working_dir: "/tmp".into(),
         };
         let path = temp.path().join(file_name(&game));
-        write_shortcut(&path, &game, &launcher).await.unwrap();
+        write_shortcut(&path, &game, &launcher, None).await.unwrap();
         assert!(owned_bundle(&path, &game));
         let exe = irori_core::platform::bundle_executable(&path).unwrap();
         let script = std::fs::read_to_string(exe).unwrap();
@@ -335,6 +378,10 @@ mod tests {
             app_name: "other".into(),
             ..game.clone()
         };
-        assert!(write_shortcut(&path, &other, &launcher).await.is_err());
+        assert!(
+            write_shortcut(&path, &other, &launcher, None)
+                .await
+                .is_err()
+        );
     }
 }

@@ -200,6 +200,16 @@ mod tests {
         }
         assert!(matches!(plan.games[1].kind, ImportKind::Native { .. }));
         assert!(plan.games[1].hidden);
+        // What Irori never deletes: each game's folder and prefix.
+        let mut folders = plan.folders();
+        folders.sort();
+        let mut expected = vec![
+            home.join("Faugus/celeste"),
+            exe.parent().unwrap().to_path_buf(),
+            native.parent().unwrap().to_path_buf(),
+        ];
+        expected.sort();
+        assert_eq!(folders, expected);
         assert!(matches!(
             plan.games[2].kind,
             ImportKind::Skipped {

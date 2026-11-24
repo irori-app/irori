@@ -10,6 +10,7 @@ mod export;
 mod headless;
 mod import;
 mod instance;
+mod launcher_sync;
 mod lutris;
 #[cfg(not(target_os = "linux"))]
 mod menu_theme;
@@ -78,7 +79,24 @@ fn main() -> Result<()> {
     if args.first().map(String::as_str) == Some(irori_sign_in::SIGN_IN_FLAG) {
         std::process::exit(i32::from(irori_sign_in::main(args.into_iter().skip(1))));
     }
+    // Started as administrator to hide a graphics card from a game
+    // (`irori_services::gpu_hide`): it does that and nothing else.
+    #[cfg(target_os = "windows")]
+    if args.first().map(String::as_str) == Some(irori_services::gpu_hide::HELPER_FLAG) {
+        std::process::exit(irori_services::gpu_hide::helper_main(
+            args.into_iter().skip(1),
+        ));
+    }
+    // Started by "Restart to update" to put the downloaded update in once
+    // the Irori that started it has quit (`irori_services::self_update`).
+    if args.first().map(String::as_str) == Some(irori_services::self_update::HELPER_FLAG) {
+        std::process::exit(irori_services::self_update::helper_main(
+            args.into_iter().skip(1),
+        ));
+    }
     irori_secrets::use_os_keyring();
+    // A renamed Mac account leaves the old home's paths in saved files.
+    irori_core::home_rename::enable();
     let args = match std::env::current_dir() {
         Ok(cwd) => cli::absolute_file_args(args, &cwd),
         Err(_) => args,
@@ -193,6 +211,7 @@ fn main() -> Result<()> {
         let prefs = backend.settings.app().ui.clone();
         irori_ui::theme::apply(&prefs, None, cx);
 
+        launcher_sync::start(backend.clone());
         let app = Arc::new(Mutex::new(AppHandles::default()));
         start_tray(&backend, tx.clone(), app.clone(), cx);
         {
@@ -253,7 +272,8 @@ fn main() -> Result<()> {
             || (can_hide
                 && (((cli.minimized || backend.settings.app().start_in_tray)
                     && !cli.has_request())
-                    || cli.quick_launch_only()));
+                    || cli.quick_launch_only()
+                    || cli.open_launcher_only()));
         if !start_hidden {
             open_main_window(&app, cx);
             let app_settings = backend.settings.app();
@@ -479,6 +499,9 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             });
         }
     }
+    if let Some(id) = &cli.open_launcher {
+        open_launcher(id, cx);
+    }
     if let Some(id) = &cli.launch {
         if cli.launch_from_link {
             confirm_link_launch(id.clone(), app, cx);
@@ -486,6 +509,38 @@ fn handle_cli(cli: &Cli, app: &Arc<Mutex<AppHandles>>, cx: &mut App) {
             launch_from_outside(id.clone(), app, cx);
         }
     }
+}
+
+/// Open a third-party launcher Irori set up (its shortcut, `--open-launcher`,
+/// `irori://launcher/<id>`). It only starts a program the user set up, so a
+/// link needs no question; a failure becomes a notice.
+fn open_launcher(id: &str, cx: &mut App) {
+    let backend = irori_ui::backend(cx);
+    let Some(launcher) = irori_launchers::LauncherKind::from_id(id) else {
+        tracing::warn!("no launcher is called {id}");
+        return;
+    };
+    let Some(store) = stores::LAUNCHERS.get().cloned() else {
+        return;
+    };
+    let b = backend.clone();
+    backend.spawn(async move {
+        if let Err(e) = store.open(launcher).await {
+            let name = launcher.display_name();
+            b.bus.notice(
+                irori_core::Notice::new(
+                    irori_core::NoticeLevel::Error,
+                    format!("{name} didn't open"),
+                )
+                .message(format!("{e:#}"))
+                .keys(
+                    "shell.notice.launcher_open_failed",
+                    None,
+                    &[("launcher", name)],
+                ),
+            );
+        }
+    });
 }
 
 /// A link can come from any web page or program, and playing runs the game's

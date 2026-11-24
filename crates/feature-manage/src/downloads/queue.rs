@@ -44,6 +44,51 @@ impl HistoryRow {
             DownloadState::Failed | DownloadState::Canceled
         )
     }
+
+    /// A finished download whose game is installed now can be played from
+    /// its row. The library's entry decides, so a game uninstalled since
+    /// offers no Play.
+    pub fn is_playable(&self) -> bool {
+        self.item.state == DownloadState::Done && self.game.is_installed
+    }
+}
+
+/// Which finished downloads the history shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum HistoryFilter {
+    #[default]
+    All,
+    /// Downloads that finished.
+    Done,
+    /// Downloads that failed or were canceled.
+    Unfinished,
+}
+
+impl HistoryFilter {
+    /// Every choice, in the order the page offers them.
+    pub const ALL: [HistoryFilter; 3] = [
+        HistoryFilter::All,
+        HistoryFilter::Done,
+        HistoryFilter::Unfinished,
+    ];
+
+    pub fn matches(self, state: DownloadState) -> bool {
+        match self {
+            HistoryFilter::All => true,
+            HistoryFilter::Done => state == DownloadState::Done,
+            HistoryFilter::Unfinished => {
+                matches!(state, DownloadState::Failed | DownloadState::Canceled)
+            }
+        }
+    }
+
+    pub fn label(self) -> SharedString {
+        match self {
+            HistoryFilter::All => t("manage.downloads.history.filter.all"),
+            HistoryFilter::Done => t("manage.downloads.history.filter.done"),
+            HistoryFilter::Unfinished => t("manage.downloads.history.filter.unfinished"),
+        }
+    }
 }
 
 /// Everything the downloads page renders about the queue.
@@ -122,6 +167,13 @@ impl QueuePresentation {
         self.current.is_none() && self.waiting.is_empty() && self.history.is_empty()
     }
 
+    /// The history rows `filter` keeps, most recent first.
+    pub fn history_in(&self, filter: HistoryFilter) -> impl Iterator<Item = &HistoryRow> {
+        self.history
+            .iter()
+            .filter(move |r| filter.matches(r.item.state))
+    }
+
     pub fn has_active(&self) -> bool {
         self.current.is_some() || !self.waiting.is_empty()
     }
@@ -154,6 +206,61 @@ impl QueuePresentation {
     /// Backend reorder index that restores an item to waiting position `ix`.
     pub fn restore_index(&self, waiting_ix: usize) -> usize {
         waiting_ix + self.index_offset
+    }
+}
+
+/// When the waiting downloads start and the queue is done, in seconds from
+/// now, at the rate the current download has averaged.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Estimates {
+    /// Seconds the current download still needs.
+    pub current: Option<u64>,
+    /// Per waiting row, in order: when it starts, while the size of every
+    /// download before it is known.
+    pub starts: Vec<Option<u64>>,
+    /// When everything is done, when every size is known.
+    pub done: Option<u64>,
+}
+
+/// Seconds the running download still needs at `rate` (bytes per second):
+/// from the bytes left when the store tells them, else the store's own
+/// estimate.
+pub(crate) fn current_left(
+    progress: Option<irori_core::InstallProgress>,
+    rate: Option<u64>,
+) -> Option<u64> {
+    let p = progress?;
+    let by_bytes = match (p.bytes_total, p.bytes_done, rate.filter(|r| *r > 0)) {
+        (Some(total), Some(done), Some(rate)) if total > 0 => {
+            Some(total.saturating_sub(done).div_ceil(rate))
+        }
+        _ => None,
+    };
+    by_bytes.or(p.eta_secs)
+}
+
+/// Chain the estimates: each waiting download starts when the one before it
+/// is done, and needs its size over `rate`. An update's size is told only
+/// once it runs (`0` here), so from the first unknown size on nothing more is
+/// promised.
+pub(crate) fn estimate(current: Option<u64>, waiting: &[u64], rate: Option<u64>) -> Estimates {
+    let rate = rate.filter(|r| *r > 0);
+    let mut at = current;
+    let starts = waiting
+        .iter()
+        .map(|size| {
+            let start = at;
+            at = match (at, rate) {
+                (Some(at), Some(rate)) if *size > 0 => Some(at + size.div_ceil(rate)),
+                _ => None,
+            };
+            start
+        })
+        .collect();
+    Estimates {
+        current,
+        starts,
+        done: at,
     }
 }
 
@@ -235,6 +342,7 @@ pub(crate) mod tests {
             ],
             finished: vec![],
             paused: false,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         let current = p.current.as_ref().unwrap();
@@ -264,6 +372,7 @@ pub(crate) mod tests {
             ],
             finished: vec![],
             paused: true,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         assert!(p.current.as_ref().unwrap().paused);
@@ -288,6 +397,7 @@ pub(crate) mod tests {
             ],
             finished: vec![],
             paused: true,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         assert!(p.current.is_none());
@@ -326,6 +436,7 @@ pub(crate) mod tests {
                 item(Runner::Gog, "c", DownloadState::Canceled),
             ],
             paused: false,
+            ..Default::default()
         };
         let p = QueuePresentation::build(&snap, known);
         assert!(!p.has_active());
@@ -337,5 +448,73 @@ pub(crate) mod tests {
         assert_eq!(kind_label(&p.history[1].item.kind), "Update");
         assert_eq!(store_label(Runner::Sideload), "Other");
         assert_eq!(store_label(Runner::Nile), "Amazon Games");
+    }
+
+    #[test]
+    fn estimates_chain_through_known_sizes() {
+        // 100 bytes a second; the current download has 50 s left.
+        let e = estimate(Some(50), &[1_000, 2_000, 0, 500], Some(100));
+        assert_eq!(e.current, Some(50));
+        assert_eq!(e.starts, vec![Some(50), Some(60), Some(80), None]);
+        assert_eq!(e.done, None, "an update of unknown size hides the end");
+        let e = estimate(Some(50), &[1_000], Some(100));
+        assert_eq!(e.done, Some(60));
+        // Without a rate only the current download's own estimate stands.
+        let e = estimate(Some(50), &[1_000, 1_000], None);
+        assert_eq!(e.starts, vec![Some(50), None]);
+        assert_eq!(e.done, None);
+        assert_eq!(estimate(None, &[], Some(100)).done, None);
+    }
+
+    #[test]
+    fn current_download_left_from_bytes_or_store() {
+        use irori_core::InstallProgress;
+        let bytes = InstallProgress {
+            bytes_total: Some(1_000),
+            bytes_done: Some(250),
+            eta_secs: Some(9),
+            ..Default::default()
+        };
+        assert_eq!(current_left(Some(bytes), Some(100)), Some(8));
+        assert_eq!(current_left(Some(bytes), None), Some(9));
+        assert_eq!(current_left(None, Some(100)), None);
+    }
+
+    #[test]
+    fn history_filter_and_play() {
+        let installed = |id: &GameId| {
+            Some(Arc::new(GameInfo {
+                runner: Some(id.runner),
+                app_name: id.app_name.to_string(),
+                is_installed: id.app_name.as_ref() != "gone",
+                ..Default::default()
+            }))
+        };
+        let snap = DownloadQueueSnapshot {
+            finished: vec![
+                item(Runner::Gog, "done", DownloadState::Done),
+                item(Runner::Gog, "failed", DownloadState::Failed),
+                item(Runner::Gog, "gone", DownloadState::Done),
+                item(Runner::Gog, "canceled", DownloadState::Canceled),
+            ],
+            ..Default::default()
+        };
+        let p = QueuePresentation::build(&snap, installed);
+        let apps = |filter| {
+            p.history_in(filter)
+                .map(|r| r.item.id.app_name.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(apps(HistoryFilter::All).len(), 4);
+        assert_eq!(apps(HistoryFilter::Done), ["done", "gone"]);
+        assert_eq!(apps(HistoryFilter::Unfinished), ["failed", "canceled"]);
+        let playable: Vec<_> = p
+            .history
+            .iter()
+            .filter(|r| r.is_playable())
+            .map(|r| r.item.id.app_name.to_string())
+            .collect();
+        // A failed download and a game uninstalled since offer no Play.
+        assert_eq!(playable, ["done"]);
     }
 }

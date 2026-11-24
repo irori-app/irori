@@ -389,9 +389,12 @@ impl GogStore {
                 install.display()
             );
         }
-        let native = !rec.platform.needs_wine();
+        // A native replacement program set for the game runs directly, and
+        // the Windows build's setup isn't run for it.
+        let without_wine = request.environment.without_wine;
+        let native = !rec.platform.needs_wine() || without_wine;
         let wine = if native {
-            if rec.platform == irori_core::InstallPlatform::Windows {
+            if rec.platform == irori_core::InstallPlatform::Windows && !without_wine {
                 self.prepare_prefix(&rec, None, &ctx, &request.log_file)
                     .await?;
             }
@@ -405,7 +408,7 @@ impl GogStore {
             Some(w)
         };
 
-        let windows_program = rec.platform == irori_core::InstallPlatform::Windows;
+        let windows_program = rec.platform == irori_core::InstallPlatform::Windows && !without_wine;
         let (mut prefer, mut user_args) = match &request.option {
             Some(LaunchOption::Basic { parameters, .. }) => {
                 split_option(windows_program, parameters)
@@ -684,6 +687,7 @@ mod tests {
             cwd: "/g".into(),
         };
         let env = LaunchEnvironment {
+            without_wine: false,
             env: BTreeMap::new(),
             env_remove: Vec::new(),
             wrappers: vec![vec!["gamemoderun".into()]],

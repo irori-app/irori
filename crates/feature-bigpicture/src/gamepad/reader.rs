@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use futures::channel::mpsc::UnboundedSender;
 #[cfg(target_os = "linux")]
 use gilrs::LinuxGamepadExt as _;
-use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, PowerInfo};
+use gilrs::{Axis, Button, EventType, GamepadId, Gilrs, GilrsBuilder, MappingSource, PowerInfo};
 
 use super::input::{
     AxisChange, Chord, Chords, ControllerKind, Deduper, GamepadInput, GuideTap, HoldRelease,
@@ -70,6 +70,7 @@ impl SharedConfig {
         Chords {
             screenshot: bits & 1 != 0,
             volume: bits & 2 != 0,
+            moment: bits & 4 != 0,
         }
     }
 
@@ -109,7 +110,7 @@ impl SharedConfig {
 
 /// [`Chords`] as the bits [`SharedConfig`] keeps.
 fn pack(chords: Chords) -> u8 {
-    u8::from(chords.screenshot) | (u8::from(chords.volume) << 1)
+    u8::from(chords.screenshot) | (u8::from(chords.volume) << 1) | (u8::from(chords.moment) << 2)
 }
 
 /// What the reader reports to the GPUI side.
@@ -154,6 +155,51 @@ struct Device {
     stick_y: StickAxis,
     /// Its Bluetooth address, read once when it connects (Linux).
     bluetooth: Option<String>,
+    /// Its top and left face buttons come in each other's names (see
+    /// [`swaps_north_west`]).
+    swap_north_west: bool,
+}
+
+/// Whether a pad's top and left face buttons must be swapped back.
+///
+/// The kernel's `xpad` driver reports an Xbox pad's left button (X) as
+/// `BTN_X` and its top one (Y) as `BTN_Y`, and the kernel also names those
+/// codes `BTN_NORTH` and `BTN_WEST`. SDL's mapping database undoes that per
+/// device (its xpad entries read `x:b2,y:b3`), and gilrs uses the database
+/// when it lists the pad. A pad it doesn't list (a GameSir G7 SE, `3537:1010`)
+/// gets gilrs' default mapping, which reads the codes by their positional
+/// names, so X arrives as North and Y as West. Only that case is changed:
+/// pads with an SDL mapping and other drivers (hid-playstation,
+/// hid-nintendo) already report positions right.
+fn swaps_north_west(default_mapping: bool, driver: Option<&str>) -> bool {
+    default_mapping && driver == Some("xpad")
+}
+
+/// `button` as the pad means it.
+fn face_fix(button: PadButton, swap_north_west: bool) -> PadButton {
+    match button {
+        PadButton::North if swap_north_west => PadButton::West,
+        PadButton::West if swap_north_west => PadButton::North,
+        other => other,
+    }
+}
+
+/// The kernel driver of `pad`'s event device: the name of
+/// `/sys/class/input/<eventN>/device/device/driver`, where `device` is the
+/// input device and its parent the USB interface the driver holds.
+#[cfg(target_os = "linux")]
+fn kernel_driver(pad: &gilrs::Gamepad<'_>) -> Option<String> {
+    let node = pad.devpath().file_name()?;
+    let link = std::path::Path::new("/sys/class/input")
+        .join(node)
+        .join("device/device/driver");
+    let target = std::fs::read_link(link).ok()?;
+    Some(target.file_name()?.to_string_lossy().into_owned())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn kernel_driver(_pad: &gilrs::Gamepad<'_>) -> Option<String> {
+    None
 }
 
 /// The Bluetooth address of `pad`, for turning it off from the overlay.
@@ -325,6 +371,13 @@ impl Reader {
                         || self.steam_ignored.ignores(vendor, product),
                     stick_x: previous.as_ref().map(|d| d.stick_x).unwrap_or_default(),
                     stick_y: previous.as_ref().map(|d| d.stick_y).unwrap_or_default(),
+                    swap_north_west: match &previous {
+                        Some(previous) => previous.swap_north_west,
+                        None => swaps_north_west(
+                            pad.mapping_source() == MappingSource::Driver,
+                            kernel_driver(&pad).as_deref(),
+                        ),
+                    },
                     bluetooth: match previous {
                         Some(previous) => previous.bluetooth,
                         None => bluetooth_address(&pad),
@@ -398,12 +451,13 @@ impl Reader {
                 self.refresh_devices(gilrs);
             }
             EventType::ButtonPressed(button, _) => {
-                let Some(button) = pad_button(button) else {
-                    return;
-                };
                 let Some(device) = self.devices.get(&id) else {
                     return;
                 };
+                let Some(button) = pad_button(button) else {
+                    return;
+                };
+                let button = face_fix(button, device.swap_north_west);
                 if device.ignored {
                     return;
                 }
@@ -442,12 +496,13 @@ impl Reader {
                 self.press(id, Source::DPad, input);
             }
             EventType::ButtonReleased(button, _) => {
-                let Some(button) = pad_button(button) else {
-                    return;
-                };
                 let Some(device) = self.devices.get(&id) else {
                     return;
                 };
+                let Some(button) = pad_button(button) else {
+                    return;
+                };
+                let button = face_fix(button, device.swap_north_west);
                 let input = super::bindings::input(button, device.kind);
                 if self.holding == Some(button) {
                     match self.hold.release(usize::from(id), Instant::now()) {
@@ -546,5 +601,31 @@ impl Reader {
             Some(_) => {}
             None => self.repeater.release(input),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_unmapped_xpad_pads_swap_their_top_and_left_buttons() {
+        assert!(swaps_north_west(true, Some("xpad")));
+        // SDL's database already maps the pad.
+        assert!(!swaps_north_west(false, Some("xpad")));
+        // Other drivers report positions as the kernel names them.
+        assert!(!swaps_north_west(true, Some("playstation")));
+        assert!(!swaps_north_west(true, Some("nintendo")));
+        assert!(!swaps_north_west(true, None));
+    }
+
+    #[test]
+    fn a_swapped_pad_reads_x_on_the_left_and_y_on_top() {
+        assert_eq!(face_fix(PadButton::North, true), PadButton::West);
+        assert_eq!(face_fix(PadButton::West, true), PadButton::North);
+        assert_eq!(face_fix(PadButton::South, true), PadButton::South);
+        assert_eq!(face_fix(PadButton::East, true), PadButton::East);
+        assert_eq!(face_fix(PadButton::North, false), PadButton::North);
+        assert_eq!(face_fix(PadButton::West, false), PadButton::West);
     }
 }

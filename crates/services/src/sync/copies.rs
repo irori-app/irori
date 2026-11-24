@@ -449,7 +449,7 @@ impl Backend {
     /// Automatic, no game runs and the wait since the last one is over.
     pub(crate) async fn cloud_copies_when_due(&self) {
         let app = self.settings.app();
-        if app.sync.mode == irori_core::SyncMode::Off {
+        if !super::syncs_now(app.sync.mode, self.working_offline()) {
             return;
         }
         let automatic: Vec<CopyKind> = CopyKind::ALL

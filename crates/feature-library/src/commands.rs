@@ -26,6 +26,8 @@ pub enum GameCommand {
     ToggleCategory(String),
     NewCategory,
     Edit,
+    /// Change the developer, publisher and genres.
+    EditMetadata,
     RemoveFromRecent,
     AddShortcut,
     RemoveShortcut,
@@ -149,7 +151,7 @@ pub fn menu(state: &GameState) -> Vec<Vec<GameCommand>> {
         }
     }
 
-    let mut library = vec![ToggleFavourite, ToggleHidden, Edit];
+    let mut library = vec![ToggleFavourite, ToggleHidden, Edit, EditMetadata];
     if state.rom && !busy && !playing {
         library.push(PlayAsPcGame);
     }
@@ -210,6 +212,7 @@ impl GameCommand {
             NewCategory => "library.command.new_category",
             Edit if state.sideload => "library.command.edit_app",
             Edit => "library.command.edit_details",
+            EditMetadata => "library.command.edit_metadata",
             RemoveFromRecent => "library.command.remove_from_recent",
             AddShortcut => "library.command.add_shortcut",
             RemoveShortcut => "library.command.remove_shortcut",
@@ -244,6 +247,7 @@ impl GameCommand {
             ToggleCategory(_) => IconName::Tag,
             NewCategory => IconName::Plus,
             Edit => IconName::Pencil,
+            EditMetadata => IconName::Tags,
             RemoveFromRecent => IconName::Minus,
             AddShortcut => IconName::Link2,
             RemoveShortcut => IconName::Link2Off,

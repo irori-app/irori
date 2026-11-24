@@ -97,7 +97,7 @@ impl GamePage {
                 .child(game.title.clone())
                 .into_any_element(),
         };
-        let meta = self.render_meta_line(game);
+        let meta = self.render_meta_line(game, cx);
         let tags = (!game.tags.is_empty()).then(|| {
             h_flex()
                 .gap_2()
@@ -222,6 +222,7 @@ impl GamePage {
         let game_modes = self.render_game_modes(game, cx);
         let sandbox = self.render_sandbox(cx);
         let tools = self.render_tools(game, cx);
+        let left_off = self.render_left_off(game, cx);
         let rating = self.render_rating(cx);
         let facts = self.render_facts(game, cx);
         // Everything in the column takes the cover's width; long action
@@ -245,13 +246,14 @@ impl GamePage {
             .children(game_modes)
             .children(sandbox)
             .child(tools)
+            .child(left_off)
             .child(rating)
             .children(facts)
             .into_any_element()
     }
 
     /// "Feb 25, 2022 · Windows, Linux · Role-playing · Adventure".
-    pub(super) fn render_meta_line(&self, game: &GameInfo) -> Option<String> {
+    pub(super) fn render_meta_line(&self, game: &GameInfo, cx: &gpui_kit::App) -> Option<String> {
         let date = self.release_date(game);
         let platforms = match &game.install {
             Some(install) if game.is_installed => {
@@ -266,12 +268,7 @@ impl GamePage {
             ),
         }
         .filter(|p| !p.is_empty() && game.runner() != irori_core::Runner::Emulation);
-        let genres = self
-            .extra
-            .ready()
-            .map(|e| e.genres.clone())
-            .filter(|g| !g.is_empty())
-            .unwrap_or_else(|| game.genres.clone());
+        let genres = self.shown_genres(game, cx);
         let parts: Vec<String> = date
             .into_iter()
             .chain(platforms)
@@ -310,10 +307,24 @@ impl GamePage {
         };
         let mut rows = Vec::new();
         let compat = self.compat.ready();
+        // PCGamingWiki's scores, else the store page's (Steam's
+        // Metacritic, IGDB), else the library's: GamesDB's for GOG and
+        // Epic games, a score learned from the store page for the rest.
         let score = compat
             .and_then(|c| c.scores.first())
             .map(|s| (s.source.clone(), s.score))
-            .or_else(|| game.rating.map(|r| ("GOG".to_string(), r)));
+            .or_else(|| {
+                let s = self.extra.ready()?.score.as_ref()?;
+                Some((s.source.clone(), s.score))
+            })
+            .or_else(|| {
+                let gamesdb = matches!(
+                    game.runner(),
+                    irori_core::Runner::Gog | irori_core::Runner::Legendary
+                );
+                game.rating
+                    .map(|r| (if gamesdb { "GOG" } else { "" }.to_string(), r))
+            });
         if let Some((source, score)) = score {
             let tag = match score {
                 75.. => Tag::success(),

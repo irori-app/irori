@@ -32,6 +32,7 @@ pub fn resolve_launch_error(
     if crate::missing_files::resolve(id, &params, error, window, cx)
         || crate::engine_problem::resolve(id, &params, error, window, cx)
         || crate::launcher_problem::resolve(id, &params, error, window, cx)
+        || crate::rosetta_problem::resolve(id, &params, error, window, cx)
         || crate::sandbox_problem::resolve(id, error, window, cx)
         || crate::xbox_problem::resolve(id, error, window, cx)
     {

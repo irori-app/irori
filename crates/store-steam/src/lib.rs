@@ -776,7 +776,12 @@ impl Store for SteamStore {
         let _one = self.refreshing.lock().await;
         let found = self.library.read().found;
         let mut changed = self.scan().await?;
-        let account = self.refresh_account(full).await;
+        // Working offline, the account's library stays as last read.
+        let account = if irori_core::net::working_offline() {
+            Ok(false)
+        } else {
+            self.refresh_account(full).await
+        };
         if matches!(account, Ok(true)) {
             changed |= self.scan().await?;
         }

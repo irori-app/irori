@@ -21,6 +21,7 @@ pub mod known_fixes;
 pub mod launchbox;
 pub mod logs;
 pub mod lutris_import;
+pub mod pc_check;
 pub mod playnite;
 pub mod protocol;
 pub mod releases;

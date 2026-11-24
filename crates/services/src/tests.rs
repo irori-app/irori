@@ -117,6 +117,38 @@ impl Store for LoginStore {
 }
 
 #[test]
+fn working_offline_refreshes_only_stores_that_read_this_computer() {
+    use irori_core::net::NetworkMode;
+    assert_eq!(crate::decided_online(NetworkMode::Offline), Some(false));
+    assert_eq!(crate::decided_online(NetworkMode::Online), Some(true));
+    assert_eq!(crate::decided_online(NetworkMode::Auto), None);
+    for runner in [
+        Runner::Steam,
+        Runner::Launchers,
+        Runner::Emulation,
+        Runner::Sideload,
+    ] {
+        assert!(crate::refreshes_offline(runner), "{runner}");
+    }
+    for runner in [
+        Runner::Legendary,
+        Runner::Gog,
+        Runner::Nile,
+        Runner::Zoom,
+        Runner::Itch,
+        Runner::Xbox,
+    ] {
+        assert!(!crate::refreshes_offline(runner), "{runner}");
+    }
+    use irori_core::SyncMode;
+    assert!(crate::sync::syncs_now(SyncMode::Folder, true));
+    assert!(!crate::sync::syncs_now(SyncMode::Webdav, true));
+    assert!(!crate::sync::syncs_now(SyncMode::Rclone, true));
+    assert!(crate::sync::syncs_now(SyncMode::Rclone, false));
+    assert!(!crate::sync::syncs_now(SyncMode::Off, false));
+}
+
+#[test]
 fn canceling_a_stopped_install_deletes_what_it_downloaded() {
     isolate_paths();
     let store = Arc::new(LoginStore::default());
@@ -410,8 +442,12 @@ impl Store for PlayStore {
     fn supports_cloud_saves(&self) -> bool {
         self.saves_fail
     }
-    async fn default_save_path(&self, _: &str, _: Option<&Path>) -> Result<String> {
-        Ok("/saves".into())
+    async fn default_save_path(&self, _: &str, prefix: Option<&Path>) -> Result<String> {
+        // Inside the prefix, as Windows games' saves are.
+        Ok(prefix.map_or_else(
+            || "/saves".into(),
+            |p| p.join("saves").display().to_string(),
+        ))
     }
     async fn sync_saves(
         &self,
@@ -589,6 +625,56 @@ fn knows_when_a_forced_upload_deletes_cloud_saves() {
     assert!(deletes());
     std::fs::write(saves.join("slot1.sav"), "x").unwrap();
     assert!(!deletes());
+}
+
+/// Heroic #6081: a save folder Irori worked out inside the game's prefix
+/// follows the prefix when it changes; one the user chose stays.
+#[cfg(unix)]
+#[test]
+fn a_found_save_folder_follows_the_prefix() {
+    let (b, id) = play_with("saves-follow-prefix", "exit 0", true);
+    let dir = tempfile::tempdir().unwrap();
+    let prefix = |name: &str| dir.path().join(name);
+    let set_prefix = |name: &str| {
+        b.settings.set_game_value(
+            &id,
+            "winePrefix",
+            Some(serde_json::Value::String(
+                prefix(name).display().to_string(),
+            )),
+        );
+    };
+    let saves = || b.settings.game(&id).saves_path;
+    let resolve = || {
+        b.runtime()
+            .block_on(b.forced_upload_deletes_cloud_saves(&id))
+            .unwrap();
+    };
+
+    set_prefix("first");
+    resolve();
+    assert_eq!(saves(), prefix("first").join("saves").display().to_string());
+    // Nothing changed: the found folder stays.
+    assert!(!b.forget_stale_save_path(&id));
+
+    set_prefix("second");
+    resolve();
+    assert_eq!(
+        saves(),
+        prefix("second").join("saves").display().to_string()
+    );
+
+    // A folder the user typed over the found one is theirs from then on.
+    let own = dir.path().join("my saves").display().to_string();
+    b.settings.set_game_value(
+        &id,
+        "savesPath",
+        Some(serde_json::Value::String(own.clone())),
+    );
+    set_prefix("third");
+    resolve();
+    assert_eq!(saves(), own);
+    assert!(b.settings.game(&id).saves_path_found.is_none());
 }
 
 /// Wait up to `limit` for `id`'s session to end; how long that took.
@@ -1416,6 +1502,54 @@ fn fetching_details_again_forgets_what_was_kept() {
 
 #[cfg(unix)]
 #[test]
+fn moves_games_into_a_library_folder_and_says_which_failed() {
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let game_dir = dir.path().join("games").join("Celeste");
+    std::fs::create_dir_all(&game_dir).unwrap();
+    std::fs::write(game_dir.join("Celeste.x86_64"), b"x").unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Sideload),
+            app_name: "folders-celeste".into(),
+            title: "Celeste".into(),
+            is_installed: true,
+            install: Some(irori_core::InstalledInfo {
+                install_path: game_dir.display().to_string(),
+                platform: InstallPlatform::Linux,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store: irori_core::DynStore = Arc::new(PlayStore {
+        game,
+        command: irori_core::process::CommandSpec::new("true"),
+        saves_fail: false,
+    });
+    let b = Backend::start_headless(move |_, _| vec![store]).unwrap();
+    let card = irori_core::settings::LibraryFolder {
+        name: "SD card".into(),
+        path: dir.path().join("sd").display().to_string(),
+    };
+    let missing = irori_core::GameId::new(Runner::Sideload, "folders-gone");
+    let mut rx = b.subscribe();
+    let report = b
+        .runtime()
+        .block_on(b.move_installs(&[id.clone(), missing], &card));
+    assert_eq!(report.moved, 1);
+    assert_eq!(report.failed.len(), 1);
+    assert_eq!(report.failed[0].0, "folders-gone");
+    assert!(dir.path().join("sd/Celeste/Celeste.x86_64").is_file());
+    assert!(!game_dir.exists());
+    // One summary is the caller's to give: no notice per game.
+    assert!(notices(&mut rx).is_empty());
+}
+
+#[cfg(unix)]
+#[test]
 fn removing_a_prefix_forgets_it() {
     isolate_paths();
     let dir = tempfile::tempdir().unwrap();
@@ -1899,4 +2033,184 @@ fn unlocks_follow_the_stores_files_while_playing() {
     let live: Vec<String> = b.take_live_unlocks(&id).into_iter().map(|a| a.id).collect();
     assert_eq!(live, ["b"]);
     stop.cancel();
+}
+
+/// A ZOOM-like store listing one game that isn't installed, and taking an
+/// import of it. Only the Unix backup test uses it.
+#[cfg(unix)]
+struct ImportStore {
+    game: Arc<GameInfo>,
+    imported: parking_lot::Mutex<Vec<(String, std::path::PathBuf)>>,
+}
+
+#[cfg(unix)]
+#[async_trait]
+impl Store for ImportStore {
+    fn runner(&self) -> Runner {
+        Runner::Zoom
+    }
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+    fn user(&self) -> Option<UserInfo> {
+        Some(UserInfo::default())
+    }
+    fn login_flow(&self) -> LoginFlow {
+        LoginFlow::None
+    }
+    async fn login(&self, _: &str) -> Result<UserInfo> {
+        bail!("not supported")
+    }
+    async fn logout(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn refresh(&self, _: bool) -> Result<()> {
+        Ok(())
+    }
+    fn games(&self) -> Vec<Arc<GameInfo>> {
+        vec![self.game.clone()]
+    }
+    fn game(&self, app: &str) -> Option<Arc<GameInfo>> {
+        (app == self.game.app_name).then(|| self.game.clone())
+    }
+    async fn extra_info(&self, _: &str) -> Result<ExtraInfo> {
+        Ok(ExtraInfo::default())
+    }
+    async fn install_info(
+        &self,
+        _: &str,
+        _: InstallPlatform,
+        _: &InstallInfoQuery,
+    ) -> Result<InstallInfo> {
+        bail!("not supported")
+    }
+    async fn updatable_games(&self) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn install(&self, _: &str, _: &InstallRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn update(&self, _: &str, _: &UpdateRequest, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn repair(&self, _: &str, _: OpContext) -> Result<Outcome> {
+        bail!("not supported")
+    }
+    async fn uninstall(&self, _: &str, _: RemoveArgs) -> Result<()> {
+        Ok(())
+    }
+    async fn import(&self, app: &str, path: &Path, _: InstallPlatform) -> Result<()> {
+        self.imported
+            .lock()
+            .push((app.to_string(), path.to_path_buf()));
+        Ok(())
+    }
+    async fn set_install_path(&self, _: &str, _: &Path) -> Result<()> {
+        bail!("not supported")
+    }
+    async fn launch(&self, _: &str, _: &LaunchRequest, _: OpContext) -> Result<LaunchPlan> {
+        bail!("not supported")
+    }
+}
+
+/// A backup made by another user on Linux, restored here: its game's install
+/// folder is found where the user located it and attached again, a Windows
+/// path is left out, and what is still missing is reported.
+#[cfg(unix)]
+#[test]
+fn a_backup_from_another_computer_finds_its_installs_again() {
+    use crate::backup::{Backup, BackupParts, InstallRecord, PathKind};
+    use crate::backup_paths::{BackupOrigin, Remap};
+
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let game = Arc::new(
+        GameInfo {
+            runner: Some(Runner::Zoom),
+            app_name: "restore-attach".into(),
+            title: "Restore Attach".into(),
+            ..Default::default()
+        }
+        .finalize(),
+    );
+    let id = game.id();
+    let store = Arc::new(ImportStore {
+        game,
+        imported: Default::default(),
+    });
+    let dyn_store: irori_core::DynStore = store.clone();
+    let b = Backend::start_headless(move |_, _| vec![dyn_store]).unwrap();
+    assert!(eventually(|| b.game(&id).is_some()));
+
+    let old_home = "/home/someone-else";
+    let backup = Backup {
+        format: "irori-backup".into(),
+        version: 1,
+        origin: Some(BackupOrigin {
+            os: "linux".into(),
+            home: old_home.into(),
+            ..Default::default()
+        }),
+        installs: vec![InstallRecord {
+            game: id.key(),
+            title: "Restore Attach".into(),
+            path: format!("{old_home}/Games/Restore Attach"),
+            platform: InstallPlatform::Windows,
+        }],
+        game_settings: [(
+            id.key(),
+            serde_json::json!({
+                "winePrefix": format!("{old_home}/Prefixes/Restore Attach"),
+                "targetExe": r"C:\Games\restore.exe",
+                "launcherArgs": "-windowed",
+            }),
+        )]
+        .into(),
+        ..Default::default()
+    };
+    // The user located the old home folder's games here.
+    let here = dir.path().join("home");
+    std::fs::create_dir_all(here.join("Games/Restore Attach")).unwrap();
+    let remaps = [Remap::new(old_home, here.to_string_lossy())];
+    let parts = BackupParts {
+        settings: false,
+        library: false,
+        playtime: false,
+        ..BackupParts::ALL
+    };
+
+    let plan = b
+        .runtime()
+        .block_on(b.plan_restore(&backup, parts, &remaps));
+    let found = |kind: PathKind| plan.iter().find(|c| c.kind == kind).map(|c| c.found);
+    assert_eq!(found(PathKind::Install), Some(true));
+    assert_eq!(found(PathKind::Prefix), Some(false));
+
+    let summary = b
+        .runtime()
+        .block_on(b.restore_backup_with(&backup, parts, &remaps))
+        .unwrap();
+    assert_eq!(summary.installs_attached, 1);
+    assert_eq!(
+        *store.imported.lock(),
+        [(
+            "restore-attach".to_string(),
+            here.join("Games/Restore Attach")
+        )]
+    );
+    assert_eq!(summary.paths_dropped, 1, "the Windows program path");
+    assert_eq!(
+        summary.missing.iter().map(|c| c.kind).collect::<Vec<_>>(),
+        [PathKind::Prefix]
+    );
+    let restored = b.settings.overrides(&id);
+    assert_eq!(
+        restored.0.get("winePrefix").and_then(|v| v.as_str()),
+        Some(here.join("Prefixes/Restore Attach").to_str().unwrap())
+    );
+    assert!(restored.0.get("targetExe").is_none());
+    assert_eq!(
+        restored.0.get("launcherArgs").and_then(|v| v.as_str()),
+        Some("-windowed")
+    );
 }

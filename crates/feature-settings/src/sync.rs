@@ -470,6 +470,7 @@ impl SyncPanel {
             ConflictField::Custom => "settings.sync.conflict.custom",
             ConflictField::Goal => "settings.sync.conflict.goal",
             ConflictField::Playtime => "settings.sync.conflict.playtime",
+            ConflictField::Journal => "settings.sync.conflict.journal",
         };
         t_args(
             key,

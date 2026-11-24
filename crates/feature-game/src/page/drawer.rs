@@ -46,10 +46,11 @@ impl GamePage {
     ) -> AnyElement {
         let action = self.primary_action(cx).unwrap_or(PrimaryAction::Install);
         let hero = self.render_drawer_hero(game, cx);
-        let meta = self.render_meta_line(game);
+        let meta = self.render_meta_line(game, cx);
         let primary = self.render_primary(action, game, true, cx);
         let status = self.render_status_line(game, cx);
         let tools = self.render_tools(game, cx);
+        let left_off = self.render_left_off(game, cx);
         let rating = self.render_rating(cx);
         let tiles = self.render_drawer_tiles(cx);
         let shots = self.render_drawer_shots(cx);
@@ -100,6 +101,7 @@ impl GamePage {
                             .child(primary)
                             .children(status)
                             .child(tools)
+                            .child(left_off)
                             .child(rating)
                             .child(tiles)
                             .children(shots)

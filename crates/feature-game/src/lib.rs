@@ -19,6 +19,7 @@
 
 mod choice;
 mod compat_source;
+mod detail_rows;
 mod dlc;
 mod hltb_match;
 mod hooks;
@@ -36,7 +37,9 @@ mod mods;
 pub mod ops;
 mod page;
 mod play_with;
+mod playtime_edit;
 mod redmod;
+mod save_snapshots;
 mod saves;
 pub mod sizes;
 pub mod state;
@@ -48,6 +51,7 @@ mod windows_file;
 
 use gpui_kit::{App, KeyBinding};
 
+pub use detail_rows::open_detail_rows_dialog;
 pub use hooks::{
     AnticheatReport, AnticheatStatus, BranchPasswordFn, CompatibilityFn, CompatibilityInfo,
     GameHooks, HowLongToBeat, ReviewScore, SteamDeckStatus, install_hooks, install_store_handles,
@@ -70,6 +74,7 @@ pub use manage::{
 pub use mods::{ModsPanel, open_mods_sheet, open_nxm_dialog, open_thunderstore_link_dialog};
 pub use page::{AchievementFilter, GAME_PAGE_CONTEXT, GamePage, GamePageEvent, InfoTab, game_menu};
 pub use play_with::open_play_with_dialog;
+pub use playtime_edit::open_playtime_dialog;
 pub use redmod::{RedmodPanel, open_redmod_sheet};
 pub use saves::{CloudSavesPanel, CloudSupport, open_cloud_saves_sheet};
 pub use state::PrimaryAction;

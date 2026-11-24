@@ -17,7 +17,9 @@ mod detect;
 mod extract;
 mod install;
 mod launch;
+mod receipt;
 mod records;
+mod setup;
 #[cfg(test)]
 mod tests;
 
@@ -473,8 +475,15 @@ impl Store for ItchStore {
             .collect();
         let mut out = Vec::new();
         for (app, record) in candidates {
-            match self.choose_upload(&app, record.platform).await {
-                Ok((_, upload)) if upload.revision() != record.revision => out.push(app),
+            match self
+                .choose_upload_preferring(&app, record.platform, record.upload_id)
+                .await
+            {
+                Ok((_, upload))
+                    if !receipt::same_revision(&upload.revision(), &record.revision) =>
+                {
+                    out.push(app)
+                }
                 Ok(_) => {}
                 Err(e) => {
                     let e = session_error(e);
@@ -564,20 +573,25 @@ impl Store for ItchStore {
         .await
     }
 
-    /// Registers a folder holding the game. Updates are not offered for it,
-    /// since which upload it came from is unknown.
+    /// Registers a folder holding the game. A folder the itch app installed
+    /// keeps its receipt, which names the upload and build, so updates are
+    /// offered as they were there; for any other folder that is unknown, and
+    /// no updates are offered.
     async fn import(&self, app_name: &str, path: &Path, platform: InstallPlatform) -> Result<()> {
         let game = self
             .game(app_name)
             .with_context(|| format!("{app_name} is not in your itch.io library"))?;
         let dir = path.to_path_buf();
-        let (exe, size) = Self::blocking(move || {
+        let (exe, size, receipt) = Self::blocking(move || {
             (
                 detect::find_executable(&dir, platform),
                 install::folder_size(&dir),
+                receipt::read(&dir),
             )
         })
         .await?;
+        // A receipt of another game (a folder copied over) says nothing here.
+        let receipt = receipt.filter(|r| r.game_id.to_string() == app_name);
         let exe = exe.with_context(|| {
             format!(
                 "No {} program was found in {}",
@@ -591,6 +605,12 @@ impl Store for ItchStore {
             platform,
             executable: exe.to_string_lossy().into_owned(),
             size,
+            upload_id: receipt.as_ref().map_or(0, |r| r.upload_id),
+            revision: receipt
+                .as_ref()
+                .map(|r| r.revision.clone())
+                .unwrap_or_default(),
+            version: receipt.map(|r| r.version).unwrap_or_default(),
             ..Default::default()
         };
         self.update_installed(|m| {

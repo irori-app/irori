@@ -703,6 +703,7 @@
       ],
       "folders": [
         "3ds",
+        "n3ds",
         "nintendo 3ds"
       ],
       "engines": [
@@ -888,6 +889,95 @@
       ],
       "engines": [
         "anyps5"
+      ]
+    },
+    {
+      "id": "dreamcast",
+      "name": "Dreamcast",
+      "short": "DC",
+      "maker": "Sega",
+      "year": 1998,
+      "libretro": "Sega - Dreamcast",
+      "colors": [
+        "#e2621b",
+        "#f2f2f2"
+      ],
+      "extensions": [
+        "gdi",
+        "cdi",
+        "chd",
+        "cue",
+        "m3u"
+      ],
+      "discImages": true,
+      "multiDisc": true,
+      "folders": [
+        "dreamcast",
+        "sega dreamcast"
+      ],
+      "engines": [
+        "flycast",
+        "retroarch:flycast"
+      ]
+    },
+    {
+      "id": "psvita",
+      "name": "PlayStation Vita",
+      "short": "VITA",
+      "maker": "Sony",
+      "year": 2011,
+      "libretro": "Sony - PlayStation Vita",
+      "colors": [
+        "#0b1a3a",
+        "#4a8fe0"
+      ],
+      "extensions": [
+        "bin"
+      ],
+      "folders": [
+        "psvita",
+        "ps vita",
+        "vita",
+        "playstation vita",
+        "ux0"
+      ],
+      "folderOnly": true,
+      "folderGames": true,
+      "folderMain": [
+        "eboot.bin"
+      ],
+      "folderTitle": [
+        "sce_sys/param.sfo"
+      ],
+      "layoutFolders": [
+        "sce_sys",
+        "sce_module"
+      ],
+      "engines": [
+        "vita3k"
+      ]
+    },
+    {
+      "id": "switch",
+      "name": "Nintendo Switch",
+      "short": "NSW",
+      "maker": "Nintendo",
+      "year": 2017,
+      "libretro": "Nintendo - Nintendo Switch",
+      "colors": [
+        "#e60012",
+        "#2d2d2d"
+      ],
+      "extensions": [
+        "nsp",
+        "xci"
+      ],
+      "folders": [
+        "switch",
+        "nintendo switch"
+      ],
+      "engines": [
+        "ryujinx"
       ]
     }
   ]

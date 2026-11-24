@@ -79,10 +79,103 @@ pub fn now() -> i64 {
     irori_core::util::unix_now() as i64
 }
 
+/// What a game's caption says about the order the library is in: the value
+/// it is sorted by, with that order's icon. `None` for orders without one
+/// to show (title, installed first, an order this version doesn't caption)
+/// and for games without the value (never played, size unknown).
+/// `last_played` and `added` are RFC 3339 times (`added` may be a bare
+/// `YYYY-MM-DD`).
+pub fn sort_value(
+    sort: irori_services::LibrarySort,
+    game: &GameInfo,
+    minutes: u64,
+    last_played: Option<&str>,
+    added: Option<&str>,
+    now: i64,
+) -> Option<(gpui_kit::assets::IconName, String)> {
+    use gpui_kit::assets::IconName;
+    use irori_services::LibrarySort;
+    match sort {
+        LibrarySort::LastPlayed => {
+            self::last_played(last_played, now).map(|when| (IconName::CalendarClock, when))
+        }
+        LibrarySort::Playtime => playtime(minutes).map(|p| (IconName::Clock, p)),
+        LibrarySort::InstallSize => install_size(game).map(|s| (IconName::HardDrive, s)),
+        LibrarySort::ReleaseDate => game
+            .release_date
+            .as_deref()
+            .and_then(|d| d.get(..4))
+            .filter(|y| y.bytes().all(|b| b.is_ascii_digit()))
+            .map(|y| (IconName::CalendarDays, y.to_string())),
+        LibrarySort::DateAdded => {
+            let added = added?;
+            let when = parse_rfc3339(added)
+                .or_else(|| parse_rfc3339(&format!("{}T00:00:00Z", added.get(..10)?)))?;
+            Some((IconName::CalendarDays, relative_time(when, now)))
+        }
+        LibrarySort::Score => game.rating.map(|r| (IconName::Star, r.to_string())),
+        // Orders added later show nothing until they say what to show.
+        #[allow(unreachable_patterns)]
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use irori_core::InstalledInfo;
+
+    #[test]
+    fn captions_name_the_value_the_library_is_sorted_by() {
+        use irori_services::LibrarySort;
+        crate::i18n::register();
+        let now = 1_000_000_000;
+        let game = GameInfo {
+            runner: Some(Runner::Gog),
+            release_date: Some("2015-05-19".into()),
+            rating: Some(92),
+            install: Some(InstalledInfo {
+                install_size_bytes: 1536,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let text = |sort, minutes, last: Option<&str>, added: Option<&str>| {
+            sort_value(sort, &game, minutes, last, added, now).map(|(_, text)| text)
+        };
+        assert_eq!(text(LibrarySort::Title, 60, None, None), None);
+        assert_eq!(text(LibrarySort::InstalledFirst, 60, None, None), None);
+        assert_eq!(
+            text(LibrarySort::Playtime, 125, None, None).as_deref(),
+            Some("2 h 5 min")
+        );
+        assert_eq!(text(LibrarySort::Playtime, 0, None, None), None);
+        assert_eq!(
+            text(LibrarySort::InstallSize, 0, None, None).as_deref(),
+            Some("1.5 KiB")
+        );
+        assert_eq!(
+            text(LibrarySort::ReleaseDate, 0, None, None).as_deref(),
+            Some("2015")
+        );
+        assert_eq!(
+            text(LibrarySort::Score, 0, None, None).as_deref(),
+            Some("92")
+        );
+        assert_eq!(text(LibrarySort::LastPlayed, 0, None, None), None);
+        assert!(
+            text(
+                LibrarySort::LastPlayed,
+                0,
+                Some("2001-09-08T00:00:00Z"),
+                None
+            )
+            .is_some()
+        );
+        // A bare date added reads too; nonsense doesn't.
+        assert!(text(LibrarySort::DateAdded, 0, None, Some("2001-09-01")).is_some());
+        assert_eq!(text(LibrarySort::DateAdded, 0, None, Some("soon")), None);
+    }
 
     #[test]
     fn relative_times() {

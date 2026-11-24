@@ -590,6 +590,14 @@ fn on_chord(chord: Chord, cx: &mut App) {
                 .and_then(|m| m.statuses.read(cx).playing().next().cloned());
             backend.take_screenshot(game);
         }
+        Chord::MarkMoment => {
+            let game = cx
+                .try_global::<irori_ui::Models>()
+                .and_then(|m| m.statuses.read(cx).playing().next().cloned());
+            if let Some(game) = game {
+                crate::overlay::mark_moment(game, false, cx);
+            }
+        }
         Chord::VolumeUp | Chord::VolumeDown => {
             let prefs = crate::overlay::prefs(cx);
             let step = match chord {

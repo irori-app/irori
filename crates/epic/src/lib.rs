@@ -29,7 +29,7 @@ pub mod registry;
 pub mod saves;
 
 pub use api::{
-    Asset, Client, Endpoints, Identity, LibraryItem, ManifestInfo, PlaytimeItem, PlaytimeUpload,
-    SaveFile, Session, Sidecar, SignInRejected, Ticket,
+    Asset, Client, DEFAULT_TIMEOUT, Endpoints, Identity, LibraryItem, ManifestInfo, PlaytimeItem,
+    PlaytimeUpload, SaveFile, Session, Sidecar, SignInRejected, Ticket,
 };
 pub use manifest::{ChunkInfo, ChunkPart, Comparison, FileManifest, Guid, Manifest, Meta, Secrets};

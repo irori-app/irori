@@ -185,6 +185,17 @@ pub(super) struct GameFacts {
     /// Its store keeps cloud saves Irori syncs.
     pub(super) syncable: bool,
     pub(super) actions: Vec<(usize, UserAction)>,
+    /// Its entry's other copies that can be played or installed, each with
+    /// its label ("Play with Steam").
+    pub(super) copies: Vec<CopyRow>,
+}
+
+/// Another copy of the game's entry, played or installed from the palette.
+#[derive(Debug, Clone)]
+pub(super) struct CopyRow {
+    pub(super) id: irori_core::GameId,
+    pub(super) label: SharedString,
+    pub(super) action: irori_ui::copies::CopyAction,
 }
 
 /// Every action of `game`, as the level → opens lists them: what it is
@@ -221,6 +232,18 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
             PaletteTarget::Play(id.clone()),
         ),
         _ => {}
+    }
+    for copy in &facts.copies {
+        let (icon, target) = match copy.action {
+            irori_ui::copies::CopyAction::Play => {
+                (IconName::Play, PaletteTarget::Play(copy.id.clone()))
+            }
+            irori_ui::copies::CopyAction::Install => (
+                IconName::Download,
+                PaletteTarget::InstallCopy(copy.id.clone()),
+            ),
+        };
+        push(Entry::new().label(copy.label.clone()).icon(icon), target);
     }
     push(
         Entry::new()
@@ -259,6 +282,27 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
             .icon(IconName::ExternalLink),
         PaletteTarget::GameLinks(id.clone()),
     );
+    push(
+        Entry::new()
+            .label(t_args("shell.palette.edit_metadata", &[("title", title)]))
+            .keywords([t("shell.palette.edit_metadata_keywords")])
+            .icon(IconName::Tags),
+        PaletteTarget::EditMetadata(id.clone()),
+    );
+    push(
+        Entry::new()
+            .label(t_args("shell.palette.edit_playtime", &[("title", title)]))
+            .keywords([t("shell.palette.edit_playtime_keywords")])
+            .icon(IconName::Timer),
+        PaletteTarget::EditPlaytime(id.clone()),
+    );
+    push(
+        Entry::new()
+            .label(t("shell.palette.detail_rows"))
+            .keywords([t("shell.palette.detail_rows_keywords")])
+            .icon(IconName::Settings2),
+        PaletteTarget::DetailRows,
+    );
     if !matches!(game.runner(), Runner::Steam | Runner::Emulation) {
         push(
             Entry::new()
@@ -285,6 +329,13 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
             PaletteTarget::OpenFolder(id.clone()),
         );
     }
+    push(
+        Entry::new()
+            .label(t_args("shell.palette.captures_folder", &[("title", title)]))
+            .keywords([t("shell.palette.captures_folder_keywords")])
+            .icon(IconName::Images),
+        PaletteTarget::CapturesFolder(id.clone()),
+    );
     push(
         Entry::new()
             .label(t(if facts.hidden {

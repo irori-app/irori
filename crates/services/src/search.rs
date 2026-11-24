@@ -12,7 +12,10 @@
 //! keeps games played in co-op, `mode:local,online` games with either, and
 //! several terms must all hold. `tag:` terms work the same way on Steam's
 //! user tags (`tag:puzzle`, `tag:open-world,roguelike`; spaces, hyphens and
-//! case don't matter). The rest of the query is searched as text.
+//! case don't matter). `category:` terms keep the games in a manual
+//! category and `smart:` terms those in a smart category, named the same
+//! loose way (`category:story-games`; a name's start is enough when no name
+//! is whole, `smart:unplay`). The rest of the query is searched as text.
 
 use std::sync::Arc;
 
@@ -192,6 +195,49 @@ pub struct ParsedQuery {
     /// One entry per `tag:` term: the tags it names ([`tag_key`]), any of
     /// which a game must have.
     pub tags: Vec<Vec<String>>,
+    /// One entry per `category:` term: the manual categories it names
+    /// ([`tag_key`] of the name), any of which a game must be in.
+    pub categories: Vec<Vec<String>>,
+    /// One entry per `smart:` term: the smart categories it names, any of
+    /// which a game must be in.
+    pub smart: Vec<Vec<String>>,
+}
+
+/// The loose keys of a term's comma-separated names; `None` when it names
+/// nothing, so the term stays text.
+fn term_keys(rest: &str) -> Option<Vec<String>> {
+    let keys: Vec<String> = rest
+        .split(',')
+        .map(tag_key)
+        .filter(|k| !k.is_empty())
+        .collect();
+    (!keys.is_empty()).then_some(keys)
+}
+
+/// The rest of `word` after `prefix` (any case), if it starts with it.
+fn after<'a>(word: &'a str, prefix: &str) -> Option<&'a str> {
+    word.get(..prefix.len())
+        .filter(|p| p.eq_ignore_ascii_case(prefix))
+        .map(|_| &word[prefix.len()..])
+}
+
+/// Which of `names` a term's `key` names: those whose loose key is `key`,
+/// else those whose key starts with it.
+fn named<'a, T: Clone>(key: &str, names: impl Iterator<Item = (&'a str, T)>) -> Vec<T> {
+    let keyed: Vec<(String, T)> = names.map(|(n, v)| (tag_key(n), v)).collect();
+    let whole: Vec<T> = keyed
+        .iter()
+        .filter(|(k, _)| k == key)
+        .map(|(_, v)| v.clone())
+        .collect();
+    if !whole.is_empty() {
+        return whole;
+    }
+    keyed
+        .into_iter()
+        .filter(|(k, _)| k.starts_with(key))
+        .map(|(_, v)| v)
+        .collect()
 }
 
 /// How store tags compare: letters and digits only, lower case, so
@@ -211,7 +257,17 @@ impl ParsedQuery {
         let mut text: Vec<&str> = Vec::new();
         let mut modes = Vec::new();
         let mut tags = Vec::new();
+        let mut categories = Vec::new();
+        let mut smart = Vec::new();
         for word in raw.split_whitespace() {
+            if let Some(keys) = after(word, "category:").and_then(term_keys) {
+                categories.push(keys);
+                continue;
+            }
+            if let Some(keys) = after(word, "smart:").and_then(term_keys) {
+                smart.push(keys);
+                continue;
+            }
             if let Some(rest) = word
                 .get(..4)
                 .filter(|p| p.eq_ignore_ascii_case("tag:"))
@@ -246,7 +302,48 @@ impl ParsedQuery {
             text: text.join(" "),
             modes,
             tags,
+            categories,
+            smart,
         }
+    }
+
+    /// Whether a game whose copies have `keys` passes every `category:`
+    /// term of `user`'s manual categories.
+    pub fn categories_match(&self, user: &crate::UserData, keys: &[String]) -> bool {
+        self.categories.iter().all(|any| {
+            any.iter().any(|part| {
+                named(
+                    part,
+                    user.categories.iter().map(|(n, games)| (n.as_str(), games)),
+                )
+                .iter()
+                .any(|games| keys.iter().any(|k| games.contains(k)))
+            })
+        })
+    }
+
+    /// The smart categories each `smart:` term names, by id: a game must be
+    /// in one of each list. A term naming none has an empty list.
+    pub fn smart_ids(&self, user: &crate::UserData) -> Vec<Vec<String>> {
+        self.smart
+            .iter()
+            .map(|any| {
+                let mut ids: Vec<String> = any
+                    .iter()
+                    .flat_map(|part| {
+                        named(
+                            part,
+                            user.smart_categories
+                                .iter()
+                                .map(|(id, c)| (c.name.as_str(), id.clone())),
+                        )
+                    })
+                    .collect();
+                ids.sort();
+                ids.dedup();
+                ids
+            })
+            .collect()
     }
 
     /// Whether a game with `store_tags` passes every `tag:` term.
@@ -439,43 +536,15 @@ pub fn fold(s: &str) -> String {
         if matches!(c, '\'' | '’' | '`') {
             continue;
         }
-        for lower in c.to_lowercase() {
-            match unaccent(lower) {
-                Some(plain) => plain.chars().for_each(|p| push(p, &mut out)),
-                None if lower.is_alphanumeric() => push(lower, &mut out),
-                None => push(' ', &mut out),
-            }
-        }
+        // Accents and trademark signs as every metadata matcher folds them.
+        irori_core::text::fold_char(c, |f| {
+            push(if f.is_alphanumeric() { f } else { ' ' }, &mut out)
+        });
     }
     if out.ends_with(' ') {
         out.pop();
     }
     out
-}
-
-/// The plain letters of an accented Latin letter.
-fn unaccent(c: char) -> Option<&'static str> {
-    Some(match c {
-        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' => "a",
-        'æ' => "ae",
-        'ç' | 'ć' | 'č' => "c",
-        'ď' | 'đ' => "d",
-        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ė' | 'ę' | 'ě' => "e",
-        'ğ' => "g",
-        'ì' | 'í' | 'î' | 'ï' | 'ī' | 'ı' => "i",
-        'ł' | 'ľ' => "l",
-        'ñ' | 'ń' | 'ň' => "n",
-        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' | 'ő' => "o",
-        'œ' => "oe",
-        'ř' => "r",
-        'ś' | 'š' | 'ş' | 'ș' => "s",
-        'ß' => "ss",
-        'ť' | 'ţ' | 'ț' => "t",
-        'ù' | 'ú' | 'û' | 'ü' | 'ū' | 'ů' | 'ű' => "u",
-        'ý' | 'ÿ' => "y",
-        'ź' | 'ż' | 'ž' => "z",
-        _ => return None,
-    })
 }
 
 /// The other spelling of a sequel number: digits for a Roman numeral and
@@ -538,6 +607,49 @@ mod tests {
     }
 
     #[test]
+    fn category_terms_name_categories_loosely() {
+        let mut user = crate::UserData::default();
+        user.categories
+            .insert("Story games".into(), ["gog:1".to_string()].into());
+        user.categories
+            .insert("Story".into(), ["gog:2".to_string()].into());
+        user.categories
+            .insert("Later".into(), ["gog:3".to_string()].into());
+        user.smart_categories.insert(
+            "s-1".into(),
+            crate::SmartCategory::new("Unplayed", crate::Match::All, vec![], vec![]),
+        );
+        let keys = |k: &str| vec![k.to_string()];
+        let q = ParsedQuery::new("CATEGORY:story-games witcher");
+        assert_eq!(q.text, "witcher");
+        assert_eq!(q.categories, [vec!["storygames".to_string()]]);
+        assert!(q.categories_match(&user, &keys("gog:1")));
+        assert!(!q.categories_match(&user, &keys("gog:2")));
+        // A whole name wins over names it starts.
+        let q = ParsedQuery::new("category:story");
+        assert!(q.categories_match(&user, &keys("gog:2")));
+        assert!(!q.categories_match(&user, &keys("gog:1")));
+        // Else a name's start, and any of several; every term must hold.
+        let q = ParsedQuery::new("category:lat,storyg");
+        assert!(q.categories_match(&user, &keys("gog:3")));
+        assert!(q.categories_match(&user, &keys("gog:1")));
+        let q = ParsedQuery::new("category:later category:story");
+        assert!(!q.categories_match(&user, &keys("gog:3")));
+        assert!(q.categories_match(&user, &["gog:3".into(), "steam:9".into(), "gog:2".into()]));
+        // A name no category has matches nothing; no term matches all.
+        assert!(!ParsedQuery::new("category:nope").categories_match(&user, &keys("gog:1")));
+        assert!(ParsedQuery::new("hades").categories_match(&user, &keys("gog:1")));
+        // Smart categories by name, to their ids.
+        let q = ParsedQuery::new("smart:unplay smart:gone");
+        assert_eq!(q.smart_ids(&user), [vec!["s-1".to_string()], vec![]]);
+        // An empty term stays text.
+        assert_eq!(
+            ParsedQuery::new("category: smart:").text,
+            "category: smart:"
+        );
+    }
+
+    #[test]
     fn mode_terms_split_from_the_text() {
         let q = ParsedQuery::new("  portal  MODE:co-op mode:local,online ");
         assert_eq!(q.text, "portal");
@@ -595,6 +707,9 @@ mod tests {
         assert_eq!(fold("Assassin’s Creed"), "assassins creed");
         assert_eq!(fold("Ratchet & Clank"), "ratchet and clank");
         assert_eq!(fold("  ..  "), "");
+        // Trademark signs don't split a word; Greek accents fold too.
+        assert_eq!(fold("Pokémon™Ranger"), "pokemonranger");
+        assert_eq!(fold("Οδύσσεια"), "οδυσσεια");
     }
 
     #[test]

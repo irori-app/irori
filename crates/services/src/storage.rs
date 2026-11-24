@@ -733,6 +733,24 @@ impl Backend {
         .context("measuring disk use")
     }
 
+    /// The size of `id`'s install folder as measured on disk, for a game
+    /// whose store doesn't say; `None` when it has no folder. The storage
+    /// report's cache is used and kept, so a folder measured lately isn't
+    /// walked again.
+    pub async fn install_folder_size(&self, id: &GameId) -> Option<u64> {
+        let path = self.game(id)?.install_path()?;
+        let file = Paths::get().cache.join("storage.json");
+        tokio::task::spawn_blocking(move || {
+            let mut measurer = Measurer::open(file, false);
+            let size = measurer.measure(&path).map(|c| c.bytes);
+            measurer.save();
+            size
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
     /// Delete what `kind` offers among `chosen` (or move it to the trash,
     /// [`CleanupItem::goes_to_trash`]), saying how much went where. The
     /// report is rebuilt first, so only what is still safe to delete goes.
@@ -948,9 +966,17 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
         .iter()
         .map(|(p, title)| (resolve(p), title))
         .collect();
+    // Folders other launchers (Lutris, Bottles…) keep are theirs to remove:
+    // never offered, and deleting them is refused anyway.
+    let others: Vec<PathBuf> = fs_guard::OtherLaunchers::load()
+        .resolved()
+        .into_iter()
+        .map(|(dir, _)| dir)
+        .collect();
     let orphans: Vec<CleanupItem> = orphan_prefixes(&prefixes, &used_prefixes)
         .into_iter()
         .filter(|p| !fs_guard::protected_dirs(app).contains(p))
+        .filter(|p| !others.iter().any(|o| o.starts_with(p)))
         .map(|p| CleanupItem {
             path: p.clone(),
             bytes: prefix_sizes.get(p).copied().unwrap_or(0),
@@ -1040,6 +1066,7 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
     used_paths.extend(used_prefixes.iter().cloned());
     used_paths.extend(used_programs.iter().cloned());
     used_paths.extend(plan.named.iter().cloned());
+    used_paths.extend(others.iter().cloned());
     let protected = fs_guard::protected_dirs(app);
     let mut strays: Vec<CleanupItem> = if root_is_home || !plan.downloading.is_empty() {
         Vec::new()

@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use irori_core::settings::{CoverCaption, Density};
+use irori_core::settings::{CoverCaption, CoverShape, Density};
 
 /// Gap between tiles, in rem.
 pub const GAP_REM: f32 = 1.25;
@@ -102,7 +102,28 @@ pub fn grid_metrics_for(
     density: Density,
     caption: CoverCaption,
 ) -> GridMetrics {
-    let preferred = preferred_rem.clamp(MIN_TILE_REM, MAX_TILE_REM) * density.cover_scale();
+    grid_metrics_shaped(
+        available_rem,
+        preferred_rem,
+        density,
+        caption,
+        CoverShape::Portrait,
+    )
+}
+
+/// [`grid_metrics_for`] with covers of `shape` (`coverShape`): the cover
+/// size `preferred_rem` is a box's width, which squares and banners widen
+/// by [`CoverShape::width_scale`], and rows are as tall as the shape.
+pub fn grid_metrics_shaped(
+    available_rem: f32,
+    preferred_rem: f32,
+    density: Density,
+    caption: CoverCaption,
+    shape: CoverShape,
+) -> GridMetrics {
+    let preferred = preferred_rem.clamp(MIN_TILE_REM, MAX_TILE_REM)
+        * density.cover_scale()
+        * shape.width_scale();
     let gap = GAP_REM * density.spacing_scale();
     let available = available_rem.max(preferred);
     let columns = (((available + gap) / (preferred + gap)).floor() as usize).max(1);
@@ -111,9 +132,24 @@ pub fn grid_metrics_for(
     GridMetrics {
         columns,
         tile_rem,
-        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + caption_rem(caption) + gap,
+        row_rem: ROW_INSET_REM + tile_rem * shape.ratio() + caption_rem(caption) + gap,
         gap_rem: gap,
         list_row_rem: LIST_ROW_REM * density.row_scale(),
+    }
+}
+
+/// The Focus view's column: covers exactly `tile_rem` wide (its own sizes,
+/// not the grid slider's range) at comfortable spacing, as many to a row as
+/// `available_rem` holds.
+pub fn focus_metrics(available_rem: f32, tile_rem: f32, caption: CoverCaption) -> GridMetrics {
+    let gap = GAP_REM;
+    let columns = (((available_rem + gap) / (tile_rem + gap) + 1e-4).floor() as usize).max(1);
+    GridMetrics {
+        columns,
+        tile_rem,
+        row_rem: ROW_INSET_REM + tile_rem * COVER_RATIO + caption_rem(caption) + gap,
+        gap_rem: gap,
+        list_row_rem: LIST_ROW_REM,
     }
 }
 
@@ -291,6 +327,49 @@ mod tests {
         assert!((full.row_rem - title.row_rem - (CAPTION_REM - TITLE_ONLY_REM)).abs() < 1e-4);
         assert!((full.row_rem - none.row_rem - CAPTION_REM).abs() < 1e-4);
         assert_eq!((full.columns, full.tile_rem), (none.columns, none.tile_rem));
+    }
+
+    #[test]
+    fn rows_follow_the_cover_shape() {
+        let at = |shape| {
+            grid_metrics_shaped(60.0, 11.0, Density::Comfortable, CoverCaption::None, shape)
+        };
+        let (boxes, squares, banners) = (
+            at(CoverShape::Portrait),
+            at(CoverShape::Square),
+            at(CoverShape::Banner),
+        );
+        assert_eq!(
+            boxes,
+            grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::None)
+        );
+        // Wider covers, fewer to a row, and rows as tall as the shape.
+        assert!(squares.columns <= boxes.columns && banners.columns < boxes.columns);
+        assert!(banners.tile_rem > boxes.tile_rem);
+        for m in [boxes, squares, banners] {
+            let cover = m.row_rem - ROW_INSET_REM - m.gap_rem;
+            assert!(cover > 0.0);
+        }
+        let cover = |m: GridMetrics| m.row_rem - ROW_INSET_REM - m.gap_rem;
+        assert!((cover(squares) - squares.tile_rem).abs() < 1e-4);
+        assert!((cover(banners) - banners.tile_rem * 9.0 / 16.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn focus_covers_keep_their_own_size() {
+        // Smaller than the grid slider allows, and exactly as wide as asked.
+        for tile in [6.0, 7.5, 9.5] {
+            let two = 2.0 * tile + GAP_REM;
+            let m = focus_metrics(two, tile, CoverCaption::Full);
+            assert_eq!((m.columns, m.tile_rem), (2, tile));
+            assert_eq!(
+                focus_metrics(two - 0.5, tile, CoverCaption::Full).columns,
+                1
+            );
+        }
+        // The medium size lays out as the column always did.
+        let old = grid_metrics_for(16.25, 7.5, Density::Comfortable, CoverCaption::Title);
+        assert_eq!(focus_metrics(16.25, 7.5, CoverCaption::Title), old);
     }
 
     #[test]

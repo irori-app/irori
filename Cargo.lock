@@ -5384,6 +5384,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "windows-registry 0.6.1",
 ]
 
 [[package]]
@@ -5436,6 +5437,8 @@ dependencies = [
  "irori-core",
  "irori-depot",
  "irori-itch-api",
+ "irori-mods",
+ "irori-runtime",
  "irori-secrets",
  "once_cell",
  "parking_lot",
@@ -5537,6 +5540,7 @@ name = "irori-manage"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "futures",
  "gpui-kit",
  "gpui-pre",
@@ -5556,6 +5560,7 @@ dependencies = [
  "irori-ui",
  "irori-xbox",
  "regex",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
@@ -5708,6 +5713,7 @@ dependencies = [
  "once_cell",
  "open",
  "parking_lot",
+ "plist",
  "regex",
  "reqwest",
  "serde",
@@ -5783,6 +5789,7 @@ dependencies = [
  "chrono",
  "dirs 6.0.0",
  "discord-rich-presence",
+ "flate2",
  "fs4",
  "futures",
  "fuzzy-matcher",
@@ -5809,6 +5816,7 @@ dependencies = [
  "serde_yaml_ng",
  "sha2 0.10.9",
  "sysinfo 0.39.6",
+ "tar",
  "tempfile",
  "tokio",
  "tokio-util",

@@ -13,23 +13,33 @@ pub mod app_update;
 pub mod art_cache;
 pub mod audio;
 pub mod backup;
+pub mod backup_paths;
+mod backup_restore;
 pub mod backup_schedule;
 pub mod bluetooth;
 pub mod capture;
+pub mod category_file;
 pub mod copies;
 mod discord;
 pub mod displays;
+mod download_power;
+mod download_space;
 mod downloads;
+pub mod duplicates;
+pub mod engine_health;
 mod engines;
 mod facts;
+pub mod field_rules;
 pub mod file_achievements;
 mod files;
 mod follow;
 pub mod game_window;
 mod games;
+pub mod gpu_hide;
 pub mod gpu_preference;
 pub mod hidden_lock;
 mod hooks;
+pub mod how_it_starts;
 mod igdb;
 mod inhibit;
 pub mod journal;
@@ -40,6 +50,7 @@ pub mod media;
 pub mod mods;
 mod network;
 pub mod optiscaler;
+mod other_launchers;
 pub mod play_status;
 pub mod power;
 pub mod prefixes;
@@ -49,15 +60,21 @@ pub mod renodx;
 pub mod replay;
 pub mod reshade;
 mod running;
+pub mod save_snapshots;
+pub mod screen;
 pub mod screenshots;
 pub mod scripts;
 pub mod search;
+pub mod self_update;
 pub mod sessions;
 pub mod settings;
 mod settings_migration;
 pub mod smart_categories;
 pub mod status;
 pub mod steam_link;
+pub mod steam_overlay;
+pub mod steam_reception;
+mod steam_shortcuts;
 mod steam_tags;
 pub mod storage;
 mod store_facts;
@@ -86,22 +103,31 @@ pub use accounts::{MakeSlot, MultiAccountStore, SlotDirs};
 pub use achievements::{
     AchievementIndex, AchievementTotals, GameAchievements, Unlock, unlock_notice,
 };
-pub use app_update::{AppUpdateStatus, InstallKind, Release};
+pub use app_update::{AppUpdateStatus, InstallKind, Release, SelfInstall};
 pub use audio::{GameAudio, Volume, VolumeTarget};
-pub use backup::{Backup, BackupParts, ExportFormat, RestoreSummary};
+pub use backup::{
+    Backup, BackupParts, ExportFormat, InstallRecord, PathCheck, PathKind, RestoreSummary,
+};
+pub use backup_paths::Remap;
+pub use backup_restore::remap_from_located;
 pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
+pub use download_power::{DOWNLOADS_FINISHED_NOTICE, POWER_COUNTDOWN, PowerCountdown};
+pub use download_space::QueueDisk;
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
-pub use games::{LaunchCancelled, LaunchParams, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT};
+pub use games::{
+    LaunchCancelled, LaunchParams, MoveReport, PrefixChoice, RunningGame, SAVE_SYNC_TIMEOUT,
+};
 pub use igdb::IgdbStatus;
+pub use irori_engines::rom_sources::{Plan as RomPlan, RomSource, SourceKind as RomSourceKind};
 pub use irori_steam_api::StoreHit as SteamHit;
-pub use journal::{Journal, JournalEntry};
+pub use journal::{Journal, JournalEntry, LeftOff};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, ScriptExtender, supports_mods};
 pub use optiscaler::{OptiscalerInstallParams, OptiscalerStatus};
-pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord};
+pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord, StatusChange, StatusHistory};
 pub use power::{Permission, PowerAction, PowerSystem};
 pub use renodx::{RenodxChoice, RenodxStatus};
 pub use replay::{QuickLaunchShortcut, Recorder, RecorderInfo, ReplayInfo, ShortcutState};
@@ -115,6 +141,7 @@ pub use smart_categories::{
 };
 pub use status::StatusRegistry;
 pub use steam_link::{STEAM_NONE, SteamLink, TitleLinkReport};
+pub use steam_overlay::SteamLaunch;
 pub use storage::{CleanupKind, StorageReport};
 pub use store_facts::DetailsReport;
 pub use sunshine::{
@@ -124,6 +151,26 @@ pub use sync::{RcloneInfo, SyncConflict, SyncDevice, SyncReport, SyncStatus, Web
 pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
+
+/// Whether a store's library refresh reads only this computer while Irori
+/// works offline: these stores read local files and leave their network
+/// parts (Steam's account, the Xbox account) out while working offline.
+fn refreshes_offline(runner: Runner) -> bool {
+    matches!(
+        runner,
+        Runner::Steam | Runner::Launchers | Runner::Emulation | Runner::Sideload
+    )
+}
+
+/// Whether the network mode settles being online without a probe: working
+/// offline never is, "always online" always is; `None` probes.
+fn decided_online(mode: irori_core::net::NetworkMode) -> Option<bool> {
+    match mode {
+        irori_core::net::NetworkMode::Offline => Some(false),
+        irori_core::net::NetworkMode::Online => Some(true),
+        irori_core::net::NetworkMode::Auto => None,
+    }
+}
 
 /// How often connectivity is re-checked.
 const CONNECTIVITY_INTERVAL: Duration = Duration::from_secs(60);
@@ -174,6 +221,11 @@ pub struct Inner {
     isolated: bool,
     /// The queue was paused by [`Backend::pause_downloads_while_offline`].
     auto_paused: AtomicBool,
+    /// The computer is kept awake for downloads after the screen was turned
+    /// off (`screen.rs`).
+    screen_off_hold: AtomicBool,
+    /// Steam shortcut changes waiting, as last told to the Steam card.
+    steam_shortcuts_shown: std::sync::atomic::AtomicUsize,
     presence: discord::Presence,
     /// The replay buffer of the session it records, and its shortcut.
     replay: replay::ReplayState,
@@ -255,6 +307,9 @@ impl Backend {
         let _guard = rt.enter();
         let bus = EventBus::new();
         let settings = Arc::new(SettingsService::load(bus.clone()));
+        if !isolated {
+            settings.drive_network_policy();
+        }
         let settings_fn: irori_core::SettingsFn = {
             let settings = settings.clone();
             Arc::new(move || settings.app())
@@ -285,6 +340,8 @@ impl Backend {
             online: AtomicBool::new(true),
             isolated,
             auto_paused: AtomicBool::new(false),
+            screen_off_hold: AtomicBool::new(false),
+            steam_shortcuts_shown: std::sync::atomic::AtomicUsize::new(0),
             presence: discord::Presence::default(),
             replay: replay::ReplayState::default(),
             expired_logins: RwLock::new(BTreeMap::new()),
@@ -347,7 +404,50 @@ impl Backend {
         self.stores.values()
     }
 
+    /// Whether Irori may use the network now: the connection works and the
+    /// user hasn't asked Irori to work offline (`iroriNetworkMode`).
     pub fn is_online(&self) -> bool {
+        self.online.load(Ordering::Relaxed) && !self.working_offline()
+    }
+
+    /// Whether the user asked Irori to work offline.
+    pub fn working_offline(&self) -> bool {
+        self.settings.app().network_mode == irori_core::net::NetworkMode::Offline
+    }
+
+    /// Fails with [`irori_core::net::WorkingOffline`] while working offline.
+    fn ensure_online(&self) -> anyhow::Result<()> {
+        if self.working_offline() {
+            return Err(irori_core::net::WorkingOffline.into());
+        }
+        Ok(())
+    }
+
+    /// Work offline, or follow the connection again (`iroriNetworkMode`
+    /// back to automatic), from the palette and the title bar.
+    pub fn set_working_offline(&self, offline: bool) {
+        self.settings.update_app(|s| {
+            s.network_mode = if offline {
+                irori_core::net::NetworkMode::Offline
+            } else {
+                irori_core::net::NetworkMode::Auto
+            };
+        });
+    }
+
+    /// Follow a changed `iroriNetworkMode` at once: probe (or not), pause
+    /// downloads going offline and take them up again coming back.
+    async fn follow_network_mode(&self) {
+        let was_online = self.is_online_now();
+        let online = self.check_connectivity().await;
+        self.pause_downloads_while_offline(was_online, online);
+        if online && !was_online {
+            self.downloads_wake.notify_one();
+        }
+    }
+
+    /// The connection as last probed, whatever the network mode.
+    fn is_online_now(&self) -> bool {
         self.online.load(Ordering::Relaxed)
     }
 
@@ -372,6 +472,9 @@ impl Backend {
         // Initialise stores from disk, then build the library.
         let b = self.clone();
         self.spawn(async move {
+            // Read beside the stores: sorting and smart categories count
+            // plays from the first library on.
+            let plays = b.spawn_blocking(crate::sessions::load_stats);
             let inits = b.stores.values().map(|s| {
                 let s = s.clone();
                 async move {
@@ -381,6 +484,7 @@ impl Backend {
                 }
             });
             futures::future::join_all(inits).await;
+            let _ = plays.await;
             // Before anything that may wait on the network: the first screen
             // depends on this.
             b.rebuild_library();
@@ -417,6 +521,7 @@ impl Backend {
                         ),
                 );
             }
+            b.sync_steam_tools().await;
             b.sync_when_due().await;
             b.back_up_when_due().await;
             b.check_app_update_when_due().await;
@@ -439,6 +544,8 @@ impl Backend {
             let mut on = switches(&b.settings.app());
             let mut copies = b.settings.app().ui.group_copies;
             let mut tag_limit = b.settings.app().steam_tag_limit;
+            let mut proton_to_steam = b.settings.app().download_proton_to_steam;
+            let mut network_mode = b.settings.app().network_mode;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -450,11 +557,26 @@ impl Backend {
                     Ok(Event::GameSettingsChanged(id)) => b.follow_steam_link_setting(&id),
                     Ok(Event::WineVersionsChanged) => {
                         let b = b.clone();
-                        b.clone()
-                            .spawn(async move { b.forget_present_wine_updates().await });
+                        b.clone().spawn(async move {
+                            b.forget_present_wine_updates().await;
+                            // A build's registration with Steam comes and
+                            // goes with it.
+                            b.sync_steam_tools().await;
+                        });
                     }
                     Ok(Event::SettingsChanged) => {
                         let app = b.settings.app();
+                        if app.download_proton_to_steam != proton_to_steam {
+                            proton_to_steam = app.download_proton_to_steam;
+                            let b = b.clone();
+                            b.clone().spawn(async move { b.sync_steam_tools().await });
+                        }
+                        if app.network_mode != network_mode {
+                            network_mode = app.network_mode;
+                            let b = b.clone();
+                            b.clone()
+                                .spawn(async move { b.follow_network_mode().await });
+                        }
                         let now = switches(&app);
                         for (runner, (was, is)) in [Runner::Zoom, Runner::Itch]
                             .into_iter()
@@ -482,6 +604,13 @@ impl Backend {
                 }
             }
         });
+
+        // A graphics card a killed session left disabled comes back
+        // (`gpu_hide`).
+        if interactive && !self.isolated && gpu_hide::system_devices().is_some() {
+            let b = self.clone();
+            self.spawn(async move { b.recover_hidden_gpus().await });
+        }
 
         // Windows' graphics preference follows a changed or cleared setting
         // at once, not only at the game's next launch (`gpu_preference`).
@@ -517,7 +646,11 @@ impl Backend {
         // Periodic update checks and connectivity.
         if interactive && !self.isolated {
             let b = self.clone();
-            self.spawn(async move { b.periodic_tasks().await });
+            self.spawn(async move {
+                b.load_steam_shortcut_queue().await;
+                b.note_other_launchers().await;
+                b.periodic_tasks().await
+            });
             self.watch_for_sunshine();
         }
     }
@@ -531,12 +664,13 @@ impl Backend {
             tokio::time::sleep(CONNECTIVITY_INTERVAL).await;
             since_refresh += CONNECTIVITY_INTERVAL;
             since_launchers += CONNECTIVITY_INTERVAL;
-            let was_online = self.is_online();
+            let was_online = self.is_online_now();
             let online = self.check_connectivity().await;
             self.pause_downloads_while_offline(was_online, online);
             self.sync_when_due().await;
             self.cloud_copies_when_due().await;
             self.sync_sunshine_when_due().await;
+            self.steam_shortcuts_when_due().await;
             self.back_up_when_due().await;
             self.check_app_update_when_due().await;
             self.check_components_when_due().await;
@@ -577,6 +711,86 @@ impl Backend {
         result.map(|()| self.app_update())
     }
 
+    /// Download the newer Irori, check it against the release's checksums
+    /// and unpack it beside this install, to go in at the next restart
+    /// ([`self_update`]). Only for installs no package manager updates.
+    pub async fn install_app_update(&self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        use std::sync::atomic::AtomicU8;
+        let status = self.app_update();
+        let Some(release) = status.available else {
+            anyhow::bail!("There is no newer Irori to install");
+        };
+        let Some(layout) = self.app_update.layout().cloned() else {
+            anyhow::bail!("This copy of Irori is updated another way");
+        };
+        if matches!(
+            self.app_update.install_state(),
+            SelfInstall::Downloading { .. }
+        ) {
+            return Ok(());
+        }
+        self.app_update
+            .set_install(SelfInstall::Downloading { percent: None });
+        self.bus.emit(Event::AppUpdateChanged);
+        // Only whole percents reach the UI.
+        let shown = Arc::new(AtomicU8::new(u8::MAX));
+        let (b, seen) = (self.clone(), shown.clone());
+        let progress: irori_core::install::ProgressSink = Arc::new(move |p| {
+            let Some(percent) = p.percent.map(|p| p.clamp(0., 100.) as u8) else {
+                return;
+            };
+            if seen.swap(percent, Ordering::Relaxed) != percent {
+                b.app_update.set_install(SelfInstall::Downloading {
+                    percent: Some(percent),
+                });
+                b.bus.emit(Event::AppUpdateChanged);
+            }
+        });
+        let staged = self_update::stage(
+            &self_update::Source::default(),
+            &layout,
+            self.app_update.current(),
+            &release.version,
+            std::env::consts::ARCH,
+            &progress,
+            &irori_core::process::CancellationToken::new(),
+        )
+        .await
+        .and_then(|staged| {
+            irori_core::json_store::write(self.app_update.staged_record(), &staged)
+                .context("Couldn't save the update")?;
+            Ok(staged)
+        });
+        let result = match staged {
+            Ok(staged) => {
+                self.app_update.set_install(SelfInstall::Ready {
+                    version: staged.version,
+                });
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("installing Irori {}: {e:#}", release.version);
+                self.app_update.set_install(SelfInstall::Failed {
+                    error: format!("{e:#}"),
+                });
+                Err(e)
+            }
+        };
+        self.bus.emit(Event::AppUpdateChanged);
+        result
+    }
+
+    /// Start what puts the downloaded update in once Irori has quit; the
+    /// caller quits right after. Blocking: it may copy the helper.
+    pub fn restart_into_app_update(&self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        let record = self.app_update.staged_record().to_path_buf();
+        let staged: self_update::Staged =
+            irori_core::json_store::read(&record)?.context("No update is waiting for a restart")?;
+        self_update::start_helper(&staged, &record)
+    }
+
     /// Stop announcing `version` of Irori; a later one is announced again.
     pub fn dismiss_app_update(&self, version: &str) {
         self.app_update.dismiss(version);
@@ -601,6 +815,9 @@ impl Backend {
     /// Update the anticheat and known-fixes databases when their published
     /// checksums change.
     pub async fn refresh_compat_data(&self) {
+        if self.working_offline() {
+            return;
+        }
         match irori_extras::releases::fetch().await {
             Ok(info) => {
                 if let Err(e) =
@@ -625,30 +842,42 @@ impl Backend {
         {
             self.auto_paused.store(true, Ordering::Relaxed);
             self.pause_downloads();
-            self.bus.notice(
+            let notice = if self.working_offline() {
+                irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
+                    .message(
+                        "Irori is working offline. Downloads resume when you work online again.",
+                    )
+                    .keys(
+                        "shell.notice.downloads_paused",
+                        Some("shell.notice.downloads_paused_working_offline"),
+                        &[],
+                    )
+            } else {
                 irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
                     .message("You're offline. Downloads resume when the connection is back.")
                     .keys(
                         "shell.notice.downloads_paused",
                         Some("shell.notice.downloads_paused_message"),
                         &[],
-                    ),
-            );
+                    )
+            };
+            self.bus.notice(notice);
         } else if online && !was_online && self.auto_paused.swap(false, Ordering::Relaxed) {
             self.resume_downloads();
         }
     }
 
     pub async fn check_connectivity(&self) -> bool {
-        if self.isolated {
-            return self.is_online();
-        }
-        let ok = irori_core::http::client()
-            .head("https://www.gstatic.com/generate_204")
-            .timeout(Duration::from_secs(5))
-            .send()
-            .await
-            .is_ok();
+        let ok = match decided_online(self.settings.app().network_mode) {
+            Some(ok) => ok,
+            None if self.isolated => return self.is_online_now(),
+            None => irori_core::http::client()
+                .head("https://www.gstatic.com/generate_204")
+                .timeout(Duration::from_secs(5))
+                .send()
+                .await
+                .is_ok(),
+        };
         if self.online.swap(ok, Ordering::Relaxed) != ok {
             self.bus.emit(Event::Connectivity(ok));
         }
@@ -688,11 +917,13 @@ impl Backend {
 
     pub async fn refresh_all(&self, full: bool) {
         let shown = self.settings.app().ui.stores;
+        let offline = self.working_offline();
         let jobs = self
             .stores
             .values()
             .filter(|s| s.is_logged_in() || s.runner() == Runner::Sideload)
             .filter(|s| shown.shows(s.runner()))
+            .filter(|s| !offline || refreshes_offline(s.runner()))
             .map(|s| {
                 let s = s.clone();
                 let b = self.clone();
@@ -705,6 +936,11 @@ impl Backend {
                 }
             });
         futures::future::join_all(jobs).await;
+        if offline {
+            // Store playtime and updates are asked of the stores' servers.
+            self.rebuild_library();
+            return;
+        }
         self.sync_store_playtime().await;
         self.rebuild_library();
         self.refresh_updates().await;
@@ -796,6 +1032,9 @@ impl Backend {
         let store = self
             .store(runner)
             .ok_or_else(|| anyhow::anyhow!("{runner} is not available"))?;
+        if !refreshes_offline(runner) {
+            self.ensure_online()?;
+        }
         let result = store.refresh(full).await;
         self.note_login(runner, result.as_ref().err());
         result?;
@@ -813,6 +1052,7 @@ impl Backend {
         let store = self
             .store(runner)
             .ok_or_else(|| anyhow::anyhow!("{runner} is not available"))?;
+        self.ensure_online()?;
         let result = store.refresh_account(slot, full).await;
         self.note_login(runner, result.as_ref().err());
         result?;

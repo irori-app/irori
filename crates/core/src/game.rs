@@ -64,7 +64,8 @@ pub struct GameInfo {
     pub is_dlc: bool,
     pub genres: Vec<String>,
     pub release_date: Option<String>,
-    /// Aggregated review score, 0–100 (from GOG's GamesDB).
+    /// Aggregated review score, 0–100: GOG's GamesDB, else a critics'
+    /// score learned from the store page (Steam's Metacritic, IGDB).
     pub rating: Option<u8>,
     /// Age ratings the store's library data carries (Amazon, Epic), plus
     /// those services learned from the game's store page.
@@ -78,6 +79,13 @@ pub struct GameInfo {
         deserialize_with = "crate::game_mode::lenient"
     )]
     pub game_modes: Vec<crate::GameMode>,
+    /// How a controller plays it, when a source says ([`crate::controller_support`]).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::controller_support::lenient"
+    )]
+    pub controller_support: Option<crate::ControllerSupport>,
     /// When the account got the game, as RFC 3339, when the store says.
     pub date_added: Option<String>,
     /// The user hid the game on the store's own website.
@@ -159,15 +167,76 @@ impl GameInfo {
     }
 }
 
-/// Lowercase title with leading English articles removed, for natural sorting.
+/// Lowercase title with leading English articles removed, for natural
+/// sorting: numbers compare by value ("Game 2" before "Game 10") and Roman
+/// numerals after the first word count as their numbers ("Final Fantasy
+/// IX" before "Final Fantasy X"). Plain text order of the keys is that
+/// order.
 pub fn sort_key(title: &str) -> String {
     let lower = title.trim().to_lowercase();
-    for article in ["the ", "a ", "an "] {
-        if let Some(rest) = lower.strip_prefix(article) {
-            return rest.to_string();
+    let bare = ["the ", "a ", "an "]
+        .iter()
+        .find_map(|article| lower.strip_prefix(article))
+        .unwrap_or(&lower);
+    natural(bare)
+}
+
+/// Width numbers are padded to in sort keys; longer ones stay as they are.
+const NUMBER_WIDTH: usize = 10;
+
+/// `text` with each run of digits, and each Roman numeral word, written as
+/// a number zero-padded to [`NUMBER_WIDTH`].
+fn natural(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 8);
+    let mut word_index = 0;
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if c.is_ascii_digit() {
+            let end = rest
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len());
+            push_number(&mut out, rest[..end].trim_start_matches('0'));
+            rest = &rest[end..];
+            word_index += 1;
+        } else if c.is_alphanumeric() {
+            let end = rest
+                .find(|c: char| !c.is_alphanumeric())
+                .unwrap_or(rest.len());
+            let word = &rest[..end];
+            match roman(word, word_index) {
+                Some(n) => push_number(&mut out, &n.to_string()),
+                None => out.push_str(word),
+            }
+            rest = &rest[end..];
+            word_index += 1;
+        } else {
+            out.push(c);
+            rest = &rest[c.len_utf8()..];
         }
     }
-    lower
+    out
+}
+
+fn push_number(out: &mut String, digits: &str) {
+    for _ in digits.len()..NUMBER_WIDTH {
+        out.push('0');
+    }
+    out.push_str(digits);
+}
+
+/// The value of a Roman numeral word from II to XX, the numbering of game
+/// series. A lone letter that starts the title is a word ("X-Men", "V
+/// Rising"), and "I" alone is too often the pronoun.
+fn roman(word: &str, word_index: usize) -> Option<u32> {
+    const ROMAN: [&str; 21] = [
+        "", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii",
+        "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx",
+    ];
+    let n = ROMAN.iter().position(|r| *r == word)?;
+    if n < 2 || (word.len() == 1 && word_index == 0) {
+        return None;
+    }
+    Some(n as u32)
 }
 
 /// State of an installed game.
@@ -218,6 +287,71 @@ pub struct CloudSaveLocation {
     pub location: String,
 }
 
+/// What a save folder Irori worked out itself was worked out for: the
+/// store's default is a path inside the game's Wine prefix, so it is only
+/// right for the prefix (and its layout: Proton keeps `drive_c` in `pfx/`)
+/// it was found in.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavesPathFound {
+    /// The prefix the folder was found in.
+    pub prefix: String,
+    /// Whether that prefix was Proton's.
+    pub proton: bool,
+    /// The `savesPath` it found, so a folder the user typed over it since
+    /// is recognised as theirs.
+    pub path: String,
+    /// The GOG locations (`gogSaves`) it found, likewise.
+    pub gog_saves: Vec<CloudSaveLocation>,
+}
+
+impl SavesPathFound {
+    /// Whether the folders are still the ones Irori found.
+    pub fn is_current(&self, saves_path: &str, gog_saves: &[CloudSaveLocation]) -> bool {
+        self.path == saves_path && self.gog_saves == gog_saves
+    }
+
+    /// Whether the folders are still the ones Irori found, but the game's
+    /// prefix (or its layout) is no longer the one they were found in, so
+    /// the store's default must be worked out again.
+    pub fn is_stale(
+        &self,
+        saves_path: &str,
+        gog_saves: &[CloudSaveLocation],
+        prefix: &str,
+        proton: bool,
+    ) -> bool {
+        self.is_current(saves_path, gog_saves) && (self.prefix != prefix || self.proton != proton)
+    }
+}
+
+#[cfg(test)]
+mod saves_path_found_tests {
+    use super::*;
+
+    #[test]
+    fn only_a_found_folder_of_another_prefix_is_stale() {
+        let found = SavesPathFound {
+            prefix: "/p/a".into(),
+            proton: false,
+            path: "/p/a/drive_c/saves".into(),
+            gog_saves: Vec::new(),
+        };
+        let path = "/p/a/drive_c/saves";
+        assert!(!found.is_stale(path, &[], "/p/a", false));
+        assert!(found.is_stale(path, &[], "/p/b", false));
+        // Proton keeps drive_c in pfx/, so the layout counts too.
+        assert!(found.is_stale(path, &[], "/p/a", true));
+        // A folder typed over the found one is the user's.
+        assert!(!found.is_stale("/mine", &[], "/p/b", false));
+        let gog = [CloudSaveLocation {
+            name: "saves".into(),
+            location: "/mine".into(),
+        }];
+        assert!(!found.is_stale(path, &gog, "/p/b", false));
+    }
+}
+
 /// Store-side details that are fetched lazily for the game page.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -243,10 +377,41 @@ pub struct ExtraInfo {
         deserialize_with = "crate::game_mode::lenient"
     )]
     pub game_modes: Vec<crate::GameMode>,
+    /// How a controller plays it, when a source says ([`crate::controller_support`]).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::controller_support::lenient"
+    )]
+    pub controller_support: Option<crate::ControllerSupport>,
     /// The source that filled what the store page lacked (`"IGDB"`), named
     /// on the game page; `None` when everything is the store's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details_from: Option<String>,
+    /// A critics' score the store page or a source filling it gives
+    /// (Steam's Metacritic, IGDB's critics' rating).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<CriticScore>,
+}
+
+/// A critics' score, 0–100, and who gives it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CriticScore {
+    /// Shown as it is (`"Metacritic"`, `"IGDB"`); never translated.
+    pub source: String,
+    pub score: u8,
+}
+
+impl CriticScore {
+    /// A score of `source`, when `score` is one (1–100).
+    pub fn new(source: &str, score: f64) -> Option<Self> {
+        let score = score.round();
+        (1.0..=100.0).contains(&score).then(|| Self {
+            source: source.to_string(),
+            score: score as u8,
+        })
+    }
 }
 
 /// A trailer on a store page.
@@ -432,6 +597,74 @@ pub struct GameOverrides {
     /// guide), in their order.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<GameLink>,
+    /// The developer as the user wrote it, replacing the store's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub developer: Option<String>,
+    /// The publisher as the user wrote it, replacing the store's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    /// The genres as the user listed them, replacing the store's and the
+    /// store page's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genres: Option<Vec<String>>,
+}
+
+/// A change of several games' details at once ("Edit details…"): each part
+/// `None` leaves that detail as it is, `Some(None)` gives it back to the
+/// store, `Some(Some(_))` sets it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MetadataEdit {
+    pub developer: Option<Option<String>>,
+    pub publisher: Option<Option<String>>,
+    pub genres: Option<Option<Vec<String>>>,
+}
+
+impl MetadataEdit {
+    /// Whether it changes nothing.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Apply it to one game's overrides.
+    pub fn apply(&self, o: &mut GameOverrides) {
+        let text = |v: &Option<String>| {
+            v.as_ref()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+        };
+        if let Some(v) = &self.developer {
+            o.developer = text(v);
+        }
+        if let Some(v) = &self.publisher {
+            o.publisher = text(v);
+        }
+        if let Some(v) = &self.genres {
+            o.genres = v.as_ref().map(|list| {
+                let mut out: Vec<String> = Vec::new();
+                for g in list.iter().map(|g| g.trim()).filter(|g| !g.is_empty()) {
+                    if !out.iter().any(|o| o.eq_ignore_ascii_case(g)) {
+                        out.push(g.to_string());
+                    }
+                }
+                out
+            });
+        }
+    }
+}
+
+impl GameOverrides {
+    /// Lay the user's details over `game`'s: developer, publisher, genres.
+    pub fn apply_metadata(&self, game: &mut GameInfo) {
+        if let Some(d) = &self.developer {
+            game.developer = Some(d.clone());
+        }
+        if let Some(p) = &self.publisher {
+            game.publisher = Some(p.clone());
+        }
+        if let Some(g) = &self.genres {
+            game.genres = g.clone();
+        }
+    }
 }
 
 /// A web page the user keeps with a game.
@@ -508,6 +741,85 @@ pub type PlaytimeMap = BTreeMap<String, PlaytimeRecord>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn titles_sort_in_natural_order() {
+        let mut titles = vec![
+            "Game 10",
+            "The Game 2",
+            "Final Fantasy X",
+            "Final Fantasy IX",
+            "Final Fantasy VII",
+            "Final Fantasy XIII-2",
+            "Half-Life 2",
+            "Half-Life",
+            "Game 02",
+            "V Rising",
+            "Mega Man X",
+            "Mega Man 2",
+        ];
+        titles.sort_by_key(|t| sort_key(t));
+        assert_eq!(
+            titles,
+            [
+                "Final Fantasy VII",
+                "Final Fantasy IX",
+                "Final Fantasy X",
+                "Final Fantasy XIII-2",
+                "The Game 2",
+                "Game 02",
+                "Game 10",
+                "Half-Life",
+                "Half-Life 2",
+                "Mega Man 2",
+                "Mega Man X",
+                "V Rising",
+            ]
+        );
+        // Words aren't numbers, a leading lone letter or "I" stays a word.
+        assert_eq!(sort_key("Civilization VI"), sort_key("Civilization 6"));
+        assert_eq!(sort_key("X-Men"), "x-men");
+        assert_eq!(sort_key("Rayman I"), "rayman i");
+        assert_eq!(sort_key("Mix Tape"), "mix tape");
+        assert_eq!(sort_key("Some Game"), "some game");
+    }
+
+    #[test]
+    fn metadata_edits_set_keep_or_give_back_each_detail() {
+        let mut o = GameOverrides {
+            publisher: Some("Old".into()),
+            ..Default::default()
+        };
+        MetadataEdit {
+            developer: Some(Some(" Supergiant ".into())),
+            genres: Some(Some(vec![
+                "Roguelike".into(),
+                "roguelike".into(),
+                " ".into(),
+            ])),
+            ..Default::default()
+        }
+        .apply(&mut o);
+        assert_eq!(o.developer.as_deref(), Some("Supergiant"));
+        assert_eq!(o.publisher.as_deref(), Some("Old"), "left as it was");
+        assert_eq!(o.genres, Some(vec!["Roguelike".to_string()]));
+        MetadataEdit {
+            developer: Some(None),
+            publisher: Some(Some("  ".into())),
+            ..Default::default()
+        }
+        .apply(&mut o);
+        assert!(o.developer.is_none() && o.publisher.is_none());
+
+        let mut game = GameInfo {
+            developer: Some("Store".into()),
+            genres: vec!["Action".into()],
+            ..Default::default()
+        };
+        o.apply_metadata(&mut game);
+        assert_eq!(game.developer.as_deref(), Some("Store"));
+        assert_eq!(game.genres, ["Roguelike"]);
+    }
 
     #[test]
     fn links_take_web_addresses_only() {

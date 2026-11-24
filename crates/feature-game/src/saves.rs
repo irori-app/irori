@@ -216,6 +216,8 @@ pub struct CloudSavesPanel {
     detecting: bool,
     syncing: bool,
     output: Option<SharedString>,
+    /// The saves kept from before syncs, to put back.
+    snapshots: Entity<crate::save_snapshots::SaveSnapshotsSection>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -240,6 +242,8 @@ impl CloudSavesPanel {
         let id = game.id();
         let store_supports = b.store(id.runner).is_some_and(|s| s.supports_cloud_saves());
         let support = CloudSupport::of(&game, store_supports);
+        // A folder found in a prefix the game has left is found again below.
+        b.forget_stale_save_path(&id);
         let settings = b.settings.game(&id);
         let saved = settings.saves_path.clone();
         let path = cx.new(|cx| {
@@ -278,6 +282,10 @@ impl CloudSavesPanel {
             cx.observe(&settings_model, |_, _, cx| cx.notify()),
         ];
         let is_gog = id.runner == Runner::Gog;
+        let snapshots = {
+            let (id, title) = (id.clone(), SharedString::from(game.title.clone()));
+            cx.new(|cx| crate::save_snapshots::SaveSnapshotsSection::new(id, title, cx))
+        };
         let mut this = Self {
             id,
             game,
@@ -289,6 +297,7 @@ impl CloudSavesPanel {
             detecting: false,
             syncing: false,
             output: None,
+            snapshots,
             _subscriptions: subscriptions,
         };
         let initial = if !is_gog {
@@ -472,6 +481,8 @@ impl CloudSavesPanel {
                             this.path.update(cx, |s, cx| s.set_value(path, window, cx));
                         }
                         this.persist_path(cx);
+                        // Found, not chosen: a later change of prefix finds it again.
+                        backend(cx).note_save_path_found(&this.id);
                     }
                     Ok((_, names)) => {
                         if let Some(rows) = this.locations.as_ref()
@@ -618,6 +629,8 @@ impl CloudSavesPanel {
                 this.syncing = false;
                 match result {
                     Ok(out) => {
+                        // The sync may have kept a snapshot first.
+                        this.snapshots.update(cx, |s, cx| s.reload(cx));
                         let out = out.trim();
                         this.output = Some(if out.is_empty() {
                             t("game.saves.in_sync")
@@ -895,6 +908,7 @@ impl Render for CloudSavesPanel {
                         )
                     }),
             )
+            .child(self.snapshots.clone())
             .child(
                 v_flex()
                     .gap_1()

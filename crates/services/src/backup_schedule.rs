@@ -278,6 +278,7 @@ fn parts(prefs: &BackupPrefs) -> BackupParts {
         game_settings: prefs.game_settings,
         library: prefs.library,
         playtime: prefs.playtime,
+        installs: prefs.installs,
     }
 }
 

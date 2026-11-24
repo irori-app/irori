@@ -1,0 +1,63 @@
+{
+  "id": "ryujinx",
+  "name": "Ryujinx",
+  "license": "MIT",
+  "homepage": "https://ryujinx.app",
+  "kind": "standalone",
+  "systems": [
+    "switch"
+  ],
+  "sources": [
+    {
+      "type": "flatpak",
+      "id": "io.github.ryubing.Ryujinx"
+    },
+    {
+      "type": "flatpak",
+      "id": "org.ryujinx.Ryujinx"
+    },
+    {
+      "type": "path",
+      "names": [
+        "Ryujinx",
+        "ryujinx"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "Ryujinx.app"
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "Ryujinx",
+      "Ryujinx.sh"
+    ],
+    "macos": [
+      "Ryujinx.app"
+    ],
+    "windows": [
+      "Ryujinx.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "--fullscreen"
+        ]
+      },
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true
+    }
+  ],
+  "exitHotkey": "Esc",
+  "experimental": true
+}

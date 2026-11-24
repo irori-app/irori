@@ -4,7 +4,7 @@
   "license": "GPL-3.0-or-later",
   "homepage": "https://www.retroarch.com",
   "kind": "retroarch",
-  "systems": ["nes", "snes", "n64", "gb", "gbc", "gba", "nds", "sms", "genesis", "gamegear", "segacd", "pce", "psx", "psp"],
+  "systems": ["nes", "snes", "n64", "gb", "gbc", "gba", "nds", "sms", "genesis", "gamegear", "segacd", "pce", "psx", "psp", "dreamcast"],
   "sources": [
     {
       "type": "buildbot",
@@ -65,6 +65,7 @@
     },
     { "id": "mednafen_pce_fast", "name": "Beetle PCE Fast", "license": "GPL-2.0", "systems": ["pce"] },
     { "id": "swanstation", "name": "SwanStation", "license": "GPL-3.0", "systems": ["psx"] },
-    { "id": "ppsspp", "name": "PPSSPP", "license": "GPL-2.0-or-later", "systems": ["psp"] }
+    { "id": "ppsspp", "name": "PPSSPP", "license": "GPL-2.0-or-later", "systems": ["psp"] },
+    { "id": "flycast", "name": "Flycast", "license": "GPL-2.0", "systems": ["dreamcast"] }
   ]
 }

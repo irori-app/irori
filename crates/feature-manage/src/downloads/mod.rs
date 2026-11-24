@@ -1,27 +1,35 @@
 //! The downloads page ([`Route::Downloads`](irori_ui::Route::Downloads)).
 
+mod indicator;
 mod queue;
+mod space;
 mod speed;
+mod when_done;
+
+pub use indicator::{DownloadsBadge, DownloadsPanel, DownloadsPill};
+pub use when_done::{
+    DownloadCommand, download_command_keywords, download_commands, keep_on, run_download_command,
+};
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::chart::AreaChart;
 use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, StyledExt as _,
+    WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, rems,
+    Subscription, Task, Window, div, rems,
 };
 use irori_core::util::unix_now;
 use irori_core::{GameId, GameStatus, StatusKind};
-use irori_services::{DownloadKind, DownloadState, FileState};
+use irori_services::{DownloadKind, DownloadState, FileState, LaunchParams};
 use irori_ui::art::{LruImageCache, art_store};
 use irori_ui::components::{EmptyState, GameCover, PageHeader, ProgressSummary, SectionTitle};
 use irori_ui::i18n::{t, t_args};
@@ -29,7 +37,7 @@ use irori_ui::{Route, backend, models, navigate};
 
 use crate::common::{backend_op, card, notify_error};
 use crate::format;
-pub(crate) use queue::{QueuePresentation, Step};
+pub(crate) use queue::{Estimates, HistoryFilter, QueuePresentation, Step};
 use speed::{SPEED_SAMPLES, SpeedHistory};
 
 /// History rows rendered per "Show more" step.
@@ -47,7 +55,18 @@ pub struct DownloadsView {
     pending_updates: usize,
     queuing_updates: bool,
     history_shown: usize,
+    /// Which finished downloads the history lists.
+    history_filter: HistoryFilter,
+    /// When the queue's downloads start and finish.
+    estimates: Estimates,
+    /// The queue the disks were last read for.
+    space_key: space::SpaceKey,
+    /// What the queue still downloads to each disk, and what is free there.
+    disks: Vec<irori_services::QueueDisk>,
     images: Entity<LruImageCache>,
+    /// Redraws the countdown to sleeping or powering off every second while
+    /// it runs, and only then.
+    countdown_tick: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -65,11 +84,11 @@ impl DownloadsView {
                 cx.notify();
             }),
             cx.observe(&art_store(cx), |_, _, cx| cx.notify()),
+            // Progress while downloading, and the history's Play following a
+            // launch; statuses change only while something happens.
             cx.observe(&m.statuses, |this, _, cx| {
-                let changed = this.sample_speed(cx);
-                if changed || this.queue.current.is_some() {
-                    cx.notify();
-                }
+                this.sample_speed(cx);
+                cx.notify();
             }),
         ];
         let mut view = Self {
@@ -78,7 +97,12 @@ impl DownloadsView {
             pending_updates: 0,
             queuing_updates: false,
             history_shown: HISTORY_PAGE,
+            history_filter: HistoryFilter::All,
+            estimates: Estimates::default(),
+            space_key: space::SpaceKey::new(),
+            disks: Vec::new(),
             images: LruImageCache::new(48, cx),
+            countdown_tick: None,
             _subscriptions: subscriptions,
         };
         view.rebuild(cx);
@@ -99,7 +123,30 @@ impl DownloadsView {
             .iter()
             .filter(|id| !downloads.active.iter().any(|i| &i.id == *id))
             .count();
+        let space_key = space::key_of(downloads);
+        if space_key != self.space_key {
+            self.space_key = space_key;
+            self.read_disks(cx);
+        }
         self.sample_speed(cx);
+    }
+
+    /// Read the queue's disks again, off the UI thread.
+    fn read_disks(&mut self, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let task = irori_ui::run(cx, async move {
+            Ok(tokio::task::spawn_blocking(move || b.download_disks()).await?)
+        });
+        cx.spawn(async move |this, cx| {
+            // Unreadable disks leave the line out; the queue still runs.
+            if let Ok(disks) = task.await {
+                let _ = this.update(cx, |this, cx| {
+                    this.disks = disks;
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
     }
 
     fn sample_speed(&mut self, cx: &mut Context<Self>) -> bool {
@@ -113,7 +160,22 @@ impl DownloadsView {
             .as_ref()
             .and_then(|id| models(cx).statuses.read(cx).get(id))
             .and_then(|s| s.progress);
-        self.speeds.record(id.as_ref(), progress)
+        let changed = self.speeds.record(id.as_ref(), progress);
+        // From the averaged rate, not the latest reading, so the times
+        // shown hold still while the speed wobbles.
+        self.estimates = if id.is_some() && !self.queue.paused {
+            let rate = self.speeds.average_download();
+            let sizes: Vec<u64> = self
+                .queue
+                .waiting
+                .iter()
+                .map(|r| r.item.download_size)
+                .collect();
+            queue::estimate(queue::current_left(progress, rate), &sizes, rate)
+        } else {
+            Estimates::default()
+        };
+        changed
     }
 
     fn toggle_pause(&mut self, cx: &mut Context<Self>) {
@@ -221,6 +283,47 @@ impl DownloadsView {
         });
     }
 
+    /// Play a game whose download finished. Its status (Launching, then
+    /// Playing) shows on the row; a failure is told with what fixes it.
+    fn play(&mut self, id: &GameId, title: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let b = backend(cx);
+        let launch_id = id.clone();
+        let task = irori_ui::run(cx, async move {
+            b.launch_with(&launch_id, LaunchParams::default()).await
+        });
+        let (id, failure) = (
+            id.clone(),
+            t_args("manage.downloads.history.play_failed", &[("title", title)]),
+        );
+        cx.spawn_in(window, async move |_, cx| {
+            if let Err(e) = task.await {
+                cx.update(|window, cx| {
+                    // Saves that changed in both places, a missing BIOS or
+                    // emulator: the fix is offered instead of the error.
+                    if !irori_ui::save_conflict::resolve_launch_error(
+                        &id,
+                        LaunchParams::default(),
+                        &e,
+                        window,
+                        cx,
+                    ) {
+                        notify_error(failure, &e, window, cx);
+                    }
+                })
+                .ok();
+            }
+        })
+        .detach();
+    }
+
+    fn set_history_filter(&mut self, filter: HistoryFilter, cx: &mut Context<Self>) {
+        if self.history_filter != filter {
+            self.history_filter = filter;
+            self.history_shown = HISTORY_PAGE;
+            cx.notify();
+        }
+    }
+
     fn confirm_cancel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(current) = self.queue.current.as_ref() else {
             return;
@@ -299,6 +402,12 @@ impl DownloadsView {
                 )
             });
         }
+        if let Some(secs) = self.estimates.done {
+            parts.push(t_args(
+                "manage.downloads.summary.finish",
+                &[("when", &format::finish_from_now(secs))],
+            ));
+        }
         if self.pending_updates > 0 {
             let count = self.pending_updates.to_string();
             parts.push(if self.pending_updates == 1 {
@@ -317,8 +426,33 @@ impl DownloadsView {
         }
     }
 
+    /// Keep redrawing while a countdown runs; stop when it ends.
+    fn sync_countdown_tick(&mut self, counting: bool, cx: &mut Context<Self>) {
+        if !counting {
+            self.countdown_tick = None;
+        } else if self.countdown_tick.is_none() {
+            self.countdown_tick = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(when_done::COUNTDOWN_TICK)
+                        .await;
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            }));
+        }
+    }
+
     fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let mut header = PageHeader::new(t("manage.downloads.title")).description(self.summary());
+        let queue = models(cx).downloads.read(cx).queue.clone();
+        if let Some(choice) = when_done::choice_button(&queue, cx) {
+            header = header.action(choice);
+        }
+        if let Some(screen_off) = when_done::screen_off_button(&queue, cx) {
+            header = header.action(screen_off);
+        }
         if self.pending_updates > 0 {
             header = header.action(
                 Button::new("update-all")
@@ -534,6 +668,13 @@ impl DownloadsView {
                 format::eta(progress.eta_secs),
             ))
             .child(stat(
+                t("manage.downloads.stat.finishes"),
+                self.estimates
+                    .current
+                    .map(|secs| format::finish_from_now(secs).to_string())
+                    .unwrap_or_else(|| "—".to_string()),
+            ))
+            .child(stat(
                 t("manage.downloads.stat.limit"),
                 format::bottleneck(progress.bottleneck).to_string(),
             ))
@@ -545,10 +686,24 @@ impl DownloadsView {
             let theme = cx.theme();
             let id = row.item.id.clone();
             let key = id.key();
+            let starts = self
+                .estimates
+                .starts
+                .get(row.waiting_ix)
+                .copied()
+                .flatten()
+                .map(|secs| {
+                    t_args(
+                        "manage.downloads.queue.starts",
+                        &[("when", &format::finish_from_now(secs))],
+                    )
+                    .to_string()
+                });
             let meta = [
                 Some(queue::kind_label(&row.item.kind).to_string()),
                 Some(queue::store_label(id.runner).to_string()),
                 format::size(row.item.download_size),
+                starts,
                 Some(
                     t_args(
                         "manage.downloads.queue.added",
@@ -761,13 +916,22 @@ impl DownloadsView {
 
     fn render_history(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let now = unix_now();
-        let total = self.queue.history.len();
-        let rows = self
-            .queue
-            .history
-            .iter()
-            .take(self.history_shown)
-            .map(|row| {
+        let filter = self.history_filter;
+        let total = self.queue.history_in(filter).count();
+        let shown: Vec<_> = {
+            let statuses = models(cx).statuses.read(cx);
+            self.queue
+                .history_in(filter)
+                .take(self.history_shown)
+                .map(|row| (row, statuses.get(&row.item.id).map(|s| s.kind)))
+                .collect()
+        };
+        let rows =
+            shown.into_iter().map(|(row, status)| {
+                // Launching or already running: Play waits, or is not offered.
+                let launching = status == Some(StatusKind::Launching);
+                let playable = row.is_playable()
+                    && !status.is_some_and(|k| k.is_busy() && k != StatusKind::Launching);
                 let theme = cx.theme();
                 let id = row.item.id.clone();
                 let key = format!("{}-{}", id.key(), row.item.finished_at.unwrap_or(0));
@@ -803,7 +967,9 @@ impl DownloadsView {
                 .filter(|s| !s.is_empty())
                 .collect::<Vec<_>>()
                 .join(" · ");
-                let (retry_id, remove_id, page_id) = (id.clone(), id.clone(), id.clone());
+                let (retry_id, remove_id, page_id, play_id) =
+                    (id.clone(), id.clone(), id.clone(), id.clone());
+                let play_title = row.item.title.clone();
                 let retryable = row.is_retryable();
                 let is_done = row.item.state == DownloadState::Done;
                 h_flex()
@@ -852,6 +1018,21 @@ impl DownloadsView {
                                         })),
                                 )
                             })
+                            .when(playable, |this| {
+                                this.child(
+                                    Button::new("play")
+                                        .small()
+                                        .primary()
+                                        .icon(IconName::Play)
+                                        .label(t("manage.downloads.history.play"))
+                                        .loading(launching)
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            if !launching {
+                                                this.play(&play_id, &play_title, window, cx)
+                                            }
+                                        })),
+                                )
+                            })
                             .when(is_done, |this| {
                                 this.child(
                                     Button::new("open")
@@ -876,17 +1057,42 @@ impl DownloadsView {
                             ),
                     )
             });
+        let filters = ButtonGroup::new("history-filter")
+            .small()
+            .outline()
+            .children(HistoryFilter::ALL.iter().enumerate().map(|(ix, f)| {
+                Button::new(ElementId::Name(format!("history-filter-{ix}").into()))
+                    .label(f.label())
+                    .selected(*f == filter)
+            }))
+            .on_click(cx.listener(|this, clicked: &Vec<usize>, _, cx| {
+                if let Some(f) = clicked.first().and_then(|ix| HistoryFilter::ALL.get(*ix)) {
+                    this.set_history_filter(*f, cx);
+                }
+            }));
         v_flex()
             .gap_2()
             .child(
                 SectionTitle::new(t("manage.downloads.history.title")).trailing(
-                    Button::new("clear-history")
-                        .ghost()
-                        .small()
-                        .label(t("manage.downloads.history.clear"))
-                        .on_click(|_, _, cx| backend_op(cx, |b| b.clear_finished_downloads())),
+                    h_flex().gap_2().child(filters).child(
+                        Button::new("clear-history")
+                            .ghost()
+                            .small()
+                            .label(t("manage.downloads.history.clear"))
+                            .on_click(|_, _, cx| backend_op(cx, |b| b.clear_finished_downloads())),
+                    ),
                 ),
             )
+            .when(total == 0, |this| {
+                this.child(
+                    div()
+                        .px_3()
+                        .py_2()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(t("manage.downloads.history.filter.none")),
+                )
+            })
             .child(v_flex().gap_1().children(rows))
             .when(total > self.history_shown, |this| {
                 this.child(
@@ -910,6 +1116,8 @@ impl DownloadsView {
 
 impl Render for DownloadsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let countdown = models(cx).downloads.read(cx).queue.countdown;
+        self.sync_countdown_tick(countdown.is_some(), cx);
         let files = self.render_files(cx);
         let body: AnyElement = if self.queue.is_empty() && files.is_none() {
             EmptyState::new(IconName::Download, t("manage.downloads.empty.title"))
@@ -918,7 +1126,12 @@ impl Render for DownloadsView {
         } else {
             v_flex()
                 .gap_6()
-                .child(self.render_current(window, cx))
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .child(self.render_current(window, cx))
+                        .children(space::render(&self.disks, cx)),
+                )
                 .when(!self.queue.waiting.is_empty(), |this| {
                     this.child(self.render_queue(cx))
                 })
@@ -931,7 +1144,15 @@ impl Render for DownloadsView {
         v_flex()
             .size_full()
             .min_h_0()
-            .child(div().px_6().pt_6().pb_4().child(self.render_header(cx)))
+            .child(
+                v_flex()
+                    .px_6()
+                    .pt_6()
+                    .pb_4()
+                    .gap_4()
+                    .child(self.render_header(cx))
+                    .children(countdown.map(|c| when_done::countdown_banner(&c, cx))),
+            )
             .child(
                 div()
                     .id("downloads-body")

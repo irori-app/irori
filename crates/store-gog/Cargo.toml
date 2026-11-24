@@ -30,6 +30,11 @@ sha2.workspace = true
 hex.workspace = true
 dirs.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+# GOG Galaxy's installs (`galaxy.rs`); irori-launchers-data reads the
+# registry at the same version.
+windows-registry = "0.6"
+
 [dev-dependencies]
 md5.workspace = true
 tempfile = "3"

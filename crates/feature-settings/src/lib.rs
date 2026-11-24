@@ -20,7 +20,7 @@
 //! (`update_app` / `set_game_value`). Text fields commit on blur or Enter,
 //! never per keystroke.
 
-mod app_update;
+pub mod app_update;
 mod appearance;
 mod artwork;
 mod backup;
@@ -32,12 +32,14 @@ pub mod feedback;
 mod form;
 mod game_view;
 mod graphics_mods;
+mod how_it_starts;
 pub mod hud;
 mod i18n;
 mod igdb;
 mod launch_presets;
 mod launch_programs;
 mod launchbox;
+mod library_folders;
 mod logs;
 mod optiscaler;
 mod optiscaler_key;
@@ -47,6 +49,7 @@ pub mod registry;
 mod renodx;
 mod replay;
 mod reshade;
+mod restore_paths;
 mod saves;
 mod setup_card;
 mod steam_compat;

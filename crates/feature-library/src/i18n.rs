@@ -59,6 +59,16 @@ pub(crate) fn status_label(kind: StatusKind) -> String {
     t(key).to_string()
 }
 
+/// "Queued · #2": a waiting download with its place in line, or plain
+/// "Queued" when it has none (a paused download that is the queue's own).
+pub(crate) fn queued_label(place: Option<usize>) -> String {
+    match place {
+        Some(place) => t_args("library.status.queued_at", &[("place", &place.to_string())]),
+        None => t("library.status.queued"),
+    }
+    .to_string()
+}
+
 /// Name of a sort order.
 pub(crate) fn sort_label(sort: LibrarySort) -> String {
     let key = match sort {
@@ -70,6 +80,8 @@ pub(crate) fn sort_label(sort: LibrarySort) -> String {
         LibrarySort::ReleaseDate => "library.sort.release_date",
         LibrarySort::DateAdded => "library.sort.date_added",
         LibrarySort::Score => "library.sort.score",
+        LibrarySort::TimesPlayed => "library.sort.times_played",
+        LibrarySort::Rating => "library.sort.rating",
     };
     t(key).to_string()
 }
