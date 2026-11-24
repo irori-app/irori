@@ -691,7 +691,7 @@ impl Render for GameSettingsView {
         let known = backend(cx).game(&self.id).is_some();
         let id = self.id.clone();
         let nav = v_flex()
-            .w_56()
+            .w(rems(15.))
             .flex_shrink_0()
             .gap_1()
             .p_3()

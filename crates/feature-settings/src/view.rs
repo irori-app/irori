@@ -484,7 +484,7 @@ impl SettingsView {
     fn render_nav(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let searching = !self.query.trim().is_empty();
         let mut nav = v_flex()
-            .w_56()
+            .w(rems(15.))
             .flex_shrink_0()
             .gap_0p5()
             .p_3()
@@ -553,6 +553,7 @@ impl SettingsView {
                 .child(
                     TabBar::new(id)
                         .underline()
+                        .large()
                         .selected_index(selected)
                         .children(tabs.iter().map(|tab| Tab::new().label(t(tab.label_key))))
                         .on_click(cx.listener(move |this, ix: &usize, window, cx| {

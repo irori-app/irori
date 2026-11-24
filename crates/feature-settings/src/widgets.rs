@@ -331,6 +331,8 @@ pub(crate) fn nav_button(
     // that fills it and lines them up at the start.
     Button::new(id)
         .ghost()
+        .large()
+        .h_9()
         .w_full()
         .accessibility_label(label.clone())
         .child(

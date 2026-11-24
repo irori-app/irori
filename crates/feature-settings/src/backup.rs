@@ -270,6 +270,7 @@ impl Render for BackupPanel {
         };
         let tabs = TabBar::new("backup-tabs")
             .underline()
+            .large()
             .selected_index(selected)
             .children(
                 crate::layout::BACKUP_TABS
