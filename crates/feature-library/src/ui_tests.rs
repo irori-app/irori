@@ -459,12 +459,20 @@ fn picking_games_for_bulk_actions(cx: &mut TestAppContext) {
         assert!(vcx.debug_bounds("bulk-steam-remove").is_some());
     }
     // Redrawing with everything picked doesn't work out the bar again,
-    // unless the library changed meanwhile (another test's game arriving
-    // in the state folder they share).
+    // unless one of its inputs changed meanwhile: the library or the shown
+    // list (another test's game arriving in the state folder they share,
+    // a filter's data arriving in the background) or a game's status.
     let seen = |cx: &mut TestAppContext| {
         cx.read(|cx| {
             let model = models(cx).library.read(cx);
-            (model.snapshot.revision, Arc::as_ptr(&model.user) as usize)
+            let shown = view.read(cx).visible_games();
+            let statuses = models(cx).statuses.read(cx).all().count();
+            (
+                model.snapshot.revision,
+                Arc::as_ptr(&model.user) as usize,
+                Arc::as_ptr(&shown) as *const () as usize,
+                statuses,
+            )
         })
     };
     let (computes, before) = (cx.read(|cx| view.read(cx).bulk_computes()), seen(cx));
