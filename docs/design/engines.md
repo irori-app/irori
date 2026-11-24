@@ -173,6 +173,10 @@ names the same game (and so may carry the region), else by the title. Titles are
 on every scan, so games already in the library are renamed under the same app name; a
 title the user set still wins.
 
+An extension two kinds of file share can be told apart by the first bytes: a system's
+`headers` pick it among several claimants, and its `notHeaders` refuse a file even when
+it is the only one (DOOM's `IWAD`/`PWAD` data files share the Wii's `.wad`).
+
 PS3 games may also be disc images (`.iso`, which RPCS3 boots directly since early
 2026). A system may name marker files a disc of it holds at its root (`discFiles`:
 `PS3_DISC.SFB` for PS3, `UMD_DATA.BIN` for PSP); an image holding one is that system's

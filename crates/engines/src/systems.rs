@@ -105,6 +105,11 @@ pub struct System {
     pub folders: Vec<String>,
     #[serde(default)]
     pub headers: Vec<HeaderRule>,
+    /// Headers that mean a file with one of the system's extensions is
+    /// something else: DOOM's `IWAD`/`PWAD` data files share the Wii's
+    /// `.wad` (#207).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub not_headers: Vec<HeaderRule>,
     #[serde(default)]
     pub bios: BiosSpec,
     /// Engines that play it, best first (`engine` or `retroarch:<core>`).
@@ -228,12 +233,12 @@ pub fn detect(path: &Path, folder_hint: Option<&'static System>) -> Option<&'sta
     if let Some(hint) = folder_hint
         && (hint.has_extension(&ext) || matches!(ext.as_str(), "zip" | "7z"))
     {
-        return Some(hint);
+        return (!refuses(hint, path)).then_some(hint);
     }
     let candidates = by_extension(&ext);
-    match candidates.as_slice() {
+    let picked = match candidates.as_slice() {
         [] => None,
-        [one] if one.headers.is_empty() || !needs_sniff(&ext) => Some(one),
+        [one] if one.headers.is_empty() || !needs_sniff(&ext) => Some(*one),
         _ => {
             let header = read_header(path).ok()?;
             candidates
@@ -246,7 +251,17 @@ pub fn detect(path: &Path, folder_hint: Option<&'static System>) -> Option<&'sta
                     (candidates.len() == 1).then(|| candidates[0])
                 })
         }
-    }
+    }?;
+    (!refuses(picked, path)).then_some(picked)
+}
+
+/// Whether the file at `path` starts with one of `system`'s
+/// [`System::not_headers`]. Opens the file only for a system that has some;
+/// an unreadable file isn't refused.
+fn refuses(system: &System, path: &Path) -> bool {
+    !system.not_headers.is_empty()
+        && read_header(path)
+            .is_ok_and(|header| system.not_headers.iter().any(|r| r.matches(&header)))
 }
 
 /// Generic extensions that many systems share; their header decides.
@@ -462,7 +477,7 @@ mod tests {
                     assert_eq!(md5, &md5.to_ascii_lowercase());
                 }
             }
-            for rule in &s.headers {
+            for rule in s.headers.iter().chain(&s.not_headers) {
                 assert!(
                     !rule.bytes().is_empty(),
                     "{} has an empty header rule",
@@ -470,6 +485,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// DOOM's data files share the Wii's `.wad` but say `IWAD` or `PWAD`
+    /// first; a Wii package starts with its header's length (#207).
+    #[test]
+    fn doom_wads_are_not_wii_games() {
+        let dir = tempfile::tempdir().unwrap();
+        let wii = get("wii").unwrap();
+        for (name, head) in [
+            ("doom2.wad", &b"IWAD\x40\0\0\0"[..]),
+            ("mod.wad", b"PWAD\x02\0\0\0"),
+        ] {
+            let file = dir.path().join(name);
+            std::fs::write(&file, head).unwrap();
+            assert!(detect(&file, None).is_none(), "{name}");
+            assert!(detect(&file, Some(wii)).is_none(), "{name} in a Wii folder");
+        }
+        let package = dir.path().join("channel.wad");
+        std::fs::write(&package, b"\0\0\0\x20Is\0\0").unwrap();
+        assert_eq!(detect(&package, None).map(|s| s.id.as_str()), Some("wii"));
     }
 
     #[test]

@@ -313,6 +313,7 @@
       "folders": [
         "wii"
       ],
+      "notHeaders": [{"offset": 0, "ascii": "IWAD"}, {"offset": 0, "ascii": "PWAD"}],
       "headers": [
         {
           "offset": 24,
