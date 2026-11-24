@@ -667,6 +667,8 @@
   "settings.field.art_cache_limit.help": "Capas e fundos transferidos e as cópias mais pequenas feitas a partir deles. Acima deste tamanho são removidas as imagens não mostradas há mais tempo; voltam a ser transferidas quando necessário. As imagens no ecrã nunca são removidas.",
   "settings.field.igdb.help": "Completa as descrições, géneros, datas de lançamento e capturas de ecrã que faltam nas páginas das lojas, e oferece as imagens do IGDB no seletor de imagens. Um jogo só é procurado quando o abre, e as suas próprias alterações prevalecem sempre.",
   "settings.field.panel_igdb.label": "Aplicação do IGDB",
+  "settings.field.vndb.label": "Detalhes e imagens de romances visuais do VNDB",
+  "settings.field.vndb.help": "Completa descrições, datas de lançamento, programadores e capturas de ecrã de romances visuais que faltam nas páginas das lojas e no IGDB, e sugere as capas e capturas do VNDB no seletor de imagens. Não é preciso conta. Um jogo só é procurado quando o abre, as imagens que os utilizadores do VNDB classificam como sexuais ou violentas nunca são mostradas, e as suas próprias alterações prevalecem sempre.",
   "settings.igdb.description": "O IGDB precisa de uma aplicação Twitch sua. Registe uma e introduza aqui o respetivo ID de cliente e um segredo de cliente. O Irori guarda-os encriptados neste computador.",
   "settings.igdb.open_guide": "Como registar uma",
   "settings.igdb.client_id": "ID de cliente",

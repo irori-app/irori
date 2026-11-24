@@ -667,6 +667,8 @@
   "settings.field.art_cache_limit.help": "Stažené obaly a pozadí a jejich zmenšené kopie. Nad tuto velikost se odstraní obrázky, které se nejdéle nezobrazily; v případě potřeby se stáhnou znovu. Obrázky na obrazovce se nikdy neodstraní.",
   "settings.field.igdb.help": "Doplní popisy, žánry, data vydání a snímky obrazovky, které stránky obchodů neuvádějí, a nabídne grafiku z IGDB při výběru obrázků. Hra se vyhledá, až když ji otevřete, a vaše vlastní úpravy mají vždy přednost.",
   "settings.field.panel_igdb.label": "Aplikace pro IGDB",
+  "settings.field.vndb.label": "Podrobnosti a grafika vizuálních románů z VNDB",
+  "settings.field.vndb.help": "Doplňuje popisy, data vydání, vývojáře a snímky obrazovky vizuálních románů, které na stránkách obchodů a v IGDB chybějí, a nabízí obaly a snímky z VNDB ve výběru grafiky. Účet není potřeba. Hra se vyhledá, až když ji otevřete, obrázky, které uživatelé VNDB označili jako sexuální nebo násilné, se nikdy nezobrazí, a vaše vlastní úpravy mají vždy přednost.",
   "settings.igdb.description": "IGDB vyžaduje vlastní aplikaci na Twitchi. Zaregistrujte si ji a pak sem zadejte její ID klienta a tajný klíč klienta. Irori je uchovává šifrované v tomto počítači.",
   "settings.igdb.open_guide": "Jak ji zaregistrovat",
   "settings.igdb.client_id": "ID klienta",

@@ -359,10 +359,11 @@ impl GamePage {
         };
         let dlcs = self.render_dlcs(game, window, cx);
         let igdb = self.render_igdb_source(game, cx);
+        let vndb = self.render_vndb_source(game, cx);
         v_flex()
             .max_w(rems(52.))
             .gap_6()
-            .child(v_flex().gap_2().child(body).children(igdb))
+            .child(v_flex().gap_2().child(body).children(igdb).children(vndb))
             .children(dlcs)
             .children(self.render_redmod(game, cx))
             .into_any_element()
@@ -377,7 +378,7 @@ impl GamePage {
         let extra = self.extra.ready()?;
         let page = cx.entity().downgrade();
         let (id, title) = (self.id.clone(), game.title.clone());
-        let text = if extra.details_from.is_some() {
+        let text = if extra.filled_by(irori_extras::igdb::SOURCE_NAME) {
             t("game.igdb.details_from")
         } else {
             t("game.igdb.nothing_added")
@@ -401,6 +402,51 @@ impl GamePage {
                                     page.update(cx, |this, cx| this.load_extra(window, cx)).ok();
                                 });
                             crate::igdb_match::open_igdb_match_dialog(
+                                id.clone(),
+                                title.clone(),
+                                on_chosen,
+                                window,
+                                cx,
+                            );
+                        }),
+                )
+                .into_any_element(),
+        )
+    }
+
+    /// While VNDB is on: whether it filled in this page, with "Change VNDB
+    /// match".
+    fn render_vndb_source(&self, game: &Arc<GameInfo>, cx: &Context<Self>) -> Option<AnyElement> {
+        if !backend(cx).settings.app().vndb {
+            return None;
+        }
+        let extra = self.extra.ready()?;
+        let page = cx.entity().downgrade();
+        let (id, title) = (self.id.clone(), game.title.clone());
+        let text = if extra.filled_by(irori_extras::vndb::SOURCE_NAME) {
+            t("game.vndb.details_from")
+        } else {
+            t("game.vndb.nothing_added")
+        };
+        Some(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(div().min_w_0().truncate().child(text))
+                .child(
+                    Button::new("vndb-change-match")
+                        .ghost()
+                        .xsmall()
+                        .label(t("game.vndb.change_match"))
+                        .on_click(move |_, window, cx| {
+                            let page = page.clone();
+                            let on_chosen: crate::vndb_match::OnChosen =
+                                std::rc::Rc::new(move |window, cx| {
+                                    page.update(cx, |this, cx| this.load_extra(window, cx)).ok();
+                                });
+                            crate::vndb_match::open_vndb_match_dialog(
                                 id.clone(),
                                 title.clone(),
                                 on_chosen,

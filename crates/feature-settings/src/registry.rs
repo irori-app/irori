@@ -2307,6 +2307,23 @@ pub static FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["igdb", "twitch", "client id", "client secret"]),
     app(
+        "iroriVndb",
+        "settings.field.vndb.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.vndb.help")
+    .keywords(&[
+        "vndb",
+        "visual novel",
+        "metadata",
+        "description",
+        "developer",
+        "cover",
+        "screenshots",
+    ]),
+    app(
         "panel.eos-overlay",
         "settings.field.panel_eos_overlay.label",
         Advanced,

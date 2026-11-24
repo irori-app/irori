@@ -667,6 +667,8 @@
   "settings.field.art_cache_limit.help": "다운로드한 표지와 배경, 그리고 그것으로 만든 작은 사본입니다. 이 크기를 넘으면 가장 오래 표시되지 않은 이미지부터 삭제되며, 필요할 때 다시 다운로드됩니다. 화면에 표시 중인 이미지는 삭제되지 않습니다.",
   "settings.field.igdb.help": "스토어 페이지에 없는 설명, 장르, 출시일, 스크린샷을 채우고, 이미지 선택에서 IGDB의 이미지를 제공합니다. 게임은 열 때만 검색되며, 직접 수정한 내용이 항상 우선합니다.",
   "settings.field.panel_igdb.label": "IGDB 애플리케이션",
+  "settings.field.vndb.label": "VNDB의 비주얼 노벨 정보와 이미지",
+  "settings.field.vndb.help": "스토어 페이지와 IGDB에 없는 비주얼 노벨의 설명, 출시일, 개발사, 스크린샷을 채우고, 이미지 선택에서 VNDB의 표지와 스크린샷을 제안합니다. 계정은 필요하지 않습니다. 게임은 열 때만 검색되며, VNDB 사용자가 선정적이거나 폭력적이라고 평가한 이미지는 표시되지 않고, 직접 수정한 내용이 항상 우선합니다.",
   "settings.igdb.description": "IGDB를 사용하려면 직접 만든 Twitch 애플리케이션이 필요합니다. 애플리케이션을 등록한 다음 클라이언트 ID와 클라이언트 시크릿을 여기에 입력하세요. Irori는 이 컴퓨터에 암호화하여 보관합니다.",
   "settings.igdb.open_guide": "등록하는 방법",
   "settings.igdb.client_id": "클라이언트 ID",

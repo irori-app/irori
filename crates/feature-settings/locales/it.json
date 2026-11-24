@@ -667,6 +667,8 @@
   "settings.field.art_cache_limit.help": "Copertine e sfondi scaricati e le copie più piccole ricavate da essi. Oltre questa dimensione vengono rimosse le immagini non mostrate da più tempo; vengono riscaricate quando servono. Le immagini sullo schermo non vengono mai rimosse.",
   "settings.field.igdb.help": "Completa descrizioni, generi, date di uscita e screenshot che mancano nelle pagine dei negozi e offre le immagini di IGDB nel selettore di immagini. Un gioco viene cercato solo quando lo apri e le tue modifiche hanno sempre la precedenza.",
   "settings.field.panel_igdb.label": "Applicazione IGDB",
+  "settings.field.vndb.label": "Dettagli e immagini delle visual novel da VNDB",
+  "settings.field.vndb.help": "Completa descrizioni, date di uscita, sviluppatori e screenshot delle visual novel che mancano nelle pagine dei negozi e su IGDB, e propone le copertine e gli screenshot di VNDB nella scelta delle immagini. Non serve un account. Un gioco viene cercato solo quando lo apri, le immagini che gli utenti di VNDB giudicano sessuali o violente non vengono mai mostrate e le tue modifiche hanno sempre la precedenza.",
   "settings.igdb.description": "IGDB richiede un’applicazione Twitch tua. Registrane una, poi inserisci qui il suo ID client e un segreto client. Irori li conserva cifrati su questo computer.",
   "settings.igdb.open_guide": "Come registrarne una",
   "settings.igdb.client_id": "ID client",

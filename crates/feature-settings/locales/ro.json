@@ -667,6 +667,8 @@
   "settings.field.art_cache_limit.help": "Coperțile și fundalurile descărcate și copiile mai mici făcute din ele. Peste această dimensiune se șterg imaginile neafișate de cel mai mult timp; se descarcă din nou la nevoie. Imaginile de pe ecran nu se șterg niciodată.",
   "settings.field.igdb.help": "Completează descrierile, genurile, datele de lansare și capturile de ecran care lipsesc din paginile magazinelor și oferă imaginile din IGDB în selectorul de imagini. Un joc este căutat doar când îl deschizi, iar modificările tale au mereu prioritate.",
   "settings.field.panel_igdb.label": "Aplicația IGDB",
+  "settings.field.vndb.label": "Detalii și imagini ale romanelor vizuale din VNDB",
+  "settings.field.vndb.help": "Completează descrierile, datele de lansare, dezvoltatorii și capturile de ecran ale romanelor vizuale care lipsesc din paginile magazinelor și din IGDB și oferă copertele și capturile din VNDB în selectorul de imagini. Nu este nevoie de cont. Un joc este căutat doar când îl deschizi, imaginile pe care utilizatorii VNDB le consideră sexuale sau violente nu sunt afișate niciodată, iar modificările tale au mereu prioritate.",
   "settings.igdb.description": "IGDB are nevoie de o aplicație Twitch proprie. Înregistrează una, apoi introdu aici ID-ul de client și un secret de client. Irori le păstrează criptate pe acest computer.",
   "settings.igdb.open_guide": "Cum înregistrezi una",
   "settings.igdb.client_id": "ID client",
