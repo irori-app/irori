@@ -6,6 +6,8 @@ mod app_update;
 mod autostart;
 mod cli;
 mod crash;
+#[cfg(all(test, target_os = "linux"))]
+mod dbus_tests;
 mod export;
 mod headless;
 mod import;
