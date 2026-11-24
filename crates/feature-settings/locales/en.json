@@ -1400,6 +1400,8 @@
   "settings.field.ui_cover_categories.help": "Each game’s categories along the foot of its cover in the grid, the first two and how many more.",
   "settings.field.ui_group_copies.label": "Show copies from several stores as one game",
   "settings.field.ui_group_copies.help": "A game owned on Steam, Epic Games and GOG shows once, playing the installed copy. Its page switches between the copies; each keeps its own playtime and achievements.",
+  "settings.field.ui_program_icon_art.label": "Show the program's icon on games without art",
+  "settings.field.ui_program_icon_art.help": "A game without cover art, such as one you added yourself, shows the icon of its Windows program on its stand-in cover. Your own art and the store's always come first.",
   "settings.field.umu_id.label": "umu game id",
   "settings.field.umu_id.help": "umu applies the fixes published for this id when it runs the game with Proton. Leave it empty to find it from the store, the Steam app id or the title.",
   "settings.field.xbox.label": "Xbox store",

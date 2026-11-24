@@ -1004,6 +1004,19 @@ cx.spawn_in(window, async move |this, cx| {
   original with its thumbnails) go least recently used first. Art the store hands out
   is noted with `art_cache::note_used` and never removed; each trim dates its files to
   now, so recency survives restarts without file writes on the UI thread.
+- A game without cover art (`cover_art()` empty after the user's overrides, not a ROM)
+  whose program is a Windows `.exe` gets that program's icon as
+  `GameInfo::program_icon`, a `file://` URL (`irori-services`' `program_icons.rs`,
+  `iroriUi.programIconArt`, on by default). The icon is read off the rebuild, on a
+  blocking thread, by `irori_extras::program_icon` (the bounded PE resource reader
+  `shortcuts::pe_icon` under `#![forbid(unsafe_code)]`: the first `RT_GROUP_ICON`, its
+  largest `RT_ICON`, PNG or bitmap, small ones enlarged by whole multiples), stored as
+  `<cache>/program-icons/<digest of path, size, modified time>.png` and noted with
+  every game's answer (none included) in `<cache>/program-icons.json`, so the rebuild
+  reads no file; a new answer rebuilds the library. `GameCover` and Big Picture's tiles
+  draw it whole, centred on the stand-in wash above the title
+  (`components::program_icon_cover`); the user's and the store's art always win.
+  Native Linux and macOS programs give none (ELF carries no icon; `.icns` isn't read).
 
 **Theme and translucency:**
 

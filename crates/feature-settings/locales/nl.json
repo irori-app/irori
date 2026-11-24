@@ -1400,6 +1400,8 @@
   "settings.field.ui_cover_categories.help": "De categorieën van elke game onderaan de cover in het raster: de eerste twee en hoeveel er nog meer zijn.",
   "settings.field.ui_group_copies.label": "Exemplaren uit meerdere winkels als één game tonen",
   "settings.field.ui_group_copies.help": "Een game die je op Steam, Epic Games en GOG hebt, staat er één keer en start het geïnstalleerde exemplaar. Op de pagina wissel je tussen de exemplaren; elk houdt zijn eigen speeltijd en prestaties.",
+  "settings.field.ui_program_icon_art.label": "Programmapictogram tonen bij games zonder afbeeldingen",
+  "settings.field.ui_program_icon_art.help": "Een game zonder hoes, zoals een game die je zelf hebt toegevoegd, toont het pictogram van zijn Windows-programma op zijn vervangende hoes. Je eigen afbeeldingen en die van de store gaan altijd voor.",
   "settings.field.umu_id.label": "umu-game-id",
   "settings.field.umu_id.help": "umu past de voor dit id gepubliceerde fixes toe wanneer het de game met Proton start. Laat leeg om het te vinden via de winkel, de Steam-app-id of de titel.",
   "settings.field.xbox.label": "Xbox-winkel",

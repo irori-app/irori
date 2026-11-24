@@ -1400,6 +1400,8 @@
   "settings.field.ui_cover_categories.help": "Varje spels kategorier längs omslagets nederkant i rutnätet: de två första och hur många fler.",
   "settings.field.ui_group_copies.label": "Visa kopior från flera butiker som ett spel",
   "settings.field.ui_group_copies.help": "Ett spel du äger på Steam, Epic Games och GOG visas en gång och startar den installerade kopian. Dess sida växlar mellan kopiorna; var och en behåller sin speltid och sina prestationer.",
+  "settings.field.ui_program_icon_art.label": "Visa programmets ikon för spel utan bilder",
+  "settings.field.ui_program_icon_art.help": "Ett spel utan omslag, till exempel ett du har lagt till själv, visar ikonen för sitt Windows-program på sitt ersättningsomslag. Dina egna bilder och butikens går alltid först.",
   "settings.field.umu_id.label": "umu-spel-id",
   "settings.field.umu_id.help": "umu tillämpar de korrigeringar som publicerats för detta id när det kör spelet med Proton. Lämna tomt för att hitta det via butiken, Steam-app-id:t eller titeln.",
   "settings.field.xbox.label": "Xbox-butiken",

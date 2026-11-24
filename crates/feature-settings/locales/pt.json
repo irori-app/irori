@@ -1400,6 +1400,8 @@
   "settings.field.ui_cover_categories.help": "As categorias de cada jogo no fundo da capa na grelha: as duas primeiras e quantas mais.",
   "settings.field.ui_group_copies.label": "Mostrar cópias de várias lojas como um só jogo",
   "settings.field.ui_group_copies.help": "Um jogo que tem no Steam, na Epic Games e na GOG aparece uma vez e abre a cópia instalada. A sua página alterna entre as cópias; cada uma mantém o seu tempo de jogo e as suas conquistas.",
+  "settings.field.ui_program_icon_art.label": "Mostrar o ícone do programa nos jogos sem imagens",
+  "settings.field.ui_program_icon_art.help": "Um jogo sem capa, como um que adicionaste tu, mostra o ícone do seu programa para Windows na capa provisória. As tuas imagens e as da loja têm sempre prioridade.",
   "settings.field.umu_id.label": "ID do jogo no umu",
   "settings.field.umu_id.help": "O umu aplica as correções publicadas para este ID quando executa o jogo com o Proton. Deixe vazio para o encontrar pela loja, pelo ID da aplicação Steam ou pelo título.",
   "settings.field.xbox.label": "Loja Xbox",

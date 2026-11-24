@@ -1400,6 +1400,8 @@
   "settings.field.ui_cover_categories.help": "Categoriile fiecărui joc în partea de jos a copertei în grilă: primele două și câte mai sunt.",
   "settings.field.ui_group_copies.label": "Afișează copiile din mai multe magazine ca un singur joc",
   "settings.field.ui_group_copies.help": "Un joc deținut pe Steam, Epic Games și GOG apare o singură dată și pornește copia instalată. Pagina lui comută între copii; fiecare își păstrează timpul de joc și realizările.",
+  "settings.field.ui_program_icon_art.label": "Arată pictograma programului la jocurile fără imagini",
+  "settings.field.ui_program_icon_art.help": "Un joc fără copertă, cum ar fi unul adăugat de tine, arată pictograma programului său pentru Windows pe coperta provizorie. Imaginile tale și cele ale magazinului au mereu întâietate.",
   "settings.field.umu_id.label": "ID-ul jocului în umu",
   "settings.field.umu_id.help": "umu aplică remedierile publicate pentru acest ID când rulează jocul cu Proton. Lasă gol pentru a-l găsi după magazin, ID-ul aplicației Steam sau titlu.",
   "settings.field.xbox.label": "Magazinul Xbox",

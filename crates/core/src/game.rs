@@ -33,6 +33,11 @@ pub struct GameInfo {
     pub art_logo: Option<String>,
     pub art_background: Option<String>,
     pub art_icon: Option<String>,
+    /// `file://` URL of the icon of the game's own program, which covers
+    /// show when the game has no cover art. Filled by services at each
+    /// library rebuild, never stored by a store.
+    #[serde(skip)]
+    pub program_icon: Option<String>,
     pub is_installed: bool,
     pub install: Option<InstalledInfo>,
     /// False for entries that are owned but cannot be installed (e.g. browser-only).

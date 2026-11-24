@@ -1400,6 +1400,8 @@
   "settings.field.ui_cover_categories.help": "グリッドの各ゲームのカバー下部に、カテゴリーを最初の2つと残りの数で表示します。",
   "settings.field.ui_group_copies.label": "複数のストアのコピーを 1 つのゲームとして表示",
   "settings.field.ui_group_copies.help": "Steam、Epic Games、GOG で所有しているゲームを 1 つだけ表示し、インストール済みのコピーで遊びます。ページでコピーを切り替えられ、プレイ時間と実績はコピーごとに残ります。",
+  "settings.field.ui_program_icon_art.label": "アートのないゲームにプログラムのアイコンを表示",
+  "settings.field.ui_program_icon_art.help": "自分で追加したゲームなど、カバーアートのないゲームは、代わりのカバーに Windows プログラムのアイコンを表示します。自分で設定したアートやストアのアートが常に優先されます。",
   "settings.field.umu_id.label": "umu のゲーム ID",
   "settings.field.umu_id.help": "umu は Proton でゲームを起動するとき、この ID 向けに公開された修正を適用します。空欄ならストア、Steam アプリ ID、タイトルから探します。",
   "settings.field.xbox.label": "Xbox ストア",
