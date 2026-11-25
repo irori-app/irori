@@ -212,11 +212,11 @@ const key = (item: WallItem) => (item.kind === 'store' ? `store-${item.name}` : 
     justify-content: flex-end;
     gap: 0.35em;
     padding: 9%;
-    color: #f2e9dc;
+    color: #ece9f2;
     font-size: clamp(0.8rem, 1.4vw, 1.4rem);
     background:
       radial-gradient(120% 70% at 50% 110%, rgb(255 107 44 / 0.55), transparent 60%),
-      linear-gradient(180deg, #241c17, #120d0b);
+      linear-gradient(180deg, #201a31, #0f0c17);
     --cover-glow: #ff6b2c;
   }
   .is-band .wall-store {
@@ -254,12 +254,16 @@ const key = (item: WallItem) => (item.kind === 'store' ? `store-${item.name}` : 
     bottom: -35%;
     height: 70%;
     pointer-events: none;
-    background: radial-gradient(closest-side, rgb(255 107 44 / 0.32), rgb(255 107 44 / 0.1) 55%, transparent);
+    background:
+      radial-gradient(60% 80% at 82% 70%, rgb(225 30 136 / 0.22), transparent 70%),
+      radial-gradient(closest-side, rgb(255 107 44 / 0.32), rgb(255 107 44 / 0.1) 55%, transparent);
     transform-origin: 50% 100%;
     animation: wall-breathe 7s ease-in-out infinite alternate;
   }
   :global(html:not(.dark)) .wall-ember {
-    background: radial-gradient(closest-side, rgb(255 107 44 / 0.22), rgb(255 107 44 / 0.06) 55%, transparent);
+    background:
+      radial-gradient(60% 80% at 82% 70%, rgb(196 21 122 / 0.12), transparent 70%),
+      radial-gradient(closest-side, rgb(255 107 44 / 0.22), rgb(255 107 44 / 0.06) 55%, transparent);
   }
   @keyframes wall-breathe {
     from { transform: scale(1, 0.92); }

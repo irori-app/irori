@@ -11,13 +11,13 @@
  */
 :root {
   /* Washi paper by day. */
-  --ash: #f6f4ee;
-  --soot: #ece8de;
-  --hearth: #e3ddcf;
-  --wood: #b9a68c;
-  --grain: #d8cfbf;
-  --paper: #1c1714;
-  --smoke: #5f554b;
+  --ash: #f5f3f8;
+  --soot: #eae7f0;
+  --hearth: #e0dbe9;
+  --wood: #aea4bf;
+  --grain: #d3cedc;
+  --paper: #1a1527;
+  --smoke: #5a5273;
   --tatami: #5c6638;
   /* The brand's flame fills buttons in both themes; text in flame uses --flame-text. */
   --flame: #ff6b2c;
@@ -25,7 +25,11 @@
   --flame-text: #b8400f;
   --ember: #f59a38;
   --glow: rgb(255 107 44 / 0.18);
-  --night: #0e0b09;
+  /* The icon's flame cools from orange through magenta to violet. */
+  --dusk: #c4157a;
+  --violet: #8228bf;
+  --glow-dusk: rgb(225 30 136 / 0.14);
+  --night: #0c0a13;
 
   --font-display: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Arial Rounded MT Bold", system-ui, sans-serif;
   --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
@@ -51,23 +55,26 @@
   --destructive: #c4321f;
   --border: var(--grain);
   --input: var(--grain);
-  --ring: var(--ember);
+  --ring: var(--dusk);
   --radius: 0.75rem;
 }
 
 /* Sumi ink by night: the hearth's own colours. */
 .dark {
-  --ash: #15110e;
-  --soot: #1e1915;
-  --hearth: #2a231d;
-  --wood: #6e5d4b;
-  --grain: #342b24;
-  --paper: #f2e9dc;
-  --smoke: #b2a493;
+  --ash: #13101d;
+  --soot: #1c172b;
+  --hearth: #27203b;
+  --wood: #645b80;
+  --grain: #2f2a3c;
+  --paper: #ece9f2;
+  --smoke: #aca2bd;
   --tatami: #a9b47c;
   --flame-text: #ff6b2c;
   --ember: #ffb24f;
   --glow: rgb(255 107 44 / 0.24);
+  --dusk: #e11e88;
+  --violet: #a34be0;
+  --glow-dusk: rgb(225 30 136 / 0.2);
   color-scheme: dark;
 }
 
@@ -87,6 +94,8 @@
   --color-flame-ink: var(--flame-ink);
   --color-flame-text: var(--flame-text);
   --color-ember: var(--ember);
+  --color-dusk: var(--dusk);
+  --color-violet: var(--violet);
   --color-night: var(--night);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -390,7 +399,7 @@
   padding: 1rem 1.15rem;
   border-radius: 0.8rem;
   background: var(--night);
-  color: #f2e9dc;
+  color: #ece9f2;
   border: 1px solid var(--grain);
   font-size: 0.9rem;
   line-height: 1.6;

@@ -75,6 +75,23 @@ real folder paths. `library.png`, `game.png`, `bigpicture.png` and `downloads.pn
 copies of the 1440-pixel screens for Linux software centres, because AppStream expects PNG
 or JPEG (`packaging/linux/*.metainfo.xml`); regenerate them when those screens change.
 
+`scripts/screenshots/` makes them again, on Linux with Xvfb, xdotool, ImageMagick, `cwebp`
+and ffmpeg (for the trailers on game pages):
+
+```bash
+python3 scripts/screenshots/seed_demo.py src/data/game-covers.json ~/irori-demo /home/alex/Games
+scripts/screenshots/capture.sh ../target/release/irori ~/irori-demo out
+```
+
+`seed_demo.py` writes the demo library into a fresh `IRORI_HOME`: the games of
+`src/data/game-covers.json` split between Epic and GOG accounts named Alex, invented play time
+and sessions, and each game linked to its Steam app so its page fills from Steam's store page.
+`capture.sh` runs Irori at 2× on its own X server, with `HOME` set to `/home/alex` (which must
+exist) so no real user name shows in a path, and writes every screen as WebP at both sizes. Pass
+a screen's name as a fourth argument to take that one alone. Then `dwebp` the four PNG copies,
+and render `bigpicture-handheld.webp` (the README's handheld) from the built site with
+`scripts/screenshots/handheld.mjs`, which says how in its header.
+
 The cover walls (the home page's hero, and the bands on `/features/` and `/download/`) show
 real game covers, to illustrate the games Irori runs; the footer credits their publishers.
 The list is `src/data/game-covers.json` (title, Steam app id, file name). To change it, edit

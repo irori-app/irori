@@ -236,7 +236,7 @@ onBeforeUnmount(() => {
   border-radius: 6cqw / 9cqw;
   background:
     radial-gradient(120% 90% at 50% -20%, rgb(255 255 255 / 0.09), transparent 55%),
-    linear-gradient(180deg, #2a2420 0%, #1b1714 55%, #120f0d 100%);
+    linear-gradient(180deg, #28213d 0%, #1a1527 55%, #110e1a 100%);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.12),
     inset 0 -2px 0 rgb(0 0 0 / 0.5),
@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
   position: relative;
   padding: 1.1cqw;
   border-radius: 1.8cqw;
-  background: #070605;
+  background: #07060a;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05), inset 0 2px 8px rgb(0 0 0 / 0.8);
   outline: none;
 }
@@ -316,7 +316,7 @@ onBeforeUnmount(() => {
   width: 7.2cqw;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, #2e2824, #0f0c0b 70%);
+  background: radial-gradient(circle at 50% 40%, #2b2737, #0e0b15 70%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 0.5cqw 1cqw rgb(0 0 0 / 0.55);
 }
 .stick > span {
@@ -325,7 +325,7 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background:
     repeating-radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.05) 0 1px, transparent 1px 4px),
-    radial-gradient(circle at 45% 35%, #4a413a, #231d19);
+    radial-gradient(circle at 45% 35%, #453f59, #201b31);
   box-shadow: inset 0 -2px 3px rgb(0 0 0 / 0.5), 0 1px 0 rgb(255 255 255 / 0.06);
 }
 
@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
 }
 .arm {
   position: absolute;
-  background: linear-gradient(180deg, #312a25, #1a1512);
+  background: linear-gradient(180deg, #2d293a, #181324);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 0.3cqw 0.6cqw rgb(0 0 0 / 0.5);
   transition: background 160ms, box-shadow 160ms, transform 160ms;
 }
@@ -395,8 +395,8 @@ onBeforeUnmount(() => {
   aspect-ratio: 1;
   border-radius: 50%;
   font: 600 1.15cqw/1 var(--font-code);
-  color: rgb(242 233 220 / 0.55);
-  background: radial-gradient(circle at 45% 35%, #3a322c, #17120f);
+  color: rgb(236 233 242 / 0.55);
+  background: radial-gradient(circle at 45% 35%, #363145, #14111f);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 0.35cqw 0.7cqw rgb(0 0 0 / 0.55);
   transition: background 160ms, color 160ms, box-shadow 160ms, transform 160ms;
 }
@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
   width: 2.2cqw;
   height: 0.9cqw;
   border-radius: 999px;
-  background: #0f0c0b;
+  background: #0e0b15;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
 }
 
@@ -438,9 +438,9 @@ onBeforeUnmount(() => {
   width: 17%;
   height: 4.6cqw;
   border-radius: 3cqw 3cqw 0.8cqw 0.8cqw;
-  background: linear-gradient(180deg, #3a322c, #1c1714);
+  background: linear-gradient(180deg, #363145, #1a1527);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1);
-  color: rgb(242 233 220 / 0.5);
+  color: rgb(236 233 242 / 0.5);
   font: 600 1cqw/1 var(--font-code);
   cursor: pointer;
   transition: transform 160ms var(--ease-out), background 160ms;

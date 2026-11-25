@@ -263,7 +263,7 @@ build Irori yourself, see [Building](#building).
     <td width="50%" align="center">
       <picture>
         <source media="(prefers-color-scheme: light)" srcset="website/public/screenshots/light-wine.webp">
-        <img src="website/public/screenshots/wine.webp" width="100%" alt="Wine manager with Game Porting Toolkit, Wine and Proton builds">
+        <img src="website/public/screenshots/wine.webp" width="100%" alt="Wine manager with GE-Proton and Proton-CachyOS builds ready to install">
       </picture><br><sub><b>Wine manager</b></sub>
     </td>
   </tr>
