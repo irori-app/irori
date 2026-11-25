@@ -38,6 +38,7 @@ These crates live inside the workspace with their upstream licenses preserved in
 Irori also studies expected launcher, compatibility, and install-script behaviors from other open-source Linux gaming projects without copying their source code:
 
 - [Heroic Games Launcher](https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher) (GPL-3.0)
+- [Heronite](https://github.com/RafaelGoulartB/Heronite) (GPL-3.0)
 - [Lutris](https://github.com/lutris/lutris) (GPL-3.0)
 
 ## Trademark Notice
