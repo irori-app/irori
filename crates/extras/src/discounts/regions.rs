@@ -5,11 +5,13 @@ use crate::util;
 /// A country and currency pair used across Steam, GOG, Epic, GMG and GG.deals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DealsRegion {
-    /// Two-letter ISO 3166-1 alpha-2 country code (`BR`, `US`, `DE`…).
+    /// Two-letter ISO 3166-1 alpha-2 country code (`BR`, `US`, `EU`…).
     pub code: &'static str,
+    /// Two-letter ISO 3166-1 alpha-2 country code sent to store APIs (Steam, GOG, Epic).
+    pub store_country: &'static str,
     /// Currency code (`BRL`, `USD`, `EUR`…).
     pub currency_code: &'static str,
-    /// GOG/Epic locale string (`pt-BR`, `en-US`, `de-DE`…).
+    /// GOG/Epic locale string (`pt-BR`, `en-US`, `pl-PL`…).
     pub locale: &'static str,
     /// GG.deals path segment (`br`, `us`, `eu`, `uk`…).
     pub gg_deals_slug: &'static str,
@@ -17,9 +19,15 @@ pub struct DealsRegion {
     pub label: &'static str,
 }
 
+const EUROZONE_COUNTRIES: &[&str] = &[
+    "AT", "BE", "CY", "DE", "EE", "ES", "FI", "FR", "GR", "HR", "IE", "IT", "LT", "LU", "LV", "MT",
+    "NL", "PT", "SI", "SK",
+];
+
 pub const DEALS_REGIONS: &[DealsRegion] = &[
     DealsRegion {
         code: "BR",
+        store_country: "BR",
         currency_code: "BRL",
         locale: "pt-BR",
         gg_deals_slug: "br",
@@ -27,6 +35,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "US",
+        store_country: "US",
         currency_code: "USD",
         locale: "en-US",
         gg_deals_slug: "us",
@@ -34,55 +43,23 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "GB",
+        store_country: "GB",
         currency_code: "GBP",
         locale: "en-GB",
         gg_deals_slug: "uk",
         label: "United Kingdom (GBP)",
     },
     DealsRegion {
-        code: "DE",
+        code: "EU",
+        store_country: "NL",
         currency_code: "EUR",
-        locale: "de-DE",
-        gg_deals_slug: "de",
-        label: "Germany (EUR)",
-    },
-    DealsRegion {
-        code: "FR",
-        currency_code: "EUR",
-        locale: "fr-FR",
-        gg_deals_slug: "fr",
-        label: "France (EUR)",
-    },
-    DealsRegion {
-        code: "ES",
-        currency_code: "EUR",
-        locale: "es-ES",
-        gg_deals_slug: "es",
-        label: "Spain (EUR)",
-    },
-    DealsRegion {
-        code: "IT",
-        currency_code: "EUR",
-        locale: "it-IT",
-        gg_deals_slug: "it",
-        label: "Italy (EUR)",
-    },
-    DealsRegion {
-        code: "PT",
-        currency_code: "EUR",
-        locale: "pt-PT",
-        gg_deals_slug: "pt",
-        label: "Portugal (EUR)",
-    },
-    DealsRegion {
-        code: "NL",
-        currency_code: "EUR",
-        locale: "nl-NL",
-        gg_deals_slug: "nl",
-        label: "Netherlands (EUR)",
+        locale: "en-US",
+        gg_deals_slug: "eu",
+        label: "Europe (EUR)",
     },
     DealsRegion {
         code: "CA",
+        store_country: "CA",
         currency_code: "CAD",
         locale: "en-CA",
         gg_deals_slug: "ca",
@@ -90,6 +67,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "AU",
+        store_country: "AU",
         currency_code: "AUD",
         locale: "en-AU",
         gg_deals_slug: "au",
@@ -97,6 +75,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "PL",
+        store_country: "PL",
         currency_code: "PLN",
         locale: "pl-PL",
         gg_deals_slug: "pl",
@@ -104,6 +83,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "JP",
+        store_country: "JP",
         currency_code: "JPY",
         locale: "ja-JP",
         gg_deals_slug: "jp",
@@ -111,6 +91,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "KR",
+        store_country: "KR",
         currency_code: "KRW",
         locale: "ko-KR",
         gg_deals_slug: "kr",
@@ -118,6 +99,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "TR",
+        store_country: "TR",
         currency_code: "USD",
         locale: "tr-TR",
         gg_deals_slug: "tr",
@@ -125,6 +107,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "SE",
+        store_country: "SE",
         currency_code: "SEK",
         locale: "sv-SE",
         gg_deals_slug: "se",
@@ -132,6 +115,7 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
     DealsRegion {
         code: "CN",
+        store_country: "CN",
         currency_code: "CNY",
         locale: "zh-CN",
         gg_deals_slug: "cn",
@@ -139,15 +123,26 @@ pub const DEALS_REGIONS: &[DealsRegion] = &[
     },
 ];
 
-fn by_code(code: &str) -> Option<&'static DealsRegion> {
+/// Find a deals region by explicit region code or Eurozone country code.
+pub fn find_region(code: &str) -> Option<&'static DealsRegion> {
     let norm = code.trim();
-    DEALS_REGIONS
+    if let Some(region) = DEALS_REGIONS
         .iter()
         .find(|r| r.code.eq_ignore_ascii_case(norm))
+    {
+        return Some(region);
+    }
+    if EUROZONE_COUNTRIES
+        .iter()
+        .any(|c| c.eq_ignore_ascii_case(norm))
+    {
+        return DEALS_REGIONS.iter().find(|r| r.code == "EU");
+    }
+    None
 }
 
 fn default_region() -> &'static DealsRegion {
-    by_code("US").expect("US region exists")
+    find_region("US").expect("US region exists")
 }
 
 /// Extract a 2-letter country code from locale tags like `"pt-BR"` or `"en_GB.UTF-8"`.
@@ -163,13 +158,13 @@ pub fn resolve_region(setting: &str, system_locale: Option<&str>) -> &'static De
     let clean = setting.trim();
     if !clean.is_empty()
         && !clean.eq_ignore_ascii_case("auto")
-        && let Some(r) = by_code(clean)
+        && let Some(r) = find_region(clean)
     {
         return r;
     }
     if let Some(locale) = system_locale
         && let Some(country) = country_from_locale(locale)
-        && let Some(r) = by_code(country)
+        && let Some(r) = find_region(country)
     {
         return r;
     }

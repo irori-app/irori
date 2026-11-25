@@ -284,8 +284,8 @@ pub async fn epic_free_games(region: &DealsRegion) -> Result<Vec<FreeGame>> {
     let url = format!(
         "{EPIC_FREE_URL}?locale={}&country={}&allowCountries={}",
         util::encode_component(region.locale),
-        util::encode_component(region.code),
-        util::encode_component(region.code),
+        util::encode_component(region.store_country),
+        util::encode_component(region.store_country),
     );
     let resp = irori_core::http::client()
         .get(&url)

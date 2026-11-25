@@ -1030,12 +1030,12 @@ fn region_items(system_locale: Option<&str>) -> Vec<SelectChoice> {
 }
 
 fn region_selected_index(setting: &str) -> IndexPath {
-    let row = if setting.trim().is_empty() || setting.eq_ignore_ascii_case("auto") {
+    let norm = setting.trim();
+    let row = if norm.is_empty() || norm.eq_ignore_ascii_case("auto") {
         0
     } else {
-        DEALS_REGIONS
-            .iter()
-            .position(|r| r.code.eq_ignore_ascii_case(setting.trim()))
+        discounts::find_region(norm)
+            .and_then(|target| DEALS_REGIONS.iter().position(|r| r.code == target.code))
             .map(|i| i + 1)
             .unwrap_or(0)
     };
@@ -2300,5 +2300,14 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["S1", "G1", "S2"]
         );
+    }
+
+    #[test]
+    fn region_dropdown_maps_legacy_eurozone_codes() {
+        let eu_row = DEALS_REGIONS.iter().position(|r| r.code == "EU").unwrap() + 1;
+        assert_eq!(region_selected_index("").row, 0);
+        assert_eq!(region_selected_index("EU").row, eu_row);
+        assert_eq!(region_selected_index("DE").row, eu_row);
+        assert_eq!(region_selected_index("unknown").row, 0);
     }
 }

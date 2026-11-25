@@ -151,7 +151,7 @@ pub async fn steam_discounts(region: &DealsRegion) -> Result<Vec<CatalogProduct>
     }
     let url = format!(
         "{STEAM_FEATURED_URL}?cc={}&l=english",
-        util::encode_component(region.code)
+        util::encode_component(region.store_country)
     );
     let resp = irori_core::http::client()
         .get(&url)
@@ -287,7 +287,7 @@ pub async fn steam_search(query: &str, region: &DealsRegion) -> Result<Vec<Catal
     let url = format!(
         "{STEAM_SEARCH_URL}?term={}&l=english&cc={}",
         util::encode_component(query.trim()),
-        util::encode_component(region.code)
+        util::encode_component(region.store_country)
     );
     let resp = irori_core::http::client()
         .get(&url)
@@ -302,11 +302,7 @@ pub async fn steam_search(query: &str, region: &DealsRegion) -> Result<Vec<Catal
 
 /// Live regional search on GOG's catalog.
 pub async fn gog_search(query: &str, region: &DealsRegion) -> Result<Vec<CatalogProduct>> {
-    let locale = super::CatalogLocale {
-        country_code: region.code.into(),
-        locale: region.locale.into(),
-        currency_code: region.currency_code.into(),
-    };
+    let locale = super::CatalogLocale::from(region);
     let url = gog_catalog_url(&locale, 1, false, Some(query.trim()), 12);
     let page = super::fetch_page(&url, None).await?;
     Ok(dedupe(page.products))

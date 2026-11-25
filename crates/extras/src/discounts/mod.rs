@@ -23,8 +23,8 @@ pub use free::{
 };
 pub use ggdeals::{GgDealsPrice, ggdeals_prices, parse_ggdeals_prices};
 pub use regions::{
-    DEALS_REGIONS, DealsRegion, gg_deals_browse_url, gg_deals_search_url, protondb_app_url,
-    protondb_search_url, resolve_region,
+    DEALS_REGIONS, DealsRegion, find_region, gg_deals_browse_url, gg_deals_search_url,
+    protondb_app_url, protondb_search_url, resolve_region,
 };
 pub use search::{
     cheapshark_search, gog_search, parse_cheapshark_deals, parse_steam_featured,
@@ -167,7 +167,7 @@ fn gog_catalog_locale(locale: &str) -> &'static str {
 impl From<&DealsRegion> for CatalogLocale {
     fn from(r: &DealsRegion) -> Self {
         Self {
-            country_code: r.code.to_string(),
+            country_code: r.store_country.to_string(),
             // GOG's catalog returns [] for locales it doesn't serve (e.g. pt-BR);
             // keep the user's country and currency while requesting a valid UI locale.
             locale: gog_catalog_locale(r.locale).to_string(),
@@ -630,7 +630,18 @@ mod tests {
     fn resolves_regions_and_builds_urls() {
         assert_eq!(resolve_region("BR", Some("en-US")).code, "BR");
         assert_eq!(resolve_region("", Some("pt_BR.UTF-8")).code, "BR");
-        assert_eq!(resolve_region("auto", Some("de-DE")).currency_code, "EUR");
+        let eu = resolve_region("auto", Some("de-DE"));
+        assert_eq!(eu.code, "EU");
+        assert_eq!(eu.store_country, "NL");
+        assert_eq!(eu.currency_code, "EUR");
+        assert_eq!(eu.gg_deals_slug, "eu");
+        assert_eq!(resolve_region("PT", None).code, "EU");
+        assert_eq!(resolve_region("fr", None).code, "EU");
+        let eu_cat = CatalogLocale::from(eu);
+        assert_eq!(eu_cat.country_code, "NL");
+        assert_eq!(eu_cat.currency_code, "EUR");
+        assert_eq!(eu_cat.locale, "en-US");
+        assert_eq!(gg_deals_browse_url(eu), "https://gg.deals/eu/deals/");
         assert_eq!(resolve_region("unknown", None).code, "US");
         let br = resolve_region("BR", None);
         let br_cat = CatalogLocale::from(br);
