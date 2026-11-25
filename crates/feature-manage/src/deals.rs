@@ -51,7 +51,7 @@ use crate::store_window::open_store_window;
 /// Deals rendered per "Show more" step.
 const PAGE: usize = 40;
 /// Cap on lazy per-batch ProtonDB/GG.deals lookups per page.
-const ENRICH_BATCH: usize = 48;
+const ENRICH_BATCH: usize = 64;
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(350);
 const PROTONDB_SVG: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -281,6 +281,27 @@ fn load(entity: Entity<DealsCache>, region: &'static DealsRegion, cx: &mut App) 
                             }
                         }
                     }
+                    let steam_ids_by_title: HashMap<String, String> = groups
+                        .iter()
+                        .flat_map(|list| list.iter())
+                        .filter(|p| p.store == DealStore::Steam)
+                        .filter_map(|p| {
+                            p.steam_app_id
+                                .as_ref()
+                                .map(|id| (sort_key(&p.title), id.clone()))
+                        })
+                        .collect();
+                    if !steam_ids_by_title.is_empty() {
+                        for list in &mut groups {
+                            for p in list.iter_mut() {
+                                if p.steam_app_id.is_none()
+                                    && let Some(id) = steam_ids_by_title.get(&sort_key(&p.title))
+                                {
+                                    p.steam_app_id = Some(id.clone());
+                                }
+                            }
+                        }
+                    }
                     let products = interleave_featured(groups);
                     c.state = if products.is_empty() && free_list.is_empty() && failed.len() >= 4 {
                         DealsState::Unavailable
@@ -390,12 +411,20 @@ fn enrich_visible(
         });
         cx.spawn(async move |cx| {
             if let Ok(res) = task.await
-                && (!res.resolved_steam_ids.is_empty() || !res.tiers.is_empty())
+                && (!res.resolved_steam_ids.is_empty()
+                    || !res.tiers.is_empty()
+                    || !res.retry_keys.is_empty())
             {
                 target.update(cx, |c, cx| {
+                    for key in res.retry_keys {
+                        c.enrichment_requested.remove(&key);
+                    }
+                    let changed = !res.resolved_steam_ids.is_empty() || !res.tiers.is_empty();
                     c.resolved_steam_ids.extend(res.resolved_steam_ids);
                     c.protondb.extend(res.tiers);
-                    cx.notify();
+                    if changed {
+                        cx.notify();
+                    }
                 });
             }
         })
@@ -1126,12 +1155,13 @@ impl DealsSection {
                     });
                 }
             }),
-            cx.subscribe(&sort_select, |this, _, e, cx| {
+            cx.subscribe_in(&sort_select, window, |this, _, e, window, cx| {
                 let gpui_kit::component::select::SelectEvent::Confirm(val) = e;
                 if let Some(id) = val {
                     this.sort = DealSort::from_id(id.as_ref());
                     this.shown = PAGE;
                     this.refilter(cx);
+                    this.schedule_enrichment(window, cx);
                     cx.notify();
                 }
             }),
@@ -1501,19 +1531,25 @@ impl DealsSection {
             return None;
         }
         let tip = t("manage.deals.ggdeals.compare_tooltip");
-        Some(
-            div()
-                .id(ElementId::Name(format!("ggline-{id_prefix}").into()))
-                .cursor_pointer()
-                .text_xs()
-                .text_color(muted)
-                .truncate()
-                .hover(|s| s.underline())
-                .tooltip(move |window, cx| wrapped_tooltip(tip.clone(), window, cx))
-                .on_click(move |_, _, cx| cx.open_url(&gg_url))
-                .child(parts.join(" · "))
-                .into_any_element(),
-        )
+        let mut line = h_flex()
+            .id(ElementId::Name(format!("ggline-{id_prefix}").into()))
+            .cursor_pointer()
+            .flex_wrap()
+            .items_center()
+            .gap_x_1p5()
+            .gap_y_0p5()
+            .text_xs()
+            .text_color(muted)
+            .hover(|s| s.underline())
+            .tooltip(move |window, cx| wrapped_tooltip(tip.clone(), window, cx))
+            .on_click(move |_, _, cx| cx.open_url(&gg_url));
+        for (ix, part) in parts.into_iter().enumerate() {
+            if ix > 0 {
+                line = line.child(div().child("·"));
+            }
+            line = line.child(div().child(part));
+        }
+        Some(line.into_any_element())
     }
 
     fn render_deal_grid(

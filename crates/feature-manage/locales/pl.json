@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "Nie udało się zaktualizować klucza GG.deals",
   "manage.deals.ggdeals.official_price": "Oficjalne: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshopy: {price}",
-  "manage.deals.ggdeals.low_price": "Min: {price}",
+  "manage.deals.ggdeals.low_price": "Historyczne minimum: {price}",
   "manage.deals.ggdeals.key_tooltip": "Połącz darmowy osobisty klucz API GG.deals, aby porównywać oficjalne sklepy, keyshopy i najniższe ceny historyczne. Kliknij, aby zobaczyć instrukcję.",
   "manage.deals.ggdeals.step1": "1. Załóż darmowe konto na GG.deals i potwierdź swój e-mail:",
   "manage.deals.ggdeals.register_link": "Zarejestruj się na GG.deals",

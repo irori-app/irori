@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "GG.deals キーを更新できませんでした",
   "manage.deals.ggdeals.official_price": "公式: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "最安: {price}",
+  "manage.deals.ggdeals.low_price": "過去最安値: {price}",
   "manage.deals.ggdeals.key_tooltip": "無料の個人用 GG.deals API キーを接続して、公式ストア、キーショップ、過去最安値を比較します。クリックして手順を表示します。",
   "manage.deals.ggdeals.step1": "1. GG.deals で無料アカウントを作成し、メールを確認します:",
   "manage.deals.ggdeals.register_link": "GG.deals で登録",

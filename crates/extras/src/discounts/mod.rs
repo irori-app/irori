@@ -28,7 +28,7 @@ pub use regions::{
 };
 pub use search::{
     cheapshark_search, gog_search, parse_cheapshark_deals, parse_steam_featured,
-    parse_steam_search, search_global, steam_discounts, steam_search,
+    parse_steam_query_discounts, parse_steam_search, search_global, steam_discounts, steam_search,
 };
 
 use crate::util;
@@ -576,6 +576,79 @@ async fn feed_deals(store: DealStore, currency: &str) -> Result<Vec<CatalogProdu
     Ok(deals)
 }
 
+fn deal_base_amount(p: &CatalogProduct) -> f64 {
+    p.price
+        .base_money
+        .as_ref()
+        .or(p.price.final_money.as_ref())
+        .and_then(|m| m.amount.trim().parse::<f64>().ok())
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .unwrap_or(0.0)
+}
+
+fn deal_discount_pct(p: &CatalogProduct) -> u32 {
+    p.price
+        .discount
+        .trim()
+        .trim_start_matches('-')
+        .trim_end_matches('%')
+        .trim()
+        .parse()
+        .unwrap_or(0)
+}
+
+fn featured_fallback_score(p: &CatalogProduct) -> f64 {
+    let base = deal_base_amount(p);
+    let pct = deal_discount_pct(p) as f64;
+    let tier = if base >= 20.0 {
+        3.0
+    } else if base >= 15.0 {
+        2.0
+    } else if base >= 10.0 {
+        1.0
+    } else {
+        0.0
+    };
+    let discount_bonus = if pct >= 20.0 { pct * 0.4 } else { pct * 0.05 };
+    tier * 100.0 + base.min(120.0) + discount_bonus
+}
+
+fn curate_gmg_deals(
+    deals: &mut [CatalogProduct],
+    index: &std::collections::HashMap<String, search::CuratedEntry>,
+) {
+    for deal in deals.iter_mut() {
+        let key = irori_core::sort_key(&deal.title);
+        let matched = index.get(&key).or_else(|| {
+            let stripped = crate::wiki::strip_edition_suffix(&deal.title);
+            let skey = irori_core::sort_key(&stripped);
+            (skey != key).then(|| index.get(&skey)).flatten()
+        });
+        if let Some(entry) = matched {
+            if deal.steam_app_id.is_none() {
+                deal.steam_app_id = entry.steam_app_id.clone();
+            }
+            deal.deal_rating = Some(entry.score);
+        }
+    }
+    deals.sort_by(|a, b| match (a.deal_rating, b.deal_rating) {
+        (Some(sa), Some(sb)) => sb.partial_cmp(&sa).unwrap_or(std::cmp::Ordering::Equal),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => featured_fallback_score(b)
+            .partial_cmp(&featured_fallback_score(a))
+            .unwrap_or(std::cmp::Ordering::Equal),
+    });
+}
+
+fn rank_humble_featured(deals: &mut [CatalogProduct]) {
+    deals.sort_by(|a, b| {
+        featured_fallback_score(b)
+            .partial_cmp(&featured_fallback_score(a))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+}
+
 /// GreenManGaming deals in a currency (unsupported currencies use USD).
 pub async fn gmg_discounts(currency: Option<&str>) -> Result<Vec<CatalogProduct>> {
     let cur = currency.unwrap_or("USD").to_uppercase();
@@ -584,12 +657,20 @@ pub async fn gmg_discounts(currency: Option<&str>) -> Result<Vec<CatalogProduct>
     } else {
         "USD".to_string()
     };
-    feed_deals(DealStore::Gmg, &cur).await
+    let (deals_res, index) = futures::join!(
+        feed_deals(DealStore::Gmg, &cur),
+        search::gmg_curated_index()
+    );
+    let mut deals = deals_res?;
+    curate_gmg_deals(&mut deals, &index);
+    Ok(deals)
 }
 
 /// Humble deals (USD only).
 pub async fn humble_discounts() -> Result<Vec<CatalogProduct>> {
-    feed_deals(DealStore::Humble, "USD").await
+    let mut deals = feed_deals(DealStore::Humble, "USD").await?;
+    rank_humble_featured(&mut deals);
+    Ok(deals)
 }
 
 #[cfg(test)]
@@ -693,6 +774,117 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].price.discount, "-80%");
         assert_eq!(found[0].price.r#final, "R$17.99");
+
+        let query_json = r#"{"response": {"store_items": [
+            {"appid": 1174180, "name": "Red Dead Redemption 2",
+             "best_purchase_option": {"final_price_in_cents": "7497", "original_price_in_cents": "29990", "discount_pct": 75},
+             "assets": {"asset_url_format": "steam/apps/1174180/${FILENAME}?t=123", "header": "header.jpg"},
+             "platforms": {"windows": true, "mac": false, "steamos_linux": true}},
+            {"appid": 730, "name": "Counter-Strike 2",
+             "best_purchase_option": {"final_price_in_cents": "0", "original_price_in_cents": "0", "discount_pct": 0}}
+        ]}}"#;
+        let query_deals = parse_steam_query_discounts(query_json.as_bytes(), "BRL").unwrap();
+        assert_eq!(query_deals.len(), 1);
+        assert_eq!(query_deals[0].steam_app_id.as_deref(), Some("1174180"));
+        assert_eq!(query_deals[0].price.r#final, "R$74.97");
+        assert_eq!(query_deals[0].price.base, "R$299.90");
+        assert_eq!(query_deals[0].price.discount, "-75%");
+        assert_eq!(
+            query_deals[0].cover_horizontal.as_deref(),
+            Some(
+                "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1174180/header.jpg?t=123"
+            )
+        );
+        assert_eq!(query_deals[0].operating_systems, ["windows", "linux"]);
+    }
+
+    #[test]
+    fn curates_gmg_and_ranks_humble_featured() {
+        let make = |id: &str, title: &str, store: DealStore, cur: &str, base: &str, disc: &str| {
+            CatalogProduct {
+                id: id.into(),
+                title: title.into(),
+                store,
+                price: CatalogPrice {
+                    r#final: format!("${cur}"),
+                    base: format!("${base}"),
+                    discount: disc.into(),
+                    final_money: Some(Money {
+                        amount: cur.into(),
+                        currency: "USD".into(),
+                    }),
+                    base_money: Some(Money {
+                        amount: base.into(),
+                        currency: "USD".into(),
+                    }),
+                },
+                ..Default::default()
+            }
+        };
+        let mut gmg = vec![
+            make("g1", "Tiny Jigsaws", DealStore::Gmg, "1.00", "2.99", "-67%"),
+            make(
+                "g2",
+                "Disco Elysium - The Final Cut",
+                DealStore::Gmg,
+                "10.00",
+                "39.99",
+                "-75%",
+            ),
+            make("g3", "God of War", DealStore::Gmg, "20.00", "49.99", "-60%"),
+        ];
+        let mut idx = HashMap::new();
+        idx.insert(
+            irori_core::sort_key("Disco Elysium - The Final Cut"),
+            search::CuratedEntry {
+                score: 520.0,
+                steam_app_id: Some("632470".into()),
+            },
+        );
+        idx.insert(
+            irori_core::sort_key("God of War"),
+            search::CuratedEntry {
+                score: 490.0,
+                steam_app_id: Some("1593500".into()),
+            },
+        );
+        curate_gmg_deals(&mut gmg, &idx);
+        assert_eq!(gmg[0].id, "g2");
+        assert_eq!(gmg[0].steam_app_id.as_deref(), Some("632470"));
+        assert_eq!(gmg[1].id, "g3");
+        assert_eq!(gmg[1].steam_app_id.as_deref(), Some("1593500"));
+        assert_eq!(gmg[2].id, "g1");
+
+        let mut humble = vec![
+            make(
+                "h1",
+                "Cheap Shovelware",
+                DealStore::Humble,
+                "0.51",
+                "3.99",
+                "-87%",
+            ),
+            make(
+                "h2",
+                "Full Priced RPG",
+                DealStore::Humble,
+                "14.99",
+                "59.99",
+                "-75%",
+            ),
+            make(
+                "h3",
+                "Mid Indie",
+                DealStore::Humble,
+                "9.99",
+                "19.99",
+                "-50%",
+            ),
+        ];
+        rank_humble_featured(&mut humble);
+        assert_eq!(humble[0].id, "h2");
+        assert_eq!(humble[1].id, "h3");
+        assert_eq!(humble[2].id, "h1");
     }
 
     #[test]

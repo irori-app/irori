@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "无法更新 GG.deals 密钥",
   "manage.deals.ggdeals.official_price": "官方: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "史低: {price}",
+  "manage.deals.ggdeals.low_price": "历史最低: {price}",
   "manage.deals.ggdeals.key_tooltip": "连接免费的个人 GG.deals API 密钥，以对比官方商店、密钥商店和历史最低价。点击查看设置步骤。",
   "manage.deals.ggdeals.step1": "1. 在 GG.deals 创建免费账号并确认邮箱:",
   "manage.deals.ggdeals.register_link": "在 GG.deals 注册",

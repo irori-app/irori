@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "Nepodařilo se aktualizovat klíč GG.deals",
   "manage.deals.ggdeals.official_price": "Oficiální: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshopy: {price}",
-  "manage.deals.ggdeals.low_price": "Min: {price}",
+  "manage.deals.ggdeals.low_price": "Historické minimum: {price}",
   "manage.deals.ggdeals.key_tooltip": "Připojte bezplatný osobní klíč API GG.deals pro porovnání oficiálních obchodů, keyshopů a historických minim. Klikněte pro návod.",
   "manage.deals.ggdeals.step1": "1. Vytvořte si bezplatný účet na GG.deals a potvrďte svůj e-mail:",
   "manage.deals.ggdeals.register_link": "Registrovat se na GG.deals",

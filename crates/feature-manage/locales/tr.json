@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "GG.deals anahtarı güncellenemedi",
   "manage.deals.ggdeals.official_price": "Resmi: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshop: {price}",
-  "manage.deals.ggdeals.low_price": "En düşük: {price}",
+  "manage.deals.ggdeals.low_price": "Tarihi en düşük: {price}",
   "manage.deals.ggdeals.key_tooltip": "Resmi mağazaları, keyshop'ları ve en düşük fiyatları karşılaştırmak için ücretsiz kişisel GG.deals API anahtarı ekleyin. Adımlar için tıklayın.",
   "manage.deals.ggdeals.step1": "1. GG.deals üzerinde ücretsiz hesap oluşturun ve e-postanızı onaylayın:",
   "manage.deals.ggdeals.register_link": "GG.deals'e Kayıt Ol",

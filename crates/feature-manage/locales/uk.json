@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "Не вдалося оновити ключ GG.deals",
   "manage.deals.ggdeals.official_price": "Офіц.: {price}",
   "manage.deals.ggdeals.keyshop_price": "Ключі: {price}",
-  "manage.deals.ggdeals.low_price": "Мін.: {price}",
+  "manage.deals.ggdeals.low_price": "Історичний мінімум: {price}",
   "manage.deals.ggdeals.key_tooltip": "Підключіть безкоштовний особистий API-ключ GG.deals, щоб порівнювати офіційні магазини, keyshop-и та історичні мінімуми. Натисніть для інструкції.",
   "manage.deals.ggdeals.step1": "1. Створіть безкоштовний обліковий запис на GG.deals та підтвердьте електронну пошту:",
   "manage.deals.ggdeals.register_link": "Зареєструватися на GG.deals",

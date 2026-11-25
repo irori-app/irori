@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "Не удалось обновить ключ GG.deals",
   "manage.deals.ggdeals.official_price": "Офиц.: {price}",
   "manage.deals.ggdeals.keyshop_price": "Ключи: {price}",
-  "manage.deals.ggdeals.low_price": "Мин.: {price}",
+  "manage.deals.ggdeals.low_price": "Исторический минимум: {price}",
   "manage.deals.ggdeals.key_tooltip": "Подключите бесплатный личный API-ключ GG.deals, чтобы сравнивать официальные магазины, магазины ключей и исторические минимумы. Нажмите для инструкции.",
   "manage.deals.ggdeals.step1": "1. Создайте бесплатный аккаунт на GG.deals и подтвердите электронную почту:",
   "manage.deals.ggdeals.register_link": "Зарегистрироваться на GG.deals",

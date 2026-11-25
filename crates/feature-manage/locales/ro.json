@@ -925,7 +925,7 @@
   "manage.deals.ggdeals.key_save_failed": "Nu s-a putut actualiza cheia GG.deals",
   "manage.deals.ggdeals.official_price": "Oficial: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "Minim: {price}",
+  "manage.deals.ggdeals.low_price": "Minim istoric: {price}",
   "manage.deals.ggdeals.key_tooltip": "Conectează o cheie API personală gratuită GG.deals pentru a compara magazinele oficiale, keyshop-urile și minimele istorice. Fă clic pentru pași.",
   "manage.deals.ggdeals.step1": "1. Creează un cont gratuit pe GG.deals și confirmă-ți e-mailul:",
   "manage.deals.ggdeals.register_link": "Înregistrează-te pe GG.deals",

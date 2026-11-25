@@ -35,6 +35,9 @@ pub const WIKI_TTL: Duration = Duration::from_secs(30 * 24 * 3600);
 /// Lifetime of a cached "no umu ID" answer. Found IDs never expire.
 pub const UMU_MISS_TTL: Duration = Duration::from_secs(6 * 3600);
 
+static STEAM_SEARCH_SEM: Lazy<tokio::sync::Semaphore> =
+    Lazy::new(|| tokio::sync::Semaphore::new(2));
+
 /// Which store entry to look up.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoreIds {
@@ -319,7 +322,7 @@ pub async fn steam_art_for_title(title: &str) -> Option<(String, String)> {
     };
     let id = match steam_app_id(&game).await {
         Some(id) => id,
-        None => steam_search_app_id(title).await?,
+        None => steam_search_app_id(title).await.ok().flatten()?,
     };
     if let Some(hashed) = steam_store_hashed_art(&id).await {
         return Some(hashed);
@@ -348,26 +351,30 @@ fn steam_search_query(title: &str) -> String {
     cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-async fn steam_storesearch_items(query: &str) -> Option<Vec<serde_json::Value>> {
+async fn steam_storesearch_items(query: &str) -> Result<Vec<serde_json::Value>> {
     if query.is_empty() {
-        return None;
+        return Ok(Vec::new());
     }
-    let mut url = url::Url::parse("https://store.steampowered.com/api/storesearch/").ok()?;
+    let _permit = STEAM_SEARCH_SEM.acquire().await;
+    let mut url = url::Url::parse("https://store.steampowered.com/api/storesearch/")?;
     url.query_pairs_mut()
         .append_pair("term", query)
         .append_pair("l", "english")
         .append_pair("cc", "US");
-    let json: serde_json::Value = util::get_json(url.as_str(), std::time::Duration::from_secs(6))
-        .await
-        .ok()?;
-    json.get("items")?.as_array().cloned()
+    let json: serde_json::Value =
+        util::get_json(url.as_str(), std::time::Duration::from_secs(6)).await?;
+    Ok(json
+        .get("items")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default())
 }
 
 /// Find a game's Steam app ID via Steam's public `storesearch` endpoint.
-async fn steam_search_app_id(title: &str) -> Option<String> {
+async fn steam_search_app_id(title: &str) -> Result<Option<String>> {
     let query = steam_search_query(title);
     if query.is_empty() {
-        return None;
+        return Ok(None);
     }
     let mut items = steam_storesearch_items(&query).await?;
     if items.is_empty()
@@ -386,7 +393,7 @@ async fn steam_search_app_id(title: &str) -> Option<String> {
     };
     let wanted = squash(title);
     if wanted.is_empty() {
-        return None;
+        return Ok(None);
     }
     let picked = items
         .iter()
@@ -405,11 +412,12 @@ async fn steam_search_app_id(title: &str) -> Option<String> {
                         && (s.contains(&wanted) || wanted.contains(&s))
                 })
             })
-        })?;
-    picked
-        .get("id")
-        .and_then(|v| v.as_u64())
-        .map(|id| id.to_string())
+        });
+    Ok(picked.and_then(|v| {
+        v.get("id")
+            .and_then(|v| v.as_u64())
+            .map(|id| id.to_string())
+    }))
 }
 
 /// Resolve the hashed library capsule and hero URLs of a Steam app from
@@ -485,11 +493,12 @@ pub struct ProtonDbLookup {
 }
 
 /// Batch output mapping deal keys to resolved Steam app IDs and those IDs to
-/// non-pending ProtonDB compatibility tiers.
+/// non-pending ProtonDB compatibility tiers, plus keys that failed transiently.
 #[derive(Debug, Default)]
 pub struct ProtonDbBatchResult {
     pub resolved_steam_ids: HashMap<String, String>,
     pub tiers: HashMap<String, ProtonDbTier>,
+    pub retry_keys: Vec<String>,
 }
 
 const EDITION_SUFFIXES: &[&str] = &[
@@ -497,27 +506,52 @@ const EDITION_SUFFIXES: &[&str] = &[
     "(gog) key",
     "(epic) key",
     "steam key",
+    "game of the year edition deluxe",
     "game of the year edition",
     "goty edition",
-    "special edition",
-    "definitive edition",
-    "enhanced edition",
-    "complete edition",
-    "deluxe edition",
-    "ultimate edition",
-    "anniversary edition",
-    "gold edition",
+    "digital deluxe edition",
     "collector's edition",
     "collectors edition",
+    "legendary edition",
+    "anniversary edition",
+    "definitive edition",
+    "enhanced edition",
+    "ultimate edition",
+    "complete edition",
+    "standard edition",
+    "premium edition",
+    "special edition",
+    "master edition",
+    "royal edition",
+    "deluxe edition",
+    "gold edition",
     "director's cut",
     "directors cut",
+    "complete bundle",
+    "franchise bundle",
+    "complete collection",
+    "digital deluxe",
     "remastered",
+    "collection",
+    "franchise",
     "enhanced",
+    "ultimate",
+    "complete",
+    "legendary",
+    "deluxe",
+    "bundle",
+    "classic",
+    "pack",
     "goty",
+    "gold",
+    "(steam)",
+    "(pc)",
+    "- pc",
+    "steam",
     "key",
 ];
 
-fn strip_edition_suffix(title: &str) -> String {
+pub(crate) fn strip_edition_suffix(title: &str) -> String {
     let mut s = title.trim().to_string();
     loop {
         let trimmed = s
@@ -551,7 +585,23 @@ fn strip_edition_suffix(title: &str) -> String {
     }
 }
 
-async fn resolve_deal_steam_app_id(title: &str, gog_id: Option<&str>) -> Option<String> {
+fn base_game_candidates(title: &str) -> Vec<String> {
+    let cleaned = clean_title(title);
+    let mut out = Vec::new();
+    let stripped = strip_edition_suffix(&cleaned);
+    if !stripped.is_empty() && stripped != cleaned {
+        out.push(stripped);
+    }
+    if let Some((prefix, _)) = cleaned.split_once(" - ") {
+        let p = prefix.trim();
+        if p.chars().count() >= 4 && p != cleaned && !out.iter().any(|existing| existing == p) {
+            out.push(p.to_string());
+        }
+    }
+    out
+}
+
+async fn resolve_deal_steam_app_id(title: &str, gog_id: Option<&str>) -> Result<Option<String>> {
     let key = match gog_id {
         Some(gid) => format!("gog-{gid}"),
         None => {
@@ -565,37 +615,58 @@ async fn resolve_deal_steam_app_id(title: &str, gog_id: Option<&str>) -> Option<
         }
     };
     let path =
-        util::cache_dir("steam-ids").join(format!("{}.json", irori_core::paths::sanitize(&key)));
+        util::cache_dir("steam-ids-v2").join(format!("{}.json", irori_core::paths::sanitize(&key)));
     match util::cache_read_entry::<Option<String>>(&path).await {
-        Some((Some(id), _)) => return Some(id),
-        Some((None, age)) if age <= UMU_MISS_TTL => return None,
+        Some((Some(id), _)) => return Ok(Some(id)),
+        Some((None, age)) if age <= UMU_MISS_TTL => return Ok(None),
         _ => {}
     }
 
+    let mut had_transient_error = false;
     let mut resolved = if let Some(gid) = gog_id {
-        sources::gamesdb_steam_id(Runner::Gog, gid)
-            .await
-            .ok()
-            .flatten()
+        match sources::gamesdb_steam_id(Runner::Gog, gid).await {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::debug!("GamesDB lookup for GOG {gid} failed: {e:#}");
+                had_transient_error = true;
+                None
+            }
+        }
     } else {
         None
     };
 
     if resolved.is_none() {
         let cleaned = clean_title(title);
-        resolved = steam_search_app_id(&cleaned).await;
+        resolved = steam_search_app_id(&cleaned).await?;
         if resolved.is_none() {
             let stripped = strip_edition_suffix(&cleaned);
             if !stripped.is_empty() && stripped != cleaned {
-                resolved = steam_search_app_id(&stripped).await;
+                resolved = steam_search_app_id(&stripped).await?;
             }
         }
     }
 
-    if let Err(e) = util::cache_write(&path, &resolved).await {
+    if (resolved.is_some() || !had_transient_error)
+        && let Err(e) = util::cache_write(&path, &resolved).await
+    {
         tracing::debug!("caching deal Steam app ID for {key}: {e}");
     }
-    resolved
+    Ok(resolved)
+}
+
+enum ResolveOutcome {
+    Found(String, String, Option<ProtonDbTier>),
+    Miss,
+    Retry(String),
+}
+
+async fn protondb_tier_valid(id: &str) -> Option<ProtonDbTier> {
+    sources::protondb_cached(id)
+        .await
+        .ok()
+        .flatten()
+        .filter(|t| !matches!(t, ProtonDbTier::Unknown | ProtonDbTier::Pending))
 }
 
 /// Resolve Steam app IDs (for non-Steam deals/giveaways via GOG GamesDB or
@@ -604,33 +675,57 @@ async fn resolve_deal_steam_app_id(title: &str, gog_id: Option<&str>) -> Option<
 pub async fn resolve_protondb_batch(items: Vec<ProtonDbLookup>) -> ProtonDbBatchResult {
     use futures::stream::{self, StreamExt as _};
 
-    let entries: Vec<(String, String, Option<ProtonDbTier>)> = stream::iter(items)
+    let outcomes: Vec<ResolveOutcome> = stream::iter(items)
         .map(|item| async move {
-            let id = match item
-                .steam_app_id
-                .filter(|s| !s.trim().is_empty() && s.trim().chars().all(|c| c.is_ascii_digit()))
-            {
-                Some(id) => id,
-                None => resolve_deal_steam_app_id(&item.title, item.gog_id.as_deref()).await?,
+            let had_explicit_id = item.steam_app_id.as_deref().is_some_and(|s| {
+                !s.trim().is_empty() && s.trim().chars().all(|c| c.is_ascii_digit())
+            });
+            let mut id = if had_explicit_id {
+                item.steam_app_id.clone().unwrap()
+            } else {
+                match resolve_deal_steam_app_id(&item.title, item.gog_id.as_deref()).await {
+                    Ok(Some(id)) => id,
+                    Ok(None) => return ResolveOutcome::Miss,
+                    Err(e) => {
+                        tracing::debug!(
+                            "Steam app ID lookup for {} failed transiently: {e:#}",
+                            item.title
+                        );
+                        return ResolveOutcome::Retry(item.key);
+                    }
+                }
             };
-            let tier = sources::protondb_cached(&id)
-                .await
-                .ok()
-                .flatten()
-                .filter(|t| !matches!(t, ProtonDbTier::Unknown | ProtonDbTier::Pending));
-            Some((item.key, id, tier))
+            let mut tier = protondb_tier_valid(&id).await;
+            if tier.is_none() && !had_explicit_id {
+                for cand in base_game_candidates(&item.title) {
+                    if let Ok(Some(base_id)) = resolve_deal_steam_app_id(&cand, None).await
+                        && base_id != id
+                        && let Some(base_tier) = protondb_tier_valid(&base_id).await
+                    {
+                        id = base_id;
+                        tier = Some(base_tier);
+                        break;
+                    }
+                }
+            }
+            ResolveOutcome::Found(item.key, id, tier)
         })
         .buffer_unordered(4)
-        .filter_map(|v| async move { v })
         .collect()
         .await;
 
     let mut out = ProtonDbBatchResult::default();
-    for (key, id, tier) in entries {
-        if let Some(t) = tier {
-            out.tiers.insert(id.clone(), t);
+    for outcome in outcomes {
+        match outcome {
+            ResolveOutcome::Found(key, id, tier) => {
+                if let Some(t) = tier {
+                    out.tiers.insert(id.clone(), t);
+                }
+                out.resolved_steam_ids.insert(key, id);
+            }
+            ResolveOutcome::Miss => {}
+            ResolveOutcome::Retry(key) => out.retry_keys.push(key),
         }
-        out.resolved_steam_ids.insert(key, id);
     }
     out
 }
@@ -755,5 +850,20 @@ mod tests {
             strip_edition_suffix("The Elder Scrolls V: Skyrim Special Edition"),
             "The Elder Scrolls V: Skyrim"
         );
+        assert_eq!(
+            strip_edition_suffix(
+                "The Elder Scrolls IV: Oblivion - Game of the Year Edition Deluxe"
+            ),
+            "The Elder Scrolls IV: Oblivion"
+        );
+        assert_eq!(
+            strip_edition_suffix("Heroes of Might and Magic 3: Complete"),
+            "Heroes of Might and Magic 3"
+        );
+        assert_eq!(
+            strip_edition_suffix("The Wardrobe - Complete Bundle"),
+            "The Wardrobe"
+        );
+        assert_eq!(strip_edition_suffix("Fallout Franchise Bundle"), "Fallout");
     }
 }
