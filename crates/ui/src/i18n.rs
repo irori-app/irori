@@ -215,6 +215,10 @@ impl State {
             .map(|s| SharedString::from(s.clone()))
             .unwrap_or_else(|| SharedString::from(key.to_string()))
     }
+
+    fn t_args(&self, key: &str, args: &[(&str, &str)]) -> SharedString {
+        fill(&self.t(key), args)
+    }
 }
 
 static STATE: Lazy<RwLock<State>> = Lazy::new(|| RwLock::new(State::new()));
@@ -273,7 +277,7 @@ pub fn t(key: &str) -> SharedString {
 
 /// Translate `key` and fill `{name}` placeholders.
 pub fn t_args(key: &str, args: &[(&str, &str)]) -> SharedString {
-    fill(&t(key), args)
+    STATE.read().t_args(key, args)
 }
 
 /// Keys present in English but missing in `code` (for catalog tests).
@@ -291,25 +295,80 @@ pub fn missing_keys(catalogs: Catalogs, code: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     static TEST: Catalogs = &[
         (
             "en",
-            r#"{"i18n.test.hello": "Hello {name}", "i18n.test.only_en": "Only"}"#,
+            r#"{"i18n.test.hello": "Hello {name}", "i18n.test.only_en": "Only", "i18n.test.only_en_args": "Play {title}"}"#,
         ),
         ("de", r#"{"i18n.test.hello": "Hallo {name}"}"#),
     ];
 
-    #[test]
-    fn own_catalogs_are_complete() {
-        for lang in LANGUAGES {
-            assert!(
-                missing_keys(CATALOGS, lang.code).is_empty(),
-                "{}",
-                lang.code
-            );
+    fn placeholders(text: &str) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        let mut rest = text;
+        while let Some(start) = rest.find('{') {
+            rest = &rest[start + 1..];
+            if let Some(end) = rest.find('}') {
+                let name = &rest[..end];
+                if !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase() || b == b'_') {
+                    out.insert(name.to_string());
+                }
+                rest = &rest[end + 1..];
+            } else {
+                break;
+            }
         }
+        out
+    }
+
+    fn validate_catalogs(catalogs: Catalogs, namespace: &str) -> Result<(), String> {
+        let (_, en_json) = catalogs
+            .iter()
+            .find(|(code, _)| *code == "en")
+            .ok_or_else(|| "missing en catalog".to_string())?;
+        let en: Catalog =
+            serde_json::from_str(en_json).map_err(|e| format!("en.json does not parse: {e}"))?;
+        if en.is_empty() {
+            return Err("en.json is empty".to_string());
+        }
+        for (key, value) in &en {
+            if !key.starts_with(namespace) {
+                return Err(format!("{key} is outside {namespace}"));
+            }
+            if value.trim().is_empty() {
+                return Err(format!("en: {key} is empty"));
+            }
+        }
+        for (code, json) in catalogs {
+            let catalog: Catalog = serde_json::from_str(json)
+                .map_err(|e| format!("{code}.json does not parse: {e}"))?;
+            let mut extra: Vec<&String> = catalog.keys().filter(|k| !en.contains_key(*k)).collect();
+            extra.sort();
+            if !extra.is_empty() {
+                return Err(format!("{code} has orphan keys: {extra:?}"));
+            }
+            for (key, value) in &catalog {
+                if value.trim().is_empty() {
+                    return Err(format!("{code}: {key} is empty"));
+                }
+                if placeholders(value) != placeholders(&en[key]) {
+                    return Err(format!("{code}: placeholders of {key} differ from English"));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn own_catalogs_parse_and_match_english() {
+        let codes: Vec<&str> = CATALOGS.iter().map(|(c, _)| *c).collect();
+        let expected: Vec<&str> = LANGUAGES.iter().map(|l| l.code).collect();
+        assert_eq!(codes, expected);
+        assert_eq!(validate_catalogs(CATALOGS, "ui."), Ok(()));
     }
 
     // Uses its own state: switching the global language would race with
@@ -321,16 +380,40 @@ mod tests {
         state.set_language("de_AT");
         assert_eq!(state.code, "de");
         assert_eq!(
-            fill(&state.t("i18n.test.hello"), &[("name", "Ana")]),
+            state.t_args("i18n.test.hello", &[("name", "Ana")]),
             "Hallo Ana"
         );
         assert_eq!(state.t("i18n.test.only_en"), "Only");
+        assert_eq!(
+            state.t_args("i18n.test.only_en_args", &[("title", "Celeste")]),
+            "Play Celeste"
+        );
         assert_eq!(state.t("i18n.test.missing"), "i18n.test.missing");
         assert_eq!(
             missing_keys(TEST, "de"),
-            vec!["i18n.test.only_en".to_string()]
+            vec![
+                "i18n.test.only_en".to_string(),
+                "i18n.test.only_en_args".to_string()
+            ]
         );
+        assert_eq!(validate_catalogs(TEST, "i18n.test."), Ok(()));
         state.set_language("xx");
         assert_eq!(state.code, "en");
+    }
+
+    #[test]
+    fn validation_allows_missing_non_english_keys_but_rejects_defects() {
+        static ORPHAN: Catalogs = &[
+            ("en", r#"{"ui.ok": "OK"}"#),
+            ("de", r#"{"ui.ok": "OK", "ui.orphan": "Orphan"}"#),
+        ];
+        static BLANK: Catalogs = &[("en", r#"{"ui.ok": "OK"}"#), ("de", r#"{"ui.ok": "   "}"#)];
+        static BAD_PLACEHOLDER: Catalogs = &[
+            ("en", r#"{"ui.hi": "Hi {name}"}"#),
+            ("de", r#"{"ui.hi": "Hallo {user}"}"#),
+        ];
+        assert!(validate_catalogs(ORPHAN, "ui.").is_err());
+        assert!(validate_catalogs(BLANK, "ui.").is_err());
+        assert!(validate_catalogs(BAD_PLACEHOLDER, "ui.").is_err());
     }
 }

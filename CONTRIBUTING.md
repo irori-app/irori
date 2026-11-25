@@ -41,9 +41,11 @@ store sign-ins stay untouched.
 2. Keep the change to one topic and match the code around it.
 3. Add tests: new behaviour needs them, and a bug fix needs a test that fails
    without the fix. Tests never touch the network or real user data.
-4. Put every new or changed string into all 19 locale files, translated. The tests
-   fail on a missing key. If you can't translate a language well, say so in the pull
-   request and we'll help.
+4. Add or update user-facing strings in `crates/<crate>/locales/en.json`. Other 18
+   locale files fall back cleanly to English at runtime when keys are missing, so
+   code PRs do not need machine-translated catalogs; community translators update
+   other languages through dedicated `i18n(<lang>)` pull requests or Weblate. When
+   translating existing catalogs, keep every `{placeholder}` name exact.
 5. Run the checks:
 
    ```bash
@@ -54,6 +56,28 @@ store sign-ins stay untouched.
 
 6. If the change shows up in the app, run Irori and try it. Include screenshots in
    light and dark for UI changes.
+
+## AI-Assisted Contributions
+
+AI coding tools can help draft fixes and tests, provided a human contributor stays accountable for the result:
+
+- Understand and review every line in your diff before opening a pull request.
+- Build and test the change manually on real hardware; never submit unverified generated patches.
+- Disclose significant AI assistance in the pull request description so reviewers know how the change was produced and tested.
+- Keep pull requests small, single-purpose, and reviewable. Pull requests adding more than 1,500 lines across `*.rs` files fail CI unless split into stacked PRs or approved with the `large-pr-approved` label.
+
+## Scope and Non-Goals
+
+Irori focuses on being a fast, calm, native GPUI desktop and Big Picture game launcher for Linux, macOS, and Windows supporting official stores, emulators/ROM libraries, Lutris install scripts/imports, and sideloaded apps.
+
+Out of scope for the repository:
+
+- Parallel UI toolkits or rewrites (such as Electron, Qt, Kirigami, or embedded web engines in the main window).
+- Unofficial downloaders, DRM bypasses, or piracy sources.
+- Broad third-party plugin engines before core launcher stability and packaging reach maturity.
+- Telemetry, analytics SDKs, or automatic crash uploaders.
+
+If you want to propose a large new feature, start a conversation on [GitHub Discussions](https://github.com/irori-app/irori/discussions) before writing code.
 
 ## Pull requests
 
@@ -66,8 +90,10 @@ store sign-ins stay untouched.
   python3 .github/scripts/pr_rules.py --title "fix(epic): …" --head fix/epic-login
   ```
 
-- Fill in the template: what changed and why, how you checked it, and which
-  platforms you didn't try.
+- Fill in the pull request template: start with a short plain-language summary of
+  what changes for users before the technical details, list how you checked it and
+  which platforms you didn't try, and attach before-and-after screenshots in both
+  light and dark themes for any UI or UX change.
 - Pull requests are squash-merged, with the title as the commit message.
 
 ## Licence

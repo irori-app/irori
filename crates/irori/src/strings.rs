@@ -26,19 +26,44 @@ pub static CATALOGS: Catalogs = &[
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeSet, HashMap};
+
     use super::CATALOGS;
-    use irori_ui::i18n::{LANGUAGES, missing_keys};
+    use irori_ui::i18n::LANGUAGES;
+
+    fn parse(code: &str, json: &str) -> HashMap<String, String> {
+        serde_json::from_str(json).unwrap_or_else(|e| panic!("{code}.json does not parse: {e}"))
+    }
+
+    fn placeholders(text: &str) -> BTreeSet<String> {
+        let re = regex::Regex::new(r"\{([a-z_]+)\}").unwrap();
+        re.captures_iter(text).map(|c| c[1].to_string()).collect()
+    }
 
     #[test]
-    fn every_language_is_complete() {
-        for lang in LANGUAGES {
-            assert!(
-                CATALOGS.iter().any(|(c, _)| *c == lang.code),
-                "no shell catalog for {}",
-                lang.code
-            );
-            let missing = missing_keys(CATALOGS, lang.code);
-            assert!(missing.is_empty(), "{}: missing {missing:?}", lang.code);
+    fn every_language_catalog_parses_and_matches_english() {
+        let codes: Vec<&str> = CATALOGS.iter().map(|(c, _)| *c).collect();
+        let expected: Vec<&str> = LANGUAGES.iter().map(|l| l.code).collect();
+        assert_eq!(codes, expected);
+
+        let en = parse("en", CATALOGS[0].1);
+        assert!(!en.is_empty(), "en.json is empty");
+        for key in en.keys() {
+            assert!(key.starts_with("shell."), "{key} is outside shell.");
+        }
+
+        for (code, json) in CATALOGS {
+            let catalog = parse(code, json);
+            let extra: Vec<_> = catalog.keys().filter(|k| !en.contains_key(*k)).collect();
+            assert!(extra.is_empty(), "{code}: extra keys {extra:?}");
+            for (key, text) in &catalog {
+                assert!(!text.trim().is_empty(), "{code}: {key} is empty");
+                assert_eq!(
+                    placeholders(text),
+                    placeholders(&en[key]),
+                    "{code}: placeholders of {key}"
+                );
+            }
         }
     }
 

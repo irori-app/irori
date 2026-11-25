@@ -178,7 +178,7 @@ mod catalog_tests {
     use std::collections::{BTreeSet, HashMap};
     use std::path::Path;
 
-    use irori_ui::i18n::{LANGUAGES, missing_keys};
+    use irori_ui::i18n::LANGUAGES;
     use regex::Regex;
 
     use super::CATALOGS;
@@ -219,19 +219,14 @@ mod catalog_tests {
     fn catalogs_match_english_keys_and_placeholders() {
         let en = english();
         for (code, json) in CATALOGS {
-            assert_eq!(
-                missing_keys(CATALOGS, code),
-                Vec::<String>::new(),
-                "{code} misses keys"
-            );
             let catalog = parse(code, json);
             let mut extra: Vec<&String> = catalog.keys().filter(|k| !en.contains_key(*k)).collect();
             extra.sort();
             assert!(extra.is_empty(), "{code} has keys English lacks: {extra:?}");
-            for (key, text) in &en {
+            for (key, text) in &catalog {
                 assert_eq!(
-                    placeholders(&catalog[key]),
                     placeholders(text),
+                    placeholders(&en[key]),
                     "{code}: placeholders of {key} differ from English"
                 );
             }

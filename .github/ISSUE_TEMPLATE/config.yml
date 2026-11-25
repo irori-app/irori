@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions, ideas, and general help
+    url: https://github.com/irori-app/irori/discussions
+    about: Ask questions, share setup tips, or discuss larger ideas before opening an issue.
+  - name: Security vulnerability (private report)
+    url: https://github.com/irori-app/irori/security/advisories/new
+    about: Report credential leaks, unsafe script paths, or security bugs privately. Never open a public issue.

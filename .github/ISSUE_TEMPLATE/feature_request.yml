@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a focused improvement within Irori's scope
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before requesting a new feature, please read **Scope and Non-Goals** in [`CONTRIBUTING.md`](https://github.com/irori-app/irori/blob/main/CONTRIBUTING.md) so effort stays aligned with Irori's architecture as a native GPUI desktop and Big Picture launcher.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem or friction does this solve?
+      description: Describe the real workflow problem you hit today rather than jumping straight to an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Explain clearly how the feature should work in Irori's desktop or Big Picture interface.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Optional note on workarounds you use today or other options you considered.
+  - type: checkboxes
+    id: scope_confirmation
+    attributes:
+      label: Scope check
+      options:
+        - label: I searched existing issues and discussions for similar requests.
+          required: true
+        - label: This fits Irori's scope in CONTRIBUTING.md (no parallel UI toolkits or unofficial/piracy download sources).
+          required: true

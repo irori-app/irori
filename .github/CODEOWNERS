@@ -1,0 +1,4 @@
+# GitHub CODEOWNERS uses OR semantics on one line. With 1 required approval
+# and Code Owners enforcement on main, each maintainer reviews the other's
+# pull requests automatically.
+* @countradooku @EdwardTheBanker
