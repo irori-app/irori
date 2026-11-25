@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "GG.deals 金鑰 ✓",
   "manage.deals.ggdeals.dialog_title": "GG.deals API 金鑰",
   "manage.deals.ggdeals.dialog_description": "新增免費的個人 GG.deals API 金鑰，以您的幣別比較官方商店、Key 商店與歷史低價。",
-  "manage.deals.ggdeals.get_key": "前往 GG.deals 取得免費金鑰",
+  "manage.deals.ggdeals.get_key": "開啟 GG.deals API 頁面",
   "manage.deals.ggdeals.key_placeholder": "貼上您的 GG.deals API 金鑰",
   "manage.deals.ggdeals.save_key": "儲存金鑰",
   "manage.deals.ggdeals.remove_key": "移除金鑰",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "無法更新 GG.deals 金鑰",
   "manage.deals.ggdeals.official_price": "官方: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "史低: {price}"
+  "manage.deals.ggdeals.low_price": "史低: {price}",
+  "manage.deals.ggdeals.key_tooltip": "連接免費的個人 GG.deals API 金鑰，以比較官方商店、金鑰商店與歷史最低價。點擊查看設定步驟。",
+  "manage.deals.ggdeals.step1": "1. 在 GG.deals 建立免費帳號並確認電子郵件:",
+  "manage.deals.ggdeals.register_link": "在 GG.deals 註冊",
+  "manage.deals.ggdeals.step2": "2. 開啟 API 頁面，點擊 \"Get Your API key\" 並複製權杖:",
+  "manage.deals.ggdeals.step3": "3. 將權杖貼到下方並儲存。"
 }

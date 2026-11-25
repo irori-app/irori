@@ -651,9 +651,18 @@ fn open_ggdeals_key_dialog(
             .masked(true)
     });
     let weak_cache = cache_entity.downgrade();
-    window.open_dialog(cx, move |dialog, _, _| {
+    window.open_dialog(cx, move |dialog, _, cx| {
         let input = input.clone();
         let weak_cache = weak_cache.clone();
+        let (border, muted_bg, muted_fg, radius) = {
+            let theme = cx.theme();
+            (
+                theme.border,
+                theme.muted.opacity(0.35),
+                theme.muted_foreground,
+                theme.radius,
+            )
+        };
         dialog
             .title(t("manage.deals.ggdeals.dialog_title"))
             .child(
@@ -665,14 +674,64 @@ fn open_ggdeals_key_dialog(
                             .child(t("manage.deals.ggdeals.dialog_description")),
                     )
                     .child(
-                        Link::new("ggdeals-get-key")
-                            .href("https://gg.deals/settings/")
+                        v_flex()
+                            .gap_2()
+                            .p_3()
+                            .rounded(radius)
+                            .border_1()
+                            .border_color(border)
+                            .bg(muted_bg)
                             .child(
-                                h_flex()
+                                v_flex()
                                     .gap_1()
-                                    .text_sm()
-                                    .child(t("manage.deals.ggdeals.get_key"))
-                                    .child(Icon::new(IconName::ExternalLink).xsmall()),
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(muted_fg)
+                                            .child(t("manage.deals.ggdeals.step1")),
+                                    )
+                                    .child(
+                                        Link::new("ggdeals-register")
+                                            .href("https://gg.deals/register/")
+                                            .child(
+                                                h_flex()
+                                                    .gap_1()
+                                                    .text_sm()
+                                                    .child(t("manage.deals.ggdeals.register_link"))
+                                                    .child(
+                                                        Icon::new(IconName::ExternalLink).xsmall(),
+                                                    ),
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                v_flex()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(muted_fg)
+                                            .child(t("manage.deals.ggdeals.step2")),
+                                    )
+                                    .child(
+                                        Link::new("ggdeals-get-key")
+                                            .href("https://gg.deals/api/")
+                                            .child(
+                                                h_flex()
+                                                    .gap_1()
+                                                    .text_sm()
+                                                    .child(t("manage.deals.ggdeals.get_key"))
+                                                    .child(
+                                                        Icon::new(IconName::ExternalLink).xsmall(),
+                                                    ),
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted_fg)
+                                    .child(t("manage.deals.ggdeals.step3")),
                             ),
                     )
                     .child(Input::new(&input)),
@@ -1595,6 +1654,7 @@ impl Render for DealsSection {
                     .outline()
                     .small()
                     .icon(IconName::KeyRound)
+                    .tooltip(t("manage.deals.ggdeals.key_tooltip"))
                     .label(if ggdeals_key_saved {
                         t("manage.deals.ggdeals.key_active")
                     } else {

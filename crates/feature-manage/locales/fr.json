@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "Clé GG.deals ✓",
   "manage.deals.ggdeals.dialog_title": "Clé API GG.deals",
   "manage.deals.ggdeals.dialog_description": "Ajoutez une clé API personnelle gratuite GG.deals pour comparer boutiques officielles, keyshops et plus bas historiques.",
-  "manage.deals.ggdeals.get_key": "Obtenir une clé gratuite sur GG.deals",
+  "manage.deals.ggdeals.get_key": "Ouvrir la page API de GG.deals",
   "manage.deals.ggdeals.key_placeholder": "Collez votre clé API GG.deals",
   "manage.deals.ggdeals.save_key": "Enregistrer",
   "manage.deals.ggdeals.remove_key": "Supprimer",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "Impossible de mettre à jour la clé GG.deals",
   "manage.deals.ggdeals.official_price": "Officiel : {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops : {price}",
-  "manage.deals.ggdeals.low_price": "Min : {price}"
+  "manage.deals.ggdeals.low_price": "Min : {price}",
+  "manage.deals.ggdeals.key_tooltip": "Connectez une clé API personnelle gratuite GG.deals pour comparer boutiques officielles, keyshops et plus bas historiques. Cliquez pour voir les étapes.",
+  "manage.deals.ggdeals.step1": "1. Créez un compte gratuit sur GG.deals et confirmez votre e-mail :",
+  "manage.deals.ggdeals.register_link": "S'inscrire sur GG.deals",
+  "manage.deals.ggdeals.step2": "2. Ouvrez la page API, cliquez sur « Get Your API key » et copiez le jeton :",
+  "manage.deals.ggdeals.step3": "3. Collez le jeton ci-dessous et enregistrez."
 }

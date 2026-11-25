@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "GG.deals-nyckel ✓",
   "manage.deals.ggdeals.dialog_title": "GG.deals API-nyckel",
   "manage.deals.ggdeals.dialog_description": "Lägg till en gratis personlig GG.deals API-nyckel för att jämföra officiella butiker, keyshops och lägsta historiska pris.",
-  "manage.deals.ggdeals.get_key": "Skaffa gratis nyckel på GG.deals",
+  "manage.deals.ggdeals.get_key": "Öppna GG.deals API-sida",
   "manage.deals.ggdeals.key_placeholder": "Klistra in din GG.deals API-nyckel",
   "manage.deals.ggdeals.save_key": "Spara nyckel",
   "manage.deals.ggdeals.remove_key": "Ta bort nyckel",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "Kunde inte uppdatera GG.deals-nyckeln",
   "manage.deals.ggdeals.official_price": "Officiell: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "Lägst: {price}"
+  "manage.deals.ggdeals.low_price": "Lägst: {price}",
+  "manage.deals.ggdeals.key_tooltip": "Anslut en gratis personlig GG.deals API-nyckel för att jämföra officiella butiker, keyshops och lägsta historiska pris. Klicka för instruktioner.",
+  "manage.deals.ggdeals.step1": "1. Skapa ett gratis konto på GG.deals och bekräfta din e-post:",
+  "manage.deals.ggdeals.register_link": "Registrera på GG.deals",
+  "manage.deals.ggdeals.step2": "2. Öppna API-sidan, klicka på \"Get Your API key\" och kopiera token:",
+  "manage.deals.ggdeals.step3": "3. Klistra in token nedan och spara."
 }

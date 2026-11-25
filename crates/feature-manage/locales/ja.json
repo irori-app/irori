@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "GG.deals キー ✓",
   "manage.deals.ggdeals.dialog_title": "GG.deals API キー",
   "manage.deals.ggdeals.dialog_description": "無料の個人用 GG.deals API キーを追加すると、公式ストア・キーショップ・最安履歴を通貨別で比較できます。",
-  "manage.deals.ggdeals.get_key": "GG.deals で無料キーを取得",
+  "manage.deals.ggdeals.get_key": "GG.deals API ページを開く",
   "manage.deals.ggdeals.key_placeholder": "GG.deals API キーを貼り付け",
   "manage.deals.ggdeals.save_key": "保存",
   "manage.deals.ggdeals.remove_key": "削除",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "GG.deals キーを更新できませんでした",
   "manage.deals.ggdeals.official_price": "公式: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "最安: {price}"
+  "manage.deals.ggdeals.low_price": "最安: {price}",
+  "manage.deals.ggdeals.key_tooltip": "無料の個人用 GG.deals API キーを接続して、公式ストア、キーショップ、過去最安値を比較します。クリックして手順を表示します。",
+  "manage.deals.ggdeals.step1": "1. GG.deals で無料アカウントを作成し、メールを確認します:",
+  "manage.deals.ggdeals.register_link": "GG.deals で登録",
+  "manage.deals.ggdeals.step2": "2. API ページを開き、「Get Your API key」をクリックしてトークンをコピーします:",
+  "manage.deals.ggdeals.step3": "3. 下にトークンを貼り付けて保存します。"
 }

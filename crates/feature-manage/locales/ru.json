@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "Ключ GG.deals ✓",
   "manage.deals.ggdeals.dialog_title": "Ключ API GG.deals",
   "manage.deals.ggdeals.dialog_description": "Добавьте бесплатный личный API-ключ GG.deals для сравнения официальных магазинов, keyshops и исторических минимумов.",
-  "manage.deals.ggdeals.get_key": "Получить бесплатный ключ на GG.deals",
+  "manage.deals.ggdeals.get_key": "Открыть страницу API GG.deals",
   "manage.deals.ggdeals.key_placeholder": "Вставьте API-ключ GG.deals",
   "manage.deals.ggdeals.save_key": "Сохранить",
   "manage.deals.ggdeals.remove_key": "Удалить",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "Не удалось обновить ключ GG.deals",
   "manage.deals.ggdeals.official_price": "Офиц.: {price}",
   "manage.deals.ggdeals.keyshop_price": "Ключи: {price}",
-  "manage.deals.ggdeals.low_price": "Мин.: {price}"
+  "manage.deals.ggdeals.low_price": "Мин.: {price}",
+  "manage.deals.ggdeals.key_tooltip": "Подключите бесплатный личный API-ключ GG.deals, чтобы сравнивать официальные магазины, магазины ключей и исторические минимумы. Нажмите для инструкции.",
+  "manage.deals.ggdeals.step1": "1. Создайте бесплатный аккаунт на GG.deals и подтвердите электронную почту:",
+  "manage.deals.ggdeals.register_link": "Зарегистрироваться на GG.deals",
+  "manage.deals.ggdeals.step2": "2. Откройте страницу API, нажмите «Get Your API key» и скопируйте токен:",
+  "manage.deals.ggdeals.step3": "3. Вставьте токен ниже и сохраните."
 }

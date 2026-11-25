@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "GG.deals-sleutel ✓",
   "manage.deals.ggdeals.dialog_title": "GG.deals API-sleutel",
   "manage.deals.ggdeals.dialog_description": "Voeg een gratis persoonlijke GG.deals API-sleutel toe om officiële winkels, keyshops en laagsteprijshistorie te vergelijken.",
-  "manage.deals.ggdeals.get_key": "Gratis sleutel aanvragen op GG.deals",
+  "manage.deals.ggdeals.get_key": "GG.deals API-pagina openen",
   "manage.deals.ggdeals.key_placeholder": "Plak je GG.deals API-sleutel",
   "manage.deals.ggdeals.save_key": "Sleutel opslaan",
   "manage.deals.ggdeals.remove_key": "Sleutel verwijderen",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "Kan GG.deals-sleutel niet bijwerken",
   "manage.deals.ggdeals.official_price": "Officieel: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "Laagst: {price}"
+  "manage.deals.ggdeals.low_price": "Laagst: {price}",
+  "manage.deals.ggdeals.key_tooltip": "Koppel een gratis persoonlijke GG.deals-API-sleutel om officiële winkels, keyshops en laagste prijzen te vergelijken. Klik voor instructies.",
+  "manage.deals.ggdeals.step1": "1. Maak een gratis account aan op GG.deals en bevestig je e-mail:",
+  "manage.deals.ggdeals.register_link": "Registreren op GG.deals",
+  "manage.deals.ggdeals.step2": "2. Open de API-pagina, klik op \"Get Your API key\" en kopieer het token:",
+  "manage.deals.ggdeals.step3": "3. Plak het token hieronder en sla op."
 }

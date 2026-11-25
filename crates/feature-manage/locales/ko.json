@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "GG.deals 키 ✓",
   "manage.deals.ggdeals.dialog_title": "GG.deals API 키",
   "manage.deals.ggdeals.dialog_description": "무료 개인 GG.deals API 키를 추가하면 공식 스토어, 키샵, 역대 최저가를 내 통화로 비교할 수 있습니다.",
-  "manage.deals.ggdeals.get_key": "GG.deals에서 무료 API 키 받기",
+  "manage.deals.ggdeals.get_key": "GG.deals API 페이지 열기",
   "manage.deals.ggdeals.key_placeholder": "GG.deals API 키 붙여넣기",
   "manage.deals.ggdeals.save_key": "저장",
   "manage.deals.ggdeals.remove_key": "삭제",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "GG.deals 키를 업데이트하지 못했습니다",
   "manage.deals.ggdeals.official_price": "공식: {price}",
   "manage.deals.ggdeals.keyshop_price": "키샵: {price}",
-  "manage.deals.ggdeals.low_price": "최저: {price}"
+  "manage.deals.ggdeals.low_price": "최저: {price}",
+  "manage.deals.ggdeals.key_tooltip": "무료 개인 GG.deals API 키를 연결하여 공식 스토어, 키샵 및 역대 최저가를 비교하세요. 클릭하면 설정 방법을 확인할 수 있습니다.",
+  "manage.deals.ggdeals.step1": "1. GG.deals에서 무료 계정을 만들고 이메일을 인증하세요:",
+  "manage.deals.ggdeals.register_link": "GG.deals 가입하기",
+  "manage.deals.ggdeals.step2": "2. API 페이지를 열고 \"Get Your API key\"를 클릭한 뒤 토큰을 복사하세요:",
+  "manage.deals.ggdeals.step3": "3. 아래에 토큰을 붙여넣고 저장하세요."
 }

@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "GG.deals-Key ✓",
   "manage.deals.ggdeals.dialog_title": "GG.deals API-Schlüssel",
   "manage.deals.ggdeals.dialog_description": "Füge einen kostenlosen persönlichen GG.deals API-Schlüssel hinzu, um offizielle Stores, Keyshops und historische Tiefstpreise zu vergleichen.",
-  "manage.deals.ggdeals.get_key": "Kostenlosen API-Key auf GG.deals holen",
+  "manage.deals.ggdeals.get_key": "GG.deals API-Seite öffnen",
   "manage.deals.ggdeals.key_placeholder": "GG.deals API-Schlüssel einfügen",
   "manage.deals.ggdeals.save_key": "Speichern",
   "manage.deals.ggdeals.remove_key": "Entfernen",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "GG.deals-Schlüssel konnte nicht aktualisiert werden",
   "manage.deals.ggdeals.official_price": "Offiziell: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "Tiefst: {price}"
+  "manage.deals.ggdeals.low_price": "Tiefst: {price}",
+  "manage.deals.ggdeals.key_tooltip": "Verbinde einen kostenlosen persönlichen GG.deals-API-Schlüssel, um offizielle Shops, Keyshops und historische Tiefstpreise zu vergleichen. Für Anleitung klicken.",
+  "manage.deals.ggdeals.step1": "1. Erstelle ein kostenloses GG.deals-Konto und bestätige deine E-Mail:",
+  "manage.deals.ggdeals.register_link": "Auf GG.deals registrieren",
+  "manage.deals.ggdeals.step2": "2. Öffne die API-Seite, klicke auf \"Get Your API key\" und kopiere den Token:",
+  "manage.deals.ggdeals.step3": "3. Füge den Token unten ein und speichere."
 }

@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "Klíč GG.deals ✓",
   "manage.deals.ggdeals.dialog_title": "GG.deals API klíč",
   "manage.deals.ggdeals.dialog_description": "Přidejte bezplatný osobní GG.deals API klíč pro srovnání oficiálních obchodů, keyshopů a historických minim.",
-  "manage.deals.ggdeals.get_key": "Získat klíč zdarma na GG.deals",
+  "manage.deals.ggdeals.get_key": "Otevřít stránku API GG.deals",
   "manage.deals.ggdeals.key_placeholder": "Vložte GG.deals API klíč",
   "manage.deals.ggdeals.save_key": "Uložit klíč",
   "manage.deals.ggdeals.remove_key": "Odebrat klíč",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "Nepodařilo se aktualizovat klíč GG.deals",
   "manage.deals.ggdeals.official_price": "Oficiální: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshopy: {price}",
-  "manage.deals.ggdeals.low_price": "Min: {price}"
+  "manage.deals.ggdeals.low_price": "Min: {price}",
+  "manage.deals.ggdeals.key_tooltip": "Připojte bezplatný osobní klíč API GG.deals pro porovnání oficiálních obchodů, keyshopů a historických minim. Klikněte pro návod.",
+  "manage.deals.ggdeals.step1": "1. Vytvořte si bezplatný účet na GG.deals a potvrďte svůj e-mail:",
+  "manage.deals.ggdeals.register_link": "Registrovat se na GG.deals",
+  "manage.deals.ggdeals.step2": "2. Otevřete stránku API, klikněte na \"Get Your API key\" a zkopírujte token:",
+  "manage.deals.ggdeals.step3": "3. Vložte token níže a uložte."
 }

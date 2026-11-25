@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "Cheie GG.deals ✓",
   "manage.deals.ggdeals.dialog_title": "Cheie API GG.deals",
   "manage.deals.ggdeals.dialog_description": "Adaugă o cheie API personală gratuită GG.deals pentru a compara magazine oficiale, keyshop-uri și minime istorice.",
-  "manage.deals.ggdeals.get_key": "Obține cheia gratuită pe GG.deals",
+  "manage.deals.ggdeals.get_key": "Deschide pagina API GG.deals",
   "manage.deals.ggdeals.key_placeholder": "Lipește cheia API GG.deals",
   "manage.deals.ggdeals.save_key": "Salvează cheia",
   "manage.deals.ggdeals.remove_key": "Elimină cheia",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "Nu s-a putut actualiza cheia GG.deals",
   "manage.deals.ggdeals.official_price": "Oficial: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshops: {price}",
-  "manage.deals.ggdeals.low_price": "Minim: {price}"
+  "manage.deals.ggdeals.low_price": "Minim: {price}",
+  "manage.deals.ggdeals.key_tooltip": "Conectează o cheie API personală gratuită GG.deals pentru a compara magazinele oficiale, keyshop-urile și minimele istorice. Fă clic pentru pași.",
+  "manage.deals.ggdeals.step1": "1. Creează un cont gratuit pe GG.deals și confirmă-ți e-mailul:",
+  "manage.deals.ggdeals.register_link": "Înregistrează-te pe GG.deals",
+  "manage.deals.ggdeals.step2": "2. Deschide pagina API, apasă pe \"Get Your API key\" și copiază tokenul:",
+  "manage.deals.ggdeals.step3": "3. Lipește tokenul mai jos și salvează."
 }

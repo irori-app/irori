@@ -923,7 +923,7 @@
   "manage.deals.ggdeals.key_active": "Chiave GG.deals ✓",
   "manage.deals.ggdeals.dialog_title": "Chiave API GG.deals",
   "manage.deals.ggdeals.dialog_description": "Aggiungi una chiave API gratuita di GG.deals per confrontare negozi ufficiali, keyshop e minimi storici nella tua valuta.",
-  "manage.deals.ggdeals.get_key": "Ottieni chiave gratuita su GG.deals",
+  "manage.deals.ggdeals.get_key": "Apri la pagina API di GG.deals",
   "manage.deals.ggdeals.key_placeholder": "Incolla la tua chiave API GG.deals",
   "manage.deals.ggdeals.save_key": "Salva chiave",
   "manage.deals.ggdeals.remove_key": "Rimuovi chiave",
@@ -932,5 +932,10 @@
   "manage.deals.ggdeals.key_save_failed": "Impossibile aggiornare la chiave GG.deals",
   "manage.deals.ggdeals.official_price": "Ufficiale: {price}",
   "manage.deals.ggdeals.keyshop_price": "Keyshop: {price}",
-  "manage.deals.ggdeals.low_price": "Min: {price}"
+  "manage.deals.ggdeals.low_price": "Min: {price}",
+  "manage.deals.ggdeals.key_tooltip": "Collega una chiave API personale gratuita di GG.deals per confrontare negozi ufficiali, keyshop e minimi storici. Clicca per le istruzioni.",
+  "manage.deals.ggdeals.step1": "1. Crea un account gratuito su GG.deals e conferma la tua e-mail:",
+  "manage.deals.ggdeals.register_link": "Registrati su GG.deals",
+  "manage.deals.ggdeals.step2": "2. Apri la pagina API, clicca su \"Get Your API key\" e copia il token:",
+  "manage.deals.ggdeals.step3": "3. Incolla il token qui sotto e salva."
 }
