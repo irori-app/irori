@@ -1,16 +1,27 @@
 //! Settings that make a launcher behave under Wine, written into a prefix
 //! before Irori first runs the launcher's installer there:
 //!
-//! - Battle.net without hardware acceleration (`Client.HardwareAcceleration`
-//!   in `%APPDATA%\Battle.net\Battle.net.config`), whose GPU-drawn window
-//!   stays blank or flickers under many Wine builds.
+//! - Battle.net (`%APPDATA%\Battle.net\Battle.net.config`):
+//!   - `Client.HardwareAcceleration = "true"`, paired with `--in-process-gpu`
+//!     on launch so the CEF UI stays responsive under Wine/Proton without blank
+//!     windows.
+//!   - `Client.GameLaunchWindowBehavior = "2"` (default if unset), so
+//!     Battle.net exits completely when starting a game, freeing RAM/GPU and
+//!     avoiding focus conflicts.
+//!   - `Client.DefaultStartupScreen = "1"` (default if unset), so it opens on
+//!     the last viewed game page.
+//!   - `Client.SingleInstance = "true"` (default if unset).
+//!   - `Client.GameSearch.BackgroundSearch = "true"` (default if unset), so it
+//!     detects games already present on disk.
+//!   - `Client.Install.CreateDesktopShortcut = "false"` (default if unset), to
+//!     avoid creating broken Linux desktop shortcuts without Wine/umu flags.
 //! - Ubisoft Connect without its in-game overlay (`overlay.enabled` in
 //!   `%LOCALAPPDATA%\Ubisoft Game Launcher\settings.yaml`), which hooks the
 //!   game's renderer and crashes or freezes games under Wine.
 //!
-//! Only those keys change; every other setting in a file that is already
-//! there stays as written. The EA app and the Rockstar Games Launcher need
-//! nothing.
+//! Only those keys change; existing Battle.net user choices for the optional
+//! defaults and every unrelated setting in a file that is already there stay
+//! as written. The EA app and the Rockstar Games Launcher need nothing.
 
 use std::fs;
 use std::io;
@@ -68,8 +79,8 @@ fn users(drive: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(found)
 }
 
-/// `Battle.net.config` with hardware acceleration off, or `None` when it
-/// already is (or the file isn't JSON Irori can safely rewrite).
+/// `Battle.net.config` with Wine-friendly defaults, or `None` when nothing
+/// changes (or the file is not JSON Irori can safely rewrite).
 fn battlenet_config(existing: Option<&str>) -> Option<String> {
     use serde_json::{Map, Value};
     let mut root = match existing.map(str::trim).filter(|t| !t.is_empty()) {
@@ -81,12 +92,53 @@ fn battlenet_config(existing: Option<&str>) -> Option<String> {
         .entry("Client")
         .or_insert_with(|| Value::Object(Map::new()))
         .as_object_mut()?;
-    // Battle.net writes every value as a string.
-    let off = Value::String("false".into());
-    if client.get("HardwareAcceleration") == Some(&off) {
+
+    let mut changed = false;
+    // Battle.net writes every value as a string. HardwareAcceleration is
+    // paired with `--in-process-gpu` on Linux launches, so upgrade older
+    // prefixes where Irori previously wrote "false".
+    let on = Value::String("true".into());
+    if client.get("HardwareAcceleration") != Some(&on) {
+        client.insert("HardwareAcceleration".into(), on);
+        changed = true;
+    }
+
+    // Populate user-overridable defaults only when absent.
+    for (key, value) in [
+        ("GameLaunchWindowBehavior", "2"),
+        ("DefaultStartupScreen", "1"),
+        ("SingleInstance", "true"),
+    ] {
+        if !client.contains_key(key) {
+            client.insert(key.into(), Value::String(value.into()));
+            changed = true;
+        }
+    }
+    for (section, key, value) in [
+        ("GameSearch", "BackgroundSearch", "true"),
+        ("Install", "CreateDesktopShortcut", "false"),
+    ] {
+        match client.get_mut(section) {
+            Some(Value::Object(map)) => {
+                if !map.contains_key(key) {
+                    map.insert(key.into(), Value::String(value.into()));
+                    changed = true;
+                }
+            }
+            None => {
+                let mut map = Map::new();
+                map.insert(key.into(), Value::String(value.into()));
+                client.insert(section.into(), Value::Object(map));
+                changed = true;
+            }
+            // Leave unexpected non-object values untouched.
+            Some(_) => {}
+        }
+    }
+
+    if !changed {
         return None;
     }
-    client.insert("HardwareAcceleration".into(), off);
     serde_json::to_string_pretty(&root).ok()
 }
 
@@ -136,21 +188,73 @@ mod tests {
     use super::*;
 
     #[test]
-    fn battlenet_keeps_its_other_settings() {
+    fn battlenet_writes_defaults_and_keeps_user_overrides() {
         let fresh = battlenet_config(None).unwrap();
         let v: serde_json::Value = serde_json::from_str(&fresh).unwrap();
-        assert_eq!(v["Client"]["HardwareAcceleration"], "false");
+        assert_eq!(v["Client"]["HardwareAcceleration"], "true");
+        assert_eq!(v["Client"]["GameLaunchWindowBehavior"], "2");
+        assert_eq!(v["Client"]["DefaultStartupScreen"], "1");
+        assert_eq!(v["Client"]["SingleInstance"], "true");
+        assert_eq!(v["Client"]["GameSearch"]["BackgroundSearch"], "true");
+        assert_eq!(v["Client"]["Install"]["CreateDesktopShortcut"], "false");
 
-        let existing = r#"{"Client":{"HardwareAcceleration":"true","Sound":{"Enabled":"false"}},"Games":{"x":1}}"#;
-        let v: serde_json::Value =
-            serde_json::from_str(&battlenet_config(Some(existing)).unwrap()).unwrap();
-        assert_eq!(v["Client"]["HardwareAcceleration"], "false");
+        assert_eq!(battlenet_config(Some(&fresh)), None, "idempotent");
+
+        let existing = r#"{
+            "Client": {
+                "HardwareAcceleration": "false",
+                "GameLaunchWindowBehavior": "0",
+                "DefaultStartupScreen": "0",
+                "SingleInstance": "false",
+                "GameSearch": { "BackgroundSearch": "false" },
+                "Install": { "CreateDesktopShortcut": "true", "Custom": "kept" },
+                "Sound": { "Enabled": "false" }
+            },
+            "Games": { "x": 1 }
+        }"#;
+        let updated = battlenet_config(Some(existing)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&updated).unwrap();
+        assert_eq!(v["Client"]["HardwareAcceleration"], "true");
+        assert_eq!(v["Client"]["GameLaunchWindowBehavior"], "0");
+        assert_eq!(v["Client"]["DefaultStartupScreen"], "0");
+        assert_eq!(v["Client"]["SingleInstance"], "false");
+        assert_eq!(v["Client"]["GameSearch"]["BackgroundSearch"], "false");
+        assert_eq!(v["Client"]["Install"]["CreateDesktopShortcut"], "true");
+        assert_eq!(v["Client"]["Install"]["Custom"], "kept");
         assert_eq!(v["Client"]["Sound"]["Enabled"], "false");
         assert_eq!(v["Games"]["x"], 1);
+        assert_eq!(
+            battlenet_config(Some(&updated)),
+            None,
+            "second pass is idempotent"
+        );
 
-        assert_eq!(battlenet_config(Some(&fresh)), None, "already off");
         assert_eq!(battlenet_config(Some("not json")), None, "left alone");
         assert_eq!(battlenet_config(Some("[1]")), None, "left alone");
+        assert_eq!(
+            battlenet_config(Some(r#"{"Client": 1}"#)),
+            None,
+            "non-object Client left alone"
+        );
+        let non_object_sections = r#"{
+            "Client": {
+                "HardwareAcceleration": "true",
+                "GameLaunchWindowBehavior": "2",
+                "DefaultStartupScreen": "1",
+                "SingleInstance": "true",
+                "GameSearch": "unexpected",
+                "Install": 42
+            }
+        }"#;
+        assert_eq!(
+            battlenet_config(Some(non_object_sections)),
+            None,
+            "non-object nested sections left alone"
+        );
+        let from_whitespace = battlenet_config(Some("   \n\t")).unwrap();
+        let ws: serde_json::Value = serde_json::from_str(&from_whitespace).unwrap();
+        assert_eq!(ws["Client"]["HardwareAcceleration"], "true");
+        assert_eq!(ws["Client"]["GameSearch"]["BackgroundSearch"], "true");
     }
 
     #[test]
