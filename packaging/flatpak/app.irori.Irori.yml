@@ -10,6 +10,8 @@ sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: irori
+# flatpak-builder also rewrites <launchable type="desktop-id"> in
+# app.irori.Irori.metainfo.xml when renaming irori.desktop.
 rename-desktop-file: irori.desktop
 rename-icon: irori
 
