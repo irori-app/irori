@@ -106,7 +106,7 @@ cx.spawn_in(window, async move |this, cx| {
 - Each crate owns flat JSON catalogs under `crates/<crate>/locales/<code>.json` and a key namespace: `ui.`, `library.`, `game.`, `manage.`, `settings.`, `bigpicture.`, and `shell.` (`crates/irori/src/strings.rs`).
 - `en.json` is the source of truth. Always use `t("ns.area.intent")` and `t_args("ns.area.intent", &[("name", value)])` with intent-based keys and full sentences carrying `{placeholders}` (never concatenate sentence fragments). Use `_one` / `_other` keys for plurals. Do not translate log messages, identifiers, file paths, key names, or brand names.
 - Register `CATALOGS` once (`std::sync::Once`) from each crate's `init`. Language changes apply live via `set_language` and window refresh in `shell.rs`.
-- Localization test suites across all seven crates validate JSON parsing, reject orphan keys absent from `en.json`, reject blank values, require every key referenced in `src/` to exist in `en.json`, and enforce exact `{placeholder}` parity (Big Picture also fails on unused keys). Check `CONTRIBUTING.md` for whether non-English catalogs are updated in the same PR or fall back to English.
+- Put every new or changed string into all 19 locale catalogs in the same change, translated idiomatically with identical `{placeholder}` names (never leave English text in another catalog). Localization test suites across all seven crates validate JSON parsing, fail on missing keys in non-English catalogs (`missing_keys`), reject orphan keys absent from `en.json`, reject blank values, require every key referenced in `src/` to exist in `en.json`, and enforce exact `{placeholder}` parity (Big Picture also fails on unused keys).
 
 ## Big Picture, controllers, and in-game overlay
 

@@ -14,7 +14,7 @@ Run all commands from the repository root:
 | Lint (CI parity) | `cargo clippy --locked --workspace --all-targets --profile ci -- -D warnings` |
 | Full test suite | `cargo test --locked --workspace --no-fail-fast --profile ci` (wrap in `xvfb-run -a` on headless Linux) |
 | Fast local build | `cargo build --locked --profile quick -p irori` |
-| Sign-in helper (Linux) | `cargo build --profile quick -p irori-sign-in` (build for the same profile as `irori`) |
+| Sign-in helper (Linux) | `cargo build --locked --profile quick -p irori-sign-in` (build for the same profile as `irori`) |
 | Profile with symbols | `cargo build --locked --profile profiling -p irori` |
 | Single crate check/test | `cargo test -p <package>` (directory names differ from package names; see `docs/ARCHITECTURE.md`) |
 | Packaging tests | `python3 -m unittest discover -s packaging -p "test_*.py"` |
@@ -26,7 +26,7 @@ Run all commands from the repository root:
 2. Keep `#![forbid(unsafe_code)]` on protocol, secret, depot, archive, script, PE reader, and Galaxy service crates (`SECURITY.md` lists every crate). Elsewhere `unsafe` is restricted to OS APIs with a `// SAFETY:` comment.
 3. Preserve strict crate layering: protocol crates never depend on `irori-core`, `irori-services` talks to stores only through `DynStore`, and feature crates never depend on each other (use `irori_ui::hooks` and shell routing).
 4. Use theme tokens (`cx.theme().*`) and `rem` helpers only. Never use raw colors, and never use `px(...)` except for hairlines and art. Never invent `gpui-kit` APIs; verify against `~/.cargo/registry/src/index.crates.io-*/{gpui-kit-0.8.0,gpui-component-0.8.0,gpui-base-0.8.0,gpui-pre-0.3.9}`.
-5. Put every new or changed user-facing UI string in `en.json` first (`en.json` is the source of truth), using intent-based keys with `t()`/`t_args()` and matching `{placeholder}` names. Follow `CONTRIBUTING.md` and each crate's i18n tests.
+5. Put every new or changed user-facing UI string in `en.json` and all 19 locale catalogs in the same change (`en.json` is the source of truth), using intent-based keys with `t()`/`t_args()` and matching `{placeholder}` names. Each crate's i18n tests fail on missing keys or placeholder mismatches.
 6. Never rename Heroic-compatible settings keys (including existing typos like `enviromentOptions`), never delete files recursively without `fs_guard::ensure_deletable`, and never write credentials outside `irori-secrets`.
 7. Never enable `gpui-kit`'s `test-support` feature (it conflicts with `gpui-pre`); use `gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }` as a dev-dependency.
 8. Keep vendored crates (`crates/comet`, `crates/gpui-pre-windows`, `crates/gilrs-core`) out of workspace lints and in lockstep with their `PATCHES.md` or `README.md`.
