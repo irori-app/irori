@@ -9,6 +9,7 @@
 //! play with it and which program is gone.
 
 mod configure;
+mod cores;
 mod custom;
 mod found;
 mod open;
@@ -16,8 +17,10 @@ mod ops;
 mod retro;
 mod setup;
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
@@ -25,12 +28,11 @@ use gpui_kit::component::Icon;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::link::Link;
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
@@ -39,25 +41,25 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, ElementId, Entity, InteractiveElement as _,
-    IntoElement, ParentElement as _, PathPromptOptions, Render, SharedString, Styled as _,
-    Subscription, Task, Window, div, rems,
+    IntoElement, ParentElement as _, PathPromptOptions, Pixels, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, px, rems,
 };
 use irori_engines::bios::{FileState, SystemBios, SystemState};
 use irori_engines::releases::{self, Release};
-use irori_engines::{EngineKind, EngineRef, Host, Installation, Origin, systems};
+use irori_engines::{EngineKind, EngineManifest, EngineRef, Host, Installation, Origin, systems};
 use irori_services::EngineStatus;
 use irori_services::engine_health::EngineHealth;
 use irori_ui::components::{EmptyState, PageHeader, SectionTitle};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use crate::common::{card, notify_error};
+use crate::common::{card, card_grid_capped, info_tip, notify_error, plain_tooltip};
 use crate::format;
 pub use configure::open_engine_settings;
 pub use custom::{confirm_remove_custom_engine, open_custom_engine_dialog};
 pub use found::open_rom_sources_dialog;
 pub use open::{OpenableEngine, open_engine, openable_engines};
-use ops::{EngineOps, OpLive, cancel_install, core_key, core_name, engine_key, engine_ops};
+use ops::{EngineOps, OpLive, cancel_install, core_key, engine_key, engine_ops};
 pub use ops::{InstallTarget, start_install};
 pub use setup::open_emulation_setup;
 
@@ -68,7 +70,80 @@ pub(crate) fn option_keys() -> Vec<String> {
 }
 
 /// Repaint interval while installs report progress.
-const PROGRESS_TICK: Duration = Duration::from_millis(300);
+pub(super) const PROGRESS_TICK: Duration = Duration::from_millis(300);
+
+/// Comfortable maximum width of the Emulators and Systems content, in rem.
+const PAGE_MAX_WIDTH_REM: f32 = 80.;
+/// Narrowest an installed emulator card gets before dropping a column, in rem.
+const INSTALLED_CARD_REM: f32 = 26.;
+/// Narrowest an available or manual emulator card gets before dropping a column, in rem.
+const COMPACT_CARD_REM: f32 = 21.;
+/// Narrowest a system card gets before dropping a column, in rem.
+const SYSTEM_CARD_REM: f32 = 20.;
+/// Maximum system chips shown inline on an emulator card before "+N".
+const MAX_SYSTEM_CHIPS: usize = 4;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EngineFilter {
+    All,
+    Installed,
+    Available,
+    Updates,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EngineSection {
+    Installed,
+    Available,
+    Manual,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SystemFilter {
+    All,
+    WithGames,
+    NeedsAttention,
+}
+
+/// Classify an emulator into Installed, Available (auto-downloadable and
+/// non-experimental), or Manual (manual install, experimental, or missing
+/// custom binary).
+pub(crate) fn classify_engine(status: &EngineStatus, host: Host) -> EngineSection {
+    if status.is_installed() {
+        EngineSection::Installed
+    } else if status.manifest.downloadable_on(host) && !status.manifest.experimental {
+        EngineSection::Available
+    } else {
+        EngineSection::Manual
+    }
+}
+
+/// Fallback icon for an emulator that does not ship a brand SVG.
+pub(crate) fn engine_category_icon(manifest: &EngineManifest) -> IconName {
+    match manifest.id.as_str() {
+        "dosbox-staging" | "scummvm" => IconName::SquareTerminal,
+        "mame" => IconName::Joystick,
+        "ppsspp" | "mgba" | "melonds" | "desmume" | "azahar" | "vita3k" => {
+            IconName::GamepadDirectional
+        }
+        _ => IconName::Gamepad2,
+    }
+}
+
+fn filter_pill(
+    id: &'static str,
+    label: SharedString,
+    count: usize,
+    active: bool,
+    on_click: impl Fn(&gpui_kit::ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    Button::new(id)
+        .small()
+        .label(format!("{label} ({count})"))
+        .map(|b| if active { b.primary() } else { b.outline() })
+        .on_click(on_click)
+        .into_any_element()
+}
 
 /// One engine choice in a system's default picker.
 #[derive(Debug, Clone, PartialEq)]
@@ -117,8 +192,15 @@ pub struct EmulatorsView {
     /// Downloadable versions per engine (the cached list first).
     releases: HashMap<String, Result<Vec<Release>, SharedString>>,
     refreshing: bool,
-    /// RetroArch's core list is open.
-    show_cores: bool,
+    engine_filter: EngineFilter,
+    system_filter: SystemFilter,
+    show_other_systems: bool,
+    installed_grid_width: Rc<Cell<Pixels>>,
+    available_grid_width: Rc<Cell<Pixels>>,
+    manual_grid_width: Rc<Cell<Pixels>>,
+    folders_grid_width: Rc<Cell<Pixels>>,
+    library_systems_grid_width: Rc<Cell<Pixels>>,
+    other_systems_grid_width: Rc<Cell<Pixels>>,
     search: Entity<InputState>,
     system_selects: HashMap<String, Entity<SelectState<Vec<EngineChoice>>>>,
     ops: Entity<EngineOps>,
@@ -126,6 +208,7 @@ pub struct EmulatorsView {
     seen_revision: u64,
     ticking: bool,
     placeholder_language: String,
+    placeholder_tab: usize,
     _ticker: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -176,13 +259,22 @@ impl EmulatorsView {
             scanning: false,
             releases: HashMap::new(),
             refreshing: false,
-            show_cores: false,
+            engine_filter: EngineFilter::All,
+            system_filter: SystemFilter::All,
+            show_other_systems: false,
+            installed_grid_width: Rc::new(Cell::new(px(0.))),
+            available_grid_width: Rc::new(Cell::new(px(0.))),
+            manual_grid_width: Rc::new(Cell::new(px(0.))),
+            folders_grid_width: Rc::new(Cell::new(px(0.))),
+            library_systems_grid_width: Rc::new(Cell::new(px(0.))),
+            other_systems_grid_width: Rc::new(Cell::new(px(0.))),
             search,
             system_selects: HashMap::new(),
             ops,
             seen_revision,
             ticking: false,
             placeholder_language: irori_ui::i18n::language(),
+            placeholder_tab: 0,
             _ticker: None,
             _subscriptions: subscriptions,
         };
@@ -473,27 +565,6 @@ impl EmulatorsView {
         .detach();
     }
 
-    fn remove_core(&mut self, core: String, window: &mut Window, cx: &mut Context<Self>) {
-        let b = backend(cx);
-        let name = core_name(&core);
-        let task = irori_ui::run(cx, async move { b.remove_core(&core).await });
-        cx.spawn_in(window, async move |this, cx| {
-            let result = task.await;
-            let _ = this.update_in(cx, |this, window, cx| {
-                if let Err(e) = result {
-                    notify_error(
-                        t_args("manage.emulators.core.remove_failed", &[("core", &name)]),
-                        &e,
-                        window,
-                        cx,
-                    );
-                }
-                this.load(window, cx);
-            });
-        })
-        .detach();
-    }
-
     fn pick_folder(&mut self, bios: bool, window: &mut Window, cx: &mut Context<Self>) {
         let paths = cx.prompt_for_paths(PathPromptOptions {
             files: false,
@@ -562,7 +633,7 @@ impl EmulatorsView {
         });
     }
 
-    fn render_folders(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_folders(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let muted = cx.theme().muted_foreground;
         let app = models(cx).settings.read(cx).app.clone();
         let folders: Vec<AnyElement> = app
@@ -608,89 +679,168 @@ impl EmulatorsView {
             ),
         };
         let bios = app.bios_folder.trim().to_string();
-        h_flex()
-            .gap_4()
-            .flex_wrap()
-            .items_start()
+        let folders_card = card(cx)
             .child(
-                card(cx)
-                    .w(rems(24.))
-                    .flex_grow(1.)
-                    .child(
-                        SectionTitle::new(t("manage.emulators.folders.title")).trailing(
-                            h_flex()
-                                .gap_1()
-                                .child(
-                                    Button::new("rescan")
-                                        .ghost()
-                                        .small()
-                                        .icon(IconName::RefreshCw)
-                                        .label(t("manage.emulators.folders.rescan"))
-                                        .loading(self.scanning)
-                                        .disabled(self.scanning)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.rescan(window, cx)
-                                        })),
-                                )
-                                .child(
-                                    Button::new("add-folder")
-                                        .small()
-                                        .icon(IconName::FolderPlus)
-                                        .label(t("manage.emulators.folders.add"))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.pick_folder(false, window, cx)
-                                        })),
-                                ),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted)
-                            .child(t("manage.emulators.folders.description")),
-                    )
-                    .children(folders)
-                    .child(div().text_sm().child(if self.scanning {
-                        t("manage.emulators.folders.scanning")
-                    } else {
-                        summary
-                    })),
-            )
-            .child(
-                card(cx)
-                    .w(rems(24.))
-                    .flex_grow(1.)
-                    .child(
-                        SectionTitle::new(t("manage.emulators.bios.title")).trailing(
-                            Button::new("choose-bios")
+                SectionTitle::new(t("manage.emulators.folders.title")).trailing(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            Button::new("rescan")
+                                .ghost()
                                 .small()
-                                .icon(IconName::FolderOpen)
-                                .label(t("manage.emulators.bios.choose"))
+                                .icon(IconName::RefreshCw)
+                                .label(t("manage.emulators.folders.rescan"))
+                                .loading(self.scanning)
+                                .disabled(self.scanning)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.rescan(window, cx)),
+                                ),
+                        )
+                        .child(
+                            Button::new("add-folder")
+                                .small()
+                                .icon(IconName::FolderPlus)
+                                .label(t("manage.emulators.folders.add"))
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.pick_folder(true, window, cx)
+                                    this.pick_folder(false, window, cx)
                                 })),
                         ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted)
-                            .child(t("manage.emulators.bios.description")),
-                    )
-                    .child(div().text_sm().truncate().child(if bios.is_empty() {
-                        t("manage.emulators.bios.not_chosen")
-                    } else {
-                        bios.into()
-                    })),
+                ),
             )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(t("manage.emulators.folders.description")),
+            )
+            .children(folders)
+            .child(div().flex_1())
+            .child(div().text_sm().child(if self.scanning {
+                t("manage.emulators.folders.scanning")
+            } else {
+                summary
+            }))
+            .into_any_element();
+        let bios_card = card(cx)
+            .child(
+                SectionTitle::new(t("manage.emulators.bios.title")).trailing(
+                    Button::new("choose-bios")
+                        .small()
+                        .icon(IconName::FolderOpen)
+                        .label(t("manage.emulators.bios.choose"))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.pick_folder(true, window, cx)),
+                        ),
+                ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(t("manage.emulators.bios.description")),
+            )
+            .child(div().flex_1())
+            .child(div().text_sm().truncate().child(if bios.is_empty() {
+                t("manage.emulators.bios.not_chosen")
+            } else {
+                bios.into()
+            }))
+            .into_any_element();
+        card_grid_capped(
+            &self.folders_grid_width,
+            24.,
+            2,
+            vec![folders_card, bios_card],
+            window,
+        )
+        .into_any_element()
+    }
+
+    fn latest_update(&self, status: &EngineStatus) -> Option<Release> {
+        let newest = match self.releases.get(&status.manifest.id) {
+            Some(Ok(list)) => list.first().cloned(),
+            _ => None,
+        };
+        newest.filter(|r| {
+            status.newest_managed().is_some_and(|have| {
+                releases::compare_versions(&r.version, have) == std::cmp::Ordering::Greater
+            })
+        })
+    }
+
+    fn render_system_chips(&self, manifest: &EngineManifest, cx: &App) -> AnyElement {
+        let theme = cx.theme();
+        let (muted, bg, border, radius) = (
+            theme.muted_foreground,
+            theme.background,
+            theme.border,
+            theme.radius,
+        );
+        let short_names: Vec<String> = manifest
+            .systems
+            .iter()
+            .filter_map(|s| systems::get(s).map(|sys| sys.short.clone()))
+            .collect();
+        let full_names: Vec<String> = manifest
+            .systems
+            .iter()
+            .filter_map(|s| systems::get(s).map(|sys| sys.name.clone()))
+            .collect();
+        let shown = short_names.iter().take(MAX_SYSTEM_CHIPS).cloned();
+        let overflow = short_names.len().saturating_sub(MAX_SYSTEM_CHIPS);
+        let all_text = t_args(
+            "manage.emulators.plays",
+            &[("systems", &full_names.join(", "))],
+        );
+        h_flex()
+            .flex_wrap()
+            .gap_1()
+            .children(shown.map(|label| {
+                div()
+                    .px_1p5()
+                    .py_0p5()
+                    .rounded(radius)
+                    .bg(bg)
+                    .border_1()
+                    .border_color(border)
+                    .text_xs()
+                    .text_color(muted)
+                    .child(label)
+            }))
+            .when(overflow > 0, |row| {
+                let id = ElementId::Name(format!("systems-more-{}", manifest.id).into());
+                row.child(
+                    div()
+                        .id(id)
+                        .px_1p5()
+                        .py_0p5()
+                        .rounded(radius)
+                        .bg(bg)
+                        .border_1()
+                        .border_color(border)
+                        .text_xs()
+                        .text_color(muted)
+                        .tooltip(move |window, cx| plain_tooltip(all_text.clone(), window, cx))
+                        .child(format!("+{overflow}")),
+                )
+            })
             .into_any_element()
     }
 
     fn render_engine(&self, status: &EngineStatus, cx: &mut Context<Self>) -> AnyElement {
         let m = &status.manifest;
         let opening = open::openable(cx).read(cx).opening.contains(&m.id);
-        let theme = cx.theme();
-        let muted = theme.muted_foreground;
+        let (foreground, muted, border, radius, background, secondary) = {
+            let theme = cx.theme();
+            (
+                theme.foreground,
+                theme.muted_foreground,
+                theme.border,
+                theme.radius,
+                theme.background,
+                theme.secondary,
+            )
+        };
         let host = Host::current();
         let key = engine_key(&m.id);
         let op = self.ops.read(cx).running.get(&key).map(|o| o.snapshot());
@@ -698,21 +848,12 @@ impl EmulatorsView {
             Some(Ok(list)) => list.first().cloned(),
             _ => None,
         };
-        let update = newest.clone().filter(|r| {
-            status.newest_managed().is_some_and(|have| {
-                releases::compare_versions(&r.version, have) == std::cmp::Ordering::Greater
-            })
-        });
-        let systems_text = m
-            .systems
-            .iter()
-            .filter_map(|s| systems::get(s).map(|s| s.short.clone()))
-            .collect::<Vec<_>>()
-            .join(", ");
+        let update = self.latest_update(status);
 
         let primary: AnyElement = if op.is_some() {
             let k = key.clone();
             Button::new("cancel")
+                .small()
                 .label(t("manage.emulators.cancel"))
                 .on_click(move |_, _, cx| cancel_install(&k, cx))
                 .into_any_element()
@@ -737,6 +878,19 @@ impl EmulatorsView {
                     )
                 })
                 .into_any_element()
+        } else if status.is_installed() && irori_engines::open::can_open(m) {
+            let (id, name) = (m.id.clone(), SharedString::from(m.name.clone()));
+            Button::new("open-engine")
+                .small()
+                .icon(IconName::Play)
+                .label(t("manage.emulators.open.button"))
+                .tooltip(t_args(
+                    "manage.emulators.open.tooltip",
+                    &[("engine", &name)],
+                ))
+                .loading(opening)
+                .on_click(move |_, window, cx| open_engine(id.clone(), name.clone(), window, cx))
+                .into_any_element()
         } else if !status.is_installed() && m.downloadable_on(host) {
             let id = m.id.clone();
             let label = match newest.as_ref().and_then(|r| r.size).and_then(format::size) {
@@ -759,6 +913,28 @@ impl EmulatorsView {
                     )
                 })
                 .into_any_element()
+        } else if !status.is_installed() && !m.custom {
+            let id = m.id.clone();
+            Button::new("use-program")
+                .small()
+                .icon(IconName::FolderOpen)
+                .label(t("manage.emulators.use_program"))
+                .on_click(
+                    cx.listener(move |this, _, window, cx| {
+                        this.pick_program(id.clone(), window, cx)
+                    }),
+                )
+                .into_any_element()
+        } else if !status.is_installed() && m.custom {
+            let existing = custom_definition(status);
+            Button::new("edit-custom")
+                .small()
+                .icon(IconName::Pencil)
+                .label(t("manage.emulators.custom.edit"))
+                .on_click(move |_, window, cx| {
+                    open_custom_engine_dialog(Some(existing.clone()), window, cx)
+                })
+                .into_any_element()
         } else {
             div().into_any_element()
         };
@@ -774,13 +950,58 @@ impl EmulatorsView {
             Some(Err(e)) if !status.is_installed() => Some(e.clone()),
             _ => None,
         };
+        let info_text = [
+            (!m.exit_hotkey.is_empty()).then(|| {
+                t_args("manage.emulators.exit_hotkey", &[("keys", &m.exit_hotkey)]).to_string()
+            }),
+            (!m.license.is_empty()).then(|| {
+                t_args("manage.emulators.license", &[("license", &m.license)]).to_string()
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n");
+
+        let avatar_icon = irori_ui::components::StoreLogo::of_engine(&m.id)
+            .map(|logo| logo.icon().text_color(foreground))
+            .unwrap_or_else(|| Icon::new(engine_category_icon(m)).small().text_color(muted));
+        let show_dot = status.is_installed() || health.is_some_and(|h| !h.missing.is_empty());
+        let is_retroarch = m.kind == EngineKind::Retroarch;
+        let has_options = !m.options.is_empty();
+        let can_pick_program = !m.custom && (status.is_installed() || m.downloadable_on(host));
+        let has_overflow = (!status.is_installed() && has_options)
+            || is_retroarch
+            || can_pick_program
+            || !m.homepage.is_empty()
+            || m.custom;
+        let sel_id = m.id.clone();
+        let view = cx.entity().downgrade();
+        let engine_id = m.id.clone();
+        let engine_name = m.name.clone();
+        let homepage = m.homepage.clone();
+        let existing_custom = m.custom.then(|| custom_definition(status));
 
         card(cx)
             .id(ElementId::Name(format!("engine-{}", m.id).into()))
+            .debug_selector(move || format!("engine-{sel_id}"))
             .child(
                 h_flex()
-                    .gap_4()
+                    .gap_3()
                     .items_start()
+                    .child(
+                        div()
+                            .size(rems(2.))
+                            .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(radius)
+                            .bg(secondary)
+                            .border_1()
+                            .border_color(border)
+                            .child(avatar_icon),
+                    )
                     .child(
                         v_flex()
                             .flex_1()
@@ -789,21 +1010,16 @@ impl EmulatorsView {
                             .child(
                                 h_flex()
                                     .gap_2()
+                                    .items_center()
                                     .flex_wrap()
-                                    .child(health_dot(status, health, cx))
-                                    .children(
-                                        irori_ui::components::StoreLogo::of_engine(&m.id)
-                                            .map(|logo| logo.icon().text_color(muted)),
-                                    )
-                                    .child(div().text_lg().font_semibold().child(m.name.clone()))
-                                    .child(if status.is_installed() {
-                                        Tag::success()
-                                            .xsmall()
-                                            .child(t("manage.emulators.tag.installed"))
-                                    } else {
-                                        Tag::secondary()
-                                            .xsmall()
-                                            .child(t("manage.emulators.tag.not_installed"))
+                                    .when(show_dot, |row| row.child(health_dot(status, health, cx)))
+                                    .child(div().font_semibold().truncate().child(m.name.clone()))
+                                    .when(status.is_installed(), |d| {
+                                        d.child(
+                                            Tag::success()
+                                                .xsmall()
+                                                .child(t("manage.emulators.tag.installed")),
+                                        )
                                     })
                                     .when(update.is_some(), |d| {
                                         d.child(
@@ -827,143 +1043,216 @@ impl EmulatorsView {
                                         )
                                     }),
                             )
-                            .child(div().text_sm().text_color(muted).child(t_args(
-                                "manage.emulators.plays",
-                                &[("systems", &systems_text)],
-                            )))
-                            .children(health_lines(health, cx)),
+                            .when(!m.systems.is_empty(), |col| {
+                                col.child(self.render_system_chips(m, cx))
+                            }),
                     )
-                    .when_some(op, |d, live| d.child(render_op(&live, cx)))
-                    .child(div().flex_shrink_0().child(primary)),
+                    .when(!info_text.is_empty(), |hdr| {
+                        hdr.child(info_tip(format!("engine-{}", m.id), info_text.into(), cx))
+                    }),
             )
-            .when_some(release_error, |d, e| {
-                d.child(
-                    div()
-                        .text_xs()
-                        .text_color(muted)
-                        .child(t_args("manage.emulators.releases_failed", &[("error", &e)])),
-                )
-            })
-            .when(!status.is_installed() && !m.downloadable_on(host), |d| {
-                d.child(div().text_sm().text_color(muted).child(if m.custom {
-                    t_args("manage.emulators.custom.missing", &[("engine", &m.name)])
-                } else {
-                    not_downloadable_text(m, host)
-                }))
-            })
-            .when(!installs.is_empty(), |d| {
-                d.child(v_flex().gap_1().children(installs))
-            })
-            .when(m.kind == EngineKind::Retroarch, |d| {
-                d.child(self.render_cores(status, cx))
-            })
             .child(
-                h_flex()
-                    .gap_3()
-                    .flex_wrap()
-                    .items_center()
-                    .child(
-                        div().flex_1().min_w_0().text_xs().text_color(muted).child(
-                            // Emulators the user added have neither.
-                            [
-                                (!m.exit_hotkey.is_empty()).then(|| {
-                                    t_args(
-                                        "manage.emulators.exit_hotkey",
-                                        &[("keys", &m.exit_hotkey)],
-                                    )
-                                    .to_string()
-                                }),
-                                (!m.license.is_empty()).then(|| {
-                                    t_args("manage.emulators.license", &[("license", &m.license)])
-                                        .to_string()
-                                }),
-                            ]
-                            .into_iter()
-                            .flatten()
-                            .collect::<Vec<_>>()
-                            .join(" · "),
-                        ),
-                    )
-                    .when(!m.homepage.is_empty(), |d| {
+                v_flex()
+                    .flex_1()
+                    .gap_2()
+                    .children(health_lines(health, cx))
+                    .when_some(op, |d, live| d.child(render_op_wide(&live, cx)))
+                    .when_some(release_error, |d, e| {
                         d.child(
-                            Link::new("homepage")
-                                .href(m.homepage.clone())
-                                .child(t("manage.emulators.homepage")),
+                            div().text_xs().text_color(muted).child(t_args(
+                                "manage.emulators.releases_failed",
+                                &[("error", &e)],
+                            )),
                         )
                     })
-                    .when(!m.custom, |d| {
-                        let id = m.id.clone();
-                        d.child(
-                            Button::new("use-program")
-                                .ghost()
-                                .small()
-                                .label(t("manage.emulators.use_program"))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.pick_program(id.clone(), window, cx)
-                                })),
-                        )
+                    .when(!status.is_installed() && !m.downloadable_on(host), |d| {
+                        d.child(div().text_xs().text_color(muted).child(if m.custom {
+                            t_args("manage.emulators.custom.missing", &[("engine", &m.name)])
+                        } else {
+                            not_downloadable_text(m, host)
+                        }))
                     })
-                    .when(m.custom, |d| {
-                        let existing = custom_definition(status);
-                        let (id, name) = (m.id.clone(), m.name.clone());
-                        d.child(
-                            Button::new("edit-custom")
-                                .ghost()
-                                .small()
-                                .icon(IconName::Pencil)
-                                .label(t("manage.emulators.custom.edit"))
-                                .on_click(move |_, window, cx| {
-                                    open_custom_engine_dialog(Some(existing.clone()), window, cx)
-                                }),
-                        )
-                        .child(
-                            Button::new("remove-custom")
-                                .ghost()
-                                .small()
-                                .icon(IconName::Trash)
-                                .label(t("manage.emulators.custom.remove"))
-                                .on_click(move |_, window, cx| {
-                                    confirm_remove_custom_engine(
-                                        id.clone(),
-                                        name.clone(),
-                                        window,
-                                        cx,
-                                    )
-                                }),
-                        )
+                    .when(!installs.is_empty(), |d| {
+                        d.child(v_flex().gap_1().children(installs))
                     })
-                    .when(
-                        status.is_installed() && irori_engines::open::can_open(m),
-                        |d| {
-                            let (id, name) = (m.id.clone(), SharedString::from(m.name.clone()));
-                            d.child(
-                                Button::new("open-engine")
-                                    .small()
-                                    .icon(IconName::Play)
-                                    .label(t("manage.emulators.open.button"))
-                                    .tooltip(t_args(
-                                        "manage.emulators.open.tooltip",
-                                        &[("engine", &name)],
-                                    ))
-                                    .loading(opening)
-                                    .on_click(move |_, window, cx| {
-                                        open_engine(id.clone(), name.clone(), window, cx)
-                                    }),
-                            )
-                        },
-                    )
-                    .when(!m.options.is_empty(), |d| {
-                        let id = m.id.clone();
+                    .when(is_retroarch, |d| {
+                        let running = self.ops.read(cx);
+                        let installed_cores =
+                            m.cores.iter().filter(|c| status.has_core(&c.id)).count();
+                        let busy = m
+                            .cores
+                            .iter()
+                            .any(|c| running.running.contains_key(&core_key(&c.id)));
                         d.child(
-                            Button::new("configure")
-                                .small()
-                                .icon(IconName::SlidersHorizontal)
-                                .label(t("manage.emulators.configure"))
-                                .on_click(move |_, window, cx| {
-                                    open_engine_settings(&id, window, cx)
-                                }),
+                            h_flex()
+                                .gap_2()
+                                .items_center()
+                                .justify_between()
+                                .px_3()
+                                .py_2()
+                                .rounded(radius)
+                                .bg(background)
+                                .border_1()
+                                .border_color(border)
+                                .child(
+                                    h_flex()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .gap_2()
+                                        .items_center()
+                                        .when(busy, |row| row.child(Spinner::new().small()))
+                                        .child(div().text_xs().font_medium().truncate().child(
+                                            t_args(
+                                                "manage.emulators.cores.title",
+                                                &[
+                                                    ("installed", &installed_cores.to_string()),
+                                                    ("total", &m.cores.len().to_string()),
+                                                ],
+                                            ),
+                                        )),
+                                )
+                                .child(
+                                    Button::new("manage-retroarch-cores")
+                                        .debug_selector(|| "manage-retroarch-cores".into())
+                                        .small()
+                                        .outline()
+                                        .label(t("manage.emulators.cores.manage"))
+                                        .on_click(|_, window, cx| {
+                                            cores::open_cores_dialog(window, cx)
+                                        }),
+                                ),
                         )
                     }),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .pt_2()
+                    .border_t_1()
+                    .border_color(border)
+                    .child(primary)
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .items_center()
+                            .when(status.is_installed() && has_options, |row| {
+                                let id = m.id.clone();
+                                row.child(
+                                    Button::new("configure")
+                                        .small()
+                                        .outline()
+                                        .icon(IconName::SlidersHorizontal)
+                                        .label(t("manage.emulators.configure"))
+                                        .on_click(move |_, window, cx| {
+                                            open_engine_settings(&id, window, cx)
+                                        }),
+                                )
+                            })
+                            .when(has_overflow, |row| {
+                                let show_cfg = !status.is_installed() && has_options;
+                                let more_id =
+                                    ElementId::Name(format!("engine-more-{}", m.id).into());
+                                row.child(
+                                    Button::new(more_id)
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::Ellipsis)
+                                        .accessibility_label(t("manage.emulators.more"))
+                                        .tooltip(t("manage.emulators.more"))
+                                        .dropdown_menu(move |mut menu, _, _| {
+                                            if show_cfg {
+                                                let id = engine_id.clone();
+                                                menu = menu.item(
+                                                    PopupMenuItem::new(t(
+                                                        "manage.emulators.configure",
+                                                    ))
+                                                    .icon(IconName::SlidersHorizontal)
+                                                    .on_click(move |_, window, cx| {
+                                                        open_engine_settings(&id, window, cx)
+                                                    }),
+                                                );
+                                            }
+                                            if is_retroarch {
+                                                menu = menu.item(
+                                                    PopupMenuItem::new(t(
+                                                        "manage.emulators.cores.manage",
+                                                    ))
+                                                    .icon(IconName::Package)
+                                                    .on_click(|_, window, cx| {
+                                                        cores::open_cores_dialog(window, cx)
+                                                    }),
+                                                );
+                                            }
+                                            if can_pick_program {
+                                                let id = engine_id.clone();
+                                                let view = view.clone();
+                                                menu = menu.item(
+                                                    PopupMenuItem::new(t(
+                                                        "manage.emulators.use_program",
+                                                    ))
+                                                    .icon(IconName::FolderOpen)
+                                                    .on_click(move |_, window, cx| {
+                                                        let _ = view.update(cx, |this, cx| {
+                                                            this.pick_program(
+                                                                id.clone(),
+                                                                window,
+                                                                cx,
+                                                            )
+                                                        });
+                                                    }),
+                                                );
+                                            }
+                                            if !homepage.is_empty() {
+                                                let url = homepage.clone();
+                                                menu = menu.item(
+                                                    PopupMenuItem::new(t(
+                                                        "manage.emulators.homepage",
+                                                    ))
+                                                    .icon(IconName::ExternalLink)
+                                                    .on_click(move |_, _, cx| cx.open_url(&url)),
+                                                );
+                                            }
+                                            if let Some(existing) = existing_custom.clone() {
+                                                let id = engine_id.clone();
+                                                let name = engine_name.clone();
+                                                menu = menu
+                                                    .item(
+                                                        PopupMenuItem::new(t(
+                                                            "manage.emulators.custom.edit",
+                                                        ))
+                                                        .icon(IconName::Pencil)
+                                                        .on_click(move |_, window, cx| {
+                                                            open_custom_engine_dialog(
+                                                                Some(existing.clone()),
+                                                                window,
+                                                                cx,
+                                                            )
+                                                        }),
+                                                    )
+                                                    .item(
+                                                        PopupMenuItem::new(t(
+                                                            "manage.emulators.custom.remove",
+                                                        ))
+                                                        .icon(IconName::Trash)
+                                                        .on_click(move |_, window, cx| {
+                                                            confirm_remove_custom_engine(
+                                                                id.clone(),
+                                                                name.clone(),
+                                                                window,
+                                                                cx,
+                                                            )
+                                                        }),
+                                                    );
+                                            }
+                                            menu
+                                        }),
+                                )
+                            }),
+                    ),
             )
             .into_any_element()
     }
@@ -1110,132 +1399,7 @@ impl EmulatorsView {
             .into_any_element()
     }
 
-    fn render_cores(&self, status: &EngineStatus, cx: &mut Context<Self>) -> AnyElement {
-        let muted = cx.theme().muted_foreground;
-        let m = &status.manifest;
-        let running = self.ops.read(cx);
-        let installed_cores = m.cores.iter().filter(|c| status.has_core(&c.id)).count();
-        let busy = m
-            .cores
-            .iter()
-            .any(|c| running.running.contains_key(&core_key(&c.id)));
-        let open = self.show_cores || busy;
-        let rows: Vec<AnyElement> = m
-            .cores
-            .iter()
-            .filter(|_| open)
-            .map(|core| {
-                let key = core_key(&core.id);
-                let op = running.running.get(&key).map(|o| o.snapshot());
-                let installed = status.has_core(&core.id);
-                let systems_text = core
-                    .systems
-                    .iter()
-                    .filter_map(|s| systems::get(s).map(|s| s.short.clone()))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let action: AnyElement = match (&op, installed) {
-                    (Some(_), _) => {
-                        let k = key.clone();
-                        Button::new("cancel-core")
-                            .ghost()
-                            .small()
-                            .label(t("manage.emulators.cancel"))
-                            .on_click(move |_, _, cx| cancel_install(&k, cx))
-                            .into_any_element()
-                    }
-                    (None, true) => {
-                        let id = core.id.clone();
-                        Button::new("remove-core")
-                            .ghost()
-                            .small()
-                            .label(t("manage.emulators.core.remove"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.remove_core(id.clone(), window, cx)
-                            }))
-                            .into_any_element()
-                    }
-                    (None, false) => {
-                        let id = core.id.clone();
-                        Button::new("install-core")
-                            .small()
-                            .icon(IconName::Download)
-                            .label(t("manage.emulators.core.install"))
-                            .on_click(move |_, _, cx| {
-                                start_install(InstallTarget::Core { id: id.clone() }, cx)
-                            })
-                            .into_any_element()
-                    }
-                };
-                h_flex()
-                    .id(ElementId::Name(format!("core-{}", core.id).into()))
-                    .gap_3()
-                    .px_3()
-                    .py_1()
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .child(div().text_sm().font_medium().child(core.name.clone()))
-                                    .when(installed, |d| {
-                                        d.child(
-                                            Tag::success()
-                                                .xsmall()
-                                                .child(t("manage.emulators.tag.installed")),
-                                        )
-                                    }),
-                            )
-                            .child(div().text_xs().text_color(muted).truncate().child(t_args(
-                                "manage.emulators.core.plays",
-                                &[("systems", &systems_text), ("license", &core.license)],
-                            ))),
-                    )
-                    .when_some(op, |d, live| d.child(render_op(&live, cx)))
-                    .child(div().flex_shrink_0().child(action))
-                    .into_any_element()
-            })
-            .collect();
-        v_flex()
-            .gap_1()
-            .child(
-                SectionTitle::new(t_args(
-                    "manage.emulators.cores.title",
-                    &[
-                        ("installed", &installed_cores.to_string()),
-                        ("total", &m.cores.len().to_string()),
-                    ],
-                ))
-                .trailing(
-                    Button::new("toggle-cores")
-                        .ghost()
-                        .small()
-                        .label(if open {
-                            t("manage.emulators.cores.hide")
-                        } else {
-                            t("manage.emulators.cores.show")
-                        })
-                        .disabled(busy)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.show_cores = !this.show_cores;
-                            cx.notify();
-                        })),
-                ),
-            )
-            .child(
-                div()
-                    .px_3()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(t("manage.emulators.cores.description")),
-            )
-            .children(rows)
-            .into_any_element()
-    }
-
-    fn render_engines(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_engines(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let muted = cx.theme().muted_foreground;
         let Some(statuses) = &self.statuses else {
             return h_flex()
@@ -1246,32 +1410,162 @@ impl EmulatorsView {
                 .child(t("manage.emulators.loading"))
                 .into_any_element();
         };
+        let host = Host::current();
         let query = self.query(cx);
-        let cards: Vec<AnyElement> = statuses
-            .iter()
-            .filter(|s| {
-                query.is_empty()
-                    || s.manifest.name.to_lowercase().contains(&query)
-                    || s.manifest.systems.iter().any(|id| {
-                        systems::get(id).is_some_and(|sys| {
-                            sys.name.to_lowercase().contains(&query)
-                                || sys.short.to_lowercase().contains(&query)
-                        })
+        let matches_query = |s: &&EngineStatus| {
+            query.is_empty()
+                || s.manifest.name.to_lowercase().contains(&query)
+                || s.manifest.systems.iter().any(|id| {
+                    systems::get(id).is_some_and(|sys| {
+                        sys.name.to_lowercase().contains(&query)
+                            || sys.short.to_lowercase().contains(&query)
                     })
-            })
-            .map(|s| self.render_engine(s, cx))
-            .collect();
-        if cards.is_empty() {
-            return div()
-                .text_sm()
-                .text_color(muted)
-                .child(t("manage.emulators.no_match"))
-                .into_any_element();
+                })
+        };
+
+        let all_count = statuses.len();
+        let installed_count = statuses.iter().filter(|s| s.is_installed()).count();
+        let available_count = statuses
+            .iter()
+            .filter(|s| classify_engine(s, host) == EngineSection::Available)
+            .count();
+        let updates_count = statuses
+            .iter()
+            .filter(|s| self.latest_update(s).is_some())
+            .count();
+
+        let pills = h_flex()
+            .gap_2()
+            .flex_wrap()
+            .child(filter_pill(
+                "engines-filter-all",
+                t("manage.emulators.filter.all"),
+                all_count,
+                self.engine_filter == EngineFilter::All,
+                cx.listener(|this, _, _, cx| {
+                    this.engine_filter = EngineFilter::All;
+                    cx.notify();
+                }),
+            ))
+            .child(filter_pill(
+                "engines-filter-installed",
+                t("manage.emulators.filter.installed"),
+                installed_count,
+                self.engine_filter == EngineFilter::Installed,
+                cx.listener(|this, _, _, cx| {
+                    this.engine_filter = EngineFilter::Installed;
+                    cx.notify();
+                }),
+            ))
+            .child(filter_pill(
+                "engines-filter-available",
+                t("manage.emulators.filter.available"),
+                available_count,
+                self.engine_filter == EngineFilter::Available,
+                cx.listener(|this, _, _, cx| {
+                    this.engine_filter = EngineFilter::Available;
+                    cx.notify();
+                }),
+            ))
+            .when(
+                updates_count > 0 || self.engine_filter == EngineFilter::Updates,
+                |row| {
+                    row.child(filter_pill(
+                        "engines-filter-updates",
+                        t("manage.emulators.filter.updates"),
+                        updates_count,
+                        self.engine_filter == EngineFilter::Updates,
+                        cx.listener(|this, _, _, cx| {
+                            this.engine_filter = EngineFilter::Updates;
+                            cx.notify();
+                        }),
+                    ))
+                },
+            );
+
+        let mut installed_cards = Vec::new();
+        let mut available_cards = Vec::new();
+        let mut manual_cards = Vec::new();
+
+        for status in statuses.iter().filter(matches_query) {
+            let section = classify_engine(status, host);
+            let matches_filter = match self.engine_filter {
+                EngineFilter::All => true,
+                EngineFilter::Installed => section == EngineSection::Installed,
+                EngineFilter::Available => section == EngineSection::Available,
+                EngineFilter::Updates => self.latest_update(status).is_some(),
+            };
+            if !matches_filter {
+                continue;
+            }
+            let rendered = self.render_engine(status, cx);
+            match section {
+                EngineSection::Installed => installed_cards.push(rendered),
+                EngineSection::Available => available_cards.push(rendered),
+                EngineSection::Manual => manual_cards.push(rendered),
+            }
         }
-        v_flex().gap_4().children(cards).into_any_element()
+
+        let empty =
+            installed_cards.is_empty() && available_cards.is_empty() && manual_cards.is_empty();
+
+        v_flex()
+            .gap_5()
+            .child(pills)
+            .when(empty, |col| {
+                col.child(
+                    div()
+                        .text_sm()
+                        .text_color(muted)
+                        .child(t("manage.emulators.no_match")),
+                )
+            })
+            .when(!installed_cards.is_empty(), |col| {
+                col.child(
+                    v_flex()
+                        .gap_3()
+                        .child(SectionTitle::new(t("manage.emulators.section.installed")))
+                        .child(card_grid_capped(
+                            &self.installed_grid_width,
+                            INSTALLED_CARD_REM,
+                            2,
+                            installed_cards,
+                            window,
+                        )),
+                )
+            })
+            .when(!available_cards.is_empty(), |col| {
+                col.child(
+                    v_flex()
+                        .gap_3()
+                        .child(SectionTitle::new(t("manage.emulators.section.available")))
+                        .child(card_grid_capped(
+                            &self.available_grid_width,
+                            COMPACT_CARD_REM,
+                            3,
+                            available_cards,
+                            window,
+                        )),
+                )
+            })
+            .when(!manual_cards.is_empty(), |col| {
+                col.child(
+                    v_flex()
+                        .gap_3()
+                        .child(SectionTitle::new(t("manage.emulators.section.manual")))
+                        .child(card_grid_capped(
+                            &self.manual_grid_width,
+                            COMPACT_CARD_REM,
+                            3,
+                            manual_cards,
+                            window,
+                        )),
+                )
+            })
+            .into_any_element()
     }
 
-    fn render_systems(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_systems(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let muted = theme.muted_foreground;
         let Some(statuses) = &self.statuses else {
@@ -1282,146 +1576,291 @@ impl EmulatorsView {
         // Systems with games first, each group in catalog order.
         let mut ordered: Vec<&irori_engines::System> = systems::all().iter().collect();
         ordered.sort_by_key(|s| !self.counts.contains_key(&s.id));
-        let cards: Vec<AnyElement> = ordered
-            .into_iter()
-            .filter(|s| {
-                query.is_empty()
-                    || s.name.to_lowercase().contains(&query)
-                    || s.short.to_lowercase().contains(&query)
-                    || s.maker.to_lowercase().contains(&query)
-            })
-            .map(|system| {
-                let choice = b.system_engine(&system.id, statuses);
-                let ready = choice.as_ref().is_some_and(|c| {
-                    statuses
-                        .iter()
-                        .any(|s| s.manifest.id == c.engine && s.plays(c))
-                });
-                let engine_installed = choice.as_ref().is_some_and(|c| {
-                    statuses
-                        .iter()
-                        .any(|s| s.manifest.id == c.engine && s.is_installed())
-                });
-                let state: AnyElement = if ready {
-                    Tag::success()
-                        .xsmall()
-                        .child(t("manage.emulators.system.ready"))
-                        .into_any_element()
-                } else {
-                    Tag::warning()
-                        .xsmall()
-                        .child(t("manage.emulators.system.no_engine"))
-                        .into_any_element()
-                };
-                let fix: Option<AnyElement> = (!ready).then(|| {
-                    let choice = choice.clone();
-                    let name = choice.as_ref().map(choice_name).unwrap_or_default();
-                    Button::new("install-for-system")
-                        .small()
-                        .icon(IconName::Download)
-                        .label(t_args(
-                            "manage.emulators.system.install_engine",
-                            &[("engine", &name)],
-                        ))
-                        .on_click(move |_, _, cx| {
-                            let Some(c) = choice.clone() else { return };
-                            if !engine_installed {
-                                start_install(
-                                    InstallTarget::Engine {
-                                        id: c.engine.clone(),
-                                        release: None,
-                                        make_default: true,
-                                    },
-                                    cx,
-                                );
-                            }
-                            if let Some(core) = c.core {
-                                start_install(InstallTarget::Core { id: core }, cx);
-                            }
-                        })
-                        .into_any_element()
-                });
-                let count = self.counts.get(&system.id).copied().unwrap_or(0);
-                let bios_line = self.bios.get(&system.id).and_then(bios_line);
-                let count_text = match count {
-                    0 => t("manage.emulators.system.no_games"),
-                    1 => t("manage.emulators.system.games_one"),
-                    n => t_args(
-                        "manage.emulators.system.games_other",
-                        &[("count", &n.to_string())],
-                    ),
-                };
-                card(cx)
-                    .id(ElementId::Name(format!("system-{}", system.id).into()))
-                    .w(rems(20.))
-                    .flex_grow(1.)
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .items_start()
-                            .child(
-                                v_flex()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(
-                                        div().font_semibold().truncate().child(system.name.clone()),
-                                    )
-                                    .child(div().text_xs().text_color(muted).child(format!(
-                                        "{} · {} · {count_text}",
-                                        system.maker, system.year
-                                    ))),
-                            )
-                            .child(state),
-                    )
-                    .child(
-                        v_flex()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(muted)
-                                    .child(t("manage.emulators.system.default")),
-                            )
-                            .when_some(self.system_selects.get(&system.id), |d, select| {
-                                d.child(Select::new(select).small())
-                            }),
-                    )
-                    .when_some(bios_line, |d, (warn, text)| {
-                        d.child(
-                            h_flex()
-                                .gap_2()
-                                .items_start()
-                                .text_xs()
-                                .child(
-                                    Icon::new(if warn {
-                                        IconName::TriangleAlert
-                                    } else {
-                                        IconName::CircleCheck
-                                    })
-                                    .xsmall()
-                                    .text_color(if warn {
-                                        cx.theme().warning
-                                    } else {
-                                        cx.theme().success
-                                    }),
-                                )
-                                .child(div().flex_1().min_w_0().child(text)),
-                        )
-                    })
-                    .when_some(fix, |d, fix| d.child(fix))
+
+        let mut all_count = 0usize;
+        let mut with_games_count = 0usize;
+        let mut attention_count = 0usize;
+        let mut library_cards = Vec::new();
+        let mut other_cards = Vec::new();
+
+        for system in ordered {
+            all_count += 1;
+            let count = self.counts.get(&system.id).copied().unwrap_or(0);
+            if count > 0 {
+                with_games_count += 1;
+            }
+            let choice = b.system_engine(&system.id, statuses);
+            let ready = choice.as_ref().is_some_and(|c| {
+                statuses
+                    .iter()
+                    .any(|s| s.manifest.id == c.engine && s.plays(c))
+            });
+            let bios_line = self.bios.get(&system.id).and_then(bios_line);
+            let bios_warn = bios_line.as_ref().is_some_and(|(warn, _)| *warn);
+            let needs_attention = (count > 0 && !ready) || bios_warn;
+            if needs_attention {
+                attention_count += 1;
+            }
+
+            let matches_query = query.is_empty()
+                || system.name.to_lowercase().contains(&query)
+                || system.short.to_lowercase().contains(&query)
+                || system.maker.to_lowercase().contains(&query);
+            let matches_filter = match self.system_filter {
+                SystemFilter::All => true,
+                SystemFilter::WithGames => count > 0,
+                SystemFilter::NeedsAttention => needs_attention,
+            };
+            if !matches_query || !matches_filter {
+                continue;
+            }
+
+            let engine_installed = choice.as_ref().is_some_and(|c| {
+                statuses
+                    .iter()
+                    .any(|s| s.manifest.id == c.engine && s.is_installed())
+            });
+            let state: AnyElement = if ready {
+                Tag::success()
+                    .xsmall()
+                    .child(t("manage.emulators.system.ready"))
                     .into_any_element()
-            })
-            .collect();
+            } else {
+                Tag::warning()
+                    .xsmall()
+                    .child(t("manage.emulators.system.no_engine"))
+                    .into_any_element()
+            };
+            let fix: Option<AnyElement> = (!ready).then(|| {
+                let choice = choice.clone();
+                let name = choice.as_ref().map(choice_name).unwrap_or_default();
+                Button::new("install-for-system")
+                    .primary()
+                    .small()
+                    .icon(IconName::Download)
+                    .label(t_args(
+                        "manage.emulators.system.install_engine",
+                        &[("engine", &name)],
+                    ))
+                    .on_click(move |_, _, cx| {
+                        let Some(c) = choice.clone() else { return };
+                        if !engine_installed {
+                            start_install(
+                                InstallTarget::Engine {
+                                    id: c.engine.clone(),
+                                    release: None,
+                                    make_default: true,
+                                },
+                                cx,
+                            );
+                        }
+                        if let Some(core) = c.core {
+                            start_install(InstallTarget::Core { id: core }, cx);
+                        }
+                    })
+                    .into_any_element()
+            });
+            let count_text = match count {
+                0 => t("manage.emulators.system.no_games"),
+                1 => t("manage.emulators.system.games_one"),
+                n => t_args(
+                    "manage.emulators.system.games_other",
+                    &[("count", &n.to_string())],
+                ),
+            };
+            let rendered = card(cx)
+                .id(ElementId::Name(format!("system-{}", system.id).into()))
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_start()
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .child(div().font_semibold().truncate().child(system.name.clone()))
+                                .child(div().text_xs().text_color(muted).child(format!(
+                                    "{} · {} · {count_text}",
+                                    system.maker, system.year
+                                ))),
+                        )
+                        .child(state),
+                )
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .gap_2()
+                        .child(
+                            v_flex()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted)
+                                        .child(t("manage.emulators.system.default")),
+                                )
+                                .when_some(self.system_selects.get(&system.id), |d, select| {
+                                    d.child(Select::new(select).small())
+                                }),
+                        )
+                        .when_some(bios_line, |d, (warn, text)| {
+                            d.child(
+                                h_flex()
+                                    .gap_2()
+                                    .items_start()
+                                    .text_xs()
+                                    .child(
+                                        Icon::new(if warn {
+                                            IconName::TriangleAlert
+                                        } else {
+                                            IconName::CircleCheck
+                                        })
+                                        .xsmall()
+                                        .text_color(
+                                            if warn {
+                                                cx.theme().warning
+                                            } else {
+                                                cx.theme().success
+                                            },
+                                        ),
+                                    )
+                                    .child(div().flex_1().min_w_0().child(text)),
+                            )
+                        }),
+                )
+                .when_some(fix, |d, fix| d.child(fix))
+                .into_any_element();
+
+            if count > 0 || bios_warn {
+                library_cards.push(rendered);
+            } else {
+                other_cards.push(rendered);
+            }
+        }
+
+        let pills = h_flex()
+            .gap_2()
+            .flex_wrap()
+            .child(filter_pill(
+                "systems-filter-all",
+                t("manage.emulators.filter.all"),
+                all_count,
+                self.system_filter == SystemFilter::All,
+                cx.listener(|this, _, _, cx| {
+                    this.system_filter = SystemFilter::All;
+                    cx.notify();
+                }),
+            ))
+            .child(filter_pill(
+                "systems-filter-with-games",
+                t("manage.emulators.systems.filter.with_games"),
+                with_games_count,
+                self.system_filter == SystemFilter::WithGames,
+                cx.listener(|this, _, _, cx| {
+                    this.system_filter = SystemFilter::WithGames;
+                    cx.notify();
+                }),
+            ))
+            .when(
+                attention_count > 0 || self.system_filter == SystemFilter::NeedsAttention,
+                |row| {
+                    row.child(filter_pill(
+                        "systems-filter-attention",
+                        t("manage.emulators.systems.filter.attention"),
+                        attention_count,
+                        self.system_filter == SystemFilter::NeedsAttention,
+                        cx.listener(|this, _, _, cx| {
+                            this.system_filter = SystemFilter::NeedsAttention;
+                            cx.notify();
+                        }),
+                    ))
+                },
+            );
+
+        let has_library = !library_cards.is_empty();
+        let has_other = !other_cards.is_empty();
+        let can_collapse_others =
+            has_library && query.is_empty() && self.system_filter == SystemFilter::All;
+        let others_expanded = !can_collapse_others || self.show_other_systems;
+        let other_count = other_cards.len();
+        let empty = !has_library && !has_other;
+
         v_flex()
-            .gap_4()
+            .gap_5()
             .child(
                 div()
                     .text_sm()
                     .text_color(muted)
                     .child(t("manage.emulators.systems.description")),
             )
-            .child(self.render_folders(cx))
-            .child(h_flex().flex_wrap().gap_4().items_start().children(cards))
+            .child(self.render_folders(window, cx))
+            .child(pills)
+            .when(empty, |col| {
+                col.child(
+                    div()
+                        .text_sm()
+                        .text_color(muted)
+                        .child(t("manage.emulators.no_match")),
+                )
+            })
+            .when(has_library, |col| {
+                col.child(
+                    v_flex()
+                        .gap_3()
+                        .child(SectionTitle::new(t(
+                            "manage.emulators.systems.section.library",
+                        )))
+                        .child(card_grid_capped(
+                            &self.library_systems_grid_width,
+                            SYSTEM_CARD_REM,
+                            3,
+                            library_cards,
+                            window,
+                        )),
+                )
+            })
+            .when(has_other, |col| {
+                let title = if !has_library {
+                    SectionTitle::new(t("manage.emulators.systems.section.other"))
+                } else {
+                    SectionTitle::new(t("manage.emulators.systems.section.other")).when(
+                        can_collapse_others,
+                        |s| {
+                            s.trailing(
+                                Button::new("toggle-other-systems")
+                                    .ghost()
+                                    .small()
+                                    .icon(if others_expanded {
+                                        IconName::ChevronUp
+                                    } else {
+                                        IconName::ChevronDown
+                                    })
+                                    .label(if others_expanded {
+                                        t("manage.emulators.systems.hide_others")
+                                    } else {
+                                        t_args(
+                                            "manage.emulators.systems.show_others",
+                                            &[("count", &other_count.to_string())],
+                                        )
+                                    })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.show_other_systems = !this.show_other_systems;
+                                        cx.notify();
+                                    })),
+                            )
+                        },
+                    )
+                };
+                col.child(v_flex().gap_3().child(title).when(others_expanded, |sec| {
+                    sec.child(card_grid_capped(
+                        &self.other_systems_grid_width,
+                        SYSTEM_CARD_REM,
+                        3,
+                        other_cards,
+                        window,
+                    ))
+                }))
+            })
             .into_any_element()
     }
 }
@@ -1531,7 +1970,15 @@ fn health_lines(health: Option<&EngineHealth>, cx: &App) -> Vec<AnyElement> {
     lines
 }
 
-fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
+pub(super) fn render_op(live: &OpLive, cx: &App) -> gpui_kit::Div {
+    render_op_box(live, false, cx)
+}
+
+fn render_op_wide(live: &OpLive, cx: &App) -> gpui_kit::Div {
+    render_op_box(live, true, cx)
+}
+
+fn render_op_box(live: &OpLive, full_width: bool, cx: &App) -> gpui_kit::Div {
     let progress = live.progress.unwrap_or_default();
     let unpacking = live.step.as_deref() == Some("Unpacking");
     let detail = if unpacking {
@@ -1559,9 +2006,12 @@ fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
         .collect::<Vec<_>>()
         .join(" · ")
     };
-    v_flex()
-        .w(rems(12.))
-        .flex_shrink_0()
+    let box_div = if full_width {
+        v_flex().w_full()
+    } else {
+        v_flex().w(rems(12.)).flex_shrink_0()
+    };
+    box_div
         .gap_1()
         .child(
             Progress::new("engine-progress")
@@ -1584,34 +2034,137 @@ fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
 impl Render for EmulatorsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let language = irori_ui::i18n::language();
-        if language != self.placeholder_language {
+        if language != self.placeholder_language || self.tab_ix != self.placeholder_tab {
             self.placeholder_language = language;
-            self.search.update(cx, |s, cx| {
-                s.set_placeholder(t("manage.emulators.search"), window, cx)
-            });
+            self.placeholder_tab = self.tab_ix;
+            let placeholder = if self.tab_ix == 1 {
+                t("manage.emulators.systems.search")
+            } else {
+                t("manage.emulators.search")
+            };
+            self.search
+                .update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
         }
+
+        let (fg, muted, border, primary) = {
+            let theme = cx.theme();
+            (
+                theme.foreground,
+                theme.muted_foreground,
+                theme.border,
+                theme.primary,
+            )
+        };
+        let installed_engines = self
+            .statuses
+            .as_ref()
+            .map_or(0, |s| s.iter().filter(|st| st.is_installed()).count());
+        let updates_count = self.statuses.as_ref().map_or(0, |s| {
+            s.iter()
+                .filter(|st| self.latest_update(st).is_some())
+                .count()
+        });
+        let b = backend(cx);
+        let systems_attention = self.statuses.as_ref().map_or(0, |statuses| {
+            systems::all()
+                .iter()
+                .filter(|sys| {
+                    let count = self.counts.get(&sys.id).copied().unwrap_or(0);
+                    let ready = b.system_engine(&sys.id, statuses).is_some_and(|c| {
+                        statuses
+                            .iter()
+                            .any(|s| s.manifest.id == c.engine && s.plays(&c))
+                    });
+                    let bios_warn = self
+                        .bios
+                        .get(&sys.id)
+                        .and_then(bios_line)
+                        .is_some_and(|(w, _)| w);
+                    (count > 0 && !ready) || bios_warn
+                })
+                .count()
+        });
+        let needs_setup =
+            installed_engines == 0 || models(cx).settings.read(cx).app.rom_folders.is_empty();
+
         let content = match self.tab_ix {
-            0 => self.render_engines(cx),
-            1 => self.render_systems(cx),
+            0 => self.render_engines(window, cx),
+            1 => self.render_systems(window, cx),
             _ => self.retro.clone().into_any_element(),
         };
         let empty = self.statuses.as_ref().is_some_and(|s| s.is_empty());
+
+        let tabs = [
+            (
+                0usize,
+                "engines",
+                t("manage.emulators.tab.engines"),
+                (installed_engines > 0).then(|| {
+                    Tag::secondary()
+                        .xsmall()
+                        .child(installed_engines.to_string())
+                        .into_any_element()
+                }),
+            ),
+            (
+                1usize,
+                "systems",
+                t("manage.emulators.tab.systems"),
+                (systems_attention > 0).then(|| {
+                    Tag::warning()
+                        .xsmall()
+                        .child(systems_attention.to_string())
+                        .into_any_element()
+                }),
+            ),
+            (
+                2usize,
+                "achievements",
+                t("manage.emulators.tab.achievements"),
+                None,
+            ),
+        ];
+
         v_flex()
+            .id("emulators-page")
             .size_full()
             .min_h_0()
+            .overflow_y_scrollbar()
             .child(
                 v_flex()
+                    .id("emulators-content")
+                    .debug_selector(|| "emulators-content".into())
+                    .w_full()
+                    .max_w(rems(PAGE_MAX_WIDTH_REM))
                     .px_6()
-                    .pt_6()
-                    .gap_4()
+                    .py_6()
+                    .gap_5()
                     .child(
                         PageHeader::new(t("manage.emulators.title"))
                             .description(t("manage.emulators.description"))
                             .action(
                                 h_flex()
                                     .gap_2()
+                                    .flex_wrap()
+                                    .items_center()
+                                    .child(
+                                        Button::new("setup-emulation")
+                                            .icon(IconName::WandSparkles)
+                                            .label(t("manage.setup.open"))
+                                            .map(|b| {
+                                                if needs_setup {
+                                                    b.primary()
+                                                } else {
+                                                    b.outline()
+                                                }
+                                            })
+                                            .on_click(|_, window, cx| {
+                                                open_emulation_setup(window, cx)
+                                            }),
+                                    )
                                     .child(
                                         Button::new("add-emulator")
+                                            .outline()
                                             .icon(IconName::Plus)
                                             .label(t("manage.emulators.custom.add"))
                                             .on_click(|_, window, cx| {
@@ -1619,15 +2172,8 @@ impl Render for EmulatorsView {
                                             }),
                                     )
                                     .child(
-                                        Button::new("setup-emulation")
-                                            .icon(IconName::WandSparkles)
-                                            .label(t("manage.setup.open"))
-                                            .on_click(|_, window, cx| {
-                                                open_emulation_setup(window, cx)
-                                            }),
-                                    )
-                                    .child(
                                         Button::new("refresh-emulators")
+                                            .ghost()
                                             .icon(IconName::RefreshCw)
                                             .label(t("manage.emulators.refresh"))
                                             .loading(self.refreshing)
@@ -1636,53 +2182,79 @@ impl Render for EmulatorsView {
                                                 this.load_releases(true, window, cx);
                                                 this.load(window, cx);
                                             })),
-                                    ),
+                                    )
+                                    .when(updates_count > 0, |row| {
+                                        row.child(
+                                            Tag::warning()
+                                                .xsmall()
+                                                .child(updates_count.to_string()),
+                                        )
+                                    }),
                             ),
                     )
                     .child(
                         h_flex()
+                            .w_full()
                             .gap_4()
+                            .flex_wrap()
                             .items_end()
-                            .child(
-                                div().flex_1().min_w_0().child(
-                                    TabBar::new("emulator-tabs")
-                                        .underline()
-                                        .selected_index(self.tab_ix)
-                                        .child(Tab::new().label(t("manage.emulators.tab.engines")))
-                                        .child(Tab::new().label(t("manage.emulators.tab.systems")))
+                            .justify_between()
+                            .border_b_1()
+                            .border_color(border)
+                            .child(h_flex().id("emulator-tabs").gap_8().children(
+                                tabs.into_iter().map(|(ix, id, label, badge)| {
+                                    let active = self.tab_ix == ix;
+                                    v_flex()
+                                        .id(ElementId::Name(format!("emulators-tab-{id}").into()))
+                                        .debug_selector(move || format!("emulators-tab-{id}"))
+                                        .cursor_pointer()
+                                        .gap_2p5()
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            if this.tab_ix != ix {
+                                                this.tab_ix = ix;
+                                                cx.notify();
+                                            }
+                                        }))
                                         .child(
-                                            Tab::new()
-                                                .label(t("manage.emulators.tab.achievements")),
+                                            h_flex()
+                                                .gap_2()
+                                                .items_center()
+                                                .child(
+                                                    div()
+                                                        .text_xl()
+                                                        .font_semibold()
+                                                        .text_color(if active { fg } else { muted })
+                                                        .hover(move |s| s.text_color(fg))
+                                                        .child(label),
+                                                )
+                                                .children(badge),
                                         )
-                                        .on_click(cx.listener(|this, ix: &usize, _, cx| {
-                                            this.tab_ix = *ix;
-                                            cx.notify();
-                                        })),
-                                ),
-                            )
-                            .child(
-                                div()
-                                    .w(rems(18.))
-                                    .flex_shrink_0()
-                                    .pb_1()
-                                    .child(Input::new(&self.search).small()),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .id(ElementId::Name(
-                        format!("emulators-body-{}", self.tab_ix).into(),
-                    ))
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scrollbar()
-                    .child(div().px_6().py_4().child(if empty && self.tab_ix < 2 {
+                                        .child(
+                                            div()
+                                                .h(px(3.))
+                                                .w_full()
+                                                .rounded_full()
+                                                .when(active, |b| b.bg(primary)),
+                                        )
+                                }),
+                            ))
+                            .when(self.tab_ix < 2, |bar| {
+                                bar.child(
+                                    div()
+                                        .w(rems(18.))
+                                        .flex_shrink_0()
+                                        .pb_2()
+                                        .debug_selector(|| "emulators-search".into())
+                                        .child(Input::new(&self.search).small()),
+                                )
+                            }),
+                    )
+                    .child(if empty && self.tab_ix < 2 {
                         EmptyState::new(IconName::Joystick, t("manage.emulators.title"))
                             .into_any_element()
                     } else {
                         content
-                    })),
+                    }),
             )
     }
 }
@@ -1728,4 +2300,85 @@ fn not_downloadable_text(m: &irori_engines::EngineManifest, host: Host) -> Share
         "manage.emulators.no_build",
         &[("engine", &m.name), ("hosts", &hosts.join(", "))],
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use irori_engines::Os;
+
+    use super::*;
+
+    fn built_in_manifest(id: &str) -> EngineManifest {
+        let json = irori_engines::BUILT_IN
+            .iter()
+            .find(|(built_in_id, _)| *built_in_id == id)
+            .map(|(_, json)| *json)
+            .expect("built-in engine");
+        EngineManifest::parse(json).expect("built-in manifest")
+    }
+
+    fn fake_status(
+        id: &str,
+        experimental: bool,
+        installed: bool,
+        with_sources: bool,
+    ) -> EngineStatus {
+        let mut manifest = built_in_manifest(id);
+        manifest.experimental = experimental;
+        if !with_sources {
+            manifest.sources.clear();
+        }
+        let installations = if installed {
+            vec![Installation {
+                engine: id.into(),
+                origin: Origin::Managed,
+                version: Some("1.0".into()),
+                dir: Some(PathBuf::from("/tmp/emu")),
+                program: PathBuf::from("/tmp/emu/bin"),
+                flatpak: None,
+                size: 0,
+            }]
+        } else {
+            Vec::new()
+        };
+        EngineStatus {
+            manifest: Arc::new(manifest),
+            installations,
+            default: None,
+            cores: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn classify_engine_splits_installed_available_and_manual() {
+        let linux = Host {
+            os: Os::Linux,
+            arch: "x86_64",
+        };
+        let installed = fake_status("duckstation", true, true, false);
+        assert_eq!(classify_engine(&installed, linux), EngineSection::Installed);
+
+        let available = fake_status("duckstation", false, false, true);
+        assert_eq!(classify_engine(&available, linux), EngineSection::Available);
+
+        let experimental = fake_status("duckstation", true, false, true);
+        assert_eq!(classify_engine(&experimental, linux), EngineSection::Manual);
+
+        let manual = fake_status("duckstation", false, false, false);
+        assert_eq!(classify_engine(&manual, linux), EngineSection::Manual);
+    }
+
+    #[test]
+    fn engine_category_icon_groups_systems() {
+        let icon = |id: &str| engine_category_icon(&built_in_manifest(id));
+        assert_eq!(icon("dosbox-staging"), IconName::SquareTerminal);
+        assert_eq!(icon("scummvm"), IconName::SquareTerminal);
+        assert_eq!(icon("mame"), IconName::Joystick);
+        assert_eq!(icon("ppsspp"), IconName::GamepadDirectional);
+        assert_eq!(icon("mgba"), IconName::GamepadDirectional);
+        assert_eq!(icon("duckstation"), IconName::Gamepad2);
+    }
 }
