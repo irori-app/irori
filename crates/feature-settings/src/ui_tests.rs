@@ -1027,3 +1027,32 @@ fn tooltips_draw_on_settings_rows_pairs_and_per_game_view(cx: &mut TestAppContex
         .unwrap();
     }
 }
+
+#[gpui_kit::test]
+fn downloads_settings_shortcut_opens_integrations_subtab(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    // Move to another General sub-tab first, then open "downloads" via the shortcut route.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_subtab_for_test("window", window, cx);
+            v.set_section("downloads", window, cx);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).section()),
+        SettingsSection::General
+    );
+    assert!(
+        vcx.debug_bounds("row-maxDownloadSpeed").is_some(),
+        "download speed setting should be visible on the Integrations & downloads sub-tab"
+    );
+}

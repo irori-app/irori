@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal nakładka overlay fps frametime licznik wydajność statystyki w grze in-game stats",
   "shell.notice.crashed_review_action": "Przejrzyj i zgłoś",
   "shell.palette.latest_crash_report": "Zobacz ostatni raport o awarii",
-  "shell.palette.latest_crash_report_keywords": "crash awaria raport log błąd bug"
+  "shell.palette.latest_crash_report_keywords": "crash awaria raport log błąd bug",
+  "shell.notice.manage_rollback": "Zarządzaj / Cofnij"
 }

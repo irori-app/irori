@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal 覆盖层 overlay fps 帧时间 计数器 性能 游戏内统计 统计 in-game stats",
   "shell.notice.crashed_review_action": "查看并报告",
   "shell.palette.latest_crash_report": "查看最新崩溃报告",
-  "shell.palette.latest_crash_report_keywords": "crash 崩溃 报告 日志 错误 bug"
+  "shell.palette.latest_crash_report_keywords": "crash 崩溃 报告 日志 错误 bug",
+  "shell.notice.manage_rollback": "管理 / 回滚"
 }

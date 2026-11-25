@@ -311,7 +311,6 @@ impl Palette {
         for (label, icon, route) in [
             ("shell.nav.library", IconName::LibraryBig, Route::Library),
             ("shell.nav.downloads", IconName::Download, Route::Downloads),
-            ("shell.nav.updates", IconName::RefreshCw, Route::Updates),
             ("shell.nav.stores", IconName::Store, Route::Stores),
             ("shell.nav.stats", IconName::ChartColumn, Route::Stats),
             (
@@ -339,10 +338,14 @@ impl Palette {
             if cfg!(windows) && route == Route::WineManager {
                 continue;
             }
+            let mut keywords = vec![t(label)];
+            if route == Route::Downloads {
+                keywords.push(t("shell.nav.updates"));
+            }
             push(
                 Entry::new()
                     .label(t_args("shell.palette.go_to", &[("place", &t(label))]))
-                    .keywords([t(label)])
+                    .keywords(keywords)
                     .icon(icon),
                 PaletteTarget::Route(route),
                 targets,

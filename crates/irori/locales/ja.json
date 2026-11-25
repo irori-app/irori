@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal オーバーレイ fps フレームタイム カウンター パフォーマンス ゲーム内統計 統計 in-game stats",
   "shell.notice.crashed_review_action": "確認して報告",
   "shell.palette.latest_crash_report": "最新のクラッシュレポートを表示",
-  "shell.palette.latest_crash_report_keywords": "crash クラッシュ レポート ログ バグ"
+  "shell.palette.latest_crash_report_keywords": "crash クラッシュ レポート ログ バグ",
+  "shell.notice.manage_rollback": "管理 / ロールバック"
 }

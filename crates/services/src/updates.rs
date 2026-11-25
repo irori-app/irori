@@ -31,6 +31,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::Backend;
 
+/// Notice arg key naming the Wine build that can be rolled back after an
+/// in-place component update.
+pub const COMPONENT_ROLLBACK_ARG: &str = "rollback";
+
+/// Notice emitted when a component update finishes. Includes
+/// [`COMPONENT_ROLLBACK_ARG`] only when an in-place Wine update saved a
+/// rollback build so the UI can offer a direct shortcut to Wine Manager.
+fn component_updated_notice(name: &str, version: &str, rollback_version: Option<&str>) -> Notice {
+    let mut args = vec![("name", name), ("version", version)];
+    if let Some(rollback) = rollback_version {
+        args.push((COMPONENT_ROLLBACK_ARG, rollback));
+    }
+    Notice::new(NoticeLevel::Success, format!("{name} updated")).keys(
+        "shell.notice.component_updated",
+        None,
+        &args,
+    )
+}
+
 /// Seconds between two automatic checks.
 const CHECK_EVERY: u64 = 24 * 60 * 60;
 
@@ -656,12 +675,21 @@ impl Backend {
         };
         self.components.cancels.lock().remove(id);
         let cancelled = cancel.is_cancelled();
+        let mut rollback_version: Option<String> = None;
         self.set_components(|r| {
             r.running.remove(id);
             r.progress.remove(id);
             r.previous = previous_builds();
             match &result {
-                Ok(()) => r.updates.retain(|u| u.id != id),
+                Ok(()) => {
+                    if update.kind == ComponentKind::Wine
+                        && update.in_place
+                        && r.previous.iter().any(|p| p.version == update.installed)
+                    {
+                        rollback_version = Some(update.installed.clone());
+                    }
+                    r.updates.retain(|u| u.id != id);
+                }
                 Err(_) if cancelled => {}
                 Err(e) => {
                     r.failed.insert(id.to_string(), format!("{e:#}"));
@@ -671,13 +699,11 @@ impl Backend {
         let name = update.name.as_str();
         match result {
             Ok(()) => {
-                self.bus.notice(
-                    Notice::new(NoticeLevel::Success, format!("{name} updated")).keys(
-                        "shell.notice.component_updated",
-                        None,
-                        &[("name", name), ("version", &update.latest)],
-                    ),
-                );
+                self.bus.notice(component_updated_notice(
+                    name,
+                    &update.latest,
+                    rollback_version.as_deref(),
+                ));
                 Ok(())
             }
             Err(_) if cancelled => Ok(()),
@@ -931,5 +957,29 @@ mod tests {
             &update(ComponentKind::Translation, "GE-Proton10-25", false),
             &present
         ));
+    }
+
+    #[test]
+    fn component_updated_notice_carries_rollback_only_when_saved() {
+        let with_rollback =
+            component_updated_notice("GE-Proton", "2026-11-24", Some("GE-Proton-latest"));
+        assert_eq!(
+            with_rollback.title_key,
+            Some("shell.notice.component_updated")
+        );
+        assert!(
+            with_rollback
+                .args
+                .iter()
+                .any(|(k, v)| *k == COMPONENT_ROLLBACK_ARG && v == "GE-Proton-latest")
+        );
+
+        let without_rollback = component_updated_notice("DXVK", "2.6.2", None);
+        assert!(
+            !without_rollback
+                .args
+                .iter()
+                .any(|(k, _)| *k == COMPONENT_ROLLBACK_ARG)
+        );
     }
 }

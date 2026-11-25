@@ -20,10 +20,7 @@ use irori_services::{Backend, DownloadItem, DownloadKind, DownloadQueueSnapshot,
 use irori_ui::models;
 
 use crate::onboarding::OnboardingStep;
-use crate::{
-    AccountsView, DownloadsView, OnboardingEvent, OnboardingView, UpdatesView,
-    should_show_onboarding,
-};
+use crate::{AccountsView, DownloadsView, OnboardingEvent, OnboardingView, should_show_onboarding};
 
 fn setup(cx: &mut TestAppContext) {
     setup_with(cx, Vec::new);
@@ -102,11 +99,19 @@ fn queued(runner: Runner, app: &str, state: DownloadState) -> DownloadItem {
 }
 
 #[gpui_kit::test]
-fn updates_page_lists_games_with_updates(cx: &mut TestAppContext) {
+fn downloads_page_centers_empty_state_and_lists_game_updates(cx: &mut TestAppContext) {
     setup(cx);
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(1000.), px(800.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
     let (handle, _view) = cx.update(|cx| {
-        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-            cx.new(|cx| UpdatesView::new(window, cx))
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| DownloadsView::new(window, cx))
         })
         .expect("window opens")
     });
@@ -114,6 +119,17 @@ fn updates_page_lists_games_with_updates(cx: &mut TestAppContext) {
     vcx.run_until_parked();
     let game = GameId::new(Runner::Gog, "a");
     assert!(vcx.debug_bounds("update-gog:a").is_none());
+
+    // The idle empty state must be vertically centered in the 800 px viewport,
+    // not collapsed at the top of a scroll container.
+    let empty = vcx
+        .debug_bounds("downloads-empty")
+        .expect("idle empty state is rendered");
+    assert!(
+        empty.center().y > px(300.) && empty.center().y < px(600.),
+        "empty state center {:?} should be vertically centered in 800 px window",
+        empty.center()
+    );
 
     // Drawn in the same step: the backend's own events replace the model's
     // updates with its real, empty set as soon as the test yields.
@@ -124,6 +140,41 @@ fn updates_page_lists_games_with_updates(cx: &mut TestAppContext) {
         let _ = window.draw(cx);
     });
     assert!(vcx.debug_bounds("update-gog:a").is_some());
+    assert!(vcx.debug_bounds("downloads-empty").is_none());
+
+    // Clear game updates and surface an Irori self-update: the top banner renders
+    // cleanly without showing the empty state, then returns to empty when cleared.
+    vcx.update(|window, cx| {
+        let library = models(cx).library.clone();
+        library.update(cx, |l, _| l.updates = Arc::new(Default::default()));
+        let app_update = models(cx).app_update.clone();
+        app_update.update(cx, |u, _| {
+            u.status.kind = irori_services::InstallKind::Manual;
+            u.status.available = Some(irori_services::Release {
+                version: "9.9.9".into(),
+                url: "https://github.com/irori-app/irori/releases/tag/v9.9.9".into(),
+            });
+            u.status.install = irori_services::SelfInstall::Ready {
+                version: "9.9.9".into(),
+            };
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+    assert!(vcx.debug_bounds("irori-self-update-banner").is_some());
+    assert!(vcx.debug_bounds("downloads-empty").is_none());
+
+    vcx.update(|window, cx| {
+        let app_update = models(cx).app_update.clone();
+        app_update.update(cx, |u, _| {
+            u.status.available = None;
+            u.status.install = irori_services::SelfInstall::Idle;
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+    assert!(vcx.debug_bounds("irori-self-update-banner").is_none());
+    assert!(vcx.debug_bounds("downloads-empty").is_some());
 }
 
 #[gpui_kit::test]
@@ -173,6 +224,131 @@ fn downloads_show_items_of_every_store_in_queue_order(cx: &mut TestAppContext) {
     assert!(zoom.top() < other.top());
     // The running item is the hero, not a queue row.
     assert!(vcx.debug_bounds("queue-gog:a").is_none());
+}
+
+#[gpui_kit::test]
+fn downloads_header_wraps_cleanly_in_narrow_window(cx: &mut TestAppContext) {
+    setup(cx);
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(800.), px(700.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| DownloadsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    let update_game = GameId::new(Runner::Gog, "upd");
+    vcx.update(|window, cx| {
+        let downloads = models(cx).downloads.clone();
+        downloads.update(cx, |d, cx| {
+            d.queue = DownloadQueueSnapshot {
+                active: vec![
+                    queued(Runner::Gog, "a", DownloadState::Running),
+                    queued(Runner::Zoom, "b", DownloadState::Queued),
+                ],
+                paused: false,
+                ..Default::default()
+            };
+            cx.notify();
+        });
+        let library = models(cx).library.clone();
+        library.update(cx, |l, cx| {
+            l.updates = Arc::new([update_game].into());
+            cx.notify();
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+    vcx.run_until_parked();
+    vcx.update(|window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+
+    let title = vcx
+        .debug_bounds("downloads-title")
+        .expect("header title renders");
+    let actions = vcx
+        .debug_bounds("downloads-header-actions")
+        .expect("header actions render");
+    let settings = vcx
+        .debug_bounds("downloads-settings")
+        .expect("settings button renders");
+
+    assert!(
+        title.size.width >= px(100.),
+        "title should not collapse on an 800 px window: {title:?}"
+    );
+    assert!(
+        actions.right() <= px(800.),
+        "header actions must stay within 800 px window: {actions:?}"
+    );
+    assert!(
+        settings.right() <= px(800.),
+        "settings gear must stay within 800 px window: {settings:?}"
+    );
+
+    click(&mut vcx, "downloads-settings");
+    let route = vcx.read(|cx| irori_ui::nav::navigator(cx).read(cx).current().clone());
+    assert_eq!(route, irori_ui::Route::Settings("downloads".into()));
+}
+
+#[gpui_kit::test]
+fn downloads_history_only_shows_idle_banner_and_opens_game_page(cx: &mut TestAppContext) {
+    setup(cx);
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(1000.), px(800.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| DownloadsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    vcx.update(|window, cx| {
+        let downloads = models(cx).downloads.clone();
+        downloads.update(cx, |d, cx| {
+            d.queue = DownloadQueueSnapshot {
+                active: Vec::new(),
+                finished: vec![queued(Runner::Gog, "dawn", DownloadState::Done)],
+                paused: false,
+                ..Default::default()
+            };
+            cx.notify();
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+
+    assert!(vcx.debug_bounds("downloads-empty").is_none());
+    assert!(
+        vcx.debug_bounds("downloads-idle-banner").is_some(),
+        "compact idle banner should stay visible above finished history"
+    );
+
+    click(&mut vcx, "history-open-gog:dawn-0");
+    let route = vcx.read(|cx| irori_ui::nav::navigator(cx).read(cx).current().clone());
+    assert_eq!(
+        route,
+        irori_ui::Route::Game(GameId::new(Runner::Gog, "dawn"))
+    );
 }
 
 /// A store with fixed accounts and no games.

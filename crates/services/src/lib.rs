@@ -150,7 +150,10 @@ pub use sunshine::{
     StreamClient, StreamHost, SunshineInstall, SunshineLogin, SunshineReport, SunshineStatus,
 };
 pub use sync::{RcloneInfo, SyncConflict, SyncDevice, SyncReport, SyncStatus, WebDavLogin};
-pub use updates::{AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, PreviousBuild};
+pub use updates::{
+    AutoUpdateHold, COMPONENT_ROLLBACK_ARG, ComponentKind, ComponentReport, ComponentUpdate,
+    PreviousBuild,
+};
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
 pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
 

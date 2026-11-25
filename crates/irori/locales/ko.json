@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal 오버레이 fps 프레임타임 카운터 성능 게임 내 통계 in-game stats",
   "shell.notice.crashed_review_action": "검토 및 신고",
   "shell.palette.latest_crash_report": "최근 충돌 보고서 보기",
-  "shell.palette.latest_crash_report_keywords": "crash 충돌 보고서 로그 버그"
+  "shell.palette.latest_crash_report_keywords": "crash 충돌 보고서 로그 버그",
+  "shell.notice.manage_rollback": "관리 / 롤백"
 }

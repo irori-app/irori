@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal sobreposição overlay fps frametime contador desempenho estatísticas no jogo in-game stats",
   "shell.notice.crashed_review_action": "Revisar e relatar",
   "shell.palette.latest_crash_report": "Ver último relatório de falha",
-  "shell.palette.latest_crash_report_keywords": "crash relatório falha log panic erro bug"
+  "shell.palette.latest_crash_report_keywords": "crash relatório falha log panic erro bug",
+  "shell.notice.manage_rollback": "Gerenciar / Reverter"
 }

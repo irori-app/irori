@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime counter performance in-game stats",
   "shell.notice.crashed_review_action": "Review & report",
   "shell.palette.latest_crash_report": "View latest crash report",
-  "shell.palette.latest_crash_report_keywords": "crash report log panic backtrace bug"
+  "shell.palette.latest_crash_report_keywords": "crash report log panic backtrace bug",
+  "shell.notice.manage_rollback": "Manage / Rollback"
 }

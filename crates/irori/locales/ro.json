@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal suprapunere overlay fps frametime contor performanță statistici în joc in-game stats",
   "shell.notice.crashed_review_action": "Revizuiește și raportează",
   "shell.palette.latest_crash_report": "Vezi ultimul raport de blocare",
-  "shell.palette.latest_crash_report_keywords": "crash blocare raport jurnal log bug"
+  "shell.palette.latest_crash_report_keywords": "crash blocare raport jurnal log bug",
+  "shell.notice.manage_rollback": "Gestionează / Revino"
 }

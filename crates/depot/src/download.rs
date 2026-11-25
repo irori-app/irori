@@ -279,6 +279,12 @@ pub async fn download(
         Err(_) if cancel.is_cancelled() => return Ok(Finished::Cancelled),
         Err(e) => {
             cancel.cancel();
+            if is_disk_full(&e) {
+                bail!(
+                    "Not enough free disk space in {}: free up space and retry",
+                    job.root.display()
+                );
+            }
             return Err(anyhow::Error::from(e).context("Download failed"));
         }
     }
@@ -943,11 +949,29 @@ impl Ctx {
     /// Build a file from chunk slices (or local copies of them), verify it
     /// and move it into place.
     async fn assemble(&self, f: &FileEntry, dest: &Path, use_local: bool) -> Result<(), Error> {
+        // Tracks bytes already added to `stats.done` for this in-flight file
+        // so both errors and future-drop cancellations (from `tokio::select!`)
+        // roll back uncommitted progress before a final sample is read.
+        struct Uncommitted<'a> {
+            stats: &'a Stats,
+            written: u64,
+        }
+        impl Drop for Uncommitted<'_> {
+            fn drop(&mut self) {
+                if self.written > 0 {
+                    self.stats.sub_done(self.written);
+                }
+            }
+        }
+
         let part = path::part_path(dest);
         let mut out =
             tokio::io::BufWriter::with_capacity(1 << 20, tokio::fs::File::create(&part).await?);
         let mut hasher = f.hash.as_ref().map(Digest::hasher);
-        let mut written = 0u64;
+        let mut uncommitted = Uncommitted {
+            stats: &self.stats,
+            written: 0,
+        };
         let result = async {
             let mut parts = futures::stream::iter(f.parts.clone())
                 .map(|p| async move {
@@ -980,16 +1004,16 @@ impl Ctx {
                 }
                 self.cache.release(&p.chunk.key);
                 let n = slice.len() as u64;
-                written += n;
+                uncommitted.written += n;
                 self.stats.add_written(n);
                 self.stats.add_done(n);
             }
             out.flush().await?;
             drop(out);
-            if written != f.size {
+            if uncommitted.written != f.size {
                 return Err(Error::Corrupt(format!(
-                    "{} has {written} bytes instead of {}",
-                    f.path, f.size
+                    "{} has {} bytes instead of {}",
+                    f.path, uncommitted.written, f.size
                 )));
             }
             if let (Some(h), Some(expected)) = (hasher, &f.hash)
@@ -1004,13 +1028,13 @@ impl Ctx {
         }
         .await;
         if let Err(e) = result {
-            self.stats.sub_done(written);
             if !matches!(e, Error::Cancelled) {
                 let _ = tokio::fs::remove_file(&part).await;
             }
             return Err(e);
         }
         tokio::fs::rename(&part, dest).await?;
+        uncommitted.written = 0;
         Ok(())
     }
 
@@ -1230,6 +1254,20 @@ impl Ctx {
     }
 }
 
+/// Whether `err` was caused by a full filesystem (Windows `ERROR_DISK_FULL`
+/// or Unix `ENOSPC`).
+fn is_disk_full(err: &Error) -> bool {
+    match err {
+        Error::Io(io) => io.kind() == std::io::ErrorKind::StorageFull,
+        Error::Other(other) => other.chain().any(|cause| {
+            cause
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|io| io.kind() == std::io::ErrorKind::StorageFull)
+        }),
+        _ => false,
+    }
+}
+
 /// The error for a server that stopped sending.
 fn stalled(url: &str) -> Error {
     Error::Interrupted(format!(
@@ -1257,7 +1295,7 @@ impl Drop for Waiting<'_> {
 
 #[cfg(test)]
 mod redact_tests {
-    use super::redact;
+    use super::{Error, is_disk_full, redact};
 
     #[test]
     fn keeps_only_the_server() {
@@ -1268,6 +1306,19 @@ mod redact_tests {
         ] {
             assert_eq!(redact(url), "https://cdn.example.org");
         }
+    }
+
+    #[test]
+    fn detects_storage_full_errors() {
+        let direct = Error::Io(std::io::Error::from(std::io::ErrorKind::StorageFull));
+        assert!(is_disk_full(&direct));
+        let wrapped = Error::Other(
+            anyhow::Error::from(std::io::Error::from(std::io::ErrorKind::StorageFull))
+                .context("Data/game.pak"),
+        );
+        assert!(is_disk_full(&wrapped));
+        let other = Error::Io(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        assert!(!is_disk_full(&other));
     }
 }
 
