@@ -22,7 +22,7 @@ use irori_ui::i18n::t;
 use irori_ui::models;
 
 use crate::accounts::{ACCOUNT_STORES, StoreCard, store_cards, store_icon};
-use crate::common::{card, card_grid};
+use crate::common::{card, card_grid_capped};
 use crate::deals::DealsSection;
 use crate::login::open_login_dialog;
 use crate::store_window::open_store_window;
@@ -82,7 +82,8 @@ fn deals_shown(cx: &gpui_kit::App) -> bool {
 }
 
 /// Narrowest a store card gets before the grid drops a column, in rem.
-const MIN_CARD_REM: f32 = 17.5;
+const MIN_CARD_REM: f32 = 22.;
+const MAX_STORE_COLUMNS: u16 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StoresTab {
@@ -182,15 +183,22 @@ impl StoresView {
             card(cx)
                 .id(ElementId::Name(format!("store-{}", runner.id()).into()))
                 .debug_selector(move || format!("store-{}", runner.id()))
+                .p_5()
+                .gap_4()
                 .child(
                     h_flex()
-                        .gap_2()
+                        .gap_2p5()
                         .items_center()
-                        .child(store_icon(runner).text_color(theme.muted_foreground))
+                        .child(
+                            store_icon(runner)
+                                .size_5()
+                                .text_color(theme.muted_foreground),
+                        )
                         .child(
                             div()
                                 .flex_1()
                                 .min_w_0()
+                                .text_base()
                                 .font_semibold()
                                 .truncate()
                                 .child(runner.store_name()),
@@ -212,7 +220,6 @@ impl StoresView {
                         .items_center()
                         .child(
                             Button::new("open-store")
-                                .small()
                                 .outline()
                                 .icon(IconName::Store)
                                 .label(t("manage.stores.open_store"))
@@ -227,7 +234,6 @@ impl StoresView {
                         .child(
                             Button::new("open-browser")
                                 .ghost()
-                                .small()
                                 .icon(IconName::ExternalLink)
                                 .accessibility_label(t("manage.stores.open_browser"))
                                 .tooltip(t("manage.stores.open_browser"))
@@ -237,7 +243,6 @@ impl StoresView {
                         .when(can_login, |row| {
                             row.child(
                                 Button::new("login")
-                                    .small()
                                     .label(t("manage.stores.login"))
                                     .on_click(move |_, window, cx| {
                                         open_login_dialog(runner, window, cx);
@@ -278,7 +283,13 @@ impl Render for StoresView {
                     .collect();
                 v_flex()
                     .gap_8()
-                    .child(card_grid(&self.grid_width, MIN_CARD_REM, cards, window))
+                    .child(card_grid_capped(
+                        &self.grid_width,
+                        MIN_CARD_REM,
+                        MAX_STORE_COLUMNS,
+                        cards,
+                        window,
+                    ))
                     .child(self.launchers.clone())
                     .into_any_element()
             }
@@ -286,6 +297,10 @@ impl Render for StoresView {
                 Some(deals) => deals.clone().into_any_element(),
                 None => div().into_any_element(),
             },
+        };
+        let description = match self.tab {
+            StoresTab::Stores => t("manage.stores.description"),
+            StoresTab::Deals => t("manage.stores.description.deals"),
         };
 
         v_flex()
@@ -298,14 +313,11 @@ impl Render for StoresView {
                     .px_6()
                     .py_6()
                     .gap_5()
-                    .child(
-                        PageHeader::new(t("manage.stores.title"))
-                            .description(t("manage.stores.description")),
-                    )
+                    .child(PageHeader::new(t("manage.stores.title")).description(description))
                     .child(
                         h_flex()
                             .w_full()
-                            .gap_8()
+                            .gap_10()
                             .border_b_1()
                             .border_color(border)
                             .children(tabs.iter().map(|&tab| {
@@ -326,7 +338,7 @@ impl Render for StoresView {
                                     }))
                                     .child(
                                         div()
-                                            .text_xl()
+                                            .text_2xl()
                                             .font_semibold()
                                             .text_color(if active { fg } else { muted })
                                             .hover(move |s| s.text_color(fg))
@@ -334,7 +346,7 @@ impl Render for StoresView {
                                     )
                                     .child(
                                         div()
-                                            .h(px(3.))
+                                            .h(px(3.5))
                                             .w_full()
                                             .rounded_full()
                                             .when(active, |b| b.bg(primary)),

@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Прочитать из клиента Steam",
   "manage.steam_library.section_tip": "Читает все ваши игры напрямую из локального клиента Steam без входа в Steam в Irori.",
   "manage.stores.title": "Магазины",
-  "manage.stores.description": "Находите скидки, бесплатные раздачи и официальные магазины.",
+  "manage.stores.description": "Подключайте аккаунты магазинов для синхронизации библиотеки, открывайте витрины и настраивайте сторонние лаунчеры.",
   "manage.stores.blurb.epic": "Еженедельные бесплатные игры и эксклюзивы.",
   "manage.stores.blurb.gog": "Классика и новинки без DRM.",
   "manage.stores.blurb.amazon": "ПК-библиотека Prime Gaming.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Зарегистрироваться на GG.deals",
   "manage.deals.ggdeals.step2": "2. Откройте страницу API, нажмите «Get Your API key» и скопируйте токен:",
   "manage.deals.ggdeals.step3": "3. Вставьте токен ниже и сохраните.",
-  "manage.launchers.wine_tooltip": "Используется при настройке новых лаунчеров."
+  "manage.launchers.wine_tooltip": "Используется при настройке новых лаунчеров.",
+  "manage.stores.description.deals": "Забирайте бесплатные игры и отслеживайте региональные скидки в магазинах ПК."
 }

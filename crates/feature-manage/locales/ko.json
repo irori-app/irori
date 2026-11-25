@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Steam 클라이언트에서 읽기",
   "manage.steam_library.section_tip": "Irori에서 Steam에 로그인하지 않고도 로컬 Steam 클라이언트에서 보유한 모든 게임을 직접 읽어 옵니다.",
   "manage.stores.title": "스토어",
-  "manage.stores.description": "게임 할인, 무료 배포 게임, 공식 스토어를 한곳에서 살펴보세요.",
+  "manage.stores.description": "스토어 계정을 연결해 라이브러리를 동기화하거나, 스토어를 열고 외부 런처를 설정하세요.",
   "manage.stores.blurb.epic": "주간 무료 게임 및 독점 타이틀.",
   "manage.stores.blurb.gog": "DRM 없는 고전 및 최신 게임.",
   "manage.stores.blurb.amazon": "Prime Gaming PC 라이브러리.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "GG.deals 가입하기",
   "manage.deals.ggdeals.step2": "2. API 페이지를 열고 \"Get Your API key\"를 클릭한 뒤 토큰을 복사하세요:",
   "manage.deals.ggdeals.step3": "3. 아래에 토큰을 붙여넣고 저장하세요.",
-  "manage.launchers.wine_tooltip": "새 런처를 설정할 때 사용됩니다."
+  "manage.launchers.wine_tooltip": "새 런처를 설정할 때 사용됩니다.",
+  "manage.stores.description.deals": "무료 게임을 받고 PC 스토어별 지역 할인을 확인하세요."
 }

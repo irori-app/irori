@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "從 Steam 用戶端讀取",
   "manage.steam_library.section_tip": "不必在 Irori 中登入 Steam，直接從本機的 Steam 用戶端讀取你擁有的所有遊戲。",
   "manage.stores.title": "商店",
-  "manage.stores.description": "探索遊戲特惠、免費領取與官方商店。",
+  "manage.stores.description": "連接商店帳號以同步遊戲庫、開啟商店頁面或設定第三方啟動器。",
   "manage.stores.blurb.epic": "每週免費遊戲與獨佔作品。",
   "manage.stores.blurb.gog": "無 DRM 的經典與現代遊戲。",
   "manage.stores.blurb.amazon": "Prime Gaming PC 收藏庫。",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "在 GG.deals 註冊",
   "manage.deals.ggdeals.step2": "2. 開啟 API 頁面，點擊 \"Get Your API key\" 並複製權杖:",
   "manage.deals.ggdeals.step3": "3. 將權杖貼到下方並儲存。",
-  "manage.launchers.wine_tooltip": "設定新啟動器時使用。"
+  "manage.launchers.wine_tooltip": "設定新啟動器時使用。",
+  "manage.stores.description.deals": "領取免費遊戲並追蹤各 PC 商店的地區特惠。"
 }

@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Läs från Steam-klienten",
   "manage.steam_library.section_tip": "Läser alla spel du äger direkt från din lokala Steam-klient utan att logga in på Steam i Irori.",
   "manage.stores.title": "Butiker",
-  "manage.stores.description": "Upptäck reor, gratisspel och officiella butiker.",
+  "manage.stores.description": "Anslut butikskonton för att synka ditt bibliotek, öppna butiker eller konfigurera externa startprogram.",
   "manage.stores.blurb.epic": "Gratisspel varje vecka och exklusivt.",
   "manage.stores.blurb.gog": "DRM-fria klassiker och nya titlar.",
   "manage.stores.blurb.amazon": "Prime Gaming PC-bibliotek.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Registrera på GG.deals",
   "manage.deals.ggdeals.step2": "2. Öppna API-sidan, klicka på \"Get Your API key\" och kopiera token:",
   "manage.deals.ggdeals.step3": "3. Klistra in token nedan och spara.",
-  "manage.launchers.wine_tooltip": "Används när nya startprogram ställs in."
+  "manage.launchers.wine_tooltip": "Används när nya startprogram ställs in.",
+  "manage.stores.description.deals": "Hämta gratisspel och följ regionala erbjudanden i PC-butiker."
 }

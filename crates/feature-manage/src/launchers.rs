@@ -48,7 +48,7 @@ use irori_launchers::{
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use crate::common::{backend_op, card, card_grid, notify_error, notify_success, wrapped_tooltip};
+use crate::common::{backend_op, card, notify_error, notify_success, wrapped_tooltip};
 
 struct LaunchersHandle(Arc<LaunchersStore>);
 impl Global for LaunchersHandle {}
@@ -545,7 +545,6 @@ impl LaunchersSection {
         let sign_in = |label: SharedString| {
             Button::new("launcher-xbox-sign-in")
                 .debug_selector(|| "launcher-xbox-sign-in".to_string())
-                .small()
                 .icon(IconName::LogIn)
                 .label(label)
                 .on_click(|_, window, cx| {
@@ -694,7 +693,6 @@ impl LaunchersSection {
                 .child(
                     Button::new("launcher-xbox-scan")
                         .ghost()
-                        .small()
                         .icon(IconName::RefreshCw)
                         .label(t("manage.launchers.scan"))
                         .on_click(
@@ -704,7 +702,6 @@ impl LaunchersSection {
                 .child(if status.app_installed {
                     Button::new("launcher-xbox-open")
                         .debug_selector(|| "launcher-xbox-open".to_string())
-                        .small()
                         .icon(IconName::ExternalLink)
                         .label(t_args("manage.launchers.open", &[("launcher", name)]))
                         .on_click(
@@ -713,7 +710,6 @@ impl LaunchersSection {
                 } else {
                     Button::new("launcher-xbox-get")
                         .primary()
-                        .small()
                         .icon(IconName::ExternalLink)
                         .label(t("manage.launchers.xbox.get_app"))
                         .on_click(|_, _, cx| cx.open_url(XBOX_APP_PAGE))
@@ -723,13 +719,17 @@ impl LaunchersSection {
         card(cx)
             .id("launcher-xbox")
             .debug_selector(|| "launcher-xbox-card".to_string())
+            .p_5()
+            .gap_4()
             .child(
                 h_flex()
-                    .gap_2()
+                    .gap_2p5()
+                    .items_center()
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
+                            .text_base()
                             .font_semibold()
                             .truncate()
                             .child(name),
@@ -740,7 +740,7 @@ impl LaunchersSection {
                 div()
                     .flex_1()
                     .min_w_0()
-                    .text_xs()
+                    .text_sm()
                     .text_color(muted)
                     .child(t("manage.launchers.about.xbox")),
             )
@@ -809,7 +809,6 @@ impl LaunchersSection {
             Button::new("launcher-remove")
                 .debug_selector(move || format!("launcher-{}-remove", launcher.id()))
                 .ghost()
-                .small()
                 .label(t("manage.launchers.remove"))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.act(launcher, Action::Forget, window, cx)
@@ -853,7 +852,6 @@ impl LaunchersSection {
                 .child(
                     Button::new("launcher-scan")
                         .ghost()
-                        .small()
                         .icon(IconName::RefreshCw)
                         .label(t("manage.launchers.scan"))
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -864,7 +862,6 @@ impl LaunchersSection {
                     Button::new("launcher-close")
                         .debug_selector(move || format!("launcher-{}-close", launcher.id()))
                         .ghost()
-                        .small()
                         .icon(IconName::Power)
                         .label(t("manage.launchers.close"))
                         .on_click(
@@ -877,7 +874,6 @@ impl LaunchersSection {
                     Button::new("launcher-more")
                         .debug_selector(move || format!("launcher-{}-more", launcher.id()))
                         .ghost()
-                        .small()
                         .icon(IconName::Ellipsis)
                         .accessibility_label(t("manage.launchers.more"))
                         .tooltip(t("manage.launchers.more"))
@@ -913,7 +909,6 @@ impl LaunchersSection {
                 )
                 .child(
                     Button::new("launcher-open")
-                        .small()
                         .icon(IconName::ExternalLink)
                         .label(t_args("manage.launchers.open", &[("launcher", name)]))
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -932,7 +927,6 @@ impl LaunchersSection {
                     d.child(
                         Button::new("launcher-adopt")
                             .ghost()
-                            .small()
                             .icon(IconName::FolderOpen)
                             .label(t("manage.launchers.adopt"))
                             .disabled(no_wine)
@@ -945,7 +939,6 @@ impl LaunchersSection {
                     Button::new("launcher-setup")
                         .debug_selector(move || format!("launcher-{}-set-up", launcher.id()))
                         .primary()
-                        .small()
                         .icon(IconName::Download)
                         .label(t_args("manage.launchers.set_up", &[("launcher", name)]))
                         .disabled(no_wine)
@@ -959,17 +952,21 @@ impl LaunchersSection {
             .id(ElementId::Name(
                 format!("launcher-{}", launcher.id()).into(),
             ))
+            .p_5()
+            .gap_4()
             .child(
                 h_flex()
-                    .gap_2()
+                    .gap_2p5()
+                    .items_center()
                     .children(
                         irori_ui::components::StoreLogo::of_launcher(launcher.id())
-                            .map(|logo| logo.icon().text_color(muted)),
+                            .map(|logo| logo.icon().size_5().text_color(muted)),
                     )
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
+                            .text_base()
                             .font_semibold()
                             .truncate()
                             .child(name),
@@ -981,7 +978,7 @@ impl LaunchersSection {
                 v_flex()
                     .flex_1()
                     .gap_1p5()
-                    .child(div().text_xs().text_color(muted).child(match launcher {
+                    .child(div().text_sm().text_color(muted).child(match launcher {
                         Launcher::BattleNet => t("manage.launchers.about.battlenet"),
                         Launcher::EaApp => t("manage.launchers.about.ea"),
                         Launcher::Ubisoft => t("manage.launchers.about.ubisoft"),
@@ -1040,7 +1037,12 @@ impl Render for LaunchersSection {
                     .child(
                         v_flex()
                             .gap_1()
-                            .child(div().font_semibold().child(t("manage.launchers.title")))
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_semibold()
+                                    .child(t("manage.launchers.title")),
+                            )
                             .child(div().text_sm().text_color(muted).child(if cfg!(windows) {
                                 t("manage.launchers.description_windows")
                             } else {
@@ -1070,6 +1072,12 @@ impl Render for LaunchersSection {
                         )
                     }),
             )
-            .child(card_grid(&self.grid_width, 20., cards, window))
+            .child(crate::common::card_grid_capped(
+                &self.grid_width,
+                20.,
+                5,
+                cards,
+                window,
+            ))
     }
 }

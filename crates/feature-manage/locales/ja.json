@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Steam クライアントから読み込む",
   "manage.steam_library.section_tip": "Irori で Steam にサインインしなくても、ローカルの Steam クライアントから所有しているすべてのゲームを直接読み込みます。",
   "manage.stores.title": "ストア",
-  "manage.stores.description": "セール情報、無料配布ゲーム、公式ストアをまとめて確認できます。",
+  "manage.stores.description": "ストアアカウントを連携してライブラリを同期したり、ストアを開いたり、外部ランチャーを設定します。",
   "manage.stores.blurb.epic": "毎週の無料ゲームと独占タイトル。",
   "manage.stores.blurb.gog": "DRM フリーのクラシックと新作。",
   "manage.stores.blurb.amazon": "Prime Gaming PC ライブラリ。",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "GG.deals で登録",
   "manage.deals.ggdeals.step2": "2. API ページを開き、「Get Your API key」をクリックしてトークンをコピーします:",
   "manage.deals.ggdeals.step3": "3. 下にトークンを貼り付けて保存します。",
-  "manage.launchers.wine_tooltip": "新しいランチャーのセットアップ時に使用されます。"
+  "manage.launchers.wine_tooltip": "新しいランチャーのセットアップ時に使用されます。",
+  "manage.stores.description.deals": "無料ゲームを入手して、PC ストアごとの地域別セールをチェックできます。"
 }

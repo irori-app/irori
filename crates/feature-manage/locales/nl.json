@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Lezen uit Steam-client",
   "manage.steam_library.section_tip": "Leest elke game in je bezit rechtstreeks uit je lokale Steam-client zonder in Irori bij Steam in te loggen.",
   "manage.stores.title": "Winkels",
-  "manage.stores.description": "Ontdek aanbiedingen, gratis games en officiële winkels.",
+  "manage.stores.description": "Koppel winkelaccounts om je bibliotheek te synchroniseren, open winkels of stel externe launchers in.",
   "manage.stores.blurb.epic": "Wekelijkse gratis games en exclusives.",
   "manage.stores.blurb.gog": "DRM-vrije klassiekers en nieuwe titels.",
   "manage.stores.blurb.amazon": "Prime Gaming pc-bibliotheek.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Registreren op GG.deals",
   "manage.deals.ggdeals.step2": "2. Open de API-pagina, klik op \"Get Your API key\" en kopieer het token:",
   "manage.deals.ggdeals.step3": "3. Plak het token hieronder en sla op.",
-  "manage.launchers.wine_tooltip": "Gebruikt bij het instellen van nieuwe launchers."
+  "manage.launchers.wine_tooltip": "Gebruikt bij het instellen van nieuwe launchers.",
+  "manage.stores.description.deals": "Claim gratis games en volg regionale aanbiedingen bij PC-winkels."
 }

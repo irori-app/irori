@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Steam istemcisinden oku",
   "manage.steam_library.section_tip": "Irori içinde Steam’de oturum açmadan sahip olduğun tüm oyunları doğrudan yerel Steam istemcinden okur.",
   "manage.stores.title": "Mağazalar",
-  "manage.stores.description": "Oyun fırsatlarını, ücretsiz oyunları ve resmi mağazaları keşfedin.",
+  "manage.stores.description": "Kütüphanenizi eşitlemek için mağaza hesaplarını bağlayın, mağazaları açın veya harici başlatıcıları kurun.",
   "manage.stores.blurb.epic": "Haftalık ücretsiz oyunlar ve özel yapımlar.",
   "manage.stores.blurb.gog": "DRM’siz klasikler ve modern oyunlar.",
   "manage.stores.blurb.amazon": "Prime Gaming PC kütüphanesi.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "GG.deals'e Kayıt Ol",
   "manage.deals.ggdeals.step2": "2. API sayfasını açın, \"Get Your API key\" düğmesine tıklayın ve belirteci kopyalayın:",
   "manage.deals.ggdeals.step3": "3. Belirteci aşağıya yapıştırın ve kaydedin.",
-  "manage.launchers.wine_tooltip": "Yeni başlatıcıları kurarken kullanılır."
+  "manage.launchers.wine_tooltip": "Yeni başlatıcıları kurarken kullanılır.",
+  "manage.stores.description.deals": "Ücretsiz oyunları alın ve PC mağazalarındaki bölgesel indirimleri takip edin."
 }

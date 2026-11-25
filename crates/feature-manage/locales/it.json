@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Leggi dal client Steam",
   "manage.steam_library.section_tip": "Legge tutti i giochi che possiedi direttamente dal client Steam locale, senza accedere a Steam in Irori.",
   "manage.stores.title": "Negozi",
-  "manage.stores.description": "Scopri offerte, giochi gratis e negozi ufficiali.",
+  "manage.stores.description": "Collega gli account dei negozi per sincronizzare la libreria, apri gli store o configura launcher esterni.",
   "manage.stores.blurb.epic": "Giochi gratis settimanali ed esclusive.",
   "manage.stores.blurb.gog": "Classici e titoli moderni senza DRM.",
   "manage.stores.blurb.amazon": "Libreria PC di Prime Gaming.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Registrati su GG.deals",
   "manage.deals.ggdeals.step2": "2. Apri la pagina API, clicca su \"Get Your API key\" e copia il token:",
   "manage.deals.ggdeals.step3": "3. Incolla il token qui sotto e salva.",
-  "manage.launchers.wine_tooltip": "Usato durante la configurazione dei nuovi launcher."
+  "manage.launchers.wine_tooltip": "Usato durante la configurazione dei nuovi launcher.",
+  "manage.stores.description.deals": "Riscatta giochi gratis e segui le offerte regionali nei negozi PC."
 }

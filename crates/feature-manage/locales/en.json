@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Read from Steam client",
   "manage.steam_library.section_tip": "Reads every owned game directly from your local Steam client without signing in to Steam inside Irori.",
   "manage.stores.title": "Stores",
-  "manage.stores.description": "Discover game deals, free giveaways, and official storefronts.",
+  "manage.stores.description": "Connect store accounts to sync your library, open storefronts, or set up external launchers.",
   "manage.stores.blurb.epic": "Weekly free games and exclusives.",
   "manage.stores.blurb.gog": "DRM-free classics and modern titles.",
   "manage.stores.blurb.amazon": "Prime Gaming PC library.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Register on GG.deals",
   "manage.deals.ggdeals.step2": "2. Open the API page, click \"Get Your API key\", and copy the token:",
   "manage.deals.ggdeals.step3": "3. Paste the token below and save.",
-  "manage.launchers.wine_tooltip": "Used when setting up new launchers."
+  "manage.launchers.wine_tooltip": "Used when setting up new launchers.",
+  "manage.stores.description.deals": "Claim free games and track regional deals across PC stores."
 }

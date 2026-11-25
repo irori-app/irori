@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Citește din clientul Steam",
   "manage.steam_library.section_tip": "Citește toate jocurile pe care le deții direct din clientul Steam local, fără să te conectezi la Steam în Irori.",
   "manage.stores.title": "Magazine",
-  "manage.stores.description": "Descoperă oferte, jocuri gratuite și magazine oficiale.",
+  "manage.stores.description": "Conectează conturile magazinelor pentru a sincroniza biblioteca, deschide magazinele sau configurează lansatoare externe.",
   "manage.stores.blurb.epic": "Jocuri gratuite săptămânale și exclusivități.",
   "manage.stores.blurb.gog": "Jocuri clasice și moderne fără DRM.",
   "manage.stores.blurb.amazon": "Biblioteca PC Prime Gaming.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Înregistrează-te pe GG.deals",
   "manage.deals.ggdeals.step2": "2. Deschide pagina API, apasă pe \"Get Your API key\" și copiază tokenul:",
   "manage.deals.ggdeals.step3": "3. Lipește tokenul mai jos și salvează.",
-  "manage.launchers.wine_tooltip": "Folosit la configurarea lansatoarelor noi."
+  "manage.launchers.wine_tooltip": "Folosit la configurarea lansatoarelor noi.",
+  "manage.stores.description.deals": "Revendică jocuri gratuite și urmărește reducerile regionale în magazinele PC."
 }

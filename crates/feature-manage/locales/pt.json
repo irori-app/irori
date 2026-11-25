@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Ler do cliente Steam",
   "manage.steam_library.section_tip": "Lê todos os jogos que possui diretamente a partir do seu cliente Steam local, sem iniciar sessão no Steam dentro do Irori.",
   "manage.stores.title": "Lojas",
-  "manage.stores.description": "Explore promoções, jogos gratuitos para resgatar e lojas oficiais.",
+  "manage.stores.description": "Ligue contas das lojas para sincronizar a biblioteca, abra as lojas ou configure launchers externos.",
   "manage.stores.blurb.epic": "Jogos grátis semanais e exclusivos.",
   "manage.stores.blurb.gog": "Clássicos e modernos sem DRM.",
   "manage.stores.blurb.amazon": "Biblioteca PC do Prime Gaming.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Registar no GG.deals",
   "manage.deals.ggdeals.step2": "2. Abra a página API, clique em \"Get Your API key\" e copie o token:",
   "manage.deals.ggdeals.step3": "3. Cole o token abaixo e guarde.",
-  "manage.launchers.wine_tooltip": "Usado ao configurar novos launchers."
+  "manage.launchers.wine_tooltip": "Usado ao configurar novos launchers.",
+  "manage.stores.description.deals": "Resgate jogos grátis e acompanhe promoções regionais em lojas de PC."
 }

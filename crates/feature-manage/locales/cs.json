@@ -88,7 +88,7 @@
   "manage.steam_library.section_title": "Načíst z klienta Steam",
   "manage.steam_library.section_tip": "Načte všechny vlastněné hry přímo z místního klienta Steam, aniž byste se ke Steamu v Irori přihlašovali.",
   "manage.stores.title": "Obchody",
-  "manage.stores.description": "Objevte slevy her, hry zdarma a oficiální obchody.",
+  "manage.stores.description": "Propojte účty obchodů pro synchronizaci knihovny, otevírejte obchody nebo nastavte externí launchery.",
   "manage.stores.blurb.epic": "Týdenní hry zdarma a exkluzivity.",
   "manage.stores.blurb.gog": "Klasické i moderní hry bez DRM.",
   "manage.stores.blurb.amazon": "PC knihovna Prime Gaming.",
@@ -932,5 +932,6 @@
   "manage.deals.ggdeals.register_link": "Registrovat se na GG.deals",
   "manage.deals.ggdeals.step2": "2. Otevřete stránku API, klikněte na \"Get Your API key\" a zkopírujte token:",
   "manage.deals.ggdeals.step3": "3. Vložte token níže a uložte.",
-  "manage.launchers.wine_tooltip": "Použije se při nastavování nových launcherů."
+  "manage.launchers.wine_tooltip": "Použije se při nastavování nových launcherů.",
+  "manage.stores.description.deals": "Získejte hry zdarma a sledujte regionální slevy napříč PC obchody."
 }
