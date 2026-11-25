@@ -390,6 +390,9 @@ impl Store for ZoomStore {
     }
 
     fn user(&self) -> Option<UserInfo> {
+        if !self.enabled() {
+            return None;
+        }
         let st = self.state.read();
         st.auth.as_ref().map(|a| UserInfo {
             account_id: a.username.clone(),
@@ -504,6 +507,9 @@ impl Store for ZoomStore {
     }
 
     fn game(&self, app_name: &str) -> Option<Arc<GameInfo>> {
+        if !self.enabled() {
+            return None;
+        }
         self.state.read().games.get(app_name).cloned()
     }
 
