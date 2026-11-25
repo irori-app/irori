@@ -5352,6 +5352,7 @@ dependencies = [
  "open",
  "regex",
  "serde_json",
+ "sysinfo 0.39.6",
  "tempfile",
  "time",
  "tokio",

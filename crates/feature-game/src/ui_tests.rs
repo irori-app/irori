@@ -101,11 +101,31 @@ impl Store for FakeStore {
         platform: InstallPlatform,
         _: &InstallInfoQuery,
     ) -> anyhow::Result<InstallInfo> {
+        let dlcs = if app_name == "installed-quest" {
+            vec![
+                irori_core::DlcInfo {
+                    app_name: "dlc-alpha".into(),
+                    title: "Alpha Expansion".into(),
+                    is_installed: true,
+                    owned: true,
+                },
+                irori_core::DlcInfo {
+                    app_name: "dlc-beta".into(),
+                    title: "Beta Pack".into(),
+                    is_installed: false,
+                    owned: true,
+                },
+            ]
+        } else {
+            Vec::new()
+        };
         Ok(InstallInfo {
             app_name: app_name.into(),
             platform,
             download_size: 1 << 30,
             disk_size: 2 << 30,
+            languages: vec!["en-US".into(), "pt-BR".into()],
+            dlcs,
             ..Default::default()
         })
     }
@@ -166,9 +186,35 @@ fn steam_game() -> Arc<GameInfo> {
     )
 }
 
+/// An installed Epic game with recorded disk size and an installed DLC, for
+/// Modify-mode modal tests.
+fn installed_game(install_dir: &Path) -> Arc<GameInfo> {
+    Arc::new(
+        GameInfo {
+            runner: Some(Runner::Legendary),
+            app_name: "installed-quest".into(),
+            title: "Installed Quest".into(),
+            is_installed: true,
+            installable: true,
+            platforms: vec![InstallPlatform::Windows],
+            install: Some(irori_core::InstalledInfo {
+                install_path: install_dir.to_string_lossy().into_owned(),
+                install_size_bytes: 140 << 30,
+                version: "1.4.2".into(),
+                platform: InstallPlatform::Windows,
+                installed_dlcs: vec!["dlc-alpha".into()],
+                language: Some("en-US".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+        .finalize(),
+    )
+}
+
 fn backend() -> Backend {
     static ROOT: OnceLock<std::path::PathBuf> = OnceLock::new();
-    ROOT.get_or_init(|| {
+    let root = ROOT.get_or_init(|| {
         let root = tempfile::tempdir().expect("temp dir").keep();
         Paths::init(Paths::under(&root));
         // No catalogue refresh at startup: it would emit events from the
@@ -181,11 +227,13 @@ fn backend() -> Backend {
         root
     });
     let game = test_game();
+    let installed = installed_game(root);
     let id = game.id();
     let b = Backend::start_for_tests(move |_, _| {
         vec![
             Arc::new(FakeStore { game }) as DynStore,
             Arc::new(FakeStore { game: steam_game() }) as DynStore,
+            Arc::new(FakeStore { game: installed }) as DynStore,
         ]
     })
     .expect("backend");
@@ -243,28 +291,169 @@ fn ctrl_enter_opens_the_install_sheet(cx: &mut TestAppContext) {
 
     cx.update(|cx| assert_eq!(page.read(cx).title().as_deref(), Some("Test Quest")));
     assert_eq!(primary(cx, &page), Some(PrimaryAction::Install));
-    let has_sheet = |cx: &mut TestAppContext| {
-        cx.update_window(handle, |_, window, cx| window.has_active_sheet(cx))
+    let has_dialog = |cx: &mut TestAppContext| {
+        cx.update_window(handle, |_, window, cx| window.has_active_dialog(cx))
             .expect("window")
     };
-    assert!(!has_sheet(cx));
+    assert!(!has_dialog(cx));
 
     // The key binding runs the same command as the Install button.
     cx.dispatch_keystroke(handle, Keystroke::parse("ctrl-enter").expect("keystroke"));
     settle();
     cx.run_until_parked();
-    assert!(has_sheet(cx));
-    // Both accounts own the game: the sheet asks which one installs it.
+    assert!(has_dialog(cx));
+    // Both accounts own the game: the dialog asks which one installs it.
     let mut vcx = VisualTestContext::from_window(handle, cx);
     vcx.run_until_parked();
+    assert!(vcx.debug_bounds("install-header").is_some());
     assert!(vcx.debug_bounds("install-account").is_some());
+    let toggle = vcx
+        .debug_bounds("more-options-toggle")
+        .expect("more options toggle should be visible");
+    if !cfg!(target_os = "macos") {
+        assert!(vcx.debug_bounds("more-options-body").is_none());
+        // Clicking the collapsible header expands the advanced options body.
+        vcx.simulate_click(toggle.center(), gpui_kit::Modifiers::default());
+        vcx.run_until_parked();
+        assert!(vcx.debug_bounds("more-options-body").is_some());
+    }
 
     // An unbound key leaves the page alone.
-    cx.update_window(handle, |_, window, cx| window.close_sheet(cx))
+    cx.update_window(handle, |_, window, cx| window.close_dialog(cx))
         .expect("window");
     cx.dispatch_keystroke(handle, Keystroke::parse("ctrl-shift-z").expect("keystroke"));
     cx.run_until_parked();
-    assert!(!has_sheet(cx));
+    assert!(!has_dialog(cx));
+}
+
+#[gpui_kit::test]
+fn modify_dialog_auto_expands_more_options(cx: &mut TestAppContext) {
+    let id = GameId::new(Runner::Legendary, "installed-quest");
+    let (_b, handle, _page) = open_page(cx, id.clone());
+
+    cx.update_window(handle, |_, window, cx| {
+        crate::open_modify_sheet(id.clone(), window, cx);
+    })
+    .expect("window");
+    settle();
+    cx.run_until_parked();
+
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(
+        cx.update_window(handle, |_, window, cx| window.has_active_dialog(cx))
+            .expect("window")
+    );
+    assert!(vcx.debug_bounds("install-header").is_some());
+    assert!(vcx.debug_bounds("more-options-toggle").is_some());
+    assert!(vcx.debug_bounds("more-options-body").is_some());
+    assert!(vcx.debug_bounds("import-instead").is_none());
+
+    cx.update_window(handle, |_, window, cx| window.close_dialog(cx))
+        .expect("window");
+    cx.run_until_parked();
+    assert!(
+        !cx.update_window(handle, |_, window, cx| window.has_active_dialog(cx))
+            .expect("window")
+    );
+}
+
+#[gpui_kit::test]
+fn install_modal_handles_keyboard_enter_space_and_escape(cx: &mut TestAppContext) {
+    let id = test_game().id();
+    let (_b, handle, _page) = open_page(cx, id.clone());
+
+    cx.update_window(handle, |_, window, cx| {
+        crate::open_install_sheet(id.clone(), window, cx);
+    })
+    .expect("window");
+    settle();
+    cx.run_until_parked();
+
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    let toggle = vcx
+        .debug_bounds("more-options-toggle")
+        .expect("more options toggle");
+
+    // Click focuses the toggle and expands the body (unless auto-expanded on macOS).
+    let initially_open = vcx.debug_bounds("more-options-body").is_some();
+    vcx.simulate_click(toggle.center(), gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    assert_eq!(
+        vcx.debug_bounds("more-options-body").is_some(),
+        !initially_open
+    );
+
+    // Pressing Enter while focused activates the toggle via Confirm without
+    // accidentally dismissing the modal.
+    cx.dispatch_keystroke(handle, Keystroke::parse("enter").expect("keystroke"));
+    vcx.run_until_parked();
+    assert!(
+        cx.update_window(handle, |_, window, cx| window.has_active_dialog(cx))
+            .expect("window"),
+        "Enter on a focused toggle must not close the modal"
+    );
+    assert_eq!(
+        vcx.debug_bounds("more-options-body").is_some(),
+        initially_open
+    );
+
+    // Pressing Space while focused toggles it again via native KeyboardClickEvent.
+    let space = Keystroke::parse("space").expect("keystroke");
+    vcx.simulate_event(gpui_kit::KeyDownEvent {
+        keystroke: space.clone(),
+        is_held: false,
+        prefer_character_input: false,
+    });
+    vcx.simulate_event(gpui_kit::KeyUpEvent { keystroke: space });
+    vcx.run_until_parked();
+    assert_eq!(
+        vcx.debug_bounds("more-options-body").is_some(),
+        !initially_open
+    );
+
+    // Escape closes the modal cleanly.
+    cx.dispatch_keystroke(handle, Keystroke::parse("escape").expect("keystroke"));
+    vcx.run_until_parked();
+    assert!(
+        !cx.update_window(handle, |_, window, cx| window.has_active_dialog(cx))
+            .expect("window"),
+        "Escape should close the install modal"
+    );
+}
+
+#[gpui_kit::test]
+fn import_instead_transitions_from_install_to_import_dialog(cx: &mut TestAppContext) {
+    let id = test_game().id();
+    let (_b, handle, _page) = open_page(cx, id.clone());
+
+    cx.update_window(handle, |_, window, cx| {
+        crate::open_install_sheet(id.clone(), window, cx);
+    })
+    .expect("window");
+    settle();
+    cx.run_until_parked();
+
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("install-sheet").is_some());
+    let import_btn = vcx
+        .debug_bounds("import-instead")
+        .expect("import button should be visible in install mode");
+    vcx.simulate_click(import_btn.center(), gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+
+    assert!(
+        cx.update_window(handle, |_, window, cx| window.has_active_dialog(cx))
+            .expect("window"),
+        "import dialog should now be open"
+    );
+    assert!(
+        vcx.debug_bounds("install-sheet").is_none(),
+        "install modal should have closed before opening import"
+    );
+    assert!(vcx.debug_bounds("install-header").is_none());
 }
 
 #[gpui_kit::test]

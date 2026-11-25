@@ -1,29 +1,35 @@
-//! The install sheet (new installs) and its Modify mode (language, branch,
-//! build and DLCs of an installed game), plus the import dialog.
+//! The install modal (new installs) and its Modify mode (language, branch,
+//! build and DLCs of an installed game), centered with game artwork, live
+//! storage metrics and progressive disclosure.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures::StreamExt as _;
+use gpui_kit::StatefulInteractiveElement as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::dialog::{Confirm, DialogEntrance};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::radio::RadioGroup;
 use gpui_kit::component::select::{Select, SelectEvent};
+use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::spinner::Spinner;
+use gpui_kit::component::tag::Tag;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _,
     alert::Alert, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement, Pixels, Render, SharedString, Styled, Subscription, Task, Window, div, relative,
+    AnyElement, App, AppContext as _, BoxShadow, Context, Entity, Hsla, InteractiveElement as _,
+    IntoElement, ParentElement, Pixels, Render, Role, SharedString, Styled, Subscription, Task,
+    Window, div, linear_color_stop, linear_gradient, point, px, relative, rems,
 };
-use irori_core::settings::LibraryFolder;
 use irori_core::util::format_bytes;
 use irori_core::{
     GameId, GameInfo, InstallInfo, InstallInfoQuery, InstallPlatform, InstallRequest, Runner,
@@ -31,19 +37,26 @@ use irori_core::{
 };
 use irori_extras::anticheat::InstallGate;
 use irori_runtime::manager::{self, ReleaseKind};
+use irori_ui::components::{GameCover, StoreLogo};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::style::{
+    ICON_CONTRAST, KeyboardFocusable as _, TEXT_CONTRAST, art_tint, legible, reduce_motion,
+    visible_size,
+};
+use irori_ui::theme::reduce_transparency;
 use irori_ui::wine_choice::build_label;
 use irori_ui::wine_installs::{self, Outcome};
 use irori_ui::{Route, backend, navigate};
 
 use crate::choice::{Choice, ChoiceSelect, choice_select, set_choices};
-use crate::hooks::{self, AnticheatStatus, CompatibilityInfo};
+use crate::hooks::{self, AnticheatStatus, CompatibilityInfo, SteamDeckStatus};
 use crate::i18n::platform_label;
 use crate::load::{Load, language_name, preferred_language};
 use crate::ops::{notify_error, pick_path};
 use crate::sizes::{
-    DiskSpace, DiskVerdict, InstallSize, disk_bar_fractions, disk_space, install_button_label,
-    install_size,
+    DiskSpace, DiskVerdict, InstallSize, bar_summary, detect_extra_drives, disk_bar_fractions,
+    disk_space, drive_label, free_space, install_button_label, install_size, modify_disk_verdict,
+    same_dir,
 };
 use crate::state::is_unsupported_third_party;
 
@@ -62,15 +75,24 @@ enum ProtonDownload {
     Failed(SharedString),
 }
 
-/// Whether the sheet installs a new game or modifies an installed one.
+/// Whether the modal installs a new game or modifies an installed one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallMode {
     Install,
     Modify,
 }
 
-/// State of the install / modify sheet. Owns its inputs and selects; the
-/// sheet footer is a separate view observing this one.
+/// A selectable destination chip (configured library folder or auto-detected drive).
+#[derive(Debug, Clone)]
+struct InstallTarget {
+    label: SharedString,
+    base_path: String,
+    free: Option<u64>,
+}
+
+/// State of the install / modify modal. Owns its inputs and selects; the hero
+/// header and footer are separate views observing this one so they stay pinned
+/// while the body scrolls.
 pub struct InstallSheet {
     id: GameId,
     game: Arc<GameInfo>,
@@ -82,9 +104,8 @@ pub struct InstallSheet {
     /// The account to install with; the first owner by default.
     account: Option<String>,
     path: Entity<InputState>,
-    /// The library folders to install into, when there is more than the
-    /// default one (`iroriLibraryFolders`); picking one fills [`Self::path`].
-    library_folder: Option<Entity<ChoiceSelect>>,
+    /// Configured library folders plus extra mounted drives detected in background.
+    install_targets: Vec<InstallTarget>,
     info: Load<InstallInfo>,
     info_rev: u64,
     dlc_sizes: HashMap<String, InstallSize>,
@@ -109,19 +130,21 @@ pub struct InstallSheet {
     disk_rev: u64,
     /// Defaults for DLCs and components were applied once.
     selection_made: bool,
+    /// Whether the collapsible "More options" card is expanded.
+    options_expanded: bool,
     compat: Option<CompatibilityInfo>,
     anticheat_ack: bool,
     submitting: bool,
     _subscriptions: Vec<Subscription>,
 }
 
-/// Open the install sheet of a game. Defaults to the native Linux build when
+/// Open the install modal of a game. Defaults to the native Linux build when
 /// the store offers one.
 pub fn open_install_sheet(id: GameId, window: &mut Window, cx: &mut App) {
     open_sheet(id, InstallMode::Install, window, cx);
 }
 
-/// Open the sheet that changes language, branch, build and DLCs of an
+/// Open the modal that changes language, branch, build and DLCs of an
 /// installed game.
 pub fn open_modify_sheet(id: GameId, window: &mut Window, cx: &mut App) {
     open_sheet(id, InstallMode::Modify, window, cx);
@@ -147,17 +170,24 @@ fn open_sheet(id: GameId, mode: InstallMode, window: &mut Window, cx: &mut App) 
         );
         return;
     };
-    let title = match mode {
-        InstallMode::Install => t_args("game.install.title", &[("title", &game.title)]),
-        InstallMode::Modify => t_args("game.install.modify_title", &[("title", &game.title)]),
-    };
     let sheet = cx.new(|cx| InstallSheet::new(game, mode, window, cx));
+    let header = cx.new(|cx| InstallHeader::new(sheet.clone(), cx));
     let footer = cx.new(|cx| InstallFooter::new(sheet.clone(), cx));
-    window.open_sheet(cx, move |s, window, _| {
-        // A long title is cut, never pushed past the close button; a large
-        // interface scale keeps the sheet inside the window.
-        s.title(div().min_w_0().flex_1().truncate().child(title.clone()))
-            .size(sheet_width(window))
+    window.open_dialog(cx, move |d, window, cx| {
+        let entrance = if reduce_motion(cx) {
+            DialogEntrance::None
+        } else {
+            DialogEntrance::FadeSlide
+        };
+        d.width(modal_width(window))
+            .margin_top(modal_margin_top(window))
+            .p_0()
+            .gap_0()
+            .overflow_hidden()
+            .close_button(false)
+            .entrance(entrance)
+            .on_ok(|_, _, _| false)
+            .title(header.clone())
             .child(sheet.clone())
             .footer(footer.clone())
     });
@@ -187,10 +217,34 @@ pub(crate) fn nothing_to_install_text(runner: Runner) -> &'static str {
     }
 }
 
-/// The sheet's width: 34 rem, at most nine tenths of the window.
-fn sheet_width(window: &Window) -> Pixels {
-    let visible = irori_ui::style::visible_size(window).width;
-    (window.rem_size() * 34.).min(visible * 0.9)
+/// The modal's width: 48 rem, at most 92% of the visible window.
+fn modal_width(window: &Window) -> Pixels {
+    let visible = visible_size(window).width;
+    (window.rem_size() * 48.).min(visible * 0.92)
+}
+
+/// Top offset that centers compact modals nicely while letting taller ones snap up.
+fn modal_margin_top(window: &Window) -> Pixels {
+    let visible = visible_size(window).height;
+    (visible * 0.16).clamp(px(36.), px(160.))
+}
+
+/// Whether the "More options" card should start or become expanded.
+fn should_auto_expand_options(
+    mode: InstallMode,
+    needs_wine: bool,
+    wines_empty: bool,
+    proton: &ProtonDownload,
+) -> bool {
+    mode == InstallMode::Modify
+        || (needs_wine
+            && (wines_empty
+                || matches!(
+                    proton,
+                    ProtonDownload::Finding
+                        | ProtonDownload::Running(_)
+                        | ProtonDownload::Failed(_)
+                )))
 }
 
 /// Platforms the user can install on this host, native Linux first.
@@ -261,19 +315,33 @@ impl InstallSheet {
                 .placeholder(t("game.install.path_placeholder"))
                 .default_value(default_path)
         });
-        let folders: Vec<LibraryFolder> = app
-            .library_folders()
-            .into_iter()
-            .filter(|f| !f.path.trim().is_empty())
-            .collect();
-        let library_folder = (folders.len() > 1).then(|| {
-            let choices = folders
-                .iter()
-                .enumerate()
-                .map(|(ix, f)| Choice::new(ix.to_string(), irori_ui::library_folders::label(f)))
-                .collect();
-            choice_select(choices, Some("0"), window, cx)
-        });
+        let install_targets: Vec<InstallTarget> = if mode == InstallMode::Install {
+            app.library_folders()
+                .into_iter()
+                .filter(|f| !f.path.trim().is_empty())
+                .map(|f| {
+                    let expanded = irori_core::paths::expand_home(f.path.trim());
+                    let base_label = irori_ui::library_folders::label(&f);
+                    let label: SharedString = if f.is_default() {
+                        let drive = drive_label(&expanded);
+                        if drive.is_empty() {
+                            base_label
+                        } else {
+                            format!("{base_label} ({drive})").into()
+                        }
+                    } else {
+                        base_label
+                    };
+                    InstallTarget {
+                        label,
+                        base_path: f.path,
+                        free: None,
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         let password = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(t("game.install.password_placeholder"))
@@ -293,29 +361,7 @@ impl InstallSheet {
         let build_select = choice_select(Vec::new(), None, window, cx);
         let wine_select = choice_select(Vec::new(), None, window, cx);
 
-        let mut subscriptions = Vec::new();
-        if let Some(select) = &library_folder {
-            let runner = id.runner;
-            subscriptions.push(cx.subscribe_in(
-                select,
-                window,
-                move |this, _, e: &SelectEvent<Vec<Choice>>, window, cx| {
-                    let SelectEvent::Confirm(Some(ix)) = e else {
-                        return;
-                    };
-                    let Some(folder) = ix.parse::<usize>().ok().and_then(|ix| folders.get(ix))
-                    else {
-                        return;
-                    };
-                    let app = irori_ui::models(cx).settings.read(cx).app.clone();
-                    let dir = app.install_folder_in(&folder.path, runner);
-                    this.path
-                        .update(cx, |state, cx| state.set_value(dir, window, cx));
-                    this.refresh_disk(window, cx);
-                },
-            ));
-        }
-        subscriptions.extend([
+        let subscriptions = vec![
             cx.subscribe_in(&path, window, |this, _, e: &InputEvent, window, cx| {
                 if matches!(e, InputEvent::Change) {
                     this.refresh_disk(window, cx);
@@ -367,7 +413,14 @@ impl InstallSheet {
                     cx.notify();
                 },
             ),
-        ]);
+        ];
+
+        let options_expanded = should_auto_expand_options(
+            mode,
+            platform.needs_wine(),
+            false,
+            &ProtonDownload::Offered,
+        );
 
         let mut this = Self {
             id,
@@ -377,7 +430,7 @@ impl InstallSheet {
             owners,
             account,
             path,
-            library_folder,
+            install_targets,
             info: Load::Loading,
             info_rev: 0,
             dlc_sizes: HashMap::new(),
@@ -404,6 +457,7 @@ impl InstallSheet {
             disk: Load::Idle,
             disk_rev: 0,
             selection_made: false,
+            options_expanded,
             compat: None,
             anticheat_ack: false,
             submitting: false,
@@ -419,12 +473,25 @@ impl InstallSheet {
         this.fetch_wines(window, cx);
         this.fetch_compat(window, cx);
         this.refresh_disk(window, cx);
+        this.probe_library_folders(window, cx);
         this.check_prefix(window, cx);
         this
     }
 
     fn is_modify(&self) -> bool {
         self.mode == InstallMode::Modify
+    }
+
+    fn sync_auto_expand(&mut self) {
+        let wines_empty = self.wines.ready().is_some_and(|w| w.is_empty());
+        if should_auto_expand_options(
+            self.mode,
+            self.platform.needs_wine(),
+            wines_empty,
+            &self.proton,
+        ) {
+            self.options_expanded = true;
+        }
     }
 
     fn set_platform(
@@ -437,8 +504,67 @@ impl InstallSheet {
             self.platform = platform;
             self.branch = None;
             self.build = None;
+            self.sync_auto_expand();
             self.fetch_info(window, cx);
         }
+    }
+
+    fn select_install_target(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self.install_targets.get(index) else {
+            return;
+        };
+        let app = irori_ui::models(cx).settings.read(cx).app.clone();
+        let dir = app.install_folder_in(&target.base_path, self.id.runner);
+        self.path
+            .update(cx, |state, cx| state.set_value(dir, window, cx));
+        self.refresh_disk(window, cx);
+    }
+
+    fn probe_library_folders(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_modify() {
+            return;
+        }
+        let configured: Vec<PathBuf> = self
+            .install_targets
+            .iter()
+            .map(|t| irori_core::paths::expand_home(t.base_path.trim()))
+            .collect();
+        let task = cx.background_spawn(async move {
+            let spaces: Vec<(usize, u64)> = configured
+                .iter()
+                .enumerate()
+                .filter_map(|(ix, path)| free_space(path).ok().map(|free| (ix, free)))
+                .collect();
+            let extras = detect_extra_drives(&configured);
+            (spaces, extras)
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let (spaces, extras) = task.await;
+            let _ = this.update(cx, |this, cx| {
+                for (ix, free) in spaces {
+                    if let Some(target) = this.install_targets.get_mut(ix) {
+                        target.free = Some(free);
+                    }
+                }
+                for drive in extras {
+                    let already = this.install_targets.iter().any(|t| {
+                        same_dir(
+                            &irori_core::paths::expand_home(t.base_path.trim()),
+                            &drive.mount,
+                        )
+                    });
+                    if !already {
+                        this.install_targets.push(InstallTarget {
+                            label: drive.label.into(),
+                            base_path: drive.suggested_base,
+                            free: Some(drive.free),
+                        });
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// The store offers packages to choose between rather than builds to
@@ -647,6 +773,9 @@ impl InstallSheet {
     /// Replace a saved prefix that no longer exists with the one the
     /// defaults give, unless the user already typed another.
     fn check_prefix(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_modify() {
+            return;
+        }
         let b = backend(cx);
         let app = b.settings.app();
         let settings = b.settings.game(&self.id);
@@ -700,6 +829,7 @@ impl InstallSheet {
                 let selected = this.wine.as_ref().map(|w| w.bin.clone());
                 set_choices(&this.wine_select, items, selected.as_deref(), window, cx);
                 this.wines = Load::Ready(list);
+                this.sync_auto_expand();
                 cx.notify();
             });
         })
@@ -708,7 +838,7 @@ impl InstallSheet {
 
     /// Download the newest GE-Proton through the Wine manager, which makes it
     /// the default Wine once installed. Asked for by the user's click; the
-    /// download goes on when the sheet closes.
+    /// download goes on when the modal closes.
     fn download_proton(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(
             self.proton,
@@ -717,6 +847,7 @@ impl InstallSheet {
             return;
         }
         self.proton = ProtonDownload::Finding;
+        self.sync_auto_expand();
         cx.notify();
         let task = irori_ui::run(cx, manager::newest_release(ReleaseKind::GeProton));
         cx.spawn_in(window, async move |this, cx| {
@@ -730,6 +861,7 @@ impl InstallSheet {
                     }
                     Err(e) => this.proton = ProtonDownload::Failed(format!("{e:#}").into()),
                 }
+                this.sync_auto_expand();
                 cx.notify();
             });
         })
@@ -752,6 +884,7 @@ impl InstallSheet {
             }
             Some(Outcome::Failed(message)) => {
                 self.proton = ProtonDownload::Failed(message.into());
+                self.sync_auto_expand();
             }
             Some(Outcome::Cancelled) => self.proton = ProtonDownload::Offered,
         }
@@ -781,7 +914,7 @@ impl InstallSheet {
             .outline()
             .label(t("game.install.open_wine_manager"))
             .on_click(|_, window, cx| {
-                window.close_sheet(cx);
+                window.close_dialog(cx);
                 navigate(Route::WineManager, cx);
             });
         // GE-Proton is offered only where the Wine manager has it (Linux).
@@ -911,18 +1044,25 @@ impl InstallSheet {
         irori_core::paths::expand_home(raw.trim())
     }
 
-    fn refresh_disk(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn disk_probe_dir(&self, cx: &App) -> Option<PathBuf> {
         if self.is_modify() {
-            return;
+            self.game.install_path()
+        } else {
+            let dir = self.install_dir(cx);
+            (!dir.as_os_str().is_empty()).then_some(dir)
         }
+    }
+
+    fn refresh_disk(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.disk_rev += 1;
         let rev = self.disk_rev;
-        let dir = self.install_dir(cx);
-        if dir.as_os_str().is_empty() {
+        let Some(dir) = self.disk_probe_dir(cx) else {
             self.disk = Load::Idle;
             cx.notify();
             return;
-        }
+        };
+        self.disk = Load::Loading;
+        cx.notify();
         let task = cx.background_spawn(async move { disk_space(&dir) });
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
@@ -998,6 +1138,51 @@ impl InstallSheet {
             .unwrap_or_default()
     }
 
+    /// Disk verdict for the current mode. In Modify mode, accounts for bytes
+    /// the installed game already occupies on disk so the base game is never
+    /// double-counted against free space.
+    fn disk_verdict(&self) -> DiskVerdict {
+        let space = self.disk.ready().copied();
+        let size = self.size();
+        if !self.is_modify() {
+            return DiskVerdict::evaluate(space, size.disk);
+        }
+        let installed_disk = self
+            .game
+            .install
+            .as_ref()
+            .map_or(0, |i| i.install_size_bytes);
+        let installed_dlcs: BTreeSet<&str> = self
+            .game
+            .install
+            .as_ref()
+            .map(|i| i.installed_dlcs.iter().map(String::as_str).collect())
+            .unwrap_or_default();
+        let mut added_dlc_disk = 0u64;
+        for dlc in &self.selected_dlcs {
+            if !installed_dlcs.contains(dlc.as_str())
+                && let Some(s) = self.dlc_sizes.get(dlc)
+            {
+                added_dlc_disk = added_dlc_disk.saturating_add(s.disk);
+            }
+        }
+        let mut removed_dlc_disk = 0u64;
+        for dlc in &installed_dlcs {
+            if !self.selected_dlcs.contains(*dlc)
+                && let Some(s) = self.dlc_sizes.get(*dlc)
+            {
+                removed_dlc_disk = removed_dlc_disk.saturating_add(s.disk);
+            }
+        }
+        modify_disk_verdict(
+            space,
+            size.disk,
+            installed_disk,
+            added_dlc_disk,
+            removed_dlc_disk,
+        )
+    }
+
     fn third_party(&self) -> Option<String> {
         self.info
             .ready()
@@ -1070,7 +1255,7 @@ impl InstallSheet {
             || (self.pin_build && install.build_id != self.build)
     }
 
-    /// Primary button label: `Install · 12.3 GiB` or `Apply changes`.
+    /// Primary button label: `Install · 12.3 GiB` or `Save changes`.
     pub fn primary_label(&self) -> String {
         match self.mode {
             InstallMode::Install => {
@@ -1153,7 +1338,7 @@ impl InstallSheet {
             let _ = this.update_in(cx, |this, window, cx| {
                 this.submitting = false;
                 match result {
-                    Ok(()) => window.close_sheet(cx),
+                    Ok(()) => window.close_dialog(cx),
                     Err(e) => notify_error(window, cx, t("game.install.start_failed"), &e),
                 }
                 cx.notify();
@@ -1255,15 +1440,26 @@ impl InstallSheet {
             )
             .detach();
         }
-        window.close_sheet(cx);
+        window.close_dialog(cx);
     }
 
-    fn render_section(title: SharedString, cx: &App) -> AnyElement {
+    fn card(cx: &App) -> gpui_kit::Div {
+        let theme = cx.theme();
+        v_flex()
+            .w_full()
+            .rounded(theme.radius_lg)
+            .bg(theme.secondary.opacity(0.45))
+            .border_1()
+            .border_color(theme.border)
+            .overflow_hidden()
+    }
+
+    fn field_label(label: SharedString, cx: &App) -> AnyElement {
         div()
-            .text_sm()
-            .font_semibold()
+            .text_xs()
+            .font_medium()
             .text_color(cx.theme().muted_foreground)
-            .child(title)
+            .child(label)
             .into_any_element()
     }
 
@@ -1351,7 +1547,7 @@ impl InstallSheet {
                             .outline()
                             .label(t("game.install.open_settings"))
                             .on_click(|_, window, cx| {
-                                window.close_sheet(cx);
+                                window.close_dialog(cx);
                                 navigate(Route::Settings("advanced".into()), cx);
                             }),
                     );
@@ -1368,31 +1564,110 @@ impl InstallSheet {
         out
     }
 
+    fn platform_chip_label(platform: InstallPlatform) -> (IconName, SharedString) {
+        let native = irori_core::HostPlatform::current().native();
+        match platform {
+            InstallPlatform::Linux if native == InstallPlatform::Linux => (
+                IconName::Terminal,
+                t_args(
+                    "game.install.native",
+                    &[("platform", &platform_label(platform))],
+                ),
+            ),
+            InstallPlatform::Mac if native == InstallPlatform::Mac => (
+                IconName::Monitor,
+                t_args(
+                    "game.install.native",
+                    &[("platform", &platform_label(platform))],
+                ),
+            ),
+            InstallPlatform::Windows if platform.needs_wine() => {
+                (IconName::AppWindow, t("game.install.windows_wine"))
+            }
+            InstallPlatform::Windows => (IconName::AppWindow, platform_label(platform)),
+            InstallPlatform::Browser => (IconName::Globe, platform_label(platform)),
+            _ => (IconName::Monitor, platform_label(platform)),
+        }
+    }
+
     fn render_platform(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if self.platforms.len() < 2 || self.is_modify() {
             return None;
         }
-        let selected = self.platforms.iter().position(|p| *p == self.platform);
-        let platforms = self.platforms.clone();
+        let theme = cx.theme();
+        let active_bg = theme.primary.opacity(0.14);
+        let active_border = theme.primary;
+        let hover_bg = theme.secondary.opacity(0.8);
+        let fg = theme.foreground;
+        let muted = theme.muted_foreground;
+        let radius = theme.radius;
+        let border = theme.border;
+        let seg_bg = theme.secondary.opacity(0.6);
+
+        let buttons = self.platforms.iter().enumerate().map(|(ix, &p)| {
+            let active = p == self.platform;
+            let (icon, label) = Self::platform_chip_label(p);
+            h_flex()
+                .id(("install-platform-opt", ix))
+                .role(Role::Button)
+                .keyboard_focusable(cx)
+                .cursor_pointer()
+                .items_center()
+                .gap_1p5()
+                .px_2p5()
+                .py_1()
+                .rounded(radius)
+                .border_1()
+                .text_xs()
+                .when(active, |el| {
+                    el.bg(active_bg)
+                        .border_color(active_border)
+                        .text_color(fg)
+                        .font_semibold()
+                })
+                .when(!active, |el| {
+                    el.border_color(gpui_kit::transparent_black())
+                        .text_color(muted)
+                        .hover(move |s| s.bg(hover_bg).text_color(fg))
+                })
+                .child(Icon::new(icon).xsmall())
+                .child(label)
+                .on_action(cx.listener(move |this, _: &Confirm, window, cx| {
+                    this.set_platform(p, window, cx);
+                }))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.set_platform(p, window, cx);
+                }))
+        });
+
         Some(
-            v_flex()
-                .gap_2()
-                .child(Self::render_section(t("game.common.platform"), cx))
+            h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .flex_wrap()
                 .child(
-                    RadioGroup::horizontal("install-platform")
-                        .children(platforms.iter().map(|p| {
-                            if *p == InstallPlatform::Linux {
-                                t_args("game.install.native", &[("platform", &platform_label(*p))])
-                            } else {
-                                platform_label(*p)
-                            }
-                        }))
-                        .selected_index(selected)
-                        .on_change(cx.listener(move |this, ix: &usize, window, cx| {
-                            if let Some(p) = platforms.get(*ix) {
-                                this.set_platform(*p, window, cx);
-                            }
-                        })),
+                    h_flex()
+                        .items_center()
+                        .gap_2()
+                        .child(Icon::new(IconName::Gamepad2).small().text_color(muted))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_semibold()
+                                .child(t("game.common.platform")),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .p_0p5()
+                        .gap_1()
+                        .rounded(radius)
+                        .bg(seg_bg)
+                        .border_1()
+                        .border_color(border)
+                        .children(buttons),
                 )
                 .into_any_element(),
         )
@@ -1409,13 +1684,26 @@ impl InstallSheet {
             .iter()
             .position(|(id, _)| Some(id) == self.account.as_ref());
         let owners = self.owners.clone();
+        let muted = cx.theme().muted_foreground;
         Some(
-            v_flex()
+            Self::card(cx)
                 .debug_selector(|| "install-account".into())
-                .gap_2()
-                .child(Self::render_section(t("game.info.account"), cx))
+                .p_3p5()
+                .gap_2p5()
                 .child(
-                    RadioGroup::vertical("install-account")
+                    h_flex()
+                        .items_center()
+                        .gap_2()
+                        .child(Icon::new(IconName::Users).small().text_color(muted))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_semibold()
+                                .child(t("game.info.account")),
+                        ),
+                )
+                .child(
+                    RadioGroup::horizontal("install-account")
                         .children(owners.iter().map(|(_, name)| name.clone()))
                         .selected_index(selected)
                         .on_change(cx.listener(move |this, ix: &usize, _, cx| {
@@ -1428,7 +1716,7 @@ impl InstallSheet {
                 .child(
                     div()
                         .text_xs()
-                        .text_color(cx.theme().muted_foreground)
+                        .text_color(muted)
                         .child(t("game.install.account_hint")),
                 )
                 .into_any_element(),
@@ -1442,277 +1730,347 @@ impl InstallSheet {
         let size = self.size();
         let space = self.disk.ready().copied();
         let verdict = DiskVerdict::evaluate(space, size.disk);
+        let dir = self.install_dir(cx);
+        let label = drive_label(&dir);
+
         let theme = cx.theme();
-        let bar = space.map(|s| {
-            let (used, install) = disk_bar_fractions(s, size.disk);
-            let install_color = match verdict {
-                DiskVerdict::TooSmall { .. } => theme.danger,
-                _ => theme.primary,
-            };
-            h_flex()
-                .id("disk-bar")
-                .w_full()
-                .h_2()
-                .rounded(theme.radius)
-                .overflow_hidden()
-                .bg(theme.muted)
-                .child(
-                    div()
-                        .h_full()
-                        .w(relative(used))
-                        .bg(theme.muted_foreground.opacity(0.5)),
-                )
-                .child(div().h_full().w(relative(install)).bg(install_color))
-        });
-        let message_color = match verdict {
-            DiskVerdict::TooSmall { .. } | DiskVerdict::NotWritable => theme.danger,
-            _ => theme.muted_foreground,
-        };
-        let message = match &self.disk {
-            Load::Failed(e) => e.to_string(),
-            _ => verdict.message(space),
-        };
-        Some(
-            v_flex()
-                .gap_2()
-                .child(Self::render_section(t("game.common.location"), cx))
-                .when_some(self.library_folder.as_ref(), |this, select| {
-                    this.child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .flex_shrink_0()
-                                    .child(t("game.install.library_folder")),
-                            )
-                            .child(div().flex_1().min_w_0().child(Select::new(select))),
-                    )
-                })
-                .child(
+        let border = theme.border;
+        let muted = theme.muted_foreground;
+        let fg = theme.foreground;
+        let primary = theme.primary;
+        let primary_text = legible(
+            primary,
+            &[theme.background, theme.secondary],
+            TEXT_CONTRAST,
+            cx,
+        );
+        let danger = theme.danger;
+        let success = legible(theme.success, &[theme.background], TEXT_CONTRAST, cx);
+        let danger_text = legible(theme.danger, &[theme.background], TEXT_CONTRAST, cx);
+        let radius = theme.radius;
+        let chip_active_bg = primary.opacity(0.14);
+        let chip_idle_bg = theme.background.opacity(0.55);
+        let chip_hover_bg = theme.secondary;
+
+        let app = irori_ui::models(cx).settings.read(cx).app.clone();
+        let chips = (self.install_targets.len() > 1).then(|| {
+            h_flex().items_center().gap_1p5().flex_wrap().children(
+                self.install_targets.iter().enumerate().map(|(ix, target)| {
+                    let resolved = irori_core::paths::expand_home(
+                        &app.install_folder_in(&target.base_path, self.id.runner),
+                    );
+                    let active = same_dir(&resolved, &dir);
+                    let name = target.label.clone();
+                    let free_text = target.free.map(|free| {
+                        t_args("game.disk.chip_free", &[("free", &format_bytes(free))])
+                    });
                     h_flex()
-                        .gap_2()
-                        .child(div().flex_1().min_w_0().child(Input::new(&self.path)))
+                        .id(("library-folder-chip", ix))
+                        .debug_selector(move || format!("library-folder-chip-{ix}"))
+                        .role(Role::Button)
+                        .keyboard_focusable(cx)
+                        .cursor_pointer()
+                        .items_center()
+                        .gap_1p5()
+                        .px_2p5()
+                        .py_1()
+                        .rounded(radius)
+                        .border_1()
+                        .text_xs()
+                        .when(active, |el| {
+                            el.bg(chip_active_bg)
+                                .border_color(primary)
+                                .text_color(fg)
+                                .font_semibold()
+                        })
+                        .when(!active, |el| {
+                            el.bg(chip_idle_bg)
+                                .border_color(border)
+                                .text_color(muted)
+                                .hover(move |s| s.bg(chip_hover_bg).text_color(fg))
+                        })
+                        .child(name)
+                        .when_some(free_text, |el, free| {
+                            el.child(
+                                div()
+                                    .text_color(if active { primary_text } else { muted })
+                                    .child(free),
+                            )
+                        })
+                        .on_action(cx.listener(move |this, _: &Confirm, window, cx| {
+                            this.select_install_target(ix, window, cx);
+                        }))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.select_install_target(ix, window, cx);
+                        }))
+                }),
+            )
+        });
+
+        let bar: AnyElement = match space {
+            Some(s) => {
+                let (used, install) = disk_bar_fractions(s, size.disk);
+                let install_color = match verdict {
+                    DiskVerdict::TooSmall { .. } | DiskVerdict::NotWritable => danger,
+                    _ => primary,
+                };
+                h_flex()
+                    .id("disk-bar")
+                    .w_full()
+                    .h(px(7.))
+                    .rounded_full()
+                    .overflow_hidden()
+                    .bg(theme.muted)
+                    .child(div().h_full().w(relative(used)).bg(muted.opacity(0.45)))
+                    .child(
+                        div()
+                            .h_full()
+                            .w(relative(install))
+                            .when(size.disk > 0 && s.free > 0, |el| el.min_w(px(3.)))
+                            .bg(install_color),
+                    )
+                    .into_any_element()
+            }
+            None if self.disk.is_loading() => Skeleton::new()
+                .w_full()
+                .h(px(7.))
+                .rounded_full()
+                .into_any_element(),
+            None => div()
+                .w_full()
+                .h(px(7.))
+                .rounded_full()
+                .bg(theme.muted)
+                .into_any_element(),
+        };
+
+        let (strip_summary, strip_color, error_line): (String, Hsla, Option<String>) = match &self
+            .disk
+        {
+            Load::Failed(e) => (String::new(), danger_text, Some(e.to_string())),
+            _ => match verdict {
+                DiskVerdict::Fits { .. } => (bar_summary(verdict, space, size.disk), success, None),
+                DiskVerdict::TooSmall { missing } => (
+                    format!("{} {}", t("game.install.short_by"), format_bytes(missing)),
+                    danger_text,
+                    Some(bar_summary(verdict, space, size.disk)),
+                ),
+                DiskVerdict::NotWritable => (
+                    String::new(),
+                    danger_text,
+                    Some(bar_summary(verdict, space, size.disk)),
+                ),
+                DiskVerdict::Unknown => (bar_summary(verdict, space, size.disk), muted, None),
+            },
+        };
+
+        Some(
+            Self::card(cx)
+                .child(
+                    v_flex()
+                        .p_4()
+                        .gap_3()
                         .child(
-                            Button::new("browse-install-dir")
-                                .outline()
-                                .icon(IconName::FolderOpen)
-                                .label(t("game.common.browse"))
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.browse_install_dir(window, cx)
-                                })),
+                            h_flex()
+                                .w_full()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .flex_wrap()
+                                .child(
+                                    h_flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            Icon::new(IconName::Folder).small().text_color(muted),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_semibold()
+                                                .child(t("game.install.location_heading")),
+                                        ),
+                                )
+                                .children(chips),
+                        )
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .gap_2()
+                                .child(div().flex_1().min_w_0().child(Input::new(&self.path)))
+                                .child(
+                                    Button::new("browse-install-dir")
+                                        .outline()
+                                        .icon(IconName::FolderOpen)
+                                        .label(t("game.common.browse"))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.browse_install_dir(window, cx)
+                                        })),
+                                ),
                         ),
                 )
-                .when_some(bar, |this, bar| this.child(bar))
-                .child(div().text_xs().text_color(message_color).child(message))
+                .child(
+                    v_flex()
+                        .w_full()
+                        .border_t_1()
+                        .border_color(border)
+                        .bg(theme.background.opacity(0.45))
+                        .px_4()
+                        .py_2p5()
+                        .gap_1p5()
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .items_center()
+                                .gap_3()
+                                .child(
+                                    h_flex()
+                                        .flex_shrink_0()
+                                        .items_center()
+                                        .gap_1p5()
+                                        .child(
+                                            Icon::new(IconName::HardDrive)
+                                                .xsmall()
+                                                .text_color(muted),
+                                        )
+                                        .when(!label.is_empty(), |row| {
+                                            row.child(
+                                                div()
+                                                    .text_xs()
+                                                    .font_medium()
+                                                    .text_color(muted)
+                                                    .child(label),
+                                            )
+                                        }),
+                                )
+                                .child(div().flex_1().min_w(rems(4.)).child(bar))
+                                .when(!strip_summary.is_empty(), |row| {
+                                    row.child(
+                                        div()
+                                            .flex_shrink_0()
+                                            .text_xs()
+                                            .font_medium()
+                                            .text_color(strip_color)
+                                            .child(strip_summary),
+                                    )
+                                }),
+                        )
+                        .when_some(error_line, |col, msg| {
+                            col.child(div().text_xs().text_color(danger_text).child(msg))
+                        }),
+                )
                 .into_any_element(),
         )
     }
 
-    fn render_sizes(&self, cx: &App) -> AnyElement {
-        let size = self.size();
-        let row = |label: SharedString, value: String| {
-            h_flex()
-                .w_full()
-                .justify_between()
-                .gap_3()
-                .text_sm()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(label),
-                )
-                .child(div().flex_shrink_0().child(value))
-        };
-        let value = |bytes: u64| {
-            if self.info.is_loading() {
-                t("game.install.calculating").to_string()
-            } else if bytes == 0 {
-                t("game.install.unknown").to_string()
-            } else {
-                format_bytes(bytes)
-            }
-        };
-        v_flex()
-            .gap_1()
-            .child(row(t("game.install.download"), value(size.download)))
-            .child(row(t("game.install.size_on_disk"), value(size.disk)))
-            .into_any_element()
-    }
-
-    fn render_options(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let Some(info) = self.info.ready() else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        if info.languages.len() > 1 {
-            out.push(
-                v_flex()
-                    .gap_2()
-                    .child(Self::render_section(t("game.common.language"), cx))
-                    .child(
-                        Select::new(&self.language_select).placeholder(t("game.common.language")),
-                    )
-                    .into_any_element(),
-            );
+    fn render_sdl(&self, info: &InstallInfo, cx: &mut Context<Self>) -> Option<AnyElement> {
+        // Optional components are chosen at install time only.
+        if info.sdl.is_empty() || self.is_modify() {
+            return None;
         }
-        let has_branches = !info.branches.is_empty();
-        let builds = info
-            .builds
+        let theme = cx.theme();
+        let border = theme.border;
+        let muted = theme.muted_foreground;
+        let selected_count = info
+            .sdl
             .iter()
-            .filter(|b| b.branch == self.branch)
+            .filter(|o| o.mandatory || self.sdl.contains(&o.id))
             .count();
-        let password = hooks::has_branch_password(cx) && self.id.runner == Runner::Gog;
-        if self.package_choice() {
-            if builds > 0 {
-                out.push(
-                    v_flex()
-                        .gap_2()
-                        .child(Self::render_section(t("game.install.package"), cx))
-                        .child(
-                            Select::new(&self.build_select)
-                                .placeholder(t("game.install.package"))
-                                .disabled(builds < 2),
-                        )
-                        .into_any_element(),
-                );
-            }
-        } else if has_branches || builds > 0 || password {
-            let mut col = v_flex()
-                .gap_2()
-                .child(Self::render_section(t("game.common.version"), cx));
-            if has_branches {
-                col = col
-                    .child(Select::new(&self.branch_select).placeholder(t("game.install.branch")));
-            }
-            if builds > 0 {
-                col = col
+        let total_count = info.sdl.len();
+        let mut rows = v_flex();
+        for (ix, opt) in info.sdl.iter().enumerate() {
+            let id = opt.id.clone();
+            rows = rows.child(
+                h_flex()
+                    .w_full()
+                    .px_3p5()
+                    .py_2()
+                    .when(ix > 0, |r| r.border_t_1().border_color(border.opacity(0.5)))
                     .child(
-                        Checkbox::new("pin-build")
-                            .label(t("game.install.pin"))
-                            .checked(self.pin_build)
-                            .on_change(cx.listener(|this, v: &bool, window, cx| {
-                                this.pin_build = *v;
-                                this.fetch_info(window, cx);
-                            })),
-                    )
-                    .when(self.pin_build, |c| {
-                        c.child(
-                            Select::new(&self.build_select)
-                                .placeholder(t("game.common.version"))
-                                .disabled(builds < 2),
-                        )
-                    });
-            }
-            if password {
-                col = col.child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .child(Input::new(&self.password).mask_toggle()),
-                        )
-                        .child(
-                            Button::new("apply-branch-password")
-                                .outline()
-                                .label(t("game.install.unlock"))
-                                .loading(self.password_busy)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.apply_password(window, cx)
-                                })),
-                        ),
-                );
-            }
-            out.push(col.into_any_element());
-        } else if self.is_modify() && matches!(self.id.runner, Runner::Legendary | Runner::Itch) {
-            // Epic and itch.io offer only their latest build, but an
-            // installed game can stay at the version it has.
-            out.push(
-                v_flex()
-                    .gap_2()
-                    .child(Self::render_section(t("game.common.version"), cx))
-                    .child(
-                        Checkbox::new("skip-updates")
-                            .label(t("game.install.skip_updates"))
-                            .checked(self.pin_build)
-                            .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                this.pin_build = *v;
+                        Checkbox::new(SharedString::from(format!("sdl-{}", opt.id)))
+                            .label(opt.name.clone())
+                            .checked(opt.mandatory || self.sdl.contains(&opt.id))
+                            .disabled(opt.mandatory)
+                            .on_change(cx.listener(move |this, v: &bool, _, cx| {
+                                if *v {
+                                    this.sdl.insert(id.clone());
+                                } else {
+                                    this.sdl.remove(&id);
+                                }
                                 cx.notify();
                             })),
-                    )
-                    .into_any_element(),
+                    ),
             );
         }
-        // Optional components are chosen at install time only.
-        if !info.sdl.is_empty() && !self.is_modify() {
-            let mut col = v_flex().gap_2().child(Self::render_section(
-                t("game.install.optional_components"),
-                cx,
-            ));
-            for opt in &info.sdl {
-                let id = opt.id.clone();
-                col = col.child(
-                    Checkbox::new(SharedString::from(format!("sdl-{}", opt.id)))
-                        .label(opt.name.clone())
-                        .checked(opt.mandatory || self.sdl.contains(&opt.id))
-                        .disabled(opt.mandatory)
-                        .on_change(cx.listener(move |this, v: &bool, _, cx| {
-                            if *v {
-                                this.sdl.insert(id.clone());
-                            } else {
-                                this.sdl.remove(&id);
-                            }
-                            cx.notify();
-                        })),
-                );
-            }
-            out.push(col.into_any_element());
-        }
-        if !info.dlcs.is_empty() {
-            out.push(self.render_dlcs(info, cx));
-        }
-        out
+        Some(
+            Self::card(cx)
+                .child(
+                    h_flex()
+                        .w_full()
+                        .px_3p5()
+                        .py_2p5()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .border_b_1()
+                        .border_color(border)
+                        .child(
+                            h_flex()
+                                .items_center()
+                                .gap_2()
+                                .child(Icon::new(IconName::Layers).small().text_color(muted))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_semibold()
+                                        .child(t("game.install.optional_components")),
+                                )
+                                .child(
+                                    Tag::secondary()
+                                        .xsmall()
+                                        .outline()
+                                        .child(format!("{selected_count} / {total_count}")),
+                                ),
+                        ),
+                )
+                .child(rows)
+                .into_any_element(),
+        )
     }
 
-    fn render_dlcs(&self, info: &InstallInfo, cx: &mut Context<Self>) -> AnyElement {
+    fn render_dlcs(&self, info: &InstallInfo, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if info.dlcs.is_empty() {
+            return None;
+        }
+        let theme = cx.theme();
+        let border = theme.border;
+        let muted = theme.muted_foreground;
         let all: BTreeSet<String> = info.dlcs.iter().map(|d| d.app_name.clone()).collect();
         let all_selected = all.is_subset(&self.selected_dlcs);
-        let mut col = v_flex().gap_2().child(
-            h_flex()
-                .w_full()
-                .flex_wrap()
-                .gap_2()
-                .justify_between()
-                .child(Self::render_section(t("game.install.dlc"), cx))
-                .child(
-                    Checkbox::new("dlc-all")
-                        .label(t("game.install.dlc_all"))
-                        .checked(all_selected)
-                        .on_change(cx.listener(move |this, v: &bool, _, cx| {
-                            if *v {
-                                this.selected_dlcs.extend(all.iter().cloned());
-                            } else {
-                                this.selected_dlcs.clear();
-                            }
-                            cx.notify();
-                        })),
-                ),
-        );
-        for dlc in &info.dlcs {
+        let selected_count = info
+            .dlcs
+            .iter()
+            .filter(|d| self.selected_dlcs.contains(&d.app_name))
+            .count();
+        let total_count = info.dlcs.len();
+
+        let mut rows = v_flex();
+        for (ix, dlc) in info.dlcs.iter().enumerate() {
             let app = dlc.app_name.clone();
             let size = self
                 .dlc_sizes
                 .get(&dlc.app_name)
                 .map(|s| format_bytes(s.download))
                 .unwrap_or_default();
-            col = col.child(
+            rows = rows.child(
                 h_flex()
-                    .gap_2()
+                    .w_full()
+                    .px_3p5()
+                    .py_2()
+                    .gap_3()
+                    .items_center()
                     .justify_between()
+                    .when(ix > 0, |r| r.border_t_1().border_color(border.opacity(0.5)))
                     .child(
                         div().flex_1().min_w_0().child(
                             Checkbox::new(SharedString::from(format!("dlc-{}", dlc.app_name)))
@@ -1728,67 +2086,407 @@ impl InstallSheet {
                                 })),
                         ),
                     )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(size),
-                    ),
+                    .when(!size.is_empty(), |r| {
+                        r.child(
+                            div()
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(size),
+                        )
+                    }),
             );
         }
-        col.into_any_element()
-    }
 
-    fn render_wine(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.is_modify() || !self.platform.needs_wine() {
-            return None;
-        }
-        let empty = self.wines.ready().is_some_and(|w| w.is_empty());
         Some(
-            v_flex()
-                .gap_2()
-                .child(Self::render_section("Wine".into(), cx))
-                .map(|col| {
-                    if self.wines.is_loading() {
-                        col.child(
-                            h_flex()
-                                .gap_2()
-                                .text_sm()
-                                .child(Spinner::new().small())
-                                .child(t("game.install.looking_for_wine")),
-                        )
-                    } else if empty || matches!(self.proton, ProtonDownload::Running(_)) {
-                        col.child(self.render_proton(cx))
-                    } else {
-                        col.child(
-                            Select::new(&self.wine_select)
-                                .placeholder(t("game.install.wine_version")),
-                        )
-                    }
-                })
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(t("game.common.prefix")),
-                )
+            Self::card(cx)
                 .child(
                     h_flex()
+                        .w_full()
+                        .px_3p5()
+                        .py_2p5()
+                        .items_center()
+                        .justify_between()
                         .gap_2()
-                        .child(div().flex_1().min_w_0().child(Input::new(&self.prefix)))
+                        .flex_wrap()
+                        .border_b_1()
+                        .border_color(border)
                         .child(
-                            Button::new("browse-prefix")
-                                .outline()
-                                .icon(IconName::FolderOpen)
-                                .label(t("game.common.browse"))
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.browse_prefix(window, cx)
+                            h_flex()
+                                .items_center()
+                                .gap_2()
+                                .child(Icon::new(IconName::Package).small().text_color(muted))
+                                .child(div().text_sm().font_semibold().child(t("game.install.dlc")))
+                                .child(
+                                    Tag::secondary()
+                                        .xsmall()
+                                        .outline()
+                                        .child(format!("{selected_count} / {total_count}")),
+                                ),
+                        )
+                        .child(
+                            Checkbox::new("dlc-all")
+                                .label(t("game.install.dlc_all"))
+                                .checked(all_selected)
+                                .on_change(cx.listener(move |this, v: &bool, _, cx| {
+                                    if *v {
+                                        this.selected_dlcs.extend(all.iter().cloned());
+                                    } else {
+                                        this.selected_dlcs.clear();
+                                    }
+                                    cx.notify();
                                 })),
                         ),
                 )
+                .child(rows)
                 .into_any_element(),
         )
+    }
+
+    fn options_summary(&self, cx: &App) -> Option<String> {
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(info) = self.info.ready() {
+            if info.languages.len() > 1
+                && let Some(lang) = &self.language
+            {
+                parts.push(language_name(lang));
+            }
+            let has_branches = !info.branches.is_empty();
+            let builds = info
+                .builds
+                .iter()
+                .filter(|b| b.branch == self.branch)
+                .count();
+            if self.package_choice() {
+                if let Some(name) = self.selected_build_name(info) {
+                    parts.push(name);
+                }
+            } else if has_branches || builds > 0 {
+                if let Some(branch) = &self.branch {
+                    parts.push(branch.clone());
+                } else if has_branches {
+                    parts.push(t("game.install.branch_default").to_string());
+                }
+                if self.pin_build {
+                    if let Some(name) = self.selected_build_name(info) {
+                        parts.push(name);
+                    }
+                } else if builds > 0 && !has_branches {
+                    parts.push(t("game.install.version_latest").to_string());
+                }
+            } else if self.is_modify() && matches!(self.id.runner, Runner::Legendary | Runner::Itch)
+            {
+                let label = if self.pin_build {
+                    t("game.install.skip_updates")
+                } else {
+                    t("game.install.version_latest")
+                };
+                parts.push(label.to_string());
+            }
+        }
+        if !self.is_modify()
+            && self.platform.needs_wine()
+            && let Some(wine) = &self.wine
+            && !wine.name.trim().is_empty()
+        {
+            parts.push(wine.name.clone());
+        }
+        let _ = cx;
+        (!parts.is_empty()).then(|| parts.join(" · "))
+    }
+
+    fn selected_build_name(&self, info: &InstallInfo) -> Option<String> {
+        let id = self.build.as_deref()?;
+        info.builds
+            .iter()
+            .find(|b| b.build_id == id)
+            .map(|b| b.version_name.clone())
+    }
+
+    fn render_more_options(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let info = self.info.ready();
+        let has_language = info.is_some_and(|i| i.languages.len() > 1);
+        let has_branches = info.is_some_and(|i| !i.branches.is_empty());
+        let builds = info.map_or(0, |i| {
+            i.builds.iter().filter(|b| b.branch == self.branch).count()
+        });
+        let has_password =
+            info.is_some() && hooks::has_branch_password(cx) && self.id.runner == Runner::Gog;
+        let has_package = self.package_choice() && builds > 0;
+        let has_version = !self.package_choice() && (has_branches || builds > 0 || has_password);
+        let has_skip_updates = info.is_some()
+            && !self.package_choice()
+            && !has_version
+            && self.is_modify()
+            && matches!(self.id.runner, Runner::Legendary | Runner::Itch);
+        let has_wine = !self.is_modify() && self.platform.needs_wine();
+
+        if !(has_language || has_package || has_version || has_skip_updates || has_wine) {
+            return None;
+        }
+
+        let theme = cx.theme();
+        let border = theme.border;
+        let muted = theme.muted_foreground;
+        let hover_bg = theme.secondary.opacity(0.75);
+        let summary = self.options_summary(cx);
+        let chevron = if self.options_expanded {
+            IconName::ChevronUp
+        } else {
+            IconName::ChevronDown
+        };
+
+        let ring = theme.ring;
+        let header = h_flex()
+            .id("more-options-toggle")
+            .debug_selector(|| "more-options-toggle".into())
+            .role(Role::Button)
+            // Inside `Self::card` (which clips with `overflow_hidden`), draw an
+            // inset focus ring so keyboard focus stays visible on every edge.
+            .tab_index(0)
+            .focus_visible(move |style| {
+                style.shadow(vec![BoxShadow {
+                    color: ring,
+                    offset: point(px(0.), px(0.)),
+                    blur_radius: px(0.),
+                    spread_radius: px(2.),
+                    inset: true,
+                }])
+            })
+            .cursor_pointer()
+            .w_full()
+            .px_3p5()
+            .py_2p5()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .hover(move |s| s.bg(hover_bg))
+            .on_action(cx.listener(|this, _: &Confirm, _, cx| {
+                this.options_expanded = !this.options_expanded;
+                cx.notify();
+            }))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.options_expanded = !this.options_expanded;
+                cx.notify();
+            }))
+            .child(
+                h_flex()
+                    .items_center()
+                    .gap_2()
+                    .flex_shrink_0()
+                    .child(
+                        Icon::new(IconName::SlidersHorizontal)
+                            .small()
+                            .text_color(muted),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_semibold()
+                            .child(t("game.install.more_options")),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .min_w_0()
+                    .items_center()
+                    .gap_2()
+                    .when_some(summary, |row, text| {
+                        row.child(
+                            Tag::secondary()
+                                .xsmall()
+                                .outline()
+                                .max_w(rems(18.))
+                                .child(div().min_w_0().truncate().child(text)),
+                        )
+                    })
+                    .child(Icon::new(chevron).small().text_color(muted)),
+            );
+
+        let mut card = Self::card(cx).child(header);
+        if self.options_expanded {
+            let mut body = v_flex()
+                .debug_selector(|| "more-options-body".into())
+                .w_full()
+                .px_3p5()
+                .pt_3()
+                .pb_3p5()
+                .gap_3()
+                .border_t_1()
+                .border_color(border);
+
+            // Language & Branch sit side-by-side when both are available.
+            if has_language && has_version && has_branches {
+                body = body.child(
+                    h_flex()
+                        .w_full()
+                        .gap_3()
+                        .items_start()
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_1p5()
+                                .child(Self::field_label(t("game.common.language"), cx))
+                                .child(
+                                    Select::new(&self.language_select)
+                                        .placeholder(t("game.common.language")),
+                                ),
+                        )
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_1p5()
+                                .child(Self::field_label(t("game.install.branch"), cx))
+                                .child(
+                                    Select::new(&self.branch_select)
+                                        .placeholder(t("game.install.branch")),
+                                ),
+                        ),
+                );
+            } else {
+                if has_language {
+                    body = body.child(
+                        v_flex()
+                            .w_full()
+                            .gap_1p5()
+                            .child(Self::field_label(t("game.common.language"), cx))
+                            .child(
+                                Select::new(&self.language_select)
+                                    .placeholder(t("game.common.language")),
+                            ),
+                    );
+                }
+                if has_version && has_branches {
+                    body = body.child(
+                        v_flex()
+                            .w_full()
+                            .gap_1p5()
+                            .child(Self::field_label(t("game.install.branch"), cx))
+                            .child(
+                                Select::new(&self.branch_select)
+                                    .placeholder(t("game.install.branch")),
+                            ),
+                    );
+                }
+            }
+
+            if has_package {
+                body = body.child(
+                    v_flex()
+                        .w_full()
+                        .gap_1p5()
+                        .child(Self::field_label(t("game.install.package"), cx))
+                        .child(
+                            Select::new(&self.build_select)
+                                .placeholder(t("game.install.package"))
+                                .disabled(builds < 2),
+                        ),
+                );
+            } else if has_version {
+                if builds > 0 {
+                    body = body
+                        .child(
+                            Checkbox::new("pin-build")
+                                .label(t("game.install.pin"))
+                                .checked(self.pin_build)
+                                .on_change(cx.listener(|this, v: &bool, window, cx| {
+                                    this.pin_build = *v;
+                                    this.fetch_info(window, cx);
+                                })),
+                        )
+                        .when(self.pin_build, |c| {
+                            c.child(
+                                Select::new(&self.build_select)
+                                    .placeholder(t("game.common.version"))
+                                    .disabled(builds < 2),
+                            )
+                        });
+                }
+                if has_password {
+                    body = body.child(
+                        h_flex()
+                            .w_full()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(Input::new(&self.password).mask_toggle()),
+                            )
+                            .child(
+                                Button::new("apply-branch-password")
+                                    .outline()
+                                    .label(t("game.install.unlock"))
+                                    .loading(self.password_busy)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.apply_password(window, cx)
+                                    })),
+                            ),
+                    );
+                }
+            } else if has_skip_updates {
+                body = body.child(
+                    Checkbox::new("skip-updates")
+                        .label(t("game.install.skip_updates"))
+                        .checked(self.pin_build)
+                        .on_change(cx.listener(|this, v: &bool, _, cx| {
+                            this.pin_build = *v;
+                            cx.notify();
+                        })),
+                );
+            }
+
+            if has_wine {
+                let has_above = has_language || has_package || has_version || has_skip_updates;
+                let empty = self.wines.ready().is_some_and(|w| w.is_empty());
+                let wine_block = v_flex()
+                    .w_full()
+                    .gap_2()
+                    .when(has_above, |b| b.pt_3().border_t_1().border_color(border))
+                    .child(Self::field_label(t("game.install.compatibility_tool"), cx))
+                    .map(|col| {
+                        if self.wines.is_loading() {
+                            col.child(
+                                h_flex()
+                                    .gap_2()
+                                    .text_sm()
+                                    .child(Spinner::new().small())
+                                    .child(t("game.install.looking_for_wine")),
+                            )
+                        } else if empty || matches!(self.proton, ProtonDownload::Running(_)) {
+                            col.child(self.render_proton(cx))
+                        } else {
+                            col.child(
+                                Select::new(&self.wine_select)
+                                    .placeholder(t("game.install.wine_version")),
+                            )
+                        }
+                    })
+                    .child(Self::field_label(t("game.install.wine_folder"), cx))
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .gap_2()
+                            .child(div().flex_1().min_w_0().child(Input::new(&self.prefix)))
+                            .child(
+                                Button::new("browse-prefix")
+                                    .outline()
+                                    .icon(IconName::FolderOpen)
+                                    .label(t("game.common.browse"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.browse_prefix(window, cx)
+                                    })),
+                            ),
+                    );
+                body = body.child(wine_block);
+            }
+
+            card = card.child(body);
+        }
+
+        Some(card.into_any_element())
     }
 }
 
@@ -1818,25 +2516,510 @@ impl Render for InstallSheet {
         let platform = self.render_platform(cx);
         let account = self.render_account(cx);
         let location = self.render_location(cx);
-        let sizes = self.render_sizes(cx);
-        let options = self.render_options(cx);
-        let wine = self.render_wine(cx);
+        let sdl = self.info.ready().and_then(|info| self.render_sdl(info, cx));
+        let dlcs = self
+            .info
+            .ready()
+            .and_then(|info| self.render_dlcs(info, cx));
+        let more_options = self.render_more_options(cx);
+        let modify_loading = (self.is_modify()
+            && self.info.is_loading()
+            && notices.is_empty()
+            && dlcs.is_none()
+            && more_options.is_none())
+        .then(|| {
+            Self::card(cx)
+                .p_3p5()
+                .gap_2p5()
+                .child(Skeleton::new().h_4().w(rems(10.)).rounded_sm())
+                .child(Skeleton::new().h_8().w_full().rounded_sm())
+                .into_any_element()
+        });
+
         v_flex()
             .id("install-sheet")
+            .debug_selector(|| "install-sheet".into())
             .w_full()
-            .gap_6()
-            .py_2()
+            .px_6()
+            .pt_3()
+            .pb_5()
+            .gap_4()
             .children(notices)
             .children(platform)
             .children(account)
             .children(location)
-            .child(sizes)
-            .children(options)
-            .children(wine)
+            .children(sdl)
+            .children(dlcs)
+            .children(more_options)
+            .children(modify_loading)
     }
 }
 
-/// Sheet footer: secondary actions and the primary `Install · <size>` button.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CompatBadgeTone {
+    Success,
+    Warning,
+    Danger,
+    Neutral,
+}
+
+fn protondb_tone(tier: &str) -> CompatBadgeTone {
+    match tier.trim().to_ascii_lowercase().as_str() {
+        "platinum" | "native" => CompatBadgeTone::Success,
+        "gold" | "silver" | "bronze" => CompatBadgeTone::Warning,
+        "borked" => CompatBadgeTone::Danger,
+        _ => CompatBadgeTone::Neutral,
+    }
+}
+
+/// Pinned Hero Header of the install / modify modal: artwork cover, title,
+/// badges, ambient art tint, close button and live 3-metric storage summary.
+struct InstallHeader {
+    sheet: Entity<InstallSheet>,
+    _observe: Vec<Subscription>,
+}
+
+impl InstallHeader {
+    fn new(sheet: Entity<InstallSheet>, cx: &mut Context<Self>) -> Self {
+        let art = irori_ui::art::art_store(cx);
+        let observe = vec![
+            cx.observe(&sheet, |_, _, cx| cx.notify()),
+            cx.observe(&art, |_, _, cx| cx.notify()),
+        ];
+        Self {
+            sheet,
+            _observe: observe,
+        }
+    }
+
+    fn render_store_pill(runner: Runner, cx: &App) -> AnyElement {
+        let theme = cx.theme();
+        let store_name: SharedString = runner.store_name().into();
+        let pill = h_flex()
+            .id("install-store-badge")
+            .items_center()
+            .justify_center()
+            .px_2()
+            .py_1()
+            .rounded(theme.radius)
+            .bg(theme.secondary.opacity(0.65))
+            .border_1()
+            .border_color(theme.border)
+            .tooltip(move |window, cx| Tooltip::new(store_name.clone()).build(window, cx));
+        match StoreLogo::of_runner(runner) {
+            Some(logo) => pill
+                .child(logo.icon().size(px(20.)).text_color(theme.foreground))
+                .into_any_element(),
+            None => pill
+                .child(
+                    div()
+                        .px_0p5()
+                        .text_xs()
+                        .font_semibold()
+                        .text_color(theme.foreground)
+                        .child(runner.short_name()),
+                )
+                .into_any_element(),
+        }
+    }
+
+    fn render_metric(
+        icon: IconName,
+        accent: Hsla,
+        label: SharedString,
+        value: Option<(SharedString, Hsla)>,
+        cx: &App,
+    ) -> AnyElement {
+        let theme = cx.theme();
+        let accent_ink = legible(
+            accent,
+            &[theme.background, theme.secondary],
+            ICON_CONTRAST,
+            cx,
+        );
+        h_flex()
+            .flex_1()
+            .min_w(rems(8.))
+            .items_center()
+            .gap_3()
+            .px_3p5()
+            .py_2p5()
+            .rounded(theme.radius)
+            .bg(theme.secondary.opacity(0.45))
+            .border_1()
+            .border_color(theme.border.opacity(0.75))
+            .child(
+                h_flex()
+                    .size(px(32.))
+                    .flex_shrink_0()
+                    .items_center()
+                    .justify_center()
+                    .rounded(theme.radius)
+                    .bg(accent.opacity(0.14))
+                    .border_1()
+                    .border_color(accent.opacity(0.28))
+                    .child(Icon::new(icon).size(px(16.)).text_color(accent_ink)),
+            )
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_0p5()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_semibold()
+                            .text_color(theme.muted_foreground)
+                            .truncate()
+                            .child(SharedString::from(label.to_uppercase())),
+                    )
+                    .child(match value {
+                        Some((text, color)) => div()
+                            .text_lg()
+                            .font_bold()
+                            .text_color(color)
+                            .truncate()
+                            .child(text)
+                            .into_any_element(),
+                        None => Skeleton::new()
+                            .h_5()
+                            .w(rems(5.))
+                            .rounded_sm()
+                            .into_any_element(),
+                    }),
+            )
+            .into_any_element()
+    }
+}
+
+impl Render for InstallHeader {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let state = self.sheet.read(cx);
+        let game = state.game.clone();
+        let modify = state.is_modify();
+        let info_loading = state.info.is_loading();
+        let disk_loading = state.disk.is_loading();
+        let size = state.size();
+        let space = state.disk.ready().copied();
+        let verdict = state.disk_verdict();
+        let compat = state.compat.clone();
+
+        let tint = (!reduce_transparency(cx))
+            .then(|| {
+                game.hero_art()
+                    .and_then(|url| irori_ui::art::ambient(url, cx))
+                    .map(|a| art_tint(a.rgb, cx))
+            })
+            .flatten();
+
+        let theme = cx.theme();
+        let dark = theme.mode.is_dark();
+        let bg = theme.background;
+        let fg = theme.foreground;
+        let muted = theme.muted_foreground;
+        let border = theme.border;
+        let info_color = theme.info;
+        let primary_color = theme.primary;
+        let success_color = legible(theme.success, &[bg], TEXT_CONTRAST, cx);
+        let danger_color = legible(theme.danger, &[bg], TEXT_CONTRAST, cx);
+
+        let subtitle: Option<SharedString> = if modify {
+            let base = t("game.install.subtitle_modify");
+            Some(
+                match game
+                    .install
+                    .as_ref()
+                    .map(|i| i.version.trim())
+                    .filter(|v| !v.is_empty())
+                {
+                    Some(ver) => format!("{base} · {ver}").into(),
+                    None => base,
+                },
+            )
+        } else {
+            game.developer
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .or_else(|| {
+                    game.publisher
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                })
+                .map(|s| SharedString::from(s.to_string()))
+        };
+
+        let mut compat_pills: Vec<AnyElement> = Vec::new();
+        if cfg!(target_os = "linux")
+            && let Some(c) = &compat
+        {
+            if let Some(tier) = &c.protondb_tier {
+                let tier_text = crate::page::compat::tier_label(tier);
+                let tip = t_args("game.header.protondb", &[("tier", &tier_text)]);
+                let tag = match protondb_tone(tier) {
+                    CompatBadgeTone::Success => Tag::success(),
+                    CompatBadgeTone::Warning => Tag::warning(),
+                    CompatBadgeTone::Danger => Tag::danger(),
+                    CompatBadgeTone::Neutral => Tag::secondary(),
+                };
+                compat_pills.push(
+                    div()
+                        .id("install-protondb-badge")
+                        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                        .child(tag.xsmall().outline().font_medium().child(tier_text))
+                        .into_any_element(),
+                );
+            }
+            if let Some(deck) = c.steam_deck.filter(|d| *d != SteamDeckStatus::Unknown) {
+                let deck_label = deck.label();
+                let tip = t_args("game.header.deck", &[("status", &deck_label)]);
+                let tag = match deck {
+                    SteamDeckStatus::Verified => Tag::success(),
+                    SteamDeckStatus::Playable => Tag::warning(),
+                    SteamDeckStatus::Unsupported => Tag::danger(),
+                    SteamDeckStatus::Unknown => Tag::secondary(),
+                };
+                compat_pills.push(
+                    div()
+                        .id("install-deck-badge")
+                        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                        .child(
+                            tag.xsmall()
+                                .outline()
+                                .font_medium()
+                                .child(format!("Deck {deck_label}")),
+                        )
+                        .into_any_element(),
+                );
+            }
+        }
+
+        let download_value = (!info_loading).then(|| {
+            let text = if size.download == 0 {
+                t("game.install.unknown")
+            } else {
+                format_bytes(size.download).into()
+            };
+            (text, fg)
+        });
+        let disk_value = (!info_loading).then(|| {
+            let text = if size.disk == 0 {
+                t("game.install.unknown")
+            } else {
+                format_bytes(size.disk).into()
+            };
+            (text, fg)
+        });
+        let (third_icon, third_accent, third_label, third_value) = if info_loading || disk_loading {
+            (
+                IconName::CircleCheck,
+                theme.success,
+                t("game.install.free_after"),
+                None,
+            )
+        } else {
+            match verdict {
+                DiskVerdict::Fits { left_after } => (
+                    IconName::CircleCheck,
+                    theme.success,
+                    t("game.install.free_after"),
+                    Some((format_bytes(left_after).into(), success_color)),
+                ),
+                DiskVerdict::TooSmall { missing } => (
+                    IconName::TriangleAlert,
+                    theme.danger,
+                    t("game.install.short_by"),
+                    Some((format_bytes(missing).into(), danger_color)),
+                ),
+                DiskVerdict::NotWritable => (
+                    IconName::TriangleAlert,
+                    theme.danger,
+                    t("game.install.free_after"),
+                    Some((
+                        space
+                            .map(|s| format_bytes(s.free).into())
+                            .unwrap_or_else(|| t("game.install.unknown")),
+                        danger_color,
+                    )),
+                ),
+                DiskVerdict::Unknown => (
+                    IconName::CircleCheck,
+                    if space.is_some() {
+                        theme.success
+                    } else {
+                        muted
+                    },
+                    t("game.install.free_after"),
+                    Some((
+                        space
+                            .map(|s| format_bytes(s.free).into())
+                            .unwrap_or_else(|| t("game.install.unknown")),
+                        if space.is_some() {
+                            success_color
+                        } else {
+                            muted
+                        },
+                    )),
+                ),
+            }
+        };
+
+        div()
+            .id("install-header")
+            .debug_selector(|| "install-header".into())
+            .relative()
+            .w_full()
+            .bg(bg)
+            .border_b_1()
+            .border_color(border)
+            .overflow_hidden()
+            .when_some(tint, |el, tint| {
+                let top_alpha = if dark { 0.24 } else { 0.13 };
+                el.child(div().absolute().inset_0().bg(linear_gradient(
+                    140.,
+                    linear_color_stop(tint.opacity(top_alpha), 0.),
+                    linear_color_stop(tint.opacity(0.), 0.78),
+                )))
+            })
+            .child(
+                h_flex()
+                    .relative()
+                    .w_full()
+                    .px_6()
+                    .py_5()
+                    .gap_5()
+                    .items_stretch()
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .rounded(theme.radius)
+                            .border_1()
+                            .border_color(border)
+                            .overflow_hidden()
+                            .shadow_md()
+                            .child(
+                                GameCover::new(game.clone())
+                                    .width(rems(6.))
+                                    .radius(theme.radius),
+                            ),
+                    )
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .justify_between()
+                            .gap_3()
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .items_start()
+                                    .justify_between()
+                                    .gap_3()
+                                    .child(
+                                        v_flex()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .gap_1p5()
+                                            .child(
+                                                h_flex()
+                                                    .items_center()
+                                                    .gap_2p5()
+                                                    .flex_wrap()
+                                                    .child(
+                                                        div()
+                                                            .min_w_0()
+                                                            .text_2xl()
+                                                            .font_extrabold()
+                                                            .text_color(fg)
+                                                            .line_clamp(2)
+                                                            .child(game.title.clone()),
+                                                    )
+                                                    .child(Self::render_store_pill(
+                                                        game.runner(),
+                                                        cx,
+                                                    ))
+                                                    .when(modify, |row| {
+                                                        row.child(
+                                                            Tag::primary()
+                                                                .xsmall()
+                                                                .outline()
+                                                                .font_semibold()
+                                                                .child(t(
+                                                                    "game.install.modify_badge",
+                                                                )),
+                                                        )
+                                                    }),
+                                            )
+                                            .when(
+                                                !compat_pills.is_empty() || subtitle.is_some(),
+                                                |col| {
+                                                    col.child(
+                                                        h_flex()
+                                                            .min_w_0()
+                                                            .items_center()
+                                                            .gap_2()
+                                                            .flex_wrap()
+                                                            .children(compat_pills)
+                                                            .when_some(subtitle, |row, sub| {
+                                                                row.child(
+                                                                    div()
+                                                                        .min_w_0()
+                                                                        .text_sm()
+                                                                        .font_medium()
+                                                                        .text_color(muted)
+                                                                        .truncate()
+                                                                        .child(sub),
+                                                                )
+                                                            }),
+                                                    )
+                                                },
+                                            ),
+                                    )
+                                    .child(
+                                        Button::new("install-modal-close")
+                                            .flex_shrink_0()
+                                            .small()
+                                            .ghost()
+                                            .icon(IconName::X)
+                                            .accessibility_label(t("game.install.close"))
+                                            .tooltip(t("game.install.close"))
+                                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                                    ),
+                            )
+                            .child(
+                                h_flex()
+                                    .w_full()
+                                    .items_stretch()
+                                    .gap_3()
+                                    .child(Self::render_metric(
+                                        IconName::CloudDownload,
+                                        info_color,
+                                        t("game.install.download"),
+                                        download_value,
+                                        cx,
+                                    ))
+                                    .child(Self::render_metric(
+                                        IconName::HardDriveDownload,
+                                        primary_color,
+                                        t("game.install.size_on_disk"),
+                                        disk_value,
+                                        cx,
+                                    ))
+                                    .child(Self::render_metric(
+                                        third_icon,
+                                        third_accent,
+                                        third_label,
+                                        third_value,
+                                        cx,
+                                    )),
+                            ),
+                    ),
+            )
+    }
+}
+
+/// Modal footer: secondary actions and the primary `Install · <size>` / `Save changes` button.
 pub struct InstallFooter {
     sheet: Entity<InstallSheet>,
     _observe: Subscription,
@@ -1858,28 +3041,53 @@ impl Render for InstallFooter {
         let blocker = state.blocker(cx);
         let label = state.primary_label();
         let modify = state.is_modify();
+        let has_changes = state.has_changes();
         let submitting = state.submitting;
         let id = state.id.clone();
         let sheet = self.sheet.clone();
+        let theme = cx.theme();
+
         h_flex()
             .w_full()
-            .gap_2()
+            .px_6()
+            .py_4()
+            .gap_3()
             .flex_wrap()
+            .items_center()
             .justify_between()
-            .child(h_flex().gap_2().when(!modify, |row| {
-                row.child(
-                    Button::new("import-instead")
-                        .ghost()
-                        .label(t("game.install.import_existing"))
-                        .on_click(move |_, window, cx| {
-                            window.close_sheet(cx);
-                            crate::manage::open_import_dialog(id.clone(), window, cx);
-                        }),
-                )
-            }))
+            .border_t_1()
+            .border_color(theme.border)
+            .bg(theme.background)
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .when(!modify, |row| {
+                        row.child(
+                            Button::new("import-instead")
+                                .debug_selector(|| "import-instead".into())
+                                .ghost()
+                                .icon(IconName::FolderInput)
+                                .label(t("game.install.import_existing"))
+                                .on_click(move |_, window, cx| {
+                                    window.close_dialog(cx);
+                                    crate::manage::open_import_dialog(id.clone(), window, cx);
+                                }),
+                        )
+                    })
+                    .when(modify && has_changes && blocker.is_none(), |row| {
+                        row.child(
+                            div()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .child(t("game.install.changes_ready")),
+                        )
+                    }),
+            )
             .child(
                 h_flex()
                     .min_w_0()
+                    .items_center()
                     .gap_2()
                     .when_some(blocker.filter(|_| !submitting), |row, reason| {
                         row.child(
@@ -1887,8 +3095,16 @@ impl Render for InstallFooter {
                                 .min_w_0()
                                 .truncate()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground)
+                                .text_color(theme.muted_foreground)
                                 .child(t(reason)),
+                        )
+                    })
+                    .when(modify, |row| {
+                        row.child(
+                            Button::new("install-cancel")
+                                .outline()
+                                .label(t("game.common.cancel"))
+                                .on_click(|_, window, cx| window.close_dialog(cx)),
                         )
                     })
                     .child(
@@ -1911,7 +3127,7 @@ mod tests {
     use super::*;
 
     /// Epic games the EA app or Ubisoft Connect installs have no sizes; the
-    /// sheet must offer Install, not "nothing to install" (#167).
+    /// modal must offer Install, not "nothing to install" (#167).
     #[test]
     fn launcher_games_have_something_to_install() {
         let ea = GameInfo {
@@ -1984,5 +3200,70 @@ mod tests {
             installable_platforms(&GameInfo::default()),
             vec![InstallPlatform::Windows]
         );
+    }
+
+    #[test]
+    fn more_options_auto_expands_for_modify_or_missing_wine() {
+        assert!(should_auto_expand_options(
+            InstallMode::Modify,
+            false,
+            false,
+            &ProtonDownload::Offered
+        ));
+        assert!(!should_auto_expand_options(
+            InstallMode::Install,
+            false,
+            false,
+            &ProtonDownload::Offered
+        ));
+        assert!(!should_auto_expand_options(
+            InstallMode::Install,
+            true,
+            false,
+            &ProtonDownload::Offered
+        ));
+        assert!(should_auto_expand_options(
+            InstallMode::Install,
+            true,
+            true,
+            &ProtonDownload::Offered
+        ));
+        assert!(should_auto_expand_options(
+            InstallMode::Install,
+            true,
+            false,
+            &ProtonDownload::Finding
+        ));
+        assert!(should_auto_expand_options(
+            InstallMode::Install,
+            true,
+            false,
+            &ProtonDownload::Running("ge".into())
+        ));
+        assert!(should_auto_expand_options(
+            InstallMode::Install,
+            true,
+            false,
+            &ProtonDownload::Failed("network".into())
+        ));
+        // On Windows (needs_wine == false), missing wine does not force expand.
+        assert!(!should_auto_expand_options(
+            InstallMode::Install,
+            false,
+            true,
+            &ProtonDownload::Offered
+        ));
+    }
+
+    #[test]
+    fn protondb_tone_is_case_insensitive() {
+        assert_eq!(protondb_tone("Platinum"), CompatBadgeTone::Success);
+        assert_eq!(protondb_tone("native"), CompatBadgeTone::Success);
+        assert_eq!(protondb_tone("Gold"), CompatBadgeTone::Warning);
+        assert_eq!(protondb_tone("gold"), CompatBadgeTone::Warning);
+        assert_eq!(protondb_tone("Silver"), CompatBadgeTone::Warning);
+        assert_eq!(protondb_tone("Bronze"), CompatBadgeTone::Warning);
+        assert_eq!(protondb_tone("Borked"), CompatBadgeTone::Danger);
+        assert_eq!(protondb_tone("Unknown"), CompatBadgeTone::Neutral);
     }
 }

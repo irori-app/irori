@@ -1,6 +1,6 @@
 //! Install size accounting and free-space checks for the install sheet.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use irori_core::InstallInfo;
@@ -166,6 +166,273 @@ pub fn disk_bar_fractions(space: DiskSpace, required: u64) -> (f32, f32) {
     let used = (space.total.saturating_sub(space.free)) as f64 / total;
     let install = (required.min(space.free)) as f64 / total;
     (used as f32, install as f32)
+}
+
+/// Short, cross-platform drive or mount label for a destination path
+/// (`C:\`, `\\server\share`, `/mnt/games`, `/Volumes/SSD`, `/home`, `/`).
+pub fn drive_label(path: &Path) -> String {
+    let raw = path.to_string_lossy();
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    // Windows extended-length UNC prefix: `\\?\UNC\server\share\...`
+    if let Some(rest) = trimmed
+        .strip_prefix("\\\\?\\UNC\\")
+        .or_else(|| trimmed.strip_prefix("\\\\?\\unc\\"))
+    {
+        let mut parts = rest.split(['\\', '/']).filter(|s| !s.is_empty());
+        if let (Some(server), Some(share)) = (parts.next(), parts.next()) {
+            return format!("\\\\{server}\\{share}");
+        }
+    }
+    // Strip Windows extended-length device prefix: `\\?\C:\...` -> `C:\...`
+    let trimmed = trimmed.strip_prefix("\\\\?\\").unwrap_or(trimmed);
+    // Windows drive letter: `C:\...`, `d:/...`, `E:`
+    let bytes = trimmed.as_bytes();
+    if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+        let letter = (bytes[0] as char).to_ascii_uppercase();
+        return format!("{letter}:\\");
+    }
+    // Windows UNC share: `\\server\share\...` or `//server/share/...`
+    if let Some(rest) = trimmed
+        .strip_prefix("\\\\")
+        .or_else(|| trimmed.strip_prefix("//"))
+    {
+        let mut parts = rest.split(['\\', '/']).filter(|s| !s.is_empty());
+        if let (Some(server), Some(share)) = (parts.next(), parts.next()) {
+            return format!("\\\\{server}\\{share}");
+        }
+    }
+    // POSIX absolute paths (Linux / macOS).
+    if trimmed.starts_with('/') {
+        let parts: Vec<&str> = trimmed.split('/').filter(|s| !s.is_empty()).collect();
+        return match parts.as_slice() {
+            ["run", "media", user, vol, ..] => format!("/run/media/{user}/{vol}"),
+            ["media", user, vol, ..] => format!("/media/{user}/{vol}"),
+            ["media", vol] => format!("/media/{vol}"),
+            ["mnt", vol, ..] => format!("/mnt/{vol}"),
+            ["Volumes", vol, ..] => format!("/Volumes/{vol}"),
+            ["home", ..] => "/home".into(),
+            _ => "/".into(),
+        };
+    }
+    trimmed
+        .split(['\\', '/'])
+        .find(|s| !s.is_empty())
+        .unwrap_or(trimmed)
+        .to_string()
+}
+
+/// Disk verdict for Modify mode, accounting for space the installed game
+/// already occupies on its drive so we never double-count the base install.
+pub fn modify_disk_verdict(
+    space: Option<DiskSpace>,
+    target_disk: u64,
+    installed_disk: u64,
+    added_dlc_disk: u64,
+    removed_dlc_disk: u64,
+) -> DiskVerdict {
+    let Some(space) = space else {
+        return DiskVerdict::Unknown;
+    };
+    if !space.writable {
+        return DiskVerdict::NotWritable;
+    }
+    let (extra, freed) = if installed_disk > 0 && target_disk > 0 {
+        (
+            target_disk.saturating_sub(installed_disk),
+            installed_disk.saturating_sub(target_disk),
+        )
+    } else {
+        (
+            added_dlc_disk.saturating_sub(removed_dlc_disk),
+            removed_dlc_disk.saturating_sub(added_dlc_disk),
+        )
+    };
+    if extra > 0 {
+        DiskVerdict::evaluate(Some(space), extra)
+    } else {
+        DiskVerdict::Fits {
+            left_after: space.free.saturating_add(freed).min(space.total),
+        }
+    }
+}
+
+/// Normalized equality between two directory paths (case-insensitive on Windows).
+pub fn same_dir(a: &Path, b: &Path) -> bool {
+    let norm = |p: &Path| p.components().collect::<PathBuf>();
+    let (a, b) = (norm(a), norm(b));
+    #[cfg(windows)]
+    {
+        a.to_string_lossy()
+            .eq_ignore_ascii_case(&b.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        a == b
+    }
+}
+
+/// Minimum total capacity for an auto-detected extra drive (5 GiB).
+/// Filters out small Windows recovery/OEM/EFI partitions.
+const MIN_EXTRA_DRIVE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
+
+/// An additional mounted drive suggested as an install destination.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetectedDrive {
+    pub label: String,
+    pub suggested_base: String,
+    pub free: u64,
+    pub mount: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct DiskEntry {
+    name: String,
+    mount: PathBuf,
+    total: u64,
+    free: u64,
+    read_only: bool,
+}
+
+fn is_system_mount(mount: &str) -> bool {
+    const SYSTEM_EXACT: &[&str] = &[
+        "/", "/boot", "/efi", "/snap", "/sys", "/proc", "/dev", "/var", "/tmp", "/etc", "/usr",
+        "/nix", "/opt", "/System", "/private", "/run",
+    ];
+    const SYSTEM_PREFIXES: &[&str] = &[
+        "/boot/",
+        "/efi/",
+        "/snap/",
+        "/sys/",
+        "/proc/",
+        "/dev/",
+        "/var/",
+        "/tmp/",
+        "/etc/",
+        "/usr/",
+        "/nix/",
+        "/opt/",
+        "/System/",
+        "/private/",
+    ];
+    SYSTEM_EXACT.contains(&mount)
+        || SYSTEM_PREFIXES.iter().any(|p| mount.starts_with(p))
+        || (mount.starts_with("/run/") && !mount.starts_with("/run/media/"))
+}
+
+fn extra_drives_from_list(disks: &[DiskEntry], existing_paths: &[PathBuf]) -> Vec<DetectedDrive> {
+    let mut seen: HashSet<String> = existing_paths
+        .iter()
+        .map(|p| drive_label(p).to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut out = Vec::new();
+    for disk in disks {
+        if disk.read_only || disk.total < MIN_EXTRA_DRIVE_BYTES {
+            continue;
+        }
+        let mount_raw = disk.mount.to_string_lossy();
+        let mount_str = mount_raw.trim();
+        if mount_str.is_empty() {
+            continue;
+        }
+        if mount_str.starts_with('/') && is_system_mount(mount_str) {
+            continue;
+        }
+        let short = drive_label(&disk.mount);
+        if short.is_empty() || !seen.insert(short.to_ascii_lowercase()) {
+            continue;
+        }
+        let suggested_base = if mount_str.contains('\\') || mount_str.contains(':') {
+            format!("{}\\Games\\Irori", mount_str.trim_end_matches(['\\', '/']))
+        } else {
+            format!("{}/Games/Irori", mount_str.trim_end_matches('/'))
+        };
+        let name = disk.name.trim();
+        let label = if !name.is_empty()
+            && name.chars().count() <= 18
+            && !name.starts_with(['/', '\\'])
+            && !name.contains(':')
+            && !name.eq_ignore_ascii_case(&short)
+        {
+            format!("{name} ({short})")
+        } else {
+            short
+        };
+        out.push(DetectedDrive {
+            label,
+            suggested_base,
+            free: disk.free,
+            mount: disk.mount.clone(),
+        });
+    }
+    out
+}
+
+/// Detect writable mounted drives not already represented by `existing_paths`.
+/// Blocking: run off the UI thread.
+pub fn detect_extra_drives(existing_paths: &[PathBuf]) -> Vec<DetectedDrive> {
+    let entries: Vec<DiskEntry> = sysinfo::Disks::new_with_refreshed_list()
+        .list()
+        .iter()
+        .filter(|d| std::fs::read_dir(d.mount_point()).is_ok())
+        .map(|d| DiskEntry {
+            name: d.name().to_string_lossy().into_owned(),
+            mount: d.mount_point().to_path_buf(),
+            total: d.total_space(),
+            free: d.available_space(),
+            read_only: d.is_read_only(),
+        })
+        .collect();
+    extra_drives_from_list(&entries, existing_paths)
+}
+
+/// Read-only available-space query for `path` without touching the filesystem
+/// with a write probe (used for library folder chips).
+pub fn free_space(path: &Path) -> anyhow::Result<u64> {
+    use anyhow::Context as _;
+    let dir = existing_ancestor(path).with_context(|| {
+        t_args(
+            "game.disk.path_missing",
+            &[("path", &path.display().to_string())],
+        )
+    })?;
+    fs4::available_space(&dir).with_context(|| {
+        t_args(
+            "game.disk.read_failed",
+            &[("path", &dir.display().to_string())],
+        )
+    })
+}
+
+/// Plain-language summary shown alongside the segmented disk bar.
+pub fn bar_summary(verdict: DiskVerdict, space: Option<DiskSpace>, required: u64) -> String {
+    match (verdict, space) {
+        (DiskVerdict::NotWritable, _) => t("game.disk.not_writable").to_string(),
+        (DiskVerdict::TooSmall { missing }, _) => {
+            t_args("game.disk.too_small", &[("size", &format_bytes(missing))]).to_string()
+        }
+        (DiskVerdict::Fits { left_after }, Some(_)) => t_args(
+            "game.disk.bar_fits",
+            &[
+                ("install", &format_bytes(required)),
+                ("left", &format_bytes(left_after)),
+            ],
+        )
+        .to_string(),
+        (DiskVerdict::Unknown, Some(s)) => t_args(
+            "game.disk.free",
+            &[
+                ("free", &format_bytes(s.free)),
+                ("total", &format_bytes(s.total)),
+            ],
+        )
+        .to_string(),
+        _ => t("game.disk.checking").to_string(),
+    }
 }
 
 /// The nearest existing directory at or above `path` (installs usually
@@ -377,5 +644,288 @@ mod tests {
         let space = disk_space(&missing).unwrap();
         assert!(space.total >= space.free);
         assert!(space.writable);
+    }
+
+    #[test]
+    fn drive_labels_are_short_and_cross_platform() {
+        assert_eq!(drive_label(Path::new("")), "");
+        assert_eq!(
+            drive_label(Path::new(r"C:\Users\eduardo.junior\Games\Irori")),
+            r"C:\"
+        );
+        assert_eq!(drive_label(Path::new("d:/Games/BG3")), r"D:\");
+        assert_eq!(drive_label(Path::new("e:")), r"E:\");
+        assert_eq!(
+            drive_label(Path::new(r"\\nas\games\library")),
+            r"\\nas\games"
+        );
+        assert_eq!(
+            drive_label(Path::new("/mnt/games/Irori/Cyberpunk 2077")),
+            "/mnt/games"
+        );
+        assert_eq!(
+            drive_label(Path::new("/media/deck/SDCard/Games")),
+            "/media/deck/SDCard"
+        );
+        assert_eq!(
+            drive_label(Path::new("/run/media/deck/SDCard/Games")),
+            "/run/media/deck/SDCard"
+        );
+        assert_eq!(
+            drive_label(Path::new("/media/usb/Games")),
+            "/media/usb/Games"
+        );
+        assert_eq!(drive_label(Path::new("/media/usb")), "/media/usb");
+        assert_eq!(
+            drive_label(Path::new("/Volumes/ExternalSSD/Games")),
+            "/Volumes/ExternalSSD"
+        );
+        assert_eq!(drive_label(Path::new("/home/user/Games/Irori")), "/home");
+        assert_eq!(drive_label(Path::new("/opt/games")), "/");
+        assert_eq!(drive_label(Path::new("  C:\\Games  ")), r"C:\");
+        assert_eq!(
+            drive_label(Path::new(r"\\?\C:\Users\eduardo\Games\Irori")),
+            r"C:\"
+        );
+        assert_eq!(
+            drive_label(Path::new(r"\\?\UNC\nas\games\library")),
+            r"\\nas\games"
+        );
+    }
+
+    #[test]
+    fn modify_verdict_does_not_double_count_installed_game() {
+        let gib = 1024 * 1024 * 1024;
+        let space = DiskSpace {
+            free: 100 * gib,
+            total: 500 * gib,
+            writable: true,
+        };
+        // 140 GiB game already installed on a drive with 100 GiB free, no changes:
+        // must NOT report "Short by 40 GiB".
+        assert_eq!(
+            modify_disk_verdict(Some(space), 140 * gib, 140 * gib, 0, 0),
+            DiskVerdict::Fits {
+                left_after: 100 * gib
+            }
+        );
+        // Adding a 20 GiB DLC needs only 20 GiB extra.
+        assert_eq!(
+            modify_disk_verdict(Some(space), 160 * gib, 140 * gib, 20 * gib, 0),
+            DiskVerdict::Fits {
+                left_after: 80 * gib
+            }
+        );
+        // Adding a 120 GiB DLC exceeds the 100 GiB free by 20 GiB.
+        assert_eq!(
+            modify_disk_verdict(Some(space), 260 * gib, 140 * gib, 120 * gib, 0),
+            DiskVerdict::TooSmall { missing: 20 * gib }
+        );
+        // Removing a 30 GiB DLC increases free space after update.
+        assert_eq!(
+            modify_disk_verdict(Some(space), 110 * gib, 140 * gib, 0, 30 * gib),
+            DiskVerdict::Fits {
+                left_after: 130 * gib
+            }
+        );
+        // When the store didn't record install_size_bytes (0), fall back to DLC delta.
+        assert_eq!(
+            modify_disk_verdict(Some(space), 140 * gib, 0, 0, 0),
+            DiskVerdict::Fits {
+                left_after: 100 * gib
+            }
+        );
+        assert_eq!(
+            modify_disk_verdict(Some(space), 145 * gib, 0, 5 * gib, 0),
+            DiskVerdict::Fits {
+                left_after: 95 * gib
+            }
+        );
+        assert_eq!(
+            modify_disk_verdict(Some(space), 145 * gib, 0, 120 * gib, 0),
+            DiskVerdict::TooSmall { missing: 20 * gib }
+        );
+        // Read-only drive still reports NotWritable.
+        let ro = DiskSpace {
+            writable: false,
+            ..space
+        };
+        assert_eq!(
+            modify_disk_verdict(Some(ro), 140 * gib, 140 * gib, 0, 0),
+            DiskVerdict::NotWritable
+        );
+        assert_eq!(
+            modify_disk_verdict(None, 140 * gib, 140 * gib, 0, 0),
+            DiskVerdict::Unknown
+        );
+    }
+
+    #[test]
+    fn same_dir_normalizes_components() {
+        assert!(same_dir(Path::new("/mnt/games/."), Path::new("/mnt/games")));
+        assert!(!same_dir(Path::new("/mnt/games"), Path::new("/mnt/other")));
+        #[cfg(windows)]
+        assert!(same_dir(
+            Path::new(r"c:\Games\Irori\"),
+            Path::new(r"C:\Games\Irori")
+        ));
+    }
+
+    #[test]
+    fn free_space_reads_without_creating_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let bytes = free_space(&dir.path().join("child")).unwrap();
+        assert!(bytes > 0);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn bar_summaries_cover_every_verdict() {
+        crate::i18n::register();
+        let gib = 1024 * 1024 * 1024;
+        let space = DiskSpace {
+            free: 100 * gib,
+            total: 500 * gib,
+            writable: true,
+        };
+        let fits = bar_summary(
+            DiskVerdict::Fits {
+                left_after: 80 * gib,
+            },
+            Some(space),
+            20 * gib,
+        );
+        assert!(fits.contains("20.0 GiB"), "{fits}");
+        assert!(fits.contains("80.0 GiB"), "{fits}");
+
+        let short = bar_summary(DiskVerdict::TooSmall { missing: 12 * gib }, Some(space), 0);
+        assert!(short.contains("12.0 GiB"), "{short}");
+
+        let ro = bar_summary(DiskVerdict::NotWritable, Some(space), 10 * gib);
+        assert!(!ro.is_empty());
+
+        let unknown_known_space = bar_summary(DiskVerdict::Unknown, Some(space), 0);
+        assert!(
+            unknown_known_space.contains(&format_bytes(space.free)),
+            "{unknown_known_space}"
+        );
+        assert!(
+            unknown_known_space.contains(&format_bytes(space.total)),
+            "{unknown_known_space}"
+        );
+
+        let checking = bar_summary(DiskVerdict::Unknown, None, 0);
+        assert!(!checking.is_empty());
+    }
+
+    #[test]
+    fn extra_drives_filters_system_mounts_and_dedups_existing() {
+        let gib = 1024 * 1024 * 1024;
+        let disks = vec![
+            DiskEntry {
+                name: "System".into(),
+                mount: PathBuf::from(r"C:\"),
+                total: 500 * gib,
+                free: 80 * gib,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "GamesSSD".into(),
+                mount: PathBuf::from(r"D:\"),
+                total: 1000 * gib,
+                free: 420 * gib,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "Recovery".into(),
+                mount: PathBuf::from(r"E:\"),
+                total: 50 * gib,
+                free: 10 * gib,
+                read_only: true,
+            },
+            DiskEntry {
+                name: "WindowsRE".into(),
+                mount: PathBuf::from(r"F:\"),
+                total: 4 * gib,
+                free: 512 * 1024 * 1024,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "boot".into(),
+                mount: PathBuf::from("/boot/efi"),
+                total: 20 * gib,
+                free: 10 * gib,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "snap".into(),
+                mount: PathBuf::from("/snap/core22/1"),
+                total: 20 * gib,
+                free: 0,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "run".into(),
+                mount: PathBuf::from("/run/user/1000"),
+                total: 20 * gib,
+                free: 10 * gib,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "".into(),
+                mount: PathBuf::from("/mnt/games"),
+                total: 1000 * gib,
+                free: 600 * gib,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "SDCard".into(),
+                mount: PathBuf::from("/run/media/deck/SDCard"),
+                total: 512 * gib,
+                free: 200 * gib,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "Data".into(),
+                mount: PathBuf::from("/System/Volumes/Data"),
+                total: 500 * gib,
+                free: 120 * gib,
+                read_only: false,
+            },
+            DiskEntry {
+                name: "ExternalSSD".into(),
+                mount: PathBuf::from("/Volumes/ExternalSSD"),
+                total: 2000 * gib,
+                free: 900 * gib,
+                read_only: false,
+            },
+        ];
+
+        let existing = vec![PathBuf::from(r"C:\Users\eduardo\Games\Irori")];
+        let detected = extra_drives_from_list(&disks, &existing);
+        let labels: Vec<&str> = detected.iter().map(|d| d.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec![
+                r"GamesSSD (D:\)",
+                "/mnt/games",
+                "SDCard (/run/media/deck/SDCard)",
+                "ExternalSSD (/Volumes/ExternalSSD)",
+            ]
+        );
+        assert_eq!(detected[0].suggested_base, r"D:\Games\Irori");
+        assert_eq!(detected[1].suggested_base, "/mnt/games/Games/Irori");
+        assert_eq!(
+            detected[3].suggested_base,
+            "/Volumes/ExternalSSD/Games/Irori"
+        );
+
+        // If D:\ already hosts a configured library folder, don't duplicate it.
+        let with_d = vec![
+            PathBuf::from(r"C:\Games\Irori"),
+            PathBuf::from(r"d:\MyLibrary"),
+        ];
+        let detected2 = extra_drives_from_list(&disks, &with_d);
+        assert!(!detected2.iter().any(|d| d.label.contains(r"D:\")));
     }
 }
