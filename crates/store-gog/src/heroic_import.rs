@@ -248,7 +248,7 @@ pub(crate) fn import_into(heroic: &Path, dst: &GogPaths) -> Result<()> {
     if !dst.library_cache().exists()
         && let Some(lib) = read_value(&heroic.join("store_cache").join("gog_library.json"))
     {
-        let games: Vec<GameInfo> = lib
+        let map: HashMap<String, GameInfo> = lib
             .get("games")
             .and_then(Value::as_array)
             .into_iter()
@@ -256,9 +256,8 @@ pub(crate) fn import_into(heroic: &Path, dst: &GogPaths) -> Result<()> {
             .filter_map(|g| serde_json::from_value::<HeroicGame>(g.clone()).ok())
             .filter(|g| !g.app_name.is_empty() && g.app_name != REDIST_APP)
             .map(map_heroic_game)
+            .map(|g| (g.app_name.clone(), g))
             .collect();
-        let map: HashMap<String, GameInfo> =
-            games.into_iter().map(|g| (g.app_name.clone(), g)).collect();
         let mut list: Vec<GameInfo> = map.into_values().collect();
         list.sort_by(|a, b| a.app_name.cmp(&b.app_name));
         json_store::write(&dst.library_cache(), &list)?;

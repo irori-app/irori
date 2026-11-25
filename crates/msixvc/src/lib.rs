@@ -7,6 +7,8 @@
 //! Knows nothing about Irori: no paths, settings or events.
 
 #![forbid(unsafe_code)]
+// `clippy::chunks_exact_to_as_chunks` was introduced after Rust 1.95.
+#![allow(unknown_lints)]
 // The XTS and hash-tree code walks fixed-size blocks with `chunks_exact`, as
 // Xodus does; `as_chunks` would change every loop for no behaviour change.
 #![allow(clippy::chunks_exact_to_as_chunks)]

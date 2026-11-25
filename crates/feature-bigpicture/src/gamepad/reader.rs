@@ -527,11 +527,12 @@ impl Reader {
                     }
                 }
                 match input {
-                    Some(GamepadInput::Guide) => {
-                        if self.guide.release(usize::from(id), Instant::now()) {
-                            self.press(id, Source::DPad, GamepadInput::Guide);
-                        }
+                    Some(GamepadInput::Guide)
+                        if self.guide.release(usize::from(id), Instant::now()) =>
+                    {
+                        self.press(id, Source::DPad, GamepadInput::Guide);
                     }
+                    Some(GamepadInput::Guide) => {}
                     Some(input) if input.is_directional() => {
                         self.release(id, Source::DPad, input);
                     }

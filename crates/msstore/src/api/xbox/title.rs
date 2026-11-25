@@ -10,21 +10,12 @@ pub async fn get_title_management(client: &reqwest::Client) -> reqwest::Result<T
 
 pub fn get_endpoint<'a>(url: &str, response: &'a TitleMgtResponse) -> Option<&'a TitleMgtEndPoint> {
     let parsed_url = reqwest::Url::parse(url).ok()?;
-    let filtered: Vec<&TitleMgtEndPoint> = response
+    let host = parsed_url.host_str()?;
+    response
         .end_points
         .iter()
-        .filter(|e| e.protocol == parsed_url.scheme())
-        .collect();
-    let host = parsed_url.host_str()?;
-    let matched: Vec<&TitleMgtEndPoint> = filtered
-        .into_iter()
-        .filter(|e| host_matches(&e.host, host))
-        .collect();
-
-    matched
-        .iter()
-        .max_by_key(|&&pat| pat.host.chars().filter(|&c| c != '*').count())
-        .copied()
+        .filter(|e| e.protocol == parsed_url.scheme() && host_matches(&e.host, host))
+        .max_by_key(|pat| pat.host.chars().filter(|&c| c != '*').count())
 }
 
 /// Whether `host` matches an endpoint host pattern: an exact name or a

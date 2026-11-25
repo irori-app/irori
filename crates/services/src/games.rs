@@ -495,14 +495,14 @@ impl Backend {
         option: Option<LaunchOption>,
         extra_args: Vec<String>,
     ) -> Result<()> {
-        self.launch_with(
+        Box::pin(self.launch_with(
             id,
             LaunchParams {
                 option,
                 extra_args,
                 ..Default::default()
             },
-        )
+        ))
         .await
     }
 
@@ -632,10 +632,10 @@ impl Backend {
         // Another launcher starts its games with its own settings; Irori's
         // Wine, wrappers and variables would only apply to the opener.
         let mut environment = if id.runner.manages_installs() {
-            launch_step(
+            Box::pin(launch_step(
                 &cancel,
                 irori_runtime::prepare_launch(&app, &settings, target, &ctx),
-            )
+            ))
             .await?
         } else {
             Default::default()

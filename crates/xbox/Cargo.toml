@@ -24,3 +24,6 @@ tracing.workspace = true
 irori-depot = { workspace = true, features = ["test-server"] }
 tokio.workspace = true
 regex.workspace = true
+
+[lints]
+workspace = true

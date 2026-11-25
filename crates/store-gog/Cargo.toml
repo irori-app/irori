@@ -39,3 +39,6 @@ windows-registry = "0.6"
 md-5.workspace = true
 tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }
+
+[lints]
+workspace = true

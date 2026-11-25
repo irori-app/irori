@@ -28,3 +28,6 @@ irori-depot = { workspace = true, features = ["test-server"] }
 tempfile = "3"
 parking_lot.workspace = true
 zip = { workspace = true, features = ["deflate"] }
+
+[lints]
+workspace = true

@@ -245,7 +245,7 @@ mod test {
 
         let token: Token = mgr.get_device_sts_token().unwrap();
         let Token::Legacy(token) = token else {
-            todo!("no a LegacyToken");
+            panic!("expected LegacyToken");
         };
         let resp = exchange_device_token(
             &client,
@@ -259,7 +259,7 @@ mod test {
 
         let ms_device_token = Token::try_from(resp).unwrap();
         let Token::Compact(ms_device_token) = ms_device_token else {
-            todo!("Unsupported token");
+            panic!("expected Compact token");
         };
 
         println!("{}", ms_device_token);

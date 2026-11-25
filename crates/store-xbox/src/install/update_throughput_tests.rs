@@ -201,9 +201,10 @@ async fn streaming_update_pipeline_pause_keeps_lookahead_out_of_progress_and_res
         assert_eq!(fs::metadata(&target).unwrap().len(), 32 * 1024 * 1024);
         stop.send(true).unwrap();
     };
-    let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(operation, driver)
-    })
+    let (result, ()) = Box::pin(tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        async { tokio::join!(operation, driver) },
+    ))
     .await
     .unwrap();
     assert!(result.is_err());
@@ -717,9 +718,10 @@ async fn streaming_update_throughput_pause_and_cancellation_never_claim_prefetch
             },
         ),
     );
-    let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        tokio::join!(operation, driver)
-    })
+    let (result, ()) = Box::pin(tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        async { tokio::join!(operation, driver) },
+    ))
     .await
     .unwrap();
     assert!(result.is_err());

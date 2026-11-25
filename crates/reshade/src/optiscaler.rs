@@ -307,7 +307,7 @@ pub fn is_newer_release(channel: OptiscalerChannel, installed: &str, latest: &st
         OptiscalerChannel::Nightly => true,
         OptiscalerChannel::Stable => match (parse_semver_nums(&a), parse_semver_nums(&b)) {
             (Some((an, apre)), Some((bn, bpre))) => {
-                bn > an || (bn == an && apre && !bpre) || (bn == an && apre && bpre && b != a)
+                bn > an || (bn == an && apre && (!bpre || b != a))
             }
             _ => true,
         },

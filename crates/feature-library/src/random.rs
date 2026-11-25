@@ -168,7 +168,8 @@ pub fn pools(cx: &App) -> Vec<(Pool, SharedString)> {
         Pool::All,
     ]);
     let categories = crate::category_list(cx);
-    let names: Vec<(Pool, String)> = pools
+    let hidden = &models(cx).library.read(cx).user.hidden;
+    pools
         .into_iter()
         .map(|p| (p, String::new()))
         .chain(
@@ -177,10 +178,6 @@ pub fn pools(cx: &App) -> Vec<(Pool, SharedString)> {
                 .filter(|c| c.count > 0)
                 .map(|c| (Pool::Category(c.category), c.name)),
         )
-        .collect();
-    let hidden = &models(cx).library.read(cx).user.hidden;
-    names
-        .into_iter()
         .filter(|(pool, _)| {
             pool_games(pool, cx)
                 .iter()

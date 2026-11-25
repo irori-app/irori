@@ -339,7 +339,7 @@ pub fn with_dll_overrides(line: &str, native: &[&str], unset: &[&str]) -> String
         let add: Vec<(&str, &str)> = native.iter().map(|d| (*d, "n,b")).collect();
         value = irori_runtime::env::add_dll_overrides(Some(&value), &add);
     }
-    if value == current && variable(line, DLL_OVERRIDES).is_some() == !value.is_empty() {
+    if value == current && variable(line, DLL_OVERRIDES).is_some() != value.is_empty() {
         return line.trim().to_string();
     }
     with_variable(

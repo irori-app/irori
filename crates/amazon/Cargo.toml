@@ -32,3 +32,6 @@ rsa.workspace = true
 irori-depot = { workspace = true, features = ["test-server"] }
 tokio.workspace = true
 tempfile = "3"
+
+[lints]
+workspace = true

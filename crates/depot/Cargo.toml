@@ -34,3 +34,6 @@ parking_lot = { workspace = true, optional = true }
 [dev-dependencies]
 tempfile = "3"
 parking_lot.workspace = true
+
+[lints]
+workspace = true

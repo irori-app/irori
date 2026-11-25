@@ -2397,11 +2397,11 @@ impl SettingsForm {
                     return div().into_any_element();
                 };
                 let empty = wine.builds.as_ref().is_some_and(|b| b.is_empty())
-                    && !self
+                    && self
                         .value(path)
                         .and_then(|v| v.get("bin"))
                         .and_then(Value::as_str)
-                        .is_some_and(|b| !b.is_empty());
+                        .is_none_or(|b| b.is_empty());
                 if wine.loading {
                     row.help = t("settings.wine.searching");
                 }

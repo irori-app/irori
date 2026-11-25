@@ -42,3 +42,6 @@ windows-registry = "0.6"
 [dev-dependencies]
 tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }
+
+[lints]
+workspace = true

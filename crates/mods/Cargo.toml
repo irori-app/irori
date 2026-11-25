@@ -28,3 +28,6 @@ roxmltree = "0.21"
 [dev-dependencies]
 irori-depot = { workspace = true, features = ["test-server"] }
 tempfile = "3"
+
+[lints]
+workspace = true

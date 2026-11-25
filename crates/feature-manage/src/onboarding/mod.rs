@@ -618,14 +618,16 @@ impl Render for OnboardingView {
         let step = self.step();
         let content = match step {
             OnboardingStep::Welcome => self.render_welcome(cx),
-            OnboardingStep::Import => {
-                let found: Vec<Launcher> = self.launchers.entries.iter().map(|(l, _)| *l).collect();
-                v_flex()
-                    .gap_8()
-                    .when(self.heroic, |d| d.child(self.render_import(window, cx)))
-                    .children(found.into_iter().map(|l| self.render_launcher(l, cx)))
-                    .into_any_element()
-            }
+            OnboardingStep::Import => v_flex()
+                .gap_8()
+                .when(self.heroic, |d| d.child(self.render_import(window, cx)))
+                .children(
+                    self.launchers
+                        .entries
+                        .iter()
+                        .map(|(l, _)| self.render_launcher(*l, cx)),
+                )
+                .into_any_element(),
             OnboardingStep::Stores => self.render_stores(cx),
             OnboardingStep::InstallFolder => self.render_folder(cx),
             OnboardingStep::Done => self.render_done(cx),

@@ -17,6 +17,8 @@
 //!   decrypted into a private launch view ([`launch_view`]), the account
 //!   service the runtime talks to ([`service`]), then Proton.
 
+// `clippy::chunks_exact_to_as_chunks` was introduced after Rust 1.95.
+#![allow(unknown_lints)]
 // The streaming installer ported from Xodus walks fixed-size pages with
 // `chunks_exact`; `as_chunks` would change every loop for no behaviour change.
 #![allow(clippy::chunks_exact_to_as_chunks)]
@@ -638,9 +640,12 @@ impl XboxStore {
     /// membership: schema 1 of `ops::profile::profile_with_membership`.
     pub async fn profile(&self) -> Result<serde_json::Value> {
         let license = self.state.read().player_user.is_none();
-        irori_msstore_api::ops::profile::profile_with_membership(&self.tokens, license)
-            .await
-            .map_err(|stage| session_error(stage, "Could not read the Xbox profile"))
+        Box::pin(irori_msstore_api::ops::profile::profile_with_membership(
+            &self.tokens,
+            license,
+        ))
+        .await
+        .map_err(|stage| session_error(stage, "Could not read the Xbox profile"))
     }
 
     /// An XSTS `Authorization` value for `relying_party`, of the player

@@ -59,7 +59,7 @@ fn select(
     seen.extend(plan.games.iter().filter(|g| countable(g)).map(game_key));
     if only_new {
         plan.games
-            .retain(|g| !before.contains(&game_key(g)) && !(countable(g) && in_library(g)));
+            .retain(|g| !(before.contains(&game_key(g)) || countable(g) && in_library(g)));
     }
     plan
 }

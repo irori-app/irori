@@ -349,14 +349,14 @@ async fn paused_install_resumes_with_range() {
         .await
         .unwrap();
     assert_eq!(outcome, Outcome::Done);
-    let ranged = f
+    let ranged_count = f
         .server
         .requests()
         .iter()
         .filter(|r| r.path == "/bin/game.tar.gz")
-        .filter_map(|r| r.header("range").map(str::to_string))
-        .collect::<Vec<_>>();
-    assert_eq!(ranged.len(), 1, "resume should use one ranged request");
+        .filter(|r| r.header("range").is_some())
+        .count();
+    assert_eq!(ranged_count, 1, "resume should use one ranged request");
     assert!(f.games_dir.join("first-game/Game/start.sh").is_file());
 }
 

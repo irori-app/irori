@@ -404,7 +404,7 @@ fn entries_of(xml: &str, dir: &str) -> Vec<RemoteEntry> {
             let name = decode(path.trim_end_matches('/').rsplit('/').next()?);
             Some(RemoteEntry { name, is_dir })
         })
-        .filter(|e| !(e.is_dir && Some(&e.name) == own.as_ref()) && !e.name.is_empty())
+        .filter(|e| !(e.name.is_empty() || e.is_dir && Some(&e.name) == own.as_ref()))
         .collect();
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out.dedup();

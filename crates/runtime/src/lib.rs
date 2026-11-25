@@ -907,7 +907,7 @@ pub async fn prepare_launch(
             ..Default::default()
         });
     }
-    let mut facts = gather_facts(app, settings, target, Gather::Launch(ctx)).await?;
+    let mut facts = Box::pin(gather_facts(app, settings, target, Gather::Launch(ctx))).await?;
     let target = facts.target(target);
     let mut vars = compose_env(app, target, &facts);
     let effective = match &facts.wine {
@@ -1010,7 +1010,7 @@ pub async fn preview_launch(
             ..Default::default()
         });
     }
-    let mut facts = gather_facts(app, settings, target, Gather::Preview).await?;
+    let mut facts = Box::pin(gather_facts(app, settings, target, Gather::Preview)).await?;
     let target = facts.target(target);
     let mut vars = compose_env(app, target, &facts);
     let effective = match &facts.wine {

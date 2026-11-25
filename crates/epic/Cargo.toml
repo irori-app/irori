@@ -33,3 +33,6 @@ aes-gcm.workspace = true
 irori-depot = { workspace = true, features = ["test-server"] }
 tempfile = "3"
 parking_lot.workspace = true
+
+[lints]
+workspace = true

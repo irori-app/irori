@@ -294,30 +294,29 @@ impl Render for FieldsDialog {
                     .child(t("library.fields.loading")),
             );
         };
-        let suggestions: Vec<(String, String)> =
-            field_rules::duplicates(&values, self.field, &rules)
-                .into_iter()
-                .take(SUGGESTIONS)
-                .collect();
-        let suggestion_rows = suggestions.into_iter().enumerate().map(|(i, (from, to))| {
-            let label = t_args(
-                "library.fields.merge_suggestion",
-                &[("from", &from), ("to", &to)],
-            );
-            h_flex()
-                .w_full()
-                .gap_2()
-                .child(div().flex_1().min_w_0().truncate().text_sm().child(label))
-                .child(
-                    Button::new(("field-merge", i))
-                        .xsmall()
-                        .outline()
-                        .label(t("library.fields.merge"))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.write(from.clone(), Some(to.clone()), window, cx)
-                        })),
-                )
-        });
+        let suggestion_rows = field_rules::duplicates(&values, self.field, &rules)
+            .into_iter()
+            .take(SUGGESTIONS)
+            .enumerate()
+            .map(|(i, (from, to))| {
+                let label = t_args(
+                    "library.fields.merge_suggestion",
+                    &[("from", &from), ("to", &to)],
+                );
+                h_flex()
+                    .w_full()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().truncate().text_sm().child(label))
+                    .child(
+                        Button::new(("field-merge", i))
+                            .xsmall()
+                            .outline()
+                            .label(t("library.fields.merge"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.write(from.clone(), Some(to.clone()), window, cx)
+                            })),
+                    )
+            });
         let count = self.shown(cx).len();
         let row_h = window.rem_size() * ROW_REMS;
         if self.sized_for != (count, row_h) {

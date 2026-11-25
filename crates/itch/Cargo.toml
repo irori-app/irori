@@ -19,3 +19,6 @@ once_cell.workspace = true
 [dev-dependencies]
 irori-depot = { workspace = true, features = ["test-server"] }
 tokio.workspace = true
+
+[lints]
+workspace = true

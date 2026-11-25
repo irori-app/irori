@@ -10,9 +10,9 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, ElementId, Entity, Hsla, InteractiveElement as _, IntoElement,
-    ObjectFit, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, StyledImage as _, Subscription, Window, div, px, rems,
+    AnyElement, App, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ObjectFit,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    StyledImage as _, Subscription, Window, div, px, rems,
 };
 use irori_core::{GameId, GameInfo, Runner};
 use irori_services::CategoryRef;
@@ -279,11 +279,24 @@ impl Render for SavedViewsNav {
         let active = on_library.then(|| irori_library::active_view(cx)).flatten();
         // Pinned categories of either kind, after the views: a smart
         // category is a view that keeps itself up to date.
-        let pinned: Vec<_> = irori_library::category_list(cx)
+        let pinned = irori_library::category_list(cx)
             .into_iter()
             .filter(|entry| entry.pinned)
-            .collect();
-        let mut entries: Vec<(ViewTarget, SharedString, IconName, Option<Hsla>, bool)> = views
+            .map(|entry| {
+                let selected = on_library
+                    && active.is_none()
+                    && irori_library::shows_only_category(&entry.category, cx);
+                let colour = irori_ui::categories::colour(entry.colour.as_deref(), cx);
+                let icon = irori_ui::categories::icon(&entry.category);
+                (
+                    ViewTarget::Category(entry.category),
+                    SharedString::from(entry.name),
+                    icon,
+                    colour,
+                    selected,
+                )
+            });
+        let entries = views
             .into_iter()
             .map(|(id, name)| {
                 let selected = active == Some(id);
@@ -295,21 +308,7 @@ impl Render for SavedViewsNav {
                     selected,
                 )
             })
-            .collect();
-        for entry in pinned {
-            let selected = on_library
-                && active.is_none()
-                && irori_library::shows_only_category(&entry.category, cx);
-            let colour = irori_ui::categories::colour(entry.colour.as_deref(), cx);
-            let icon = irori_ui::categories::icon(&entry.category);
-            entries.push((
-                ViewTarget::Category(entry.category),
-                entry.name.into(),
-                icon,
-                colour,
-                selected,
-            ));
-        }
+            .chain(pinned);
         let theme = cx.theme();
         let palette = SidebarPalette::new(cx);
         let hover_bg = palette.highlight;
@@ -317,7 +316,6 @@ impl Render for SavedViewsNav {
         let (active_fg, fg) = (palette.selected_text, palette.text);
         let (active_icon, icon) = (palette.selected_icon, palette.icon);
         let rows: Vec<AnyElement> = entries
-            .into_iter()
             .map(|(target, name, glyph, colour, selected)| {
                 let id = match &target {
                     ViewTarget::Saved(id) => format!("saved-view:{id}"),

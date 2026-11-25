@@ -37,3 +37,6 @@ regex.workspace = true
 # the optional GPUI Fast crates into the lockfile, which conflict with gpui-pre.
 # Enabling GPUI's own test support exposes `TestAppContext` through `gpui_kit::*`.
 gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
+
+[lints]
+workspace = true
