@@ -373,7 +373,11 @@ impl GamePage {
                         .max_h(rems(16.))
                         .overflow_hidden()
                         .text_sm()
-                        .child(super::info::rich_text("drawer-description", &text)),
+                        .child(super::rich_text::rich_text(
+                            "drawer-description",
+                            &self.id,
+                            &text,
+                        )),
                 )
                 .into_any_element(),
         )
