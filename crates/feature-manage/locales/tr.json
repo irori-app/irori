@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Belirteci aşağıya yapıştırın ve kaydedin.",
   "manage.launchers.wine_tooltip": "Yeni başlatıcıları kurarken kullanılır.",
   "manage.stores.description.deals": "Ücretsiz oyunları alın ve PC mağazalarındaki bölgesel indirimleri takip edin.",
-  "manage.deals.ggdeals.key_connected_description": "GG.deals API anahtarınız etkin. Bağlantıyı kesmek veya farklı bir anahtar girmek için aşağıdan kaldırın."
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API anahtarınız etkin. Bağlantıyı kesmek veya farklı bir anahtar girmek için aşağıdan kaldırın.",
+  "manage.stores.deals.free_badge_one": "Kütüphanenizde olmayan 1 ücretsiz oyun alınabilir",
+  "manage.stores.deals.free_badge_other": "Kütüphanenizde olmayan {count} ücretsiz oyun alınabilir"
 }

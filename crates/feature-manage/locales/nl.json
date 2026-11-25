@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Plak het token hieronder en sla op.",
   "manage.launchers.wine_tooltip": "Gebruikt bij het instellen van nieuwe launchers.",
   "manage.stores.description.deals": "Claim gratis games en volg regionale aanbiedingen bij PC-winkels.",
-  "manage.deals.ggdeals.key_connected_description": "Je GG.deals-API-sleutel is actief. Verwijder hem hieronder om te ontkoppelen of een andere sleutel in te voeren."
+  "manage.deals.ggdeals.key_connected_description": "Je GG.deals-API-sleutel is actief. Verwijder hem hieronder om te ontkoppelen of een andere sleutel in te voeren.",
+  "manage.stores.deals.free_badge_one": "1 gratis game om te claimen die nog niet in je bibliotheek staat",
+  "manage.stores.deals.free_badge_other": "{count} gratis games om te claimen die nog niet in je bibliotheek staan"
 }

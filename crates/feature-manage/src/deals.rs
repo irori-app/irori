@@ -517,6 +517,21 @@ pub(crate) fn is_owned_base_game(title: &str, owned: &HashSet<String>) -> bool {
     owned.contains(&sort_key(title))
 }
 
+fn is_owned_free_game(title: &str, owned: &HashSet<String>) -> bool {
+    if is_owned_base_game(title, owned) {
+        return true;
+    }
+    let stripped = wiki::strip_edition_suffix(title);
+    !stripped.is_empty() && is_owned_base_game(&stripped, owned)
+}
+
+pub(crate) fn count_unowned_free_games(free_games: &[FreeGame], owned: &HashSet<String>) -> usize {
+    free_games
+        .iter()
+        .filter(|g| !g.upcoming && !is_owned_free_game(&g.title, owned))
+        .count()
+}
+
 pub(crate) fn has_divergent_currency(
     product: &CatalogProduct,
     region: &DealsRegion,
@@ -1140,9 +1155,12 @@ impl DealsSection {
                 cx.notify();
             }),
             cx.observe(&library, |this, _, cx| {
-                this.owned = owned_titles(cx);
-                if this.library_related || this.hide_owned {
-                    this.refilter(cx);
+                let next_owned = owned_titles(cx);
+                if next_owned != this.owned {
+                    this.owned = next_owned;
+                    if this.library_related || this.hide_owned {
+                        this.refilter(cx);
+                    }
                     cx.notify();
                 }
             }),
@@ -1222,6 +1240,15 @@ impl DealsSection {
         this.refilter(cx);
         this.schedule_enrichment(window, cx);
         this
+    }
+
+    pub(crate) fn unowned_free_count(&self, cx: &App) -> usize {
+        match &self.cache.read(cx).state {
+            DealsState::Loaded { free_games, .. } => {
+                count_unowned_free_games(free_games, &self.owned)
+            }
+            _ => 0,
+        }
     }
 
     fn is_global_search_active(&self, cx: &App) -> bool {
@@ -2345,5 +2372,32 @@ mod tests {
         assert_eq!(region_selected_index("EU").row, eu_row);
         assert_eq!(region_selected_index("DE").row, eu_row);
         assert_eq!(region_selected_index("unknown").row, 0);
+    }
+
+    #[test]
+    fn counts_only_active_unowned_free_games() {
+        let free = |id: &str, title: &str, upcoming: bool| FreeGame {
+            id: id.into(),
+            title: title.into(),
+            store: FreeStore::Epic,
+            image_url: None,
+            claim_url: "https://example.invalid".into(),
+            original_price: None,
+            ends_at: None,
+            upcoming,
+            steam_app_id: None,
+            from_gamerpower: false,
+        };
+        let list = vec![
+            free("1", "Unowned Active", false),
+            free("2", "Owned Exact", false),
+            free("3", "Dwarven Realms (Steam) Key", false),
+            free("4", "Future Giveaway", true),
+        ];
+        let owned: HashSet<String> = ["Owned Exact", "Dwarven Realms"]
+            .into_iter()
+            .map(sort_key)
+            .collect();
+        assert_eq!(count_unowned_free_games(&list, &owned), 1);
     }
 }

@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Pega el token abajo y guarda.",
   "manage.launchers.wine_tooltip": "Se usa al configurar nuevos lanzadores.",
   "manage.stores.description.deals": "Reclama juegos gratis y sigue ofertas regionales en tiendas de PC.",
-  "manage.deals.ggdeals.key_connected_description": "Tu clave API de GG.deals está activa. Elimínala abajo si quieres desconectarla o introducir otra clave."
+  "manage.deals.ggdeals.key_connected_description": "Tu clave API de GG.deals está activa. Elimínala abajo si quieres desconectarla o introducir otra clave.",
+  "manage.stores.deals.free_badge_one": "1 juego gratis disponible para reclamar que no está en tu biblioteca",
+  "manage.stores.deals.free_badge_other": "{count} juegos gratis disponibles para reclamar que no están en tu biblioteca"
 }

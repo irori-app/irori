@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Вставте токен нижче та збережіть.",
   "manage.launchers.wine_tooltip": "Використовується під час налаштування нових лаунчерів.",
   "manage.stores.description.deals": "Забирайте безкоштовні ігри та стежте за регіональними знижками в крамницях ПК.",
-  "manage.deals.ggdeals.key_connected_description": "Ваш API-ключ GG.deals активний. Видаліть його нижче, щоб відключити або ввести інший ключ."
+  "manage.deals.ggdeals.key_connected_description": "Ваш API-ключ GG.deals активний. Видаліть його нижче, щоб відключити або ввести інший ключ.",
+  "manage.stores.deals.free_badge_one": "1 безкоштовна гра для отримання, якої немає у вашій бібліотеці",
+  "manage.stores.deals.free_badge_other": "{count} безкоштовних ігор для отримання, яких немає у вашій бібліотеці"
 }

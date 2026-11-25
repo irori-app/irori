@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Paste the token below and save.",
   "manage.launchers.wine_tooltip": "Used when setting up new launchers.",
   "manage.stores.description.deals": "Claim free games and track regional deals across PC stores.",
-  "manage.deals.ggdeals.key_connected_description": "Your GG.deals API key is active. Remove it below if you want to disconnect or enter a different key."
+  "manage.deals.ggdeals.key_connected_description": "Your GG.deals API key is active. Remove it below if you want to disconnect or enter a different key.",
+  "manage.stores.deals.free_badge_one": "1 free game available to claim that isn’t in your library",
+  "manage.stores.deals.free_badge_other": "{count} free games available to claim that aren’t in your library"
 }

@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Wklej token poniżej i zapisz.",
   "manage.launchers.wine_tooltip": "Używany podczas konfigurowania nowych launcherów.",
   "manage.stores.description.deals": "Odbieraj darmowe gry i śledź regionalne promocje w sklepach PC.",
-  "manage.deals.ggdeals.key_connected_description": "Twój klucz API GG.deals jest aktywny. Usuń go poniżej, jeśli chcesz się rozłączyć lub podać inny klucz."
+  "manage.deals.ggdeals.key_connected_description": "Twój klucz API GG.deals jest aktywny. Usuń go poniżej, jeśli chcesz się rozłączyć lub podać inny klucz.",
+  "manage.stores.deals.free_badge_one": "1 darmowa gra do odebrania, której nie masz w bibliotece",
+  "manage.stores.deals.free_badge_other": "{count} darmowe gry do odebrania, których nie masz w bibliotece"
 }

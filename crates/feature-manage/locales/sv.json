@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Klistra in token nedan och spara.",
   "manage.launchers.wine_tooltip": "Används när nya startprogram ställs in.",
   "manage.stores.description.deals": "Hämta gratisspel och följ regionala erbjudanden i PC-butiker.",
-  "manage.deals.ggdeals.key_connected_description": "Din GG.deals API-nyckel är aktiv. Ta bort den nedan om du vill koppla från eller ange en annan nyckel."
+  "manage.deals.ggdeals.key_connected_description": "Din GG.deals API-nyckel är aktiv. Ta bort den nedan om du vill koppla från eller ange en annan nyckel.",
+  "manage.stores.deals.free_badge_one": "1 gratis spel att hämta som inte finns i ditt bibliotek",
+  "manage.stores.deals.free_badge_other": "{count} gratis spel att hämta som inte finns i ditt bibliotek"
 }

@@ -551,7 +551,7 @@ const EDITION_SUFFIXES: &[&str] = &[
     "key",
 ];
 
-pub(crate) fn strip_edition_suffix(title: &str) -> String {
+pub fn strip_edition_suffix(title: &str) -> String {
     let mut s = title.trim().to_string();
     loop {
         let trimmed = s

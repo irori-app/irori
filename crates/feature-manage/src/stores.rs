@@ -18,11 +18,11 @@ use gpui_kit::{
 };
 use irori_core::Runner;
 use irori_ui::components::PageHeader;
-use irori_ui::i18n::t;
+use irori_ui::i18n::{t, t_args};
 use irori_ui::models;
 
 use crate::accounts::{ACCOUNT_STORES, StoreCard, store_cards, store_icon};
-use crate::common::{card, card_grid_capped};
+use crate::common::{card, card_grid_capped, wrapped_tooltip};
 use crate::deals::DealsSection;
 use crate::login::open_login_dialog;
 use crate::store_window::open_store_window;
@@ -109,6 +109,7 @@ pub struct StoresView {
     /// Built only while `iroriDeals` is on, so nothing is asked for while
     /// the user has turned deals off.
     deals: Option<Entity<DealsSection>>,
+    deals_sub: Option<Subscription>,
     launchers: Entity<crate::launchers::LaunchersSection>,
     _subscriptions: Vec<Subscription>,
 }
@@ -125,12 +126,16 @@ impl StoresView {
             }),
         ];
         let deals = deals_shown(cx).then(|| cx.new(|cx| DealsSection::new(window, cx)));
+        let deals_sub = deals
+            .as_ref()
+            .map(|entity| cx.observe(entity, |_, _, cx| cx.notify()));
         let launchers = cx.new(|cx| crate::launchers::LaunchersSection::new(window, cx));
         Self {
             tab: StoresTab::Stores,
             cards: store_cards(cx),
             grid_width: Rc::new(Cell::new(px(0.))),
             deals,
+            deals_sub,
             launchers,
             _subscriptions: subscriptions,
         }
@@ -140,10 +145,13 @@ impl StoresView {
     fn show_deals(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match (deals_shown(cx), self.deals.is_some()) {
             (true, false) => {
-                self.deals = Some(cx.new(|cx| DealsSection::new(window, cx)));
+                let entity = cx.new(|cx| DealsSection::new(window, cx));
+                self.deals_sub = Some(cx.observe(&entity, |_, _, cx| cx.notify()));
+                self.deals = Some(entity);
                 cx.notify();
             }
             (false, true) => {
+                self.deals_sub = None;
                 self.deals = None;
                 if self.tab == StoresTab::Deals {
                     self.tab = StoresTab::Stores;
@@ -302,6 +310,11 @@ impl Render for StoresView {
             StoresTab::Stores => t("manage.stores.description"),
             StoresTab::Deals => t("manage.stores.description.deals"),
         };
+        let unowned_free = self
+            .deals
+            .as_ref()
+            .map(|d| d.read(cx).unowned_free_count(cx))
+            .unwrap_or(0);
 
         v_flex()
             .id("stores-page")
@@ -326,6 +339,27 @@ impl Render for StoresView {
                                     StoresTab::Stores => t("manage.stores.tab.stores"),
                                     StoresTab::Deals => t("manage.stores.tab.deals"),
                                 };
+                                let free_badge = (tab == StoresTab::Deals && unowned_free > 0)
+                                    .then(|| {
+                                        let tip = if unowned_free == 1 {
+                                            t("manage.stores.deals.free_badge_one")
+                                        } else {
+                                            t_args(
+                                                "manage.stores.deals.free_badge_other",
+                                                &[("count", &unowned_free.to_string())],
+                                            )
+                                        };
+                                        div()
+                                            .id("deals-free-badge")
+                                            .tooltip(move |window, cx| {
+                                                wrapped_tooltip(tip.clone(), window, cx)
+                                            })
+                                            .child(
+                                                Tag::success()
+                                                    .xsmall()
+                                                    .child(unowned_free.to_string()),
+                                            )
+                                    });
                                 v_flex()
                                     .id(ElementId::Name(format!("stores-tab-{}", tab.id()).into()))
                                     .cursor_pointer()
@@ -337,12 +371,18 @@ impl Render for StoresView {
                                         }
                                     }))
                                     .child(
-                                        div()
-                                            .text_2xl()
-                                            .font_semibold()
-                                            .text_color(if active { fg } else { muted })
-                                            .hover(move |s| s.text_color(fg))
-                                            .child(label),
+                                        h_flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .text_2xl()
+                                                    .font_semibold()
+                                                    .text_color(if active { fg } else { muted })
+                                                    .hover(move |s| s.text_color(fg))
+                                                    .child(label),
+                                            )
+                                            .children(free_badge),
                                     )
                                     .child(
                                         div()

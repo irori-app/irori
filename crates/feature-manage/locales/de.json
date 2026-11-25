@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Füge den Token unten ein und speichere.",
   "manage.launchers.wine_tooltip": "Wird beim Einrichten neuer Launcher verwendet.",
   "manage.stores.description.deals": "Sichere dir Gratis-Spiele und verfolge regionale Angebote in PC-Stores.",
-  "manage.deals.ggdeals.key_connected_description": "Dein GG.deals-API-Schlüssel ist aktiv. Entferne ihn unten, um die Verbindung zu trennen oder einen anderen Schlüssel einzugeben."
+  "manage.deals.ggdeals.key_connected_description": "Dein GG.deals-API-Schlüssel ist aktiv. Entferne ihn unten, um die Verbindung zu trennen oder einen anderen Schlüssel einzugeben.",
+  "manage.stores.deals.free_badge_one": "1 kostenloses Spiel zum Abholen, das noch nicht in deiner Bibliothek ist",
+  "manage.stores.deals.free_badge_other": "{count} kostenlose Spiele zum Abholen, die noch nicht in deiner Bibliothek sind"
 }

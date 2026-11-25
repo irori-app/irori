@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. Incolla il token qui sotto e salva.",
   "manage.launchers.wine_tooltip": "Usato durante la configurazione dei nuovi launcher.",
   "manage.stores.description.deals": "Riscatta giochi gratis e segui le offerte regionali nei negozi PC.",
-  "manage.deals.ggdeals.key_connected_description": "La tua chiave API di GG.deals è attiva. Rimuovila qui sotto se vuoi scollegarla o inserire un'altra chiave."
+  "manage.deals.ggdeals.key_connected_description": "La tua chiave API di GG.deals è attiva. Rimuovila qui sotto se vuoi scollegarla o inserire un'altra chiave.",
+  "manage.stores.deals.free_badge_one": "1 gioco gratuito da riscattare non ancora nella tua libreria",
+  "manage.stores.deals.free_badge_other": "{count} giochi gratuiti da riscattare non ancora nella tua libreria"
 }

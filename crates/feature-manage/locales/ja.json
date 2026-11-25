@@ -933,5 +933,7 @@
   "manage.deals.ggdeals.step3": "3. 下にトークンを貼り付けて保存します。",
   "manage.launchers.wine_tooltip": "新しいランチャーのセットアップ時に使用されます。",
   "manage.stores.description.deals": "無料ゲームを入手して、PC ストアごとの地域別セールをチェックできます。",
-  "manage.deals.ggdeals.key_connected_description": "GG.deals API キーは有効です。解除または別のキーを入力する場合は以下から削除してください。"
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API キーは有効です。解除または別のキーを入力する場合は以下から削除してください。",
+  "manage.stores.deals.free_badge_one": "ライブラリに未所持の無料ゲームが1本あります",
+  "manage.stores.deals.free_badge_other": "ライブラリに未所持の無料ゲームが{count}本あります"
 }
