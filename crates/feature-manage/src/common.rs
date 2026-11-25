@@ -44,6 +44,25 @@ pub(crate) fn notify_success(message: impl Into<SharedString>, window: &mut Wind
     window.push_notification(Notification::success(message), cx);
 }
 
+/// Wrapped plain-language tooltip built lazily on hover.
+pub(crate) fn wrapped_tooltip(
+    text: impl Into<SharedString>,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyView {
+    let text: SharedString = text.into();
+    Tooltip::element(move |_, _| {
+        div()
+            .max_w(rems(22.))
+            .text_xs()
+            .whitespace_normal()
+            .child(text.clone())
+    })
+    .py_1p5()
+    .px_2p5()
+    .build(window, cx)
+}
+
 /// A bordered surface for one object (a store, the current download).
 pub(crate) fn card(cx: &App) -> Div {
     let theme = cx.theme();

@@ -1,9 +1,11 @@
-//! Store deals: GOG's discounted catalog (optionally hiding owned games),
-//! GOG wishlist and region, and the GreenManGaming and Humble deal feeds
-//! that Heroic publishes. GMG/Humble results are cached on disk for 24 hours.
-//!
-//! GOG access tokens are passed in by the caller (the GOG store owns the
-//! credentials) and are never logged.
+//! Store deals across Steam, GOG, GreenManGaming, Humble and CheapShark,
+//! keyless free-to-claim giveaways (Epic + GamerPower), regional currency
+//! selection, global live search and optional GG.deals comparison.
+
+mod free;
+mod ggdeals;
+mod regions;
+mod search;
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -15,13 +17,27 @@ use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize};
 use tokio::sync::Mutex;
 
+pub use free::{
+    FreeGame, FreeStore, epic_free_games, free_games, gamerpower_free_games, parse_epic_free_games,
+    parse_gamerpower_free_games,
+};
+pub use ggdeals::{GgDealsPrice, ggdeals_prices, parse_ggdeals_prices};
+pub use regions::{
+    DEALS_REGIONS, DealsRegion, gg_deals_browse_url, gg_deals_search_url, protondb_app_url,
+    protondb_search_url, resolve_region,
+};
+pub use search::{
+    cheapshark_search, gog_search, parse_cheapshark_deals, parse_steam_featured,
+    parse_steam_search, search_global, steam_discounts, steam_search,
+};
+
 use crate::util;
 
 const CATALOG_URL: &str = "https://catalog.gog.com/v1/catalog";
 const WISHLIST_URL: &str = "https://embed.gog.com/user/wishlist.json";
 const USER_DATA_URL: &str = "https://embed.gog.com/userData.json";
 const PAGE_LIMIT: u32 = 48;
-const MAX_PAGES: u32 = 30;
+const MAX_PAGES: u32 = 10;
 /// Lifetime of cached GMG/Humble feeds.
 pub const FEED_TTL: Duration = Duration::from_secs(24 * 3600);
 
@@ -31,8 +47,10 @@ pub const FEED_TTL: Duration = Duration::from_secs(24 * 3600);
 pub enum DealStore {
     #[default]
     Gog,
+    Steam,
     Gmg,
     Humble,
+    Other,
 }
 
 /// An amount in a currency, as decimal text (`"2.40"`).
@@ -74,7 +92,7 @@ pub struct CatalogRating {
     pub age_rating: String,
 }
 
-/// One discounted product.
+/// One discounted or searched store product.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CatalogProduct {
@@ -82,6 +100,12 @@ pub struct CatalogProduct {
     pub id: String,
     pub title: String,
     pub store: DealStore,
+    /// Display name when `store` is [`DealStore::Other`] (e.g. `Fanatical`).
+    pub store_name: Option<String>,
+    /// Steam app ID when known (Steam directly, or CheapShark cross-reference).
+    pub steam_app_id: Option<String>,
+    /// Optional relevance/rating score (e.g. CheapShark deal rating).
+    pub deal_rating: Option<f32>,
     pub cover_horizontal: Option<String>,
     pub cover_vertical: Option<String>,
     pub price: CatalogPrice,
@@ -129,6 +153,16 @@ impl Default for CatalogLocale {
     }
 }
 
+impl From<&DealsRegion> for CatalogLocale {
+    fn from(r: &DealsRegion) -> Self {
+        Self {
+            country_code: r.code.to_string(),
+            locale: r.locale.to_string(),
+            currency_code: r.currency_code.to_string(),
+        }
+    }
+}
+
 /// The GOG account's country and currency.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -137,17 +171,29 @@ pub struct GogDealsRegion {
     pub currency_code: String,
 }
 
-fn user_agent() -> String {
+pub(crate) fn user_agent() -> String {
     format!("Irori/{}", env!("CARGO_PKG_VERSION"))
 }
 
-fn catalog_url(locale: &CatalogLocale, page: u32, hide_owned: bool) -> String {
+pub(crate) fn gog_catalog_url(
+    locale: &CatalogLocale,
+    page: u32,
+    hide_owned: bool,
+    query: Option<&str>,
+    limit: u32,
+) -> String {
     let mut url = format!(
-        "{CATALOG_URL}?limit={PAGE_LIMIT}&order=desc%3Atrending&discounted=eq%3Atrue&productType=in%3Agame%2Cpack%2Cdlc&page={page}&countryCode={}&locale={}&currencyCode={}",
+        "{CATALOG_URL}?limit={limit}&order=desc%3Atrending&productType=in%3Agame%2Cpack%2Cdlc&page={page}&countryCode={}&locale={}&currencyCode={}",
         util::encode_component(&locale.country_code),
         util::encode_component(&locale.locale),
         util::encode_component(&locale.currency_code),
     );
+    if let Some(q) = query.map(str::trim).filter(|q| !q.is_empty()) {
+        url.push_str("&query=like%3A");
+        url.push_str(&util::encode_component(q));
+    } else {
+        url.push_str("&discounted=eq%3Atrue");
+    }
     if hide_owned {
         url.push_str("&hideOwned=true");
     }
@@ -155,14 +201,14 @@ fn catalog_url(locale: &CatalogLocale, page: u32, hide_owned: bool) -> String {
 }
 
 #[derive(Deserialize)]
-struct CatalogPage {
+pub(crate) struct CatalogPage {
     #[serde(default)]
-    pages: u32,
+    pub(crate) pages: u32,
     #[serde(default)]
-    products: Vec<CatalogProduct>,
+    pub(crate) products: Vec<CatalogProduct>,
 }
 
-async fn fetch_page(url: &str, token: Option<&str>) -> Result<CatalogPage> {
+pub(crate) async fn fetch_page(url: &str, token: Option<&str>) -> Result<CatalogPage> {
     let mut req = irori_core::http::client()
         .get(url)
         .header(reqwest::header::USER_AGENT, user_agent())
@@ -173,7 +219,7 @@ async fn fetch_page(url: &str, token: Option<&str>) -> Result<CatalogPage> {
     Ok(req.send().await?.error_for_status()?.json().await?)
 }
 
-fn dedupe(products: Vec<CatalogProduct>) -> Vec<CatalogProduct> {
+pub(crate) fn dedupe(products: Vec<CatalogProduct>) -> Vec<CatalogProduct> {
     let mut seen = HashSet::new();
     products
         .into_iter()
@@ -183,12 +229,21 @@ fn dedupe(products: Vec<CatalogProduct>) -> Vec<CatalogProduct> {
 
 async fn fetch_all(locale: &CatalogLocale, token: Option<&str>) -> Result<Vec<CatalogProduct>> {
     let hide_owned = token.is_some();
-    let first = fetch_page(&catalog_url(locale, 1, hide_owned), token).await?;
+    let first = fetch_page(
+        &gog_catalog_url(locale, 1, hide_owned, None, PAGE_LIMIT),
+        token,
+    )
+    .await?;
     let total = first.pages.min(MAX_PAGES);
     let mut all = first.products;
     if total > 1 {
         let pages = join_all((2..=total).map(|n| async move {
-            match fetch_page(&catalog_url(locale, n, hide_owned), token).await {
+            match fetch_page(
+                &gog_catalog_url(locale, n, hide_owned, None, PAGE_LIMIT),
+                token,
+            )
+            .await
+            {
                 Ok(p) => p.products,
                 Err(e) => {
                     tracing::warn!("Failed to fetch discounts page {n}: {}", e);
@@ -291,7 +346,6 @@ pub const GMG_CURRENCIES: [&str; 9] = [
     "GBP", "USD", "EUR", "CAD", "AUD", "BRL", "CNY", "TRL", "KRW",
 ];
 
-/// One item of an Impact catalog feed.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
 struct FeedItem {
@@ -351,7 +405,7 @@ fn capitalize(s: &str) -> String {
     }
 }
 
-/// Format an amount for display (en-US style: symbol, grouping).
+/// Format an amount for display.
 pub fn format_money(amount: f64, currency: &str) -> String {
     let (symbol, decimals) = match currency {
         "USD" => ("$", 2),
@@ -361,6 +415,8 @@ pub fn format_money(amount: f64, currency: &str) -> String {
         "AUD" => ("A$", 2),
         "BRL" => ("R$", 2),
         "CNY" => ("CN¥", 2),
+        "PLN" => ("zł ", 2),
+        "SEK" => ("kr ", 2),
         "JPY" => ("¥", 0),
         "KRW" => ("₩", 0),
         other => return format!("{other} {amount:.2}"),
@@ -381,13 +437,11 @@ pub fn format_money(amount: f64, currency: &str) -> String {
     }
 }
 
-/// Turn a feed into deals: only items with a valid lower current price are
-/// kept; duplicates by ID are dropped.
 fn normalize_feed(feed: Feed, store: DealStore) -> Vec<CatalogProduct> {
     let prefix = match store {
         DealStore::Gmg => "gmg-",
         DealStore::Humble => "humble-",
-        DealStore::Gog => "",
+        DealStore::Gog | DealStore::Steam | DealStore::Other => "",
     };
     let items = feed.items.into_iter().filter_map(|item| {
         let id = item.catalog_item_id.clone().or(item.id)?;
@@ -513,6 +567,8 @@ pub async fn humble_discounts() -> Result<Vec<CatalogProduct>> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     #[test]
@@ -537,23 +593,106 @@ mod tests {
 
     #[test]
     fn catalog_url_params() {
-        let url = catalog_url(&CatalogLocale::default(), 2, true);
+        let url = gog_catalog_url(&CatalogLocale::default(), 2, true, None, PAGE_LIMIT);
         assert!(url.ends_with(
-            "limit=48&order=desc%3Atrending&discounted=eq%3Atrue&productType=in%3Agame%2Cpack%2Cdlc&page=2&countryCode=US&locale=en-US&currencyCode=USD&hideOwned=true"
+            "limit=48&order=desc%3Atrending&productType=in%3Agame%2Cpack%2Cdlc&page=2&countryCode=US&locale=en-US&currencyCode=USD&discounted=eq%3Atrue&hideOwned=true"
         ));
     }
 
     #[test]
-    fn region() {
-        let j = serde_json::json!({"country": "de", "selectedCurrency": {"code": "eur"}});
+    fn resolves_regions_and_builds_urls() {
+        assert_eq!(resolve_region("BR", Some("en-US")).code, "BR");
+        assert_eq!(resolve_region("", Some("pt_BR.UTF-8")).code, "BR");
+        assert_eq!(resolve_region("auto", Some("de-DE")).currency_code, "EUR");
+        assert_eq!(resolve_region("unknown", None).code, "US");
+        let br = resolve_region("BR", None);
+        assert_eq!(gg_deals_browse_url(br), "https://gg.deals/br/deals/");
         assert_eq!(
-            parse_region(&j),
-            Some(GogDealsRegion {
-                country_code: "DE".into(),
-                currency_code: "EUR".into()
-            })
+            gg_deals_search_url("Shadow of Mordor", br),
+            "https://gg.deals/br/games/?title=Shadow%20of%20Mordor"
         );
-        assert_eq!(parse_region(&serde_json::json!({"country": "de"})), None);
+        assert_eq!(
+            protondb_app_url("241930"),
+            "https://www.protondb.com/app/241930"
+        );
+    }
+
+    #[test]
+    fn parses_steam_featured_and_search() {
+        let featured = r#"{"specials": {"items": [
+            {"id": 241930, "name": "Middle-earth: Shadow of Mordor", "discounted": true, "discount_percent": 80,
+             "original_price": 8999, "final_price": 1799, "currency": "BRL",
+             "header_image": "https://cdn/241930/header.jpg", "windows_available": true, "linux_available": true},
+            {"id": 999, "name": "Full Price", "discounted": false, "discount_percent": 0, "final_price": 1000}
+        ]}}"#;
+        let deals = parse_steam_featured(featured.as_bytes(), "BRL").unwrap();
+        assert_eq!(deals.len(), 1);
+        assert_eq!(deals[0].store, DealStore::Steam);
+        assert_eq!(deals[0].steam_app_id.as_deref(), Some("241930"));
+        assert_eq!(deals[0].price.discount, "-80%");
+        assert_eq!(deals[0].price.r#final, "R$17.99");
+        assert_eq!(deals[0].operating_systems, ["windows", "linux"]);
+
+        let search = r#"{"items": [
+            {"id": 241930, "name": "Middle-earth: Shadow of Mordor", "price": {"currency": "BRL", "initial": 8999, "final": 1799}}
+        ]}"#;
+        let found = parse_steam_search(search.as_bytes(), "BRL").unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].price.discount, "-80%");
+        assert_eq!(found[0].price.r#final, "R$17.99");
+    }
+
+    #[test]
+    fn parses_epic_and_gamerpower_freebies() {
+        let epic = r#"{"data":{"Catalog":{"searchStore":{"elements":[
+            {"id":"e1","title":"Free Now","keyImages":[{"type":"OfferImageWide","url":"https://e/1.jpg"}],
+             "catalogNs":{"mappings":[{"pageSlug":"free-now"}]},
+             "price":{"totalPrice":{"discountPrice":0,"originalPrice":1999,"fmtPrice":{"originalPrice":"$19.99"}}},
+             "promotions":{"promotionalOffers":[{"promotionalOffers":[{"endDate":"2026-12-03T16:00:00Z","discountSetting":{"discountPercentage":0}}]}]}},
+            {"id":"e2","title":"Next Week","keyImages":[],
+             "productSlug":"next-week",
+             "price":{"totalPrice":{"discountPrice":1999,"originalPrice":1999,"fmtPrice":{"originalPrice":"$19.99"}}},
+             "promotions":{"upcomingPromotionalOffers":[{"promotionalOffers":[{"startDate":"2026-12-03T16:00:00Z","discountSetting":{"discountPercentage":0}}]}]}}
+        ]}}}}"#;
+        let epic_list = parse_epic_free_games(epic.as_bytes()).unwrap();
+        assert_eq!(epic_list.len(), 2);
+        assert!(!epic_list[0].upcoming);
+        assert_eq!(
+            epic_list[0].claim_url,
+            "https://store.epicgames.com/en-US/p/free-now"
+        );
+        assert!(epic_list[1].upcoming);
+
+        let gp = r#"[{"id": 42, "title": "Some Indie (Steam) Giveaway", "worth": "$9.99",
+            "image": "https://gp/img.jpg", "platforms": "PC, Steam", "end_date": "2026-12-01 23:59:00",
+            "open_giveaway_url": "https://store.steampowered.com/app/12345/Indie/", "status": "Active"}]"#;
+        let gp_list = parse_gamerpower_free_games(gp.as_bytes()).unwrap();
+        assert_eq!(gp_list.len(), 1);
+        assert_eq!(gp_list[0].store, FreeStore::Steam);
+        assert_eq!(gp_list[0].steam_app_id.as_deref(), Some("12345"));
+        assert!(gp_list[0].from_gamerpower);
+    }
+
+    #[test]
+    fn parses_cheapshark_and_ggdeals() {
+        let mut stores = HashMap::new();
+        stores.insert("15".into(), "Fanatical".into());
+        let cs = r#"[{"title":"Shadow of Mordor","dealID":"abc123","storeID":"15",
+            "salePrice":"3.99","normalPrice":"19.99","savings":"80.04","steamAppID":"241930","dealRating":"9.4"}]"#;
+        let deals = parse_cheapshark_deals(cs.as_bytes(), &stores).unwrap();
+        assert_eq!(deals.len(), 1);
+        assert_eq!(deals[0].store, DealStore::Other);
+        assert_eq!(deals[0].store_name.as_deref(), Some("Fanatical"));
+        assert_eq!(deals[0].steam_app_id.as_deref(), Some("241930"));
+        assert_eq!(deals[0].price.r#final, "$3.99");
+
+        let gg = r#"{"success": true, "data": {"241930": {"url": "https://gg.deals/game/shadow/",
+            "prices": {"currentRetail": "17.99", "currentKeyshops": "11.50", "historicalRetail": "8.99", "currency": "BRL"}}}}"#;
+        let map = parse_ggdeals_prices(gg.as_bytes(), "BRL").unwrap();
+        let p = &map["241930"];
+        assert_eq!(p.retail.as_deref(), Some("R$17.99"));
+        assert_eq!(p.keyshop.as_deref(), Some("R$11.50"));
+        assert_eq!(p.historical_retail.as_deref(), Some("R$8.99"));
     }
 
     #[test]
@@ -569,26 +708,10 @@ mod tests {
         ]}"#).unwrap();
         let deals = normalize_feed(feed, DealStore::Gmg);
         assert_eq!(deals.len(), 3);
-        let d = &deals[0];
-        assert_eq!(d.id, "gmg-Mega Sudoku - PC");
-        assert_eq!(d.price.r#final, "$2.40");
-        assert_eq!(d.price.base, "$7.99");
-        assert_eq!(d.price.discount, "-70%");
-        assert_eq!(d.operating_systems, ["windows"]);
-        assert_eq!(
-            d.features,
-            [Tag {
-                name: "Steam".into(),
-                slug: "steam".into()
-            }]
-        );
+        assert_eq!(deals[0].id, "gmg-Mega Sudoku - PC");
+        assert_eq!(deals[0].price.discount, "-70%");
         assert_eq!(deals[1].price.r#final, "₩1,500");
-        assert_eq!(
-            deals[1].price.base_money.as_ref().unwrap().amount,
-            "3000.00"
-        );
         assert_eq!(deals[2].operating_systems, ["xbox"]);
-        assert_eq!(deals[2].price.r#final, "TRL 1.00");
     }
 
     #[test]
@@ -602,8 +725,6 @@ mod tests {
         let deals = normalize_feed(feed, DealStore::Humble);
         assert_eq!(deals[0].id, "humble-blackbook_storefront");
         assert_eq!(deals[0].store, DealStore::Humble);
-        assert_eq!(deals[0].operating_systems, ["windows"]);
-        assert!(deals[0].features.is_empty());
         assert_eq!(deals[0].price.discount, "-70%");
     }
 

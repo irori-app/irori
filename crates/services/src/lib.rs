@@ -35,6 +35,7 @@ mod files;
 mod follow;
 pub mod game_window;
 mod games;
+mod ggdeals;
 pub mod gpu_hide;
 pub mod gpu_preference;
 pub mod hidden_lock;
@@ -257,6 +258,8 @@ pub struct Inner {
     igdb: igdb::IgdbState,
     /// The VNDB client, shared so requests stay spaced.
     vndb: vndb::VndbState,
+    /// Optional personal GG.deals API key.
+    ggdeals: ggdeals::GgDealsState,
 }
 
 impl Deref for Backend {
@@ -364,6 +367,7 @@ impl Backend {
             troubleshoot: Default::default(),
             igdb: Default::default(),
             vndb: Default::default(),
+            ggdeals: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {

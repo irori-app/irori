@@ -16,7 +16,9 @@
 //! (Microsoft) account, which adds playtime, achievements and art, and the
 //! PC games the account played.
 
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -36,8 +38,8 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, ElementId, Entity, Global, InteractiveElement as _,
-    IntoElement, ParentElement as _, PathPromptOptions, Render, SharedString, Styled as _,
-    Subscription, Task, Window, div, rems,
+    IntoElement, ParentElement as _, PathPromptOptions, Pixels, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, px, rems,
 };
 use irori_core::{InstallProgress, OpContext, Runner, WineInstallation};
 use irori_launchers::{
@@ -47,7 +49,7 @@ use irori_launchers::{
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use crate::common::{backend_op, card, notify_error, notify_success};
+use crate::common::{backend_op, card, card_grid, notify_error, notify_success, wrapped_tooltip};
 
 struct LaunchersHandle(Arc<LaunchersStore>);
 impl Global for LaunchersHandle {}
@@ -193,6 +195,7 @@ pub struct LaunchersSection {
     wines: Vec<WineInstallation>,
     wine_select: Entity<SelectState<Vec<WineChoice>>>,
     running: HashMap<Launcher, Arc<Mutex<Live>>>,
+    grid_width: Rc<Cell<Pixels>>,
     _ticker: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -216,6 +219,7 @@ impl LaunchersSection {
             wines: Vec::new(),
             wine_select,
             running: HashMap::new(),
+            grid_width: Rc::new(Cell::new(px(0.))),
             _ticker: None,
             _subscriptions: subscriptions,
         };
@@ -716,8 +720,6 @@ impl LaunchersSection {
         card(cx)
             .id("launcher-xbox")
             .debug_selector(|| "launcher-xbox-card".to_string())
-            .w(rems(22.))
-            .flex_grow(1.)
             .child(
                 h_flex()
                     .gap_2()
@@ -733,6 +735,7 @@ impl LaunchersSection {
             )
             .child(
                 div()
+                    .flex_1()
                     .min_w_0()
                     .text_xs()
                     .text_color(muted)
@@ -953,8 +956,6 @@ impl LaunchersSection {
             .id(ElementId::Name(
                 format!("launcher-{}", launcher.id()).into(),
             ))
-            .w(rems(22.))
-            .flex_grow(1.)
             .child(
                 h_flex()
                     .gap_2()
@@ -973,40 +974,40 @@ impl LaunchersSection {
                     .children(account)
                     .child(state),
             )
-            .child(div().text_xs().text_color(muted).child(match launcher {
-                Launcher::BattleNet => t("manage.launchers.about.battlenet"),
-                Launcher::EaApp => t("manage.launchers.about.ea"),
-                Launcher::Ubisoft => t("manage.launchers.about.ubisoft"),
-                Launcher::Rockstar => t("manage.launchers.about.rockstar"),
-            }))
-            // The EA app keeps the games an account owns only encrypted and
-            // behind EA's own service, so only installed ones can be listed.
-            .when(launcher == Launcher::EaApp, |card| {
-                card.child(
-                    h_flex()
-                        .debug_selector(|| "launcher-ea-installed-only".to_string())
-                        .w_full()
-                        .min_w_0()
-                        .gap_2()
-                        .items_start()
-                        .text_xs()
-                        .text_color(muted)
-                        .child(Icon::new(IconName::Info).xsmall().flex_shrink_0())
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .child(t("manage.launchers.ea.installed_only")),
-                        ),
-                )
-            })
+            .child(
+                v_flex()
+                    .flex_1()
+                    .gap_1p5()
+                    .child(div().text_xs().text_color(muted).child(match launcher {
+                        Launcher::BattleNet => t("manage.launchers.about.battlenet"),
+                        Launcher::EaApp => t("manage.launchers.about.ea"),
+                        Launcher::Ubisoft => t("manage.launchers.about.ubisoft"),
+                        Launcher::Rockstar => t("manage.launchers.about.rockstar"),
+                    }))
+                    // Concise one-line note with detailed encryption explanation in hover tooltip.
+                    .when(launcher == Launcher::EaApp, |body| {
+                        let tip = t("manage.launchers.ea.installed_only_tooltip");
+                        body.child(
+                            h_flex()
+                                .id("launcher-ea-installed-only-tip")
+                                .debug_selector(|| "launcher-ea-installed-only".to_string())
+                                .gap_1()
+                                .items_center()
+                                .text_xs()
+                                .text_color(muted)
+                                .tooltip(move |window, cx| wrapped_tooltip(tip.clone(), window, cx))
+                                .child(t("manage.launchers.ea.installed_only"))
+                                .child(Icon::new(IconName::Info).xsmall().flex_shrink_0()),
+                        )
+                    }),
+            )
             .child(h_flex().justify_end().child(actions))
             .into_any_element()
     }
 }
 
 impl Render for LaunchersSection {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         let enabled = models(cx).settings.read(cx).app.third_party_launchers;
         let cards: Vec<AnyElement> = if enabled {
@@ -1022,23 +1023,24 @@ impl Render for LaunchersSection {
             Vec::new()
         };
         v_flex()
-            .gap_3()
+            .gap_4()
+            .child(
+                v_flex()
+                    .gap_1()
+                    .child(div().font_semibold().child(t("manage.launchers.title")))
+                    .child(div().text_sm().text_color(muted).child(if cfg!(windows) {
+                        t("manage.launchers.description_windows")
+                    } else {
+                        t("manage.launchers.description")
+                    })),
+            )
             .child(
                 h_flex()
+                    .w_full()
                     .gap_4()
-                    .items_start()
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .gap_1()
-                            .child(div().font_semibold().child(t("manage.launchers.title")))
-                            .child(div().text_sm().text_color(muted).child(if cfg!(windows) {
-                                t("manage.launchers.description_windows")
-                            } else {
-                                t("manage.launchers.description")
-                            })),
-                    )
+                    .flex_wrap()
+                    .justify_between()
+                    .items_center()
                     .child(
                         Switch::new("launchers-enabled")
                             .label(t("manage.launchers.enable"))
@@ -1052,27 +1054,28 @@ impl Render for LaunchersSection {
                                     ));
                                 });
                             }),
-                    ),
+                    )
+                    .when(enabled && !cfg!(windows), |bar| {
+                        bar.child(
+                            h_flex()
+                                .gap_3()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .text_color(muted)
+                                        .child(t("manage.launchers.wine")),
+                                )
+                                .child(
+                                    div()
+                                        .w(rems(16.))
+                                        .child(Select::new(&self.wine_select).small()),
+                                ),
+                        )
+                    }),
             )
-            .when(enabled && !cfg!(windows), |d| {
-                d.child(
-                    Alert::warning("launchers-anticheat", t("manage.launchers.anticheat"))
-                        .title(t("manage.launchers.anticheat_title")),
-                )
-                .child(
-                    h_flex()
-                        .gap_3()
-                        .items_center()
-                        .child(div().text_sm().child(t("manage.launchers.wine")))
-                        .child(
-                            div()
-                                .w(rems(18.))
-                                .child(Select::new(&self.wine_select).small()),
-                        ),
-                )
-            })
             .when(enabled, |d| {
-                d.child(h_flex().flex_wrap().gap_4().items_start().children(cards))
+                d.child(card_grid(&self.grid_width, 20., cards, window))
             })
     }
 }

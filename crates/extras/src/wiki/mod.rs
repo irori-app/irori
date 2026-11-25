@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 pub use hltb::HowLongToBeat;
 pub use pcgamingwiki::{GameScore, PcGamingWikiInfo};
-pub use sources::{ProtonDbTier, SteamDeckCompat};
+pub use sources::{ProtonDbTier, SteamDeckCompat, protondb_batch};
 
 use crate::util;
 

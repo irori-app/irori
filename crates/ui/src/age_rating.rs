@@ -11,6 +11,11 @@ use once_cell::sync::Lazy;
 /// of most programs anyway.
 static SYSTEM_LOCALE: Lazy<Option<String>> = Lazy::new(sys_locale::get_locale);
 
+/// The system's detected locale tag, if available.
+pub fn system_locale() -> Option<&'static str> {
+    SYSTEM_LOCALE.as_deref()
+}
+
 /// The boards to show first, best first: the user's choice, then those of
 /// the current interface language's region.
 pub fn preferred_systems(cx: &gpui_kit::App) -> Vec<RatingSystem> {
