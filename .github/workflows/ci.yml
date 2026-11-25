@@ -36,7 +36,7 @@ jobs:
             platform: windows
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Rust and clang on Windows on Arm
         if: matrix.os == 'windows-11-arm'
         uses: ./.github/actions/windows-arm64-tools
@@ -55,7 +55,7 @@ jobs:
         with:
           key: native-ci-profile-v1
           cache-on-failure: true
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Packaging regression tests
@@ -110,10 +110,18 @@ jobs:
           $shell = New-Object -ComObject WScript.Shell
           $link = $shell.CreateShortcut((Join-Path $menu 'Irori.lnk'))
           if ($link.TargetPath -ne $exe) { throw 'Invalid Start menu shortcut' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Irori-${{ matrix.os }}-unsigned
           path: |
             dist/*.zip
             dist/*.tar.gz
           if-no-files-found: error
+
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: EmbarkStudios/cargo-deny-action@81891abc19297b21343b15ef67dc61e4aea74fda # v2
+        with:
+          command: check advisories licenses bans sources

@@ -2,15 +2,15 @@
 
 import unittest
 
-from pr_rules import check
+from pr_rules import LARGE_PR_LABEL, RS_ADDED_MAX, check, rs_added_from_numstat
 
 
 class PullRequestRules(unittest.TestCase):
-    def ok(self, title, head, base="main"):
-        self.assertEqual(check(title, head, base), [], (title, head, base))
+    def ok(self, title, head, base="main", **kwargs):
+        self.assertEqual(check(title, head, base, **kwargs), [], (title, head, base, kwargs))
 
-    def broken(self, title, head, base="main", count=1):
-        problems = check(title, head, base)
+    def broken(self, title, head, base="main", count=1, **kwargs):
+        problems = check(title, head, base, **kwargs)
         self.assertEqual(len(problems), count, problems)
 
     def test_conventional_names_pass(self):
@@ -47,8 +47,27 @@ class PullRequestRules(unittest.TestCase):
         self.ok("fix: keep it", "fix/login", base="feat/cli-login")
         self.broken("fix: keep it", "fix/login", base="codex/macos-windows-support")
 
-    def test_bots_are_exempt_from_the_branch_rule(self):
+    def test_bots_are_exempt_from_the_branch_and_diff_size_rules(self):
         self.ok("build(deps): bump serde from 1.0.1 to 1.0.2", "dependabot/cargo/serde-1.0.2")
+        self.ok(
+            "build(deps): bump serde from 1.0.1 to 1.0.2",
+            "dependabot/cargo/serde-1.0.2",
+            rs_added=RS_ADDED_MAX + 1000,
+        )
+
+    def test_rust_diff_size_limit(self):
+        self.ok("feat: add feature", "feat/small-feature", rs_added=RS_ADDED_MAX)
+        self.broken("feat: add feature", "feat/large-feature", rs_added=RS_ADDED_MAX + 1)
+        self.ok(
+            "feat: add feature",
+            "feat/large-feature",
+            rs_added=RS_ADDED_MAX + 1,
+            labels=[LARGE_PR_LABEL],
+        )
+
+    def test_rs_added_from_numstat_ignores_binary_entries(self):
+        sample = "120\t5\tcrates/core/src/lib.rs\n-\t-\tassets/icon.bin\n30\t10\tcrates/ui/src/lib.rs\n"
+        self.assertEqual(rs_added_from_numstat(sample), 150)
 
 
 if __name__ == "__main__":

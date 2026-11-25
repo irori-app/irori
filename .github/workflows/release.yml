@@ -33,7 +33,7 @@ jobs:
     outputs:
       version: ${{ steps.read.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - id: read
         name: Read the version and match it to the tag
         run: |
@@ -60,7 +60,7 @@ jobs:
             artifact: linux-arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Linux system libraries
         run: |
           sudo apt-get update
@@ -72,7 +72,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           key: release-v1
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2
@@ -139,7 +139,7 @@ jobs:
         run: |
           cargo generate-rpm -p crates/irori --output dist/
           cargo generate-rpm -p crates/sign-in --output dist/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -167,7 +167,7 @@ jobs:
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     container: ${{ matrix.image }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ matrix.arch == 'aarch64' && 'linux-arm64' || 'linux' }}
       # Irori alone first, as a system without WebKitGTK gets it: it must start
@@ -221,7 +221,7 @@ jobs:
     runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     container: ${{ matrix.image }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ${{ matrix.arch == 'aarch64' && 'linux-arm64' || 'linux' }}
       - name: The excludelist's libraries, without WebKitGTK
@@ -265,8 +265,8 @@ jobs:
   cargo-sources:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Generate cargo-sources.json
@@ -275,7 +275,7 @@ jobs:
           curl -fsSLo "$RUNNER_TEMP/flatpak-cargo-generator.py" \
             https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/9d86d336a39b9af38b86f114b6ce5820fe260f91/cargo/flatpak-cargo-generator.py
           python "$RUNNER_TEMP/flatpak-cargo-generator.py" Cargo.lock -o cargo-sources.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cargo-sources
           path: cargo-sources.json
@@ -287,14 +287,14 @@ jobs:
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: linux
           path: dist
       - name: Build, then install from a local pacman repository
         run: bash packaging/arch/build.sh "${{ needs.version.outputs.version }}" dist dist-arch "$GITHUB_REPOSITORY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: arch
           path: dist-arch/*.pkg.tar.zst
@@ -307,8 +307,8 @@ jobs:
     runs-on: ubuntu-24.04
     container: fedora:42
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: '{linux,linux-arm64}'
           path: dist
@@ -321,8 +321,8 @@ jobs:
     runs-on: ubuntu-24.04
     container: ghcr.io/flathub/flatpak-builder-lint:latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: cargo-sources
           path: packaging/flatpak
@@ -354,7 +354,7 @@ jobs:
       # plain file system instead.
       options: --privileged -v /var/lib/flatpak
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # Irori's fat-LTO link needs more memory than the arm64 runners have.
       # The container is privileged and RUNNER_TEMP is the host's disk, so
       # swap can be added here (not in the checkout, which the build copies).
@@ -379,7 +379,7 @@ jobs:
           if libc.swapon(path.encode(), 0) != 0:
               raise OSError(ctypes.get_errno(), "swapon failed", path)
           print(open("/proc/swaps").read())
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: cargo-sources
           path: packaging/flatpak
@@ -390,7 +390,7 @@ jobs:
           arch: ${{ matrix.arch }}
           cache-key: flatpak-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
           upload-artifact: false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: flatpak${{ matrix.suffix }}
           path: '*.flatpak'
@@ -407,12 +407,12 @@ jobs:
       SIGNED: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.MACOS_CERTIFICATE_P12 != '' }}
       NOTARIZED: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.MACOS_CERTIFICATE_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           key: release-v1
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - run: cargo build --locked --release -p irori -p irori-sign-in
@@ -473,7 +473,7 @@ jobs:
           hdiutil attach -nobrowse -mountpoint "$RUNNER_TEMP/irori" dist/*.dmg
           "$RUNNER_TEMP/irori/Irori.app/Contents/MacOS/irori" --version
           hdiutil detach "$RUNNER_TEMP/irori"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.os }}
           path: |
@@ -497,7 +497,7 @@ jobs:
     env:
       SIGNED: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Rust and clang on Windows on Arm
         if: matrix.arch == 'arm64'
         uses: ./.github/actions/windows-arm64-tools
@@ -505,14 +505,14 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           key: release-v1
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - run: cargo build --locked --release -p irori -p irori-sign-in
       - name: Upload the executables for signing
         if: env.SIGNED == 'true'
         id: unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact }}-unsigned
           path: |
@@ -569,7 +569,7 @@ jobs:
       - name: Upload the installer for signing
         if: env.SIGNED == 'true'
         id: unsigned-setup
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact }}-unsigned-setup
           path: dist/*-setup.exe
@@ -634,7 +634,7 @@ jobs:
           if (!(Test-Path $key)) { throw "winget's ProductCode does not match the uninstall key" }
           $process = Start-Process (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Uninstall failed' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -651,8 +651,8 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
           pattern: '{linux,linux-arm64,arch,flatpak,flatpak-arm64,macos-*,windows,windows-arm64}'
@@ -672,7 +672,7 @@ jobs:
             [ -f "$name" ] || { echo "::error::The release is missing $name"; exit 1; }
           done
           sha256sum -- * > SHA256SUMS && cat SHA256SUMS
-      - uses: actions/attest-build-provenance@v4
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: dist/*
       - name: Draft release

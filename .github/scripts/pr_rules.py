@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check a pull request's branch, title and base against Irori's conventions.
+"""Check a pull request's branch, title, base and Rust diff size against Irori's rules.
 
 The rules are documented in AGENTS.md ("Branches, commits and pull requests"):
 
@@ -8,8 +8,10 @@ The rules are documented in AGENTS.md ("Branches, commits and pull requests"):
   ``<type>: <summary>``, with ``!`` before the colon for a breaking change.
 - The branch's type and the title's type are the same.
 - The base is ``main``, or another convention-named branch for stacked work.
+- Pull requests adding more than 1500 lines across ``*.rs`` files require the
+  ``large-pr-approved`` label.
 
-Bot branches (Dependabot, Renovate) are exempt from the branch rule.
+Bot branches (Dependabot, Renovate) are exempt from the branch and diff-size rules.
 
 Usage, with the values GitHub provides:
 
@@ -22,8 +24,10 @@ Exits 1 and prints every problem when a rule is broken.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 import os
 import re
+import subprocess
 import sys
 
 # What each type is for; AGENTS.md has the same table.
@@ -44,6 +48,8 @@ TYPES = {
 MAIN = "main"
 TITLE_MAX = 72
 BOT_PREFIXES = ("dependabot/", "renovate/")
+RS_ADDED_MAX = 1500
+LARGE_PR_LABEL = "large-pr-approved"
 
 _TYPE = "|".join(TYPES)
 BRANCH_RE = re.compile(rf"^(?P<type>{_TYPE})/(?P<name>[a-z0-9]+(?:[-.][a-z0-9]+)*)$")
@@ -57,7 +63,36 @@ def branch_type(branch: str) -> str | None:
     return match["type"] if match else None
 
 
-def check(title: str, head: str, base: str) -> list[str]:
+def rs_added_from_numstat(output: str) -> int:
+    """Sum added lines across ``git diff --numstat`` entries."""
+    total = 0
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        added = line.split("\t", 1)[0]
+        if added.isdigit():
+            total += int(added)
+    return total
+
+
+def git_rs_added(base_sha: str, head_sha: str) -> int:
+    """Count added lines across ``*.rs`` files between two commits."""
+    proc = subprocess.run(
+        ["git", "diff", "--numstat", f"{base_sha}...{head_sha}", "--", "*.rs"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return rs_added_from_numstat(proc.stdout)
+
+
+def check(
+    title: str,
+    head: str,
+    base: str,
+    rs_added: int | None = None,
+    labels: Iterable[str] = (),
+) -> list[str]:
     """Return every rule the pull request breaks (empty when it follows them)."""
     problems: list[str] = []
     types = ", ".join(TYPES)
@@ -101,19 +136,50 @@ def check(title: str, head: str, base: str) -> list[str]:
             f"The base '{base}' must be '{MAIN}', or a convention-named branch when "
             "stacking pull requests. Work merged into any other branch never reaches main."
         )
+
+    label_set = {label.strip() for label in labels if label.strip()}
+    if not bot and rs_added is not None and rs_added > RS_ADDED_MAX and LARGE_PR_LABEL not in label_set:
+        problems.append(
+            f"This pull request adds {rs_added} lines across *.rs files (limit is {RS_ADDED_MAX}). "
+            f"Split it into smaller stacked pull requests or ask a maintainer to add the "
+            f"'{LARGE_PR_LABEL}' label."
+        )
     return problems
 
 
+def _parse_labels(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
 def main(argv: list[str]) -> int:
+    env_rs_added = os.environ.get("PR_RS_ADDED")
+    default_rs_added = int(env_rs_added) if env_rs_added and env_rs_added.strip() else None
+
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--title", default=os.environ.get("PR_TITLE"))
     parser.add_argument("--head", default=os.environ.get("PR_HEAD"))
     parser.add_argument("--base", default=os.environ.get("PR_BASE", MAIN))
+    parser.add_argument("--rs-added", type=int, default=default_rs_added)
+    parser.add_argument("--labels", default=os.environ.get("PR_LABELS", ""))
+    parser.add_argument("--base-sha", default=os.environ.get("PR_BASE_SHA"))
+    parser.add_argument("--head-sha", default=os.environ.get("PR_HEAD_SHA"))
     args = parser.parse_args(argv)
     if args.title is None or args.head is None:
         parser.error("give --title and --head, or set PR_TITLE and PR_HEAD")
 
-    problems = check(args.title, args.head, args.base)
+    rs_added = args.rs_added
+    if rs_added is None and args.base_sha and args.head_sha:
+        rs_added = git_rs_added(args.base_sha, args.head_sha)
+
+    problems = check(
+        args.title,
+        args.head,
+        args.base,
+        rs_added=rs_added,
+        labels=_parse_labels(args.labels),
+    )
     for problem in problems:
         # GitHub shows ::error lines as annotations on the run.
         prefix = "::error::" if os.environ.get("GITHUB_ACTIONS") else "error: "

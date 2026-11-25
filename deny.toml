@@ -1,0 +1,50 @@
+# Dependency policy enforced in CI by cargo-deny.
+# See SECURITY.md and THIRD-PARTY-NOTICES.md for project licensing context.
+
+[graph]
+all-features = false
+no-default-features = false
+
+[advisories]
+version = 2
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = "rsa 0.9.10 Marvin Attack; blocked by bergshamra-keys 0.8.0, kryptering 0.5.0, irori-amazon-api, and irori-msstore-api requiring ^0.9" },
+    { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 timing variability; blocked by elliptic-curve 0.13.8 requiring ^0.5" },
+    { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys 0.37.0 local WAL CVE; blocked by sqlx-sqlite 0.9.0 in vendored crates/comet and rusqlite 0.39" },
+    { id = "RUSTSEC-2026-0543", reason = "chrono 0.4.45 unmaintained notice; pulled transitively by gpui-kit, gpui-base, crates/comet, and Xbox/MSStore crates" },
+    { id = "RUSTSEC-2026-0594", reason = "cookie 0.18.2 PrivateJar nonce reuse after fork(); Irori does not use PrivateJar across fork() and reqwest 0.12 / wry 0.53 require ^0.18 with no 0.18.3 released yet" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+# Standard OSI / GPL-3.0-compatible licenses used in the dependency graph.
+# Never allow GPL-2.0-only or proprietary licenses.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MPL-2.0",
+    "Zlib",
+    "bzip2-1.0.6",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "BSL-1.0",
+    "Unlicense",
+    "0BSD",
+    "CDLA-Permissive-2.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
