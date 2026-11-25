@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Copy command",
   "manage.updates.irori_copied": "Copied",
   "manage.updates.ignore_tooltip": "Don’t offer updates for this game",
-  "manage.downloads.current.idle": "Nothing is downloading.",
-  "manage.updates.empty_description": "Irori looks for new game versions and components in the background.",
-  "manage.updates.summary_one": "{count} update available",
-  "manage.updates.summary_other": "{count} updates available",
-  "manage.updates.title": "Updates",
-  "manage.updates.update_all": "Update all ({count})",
-  "manage.updates.view_release": "View release",
   "manage.stores.tab.deals": "Deals",
   "manage.stores.tab.stores": "Stores",
   "manage.stores.connected": "Connected",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Paste the token below and save.",
   "manage.launchers.wine_tooltip": "Used when setting up new launchers.",
   "manage.stores.description.deals": "Claim free games and track regional deals across PC stores.",
-  "manage.deals.ggdeals.key_connected_description": "Your GG.deals API key is active. Remove it below if you want to disconnect or enter a different key.",
-  "manage.stores.deals.free_badge_one": "1 free game available to claim that isn’t in your library",
-  "manage.stores.deals.free_badge_other": "{count} free games available to claim that aren’t in your library"
+  "manage.deals.ggdeals.key_connected_description": "Your GG.deals API key is active. Remove it below if you want to disconnect or enter a different key."
 }

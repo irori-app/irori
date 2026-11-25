@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Opdracht kopiëren",
   "manage.updates.irori_copied": "Gekopieerd",
   "manage.updates.ignore_tooltip": "Geen updates meer aanbieden voor deze game",
-  "manage.downloads.current.idle": "Er wordt niets gedownload.",
-  "manage.updates.empty_description": "Irori zoekt op de achtergrond naar nieuwe versies van games en componenten.",
-  "manage.updates.summary_one": "{count} update beschikbaar",
-  "manage.updates.summary_other": "{count} updates beschikbaar",
-  "manage.updates.title": "Updates",
-  "manage.updates.update_all": "Alles updaten ({count})",
-  "manage.updates.view_release": "Release bekijken",
   "manage.stores.tab.deals": "Aanbiedingen",
   "manage.stores.tab.stores": "Winkels",
   "manage.stores.connected": "Verbonden",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Plak het token hieronder en sla op.",
   "manage.launchers.wine_tooltip": "Gebruikt bij het instellen van nieuwe launchers.",
   "manage.stores.description.deals": "Claim gratis games en volg regionale aanbiedingen bij PC-winkels.",
-  "manage.deals.ggdeals.key_connected_description": "Je GG.deals-API-sleutel is actief. Verwijder hem hieronder om te ontkoppelen of een andere sleutel in te voeren.",
-  "manage.stores.deals.free_badge_one": "1 gratis game om te claimen die nog niet in je bibliotheek staat",
-  "manage.stores.deals.free_badge_other": "{count} gratis games om te claimen die nog niet in je bibliotheek staan"
+  "manage.deals.ggdeals.key_connected_description": "Je GG.deals-API-sleutel is actief. Verwijder hem hieronder om te ontkoppelen of een andere sleutel in te voeren."
 }

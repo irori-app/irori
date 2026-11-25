@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "複製指令",
   "manage.updates.irori_copied": "已複製",
   "manage.updates.ignore_tooltip": "不再為此遊戲提示更新",
-  "manage.downloads.current.idle": "沒有正在下載的內容。",
-  "manage.updates.empty_description": "Irori 會在背景尋找遊戲和元件的新版本。",
-  "manage.updates.summary_one": "有 {count} 個可用更新",
-  "manage.updates.summary_other": "有 {count} 個可用更新",
-  "manage.updates.title": "更新",
-  "manage.updates.update_all": "全部更新 ({count})",
-  "manage.updates.view_release": "檢視發行版本",
   "manage.stores.tab.deals": "特惠",
   "manage.stores.tab.stores": "商店",
   "manage.stores.connected": "已連線",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. 將權杖貼到下方並儲存。",
   "manage.launchers.wine_tooltip": "設定新啟動器時使用。",
   "manage.stores.description.deals": "領取免費遊戲並追蹤各 PC 商店的地區特惠。",
-  "manage.deals.ggdeals.key_connected_description": "您的 GG.deals API 金鑰已啟用。如需中斷連線或更換金鑰，請在下方移除。",
-  "manage.stores.deals.free_badge_one": "有 1 款收藏庫中尚未擁有的免費遊戲可領取",
-  "manage.stores.deals.free_badge_other": "有 {count} 款收藏庫中尚未擁有的免費遊戲可領取"
+  "manage.deals.ggdeals.key_connected_description": "您的 GG.deals API 金鑰已啟用。如需中斷連線或更換金鑰，請在下方移除。"
 }

@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Copier la commande",
   "manage.updates.irori_copied": "Copié",
   "manage.updates.ignore_tooltip": "Ne plus proposer de mises à jour pour ce jeu",
-  "manage.downloads.current.idle": "Aucun téléchargement en cours.",
-  "manage.updates.empty_description": "Irori cherche en arrière-plan les nouvelles versions des jeux et des composants.",
-  "manage.updates.summary_one": "{count} mise à jour disponible",
-  "manage.updates.summary_other": "{count} mises à jour disponibles",
-  "manage.updates.title": "Mises à jour",
-  "manage.updates.update_all": "Tout mettre à jour ({count})",
-  "manage.updates.view_release": "Voir la version",
   "manage.stores.tab.deals": "Offres",
   "manage.stores.tab.stores": "Boutiques",
   "manage.stores.connected": "Connecté",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Collez le jeton ci-dessous et enregistrez.",
   "manage.launchers.wine_tooltip": "Utilisé lors de la configuration des nouveaux lanceurs.",
   "manage.stores.description.deals": "Récupérez des jeux gratuits et suivez les promos régionales sur PC.",
-  "manage.deals.ggdeals.key_connected_description": "Votre clé API GG.deals est active. Supprimez-la ci-dessous pour vous déconnecter ou saisir une autre clé.",
-  "manage.stores.deals.free_badge_one": "1 jeu gratuit à réclamer qui n’est pas dans votre bibliothèque",
-  "manage.stores.deals.free_badge_other": "{count} jeux gratuits à réclamer qui ne sont pas dans votre bibliothèque"
+  "manage.deals.ggdeals.key_connected_description": "Votre clé API GG.deals est active. Supprimez-la ci-dessous pour vous déconnecter ou saisir une autre clé."
 }

@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Komutu kopyala",
   "manage.updates.irori_copied": "Kopyalandı",
   "manage.updates.ignore_tooltip": "Bu oyun için güncelleme önerme",
-  "manage.downloads.current.idle": "Hiçbir şey indirilmiyor.",
-  "manage.updates.empty_description": "Irori arka planda yeni oyun sürümlerini ve bileşenleri arar.",
-  "manage.updates.summary_one": "{count} güncelleme var",
-  "manage.updates.summary_other": "{count} güncelleme var",
-  "manage.updates.title": "Güncellemeler",
-  "manage.updates.update_all": "Tümünü güncelle ({count})",
-  "manage.updates.view_release": "Sürümü görüntüle",
   "manage.stores.tab.deals": "Fırsatlar",
   "manage.stores.tab.stores": "Mağazalar",
   "manage.stores.connected": "Bağlı",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Belirteci aşağıya yapıştırın ve kaydedin.",
   "manage.launchers.wine_tooltip": "Yeni başlatıcıları kurarken kullanılır.",
   "manage.stores.description.deals": "Ücretsiz oyunları alın ve PC mağazalarındaki bölgesel indirimleri takip edin.",
-  "manage.deals.ggdeals.key_connected_description": "GG.deals API anahtarınız etkin. Bağlantıyı kesmek veya farklı bir anahtar girmek için aşağıdan kaldırın.",
-  "manage.stores.deals.free_badge_one": "Kütüphanenizde olmayan 1 ücretsiz oyun alınabilir",
-  "manage.stores.deals.free_badge_other": "Kütüphanenizde olmayan {count} ücretsiz oyun alınabilir"
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API anahtarınız etkin. Bağlantıyı kesmek veya farklı bir anahtar girmek için aşağıdan kaldırın."
 }

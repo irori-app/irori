@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Copiază comanda",
   "manage.updates.irori_copied": "Copiat",
   "manage.updates.ignore_tooltip": "Nu mai oferi actualizări pentru acest joc",
-  "manage.downloads.current.idle": "Nu se descarcă nimic.",
-  "manage.updates.empty_description": "Irori caută în fundal versiuni noi de jocuri și componente.",
-  "manage.updates.summary_one": "{count} actualizare disponibilă",
-  "manage.updates.summary_other": "{count} actualizări disponibile",
-  "manage.updates.title": "Actualizări",
-  "manage.updates.update_all": "Actualizează tot ({count})",
-  "manage.updates.view_release": "Vezi lansarea",
   "manage.stores.tab.deals": "Oferte",
   "manage.stores.tab.stores": "Magazine",
   "manage.stores.connected": "Conectat",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Lipește tokenul mai jos și salvează.",
   "manage.launchers.wine_tooltip": "Folosit la configurarea lansatoarelor noi.",
   "manage.stores.description.deals": "Revendică jocuri gratuite și urmărește reducerile regionale în magazinele PC.",
-  "manage.deals.ggdeals.key_connected_description": "Cheia ta API GG.deals este activă. Elimin-o mai jos dacă vrei să deconectezi sau să introduci altă cheie.",
-  "manage.stores.deals.free_badge_one": "1 joc gratuit disponibil de revendicat care nu este în biblioteca ta",
-  "manage.stores.deals.free_badge_other": "{count} jocuri gratuite disponibile de revendicat care nu sunt în biblioteca ta"
+  "manage.deals.ggdeals.key_connected_description": "Cheia ta API GG.deals este activă. Elimin-o mai jos dacă vrei să deconectezi sau să introduci altă cheie."
 }

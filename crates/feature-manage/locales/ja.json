@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "コマンドをコピー",
   "manage.updates.irori_copied": "コピーしました",
   "manage.updates.ignore_tooltip": "このゲームのアップデートを提案しない",
-  "manage.downloads.current.idle": "ダウンロード中のものはありません。",
-  "manage.updates.empty_description": "Irori はバックグラウンドでゲームとコンポーネントの新しいバージョンを確認します。",
-  "manage.updates.summary_one": "{count} 件のアップデートがあります",
-  "manage.updates.summary_other": "{count} 件のアップデートがあります",
-  "manage.updates.title": "アップデート",
-  "manage.updates.update_all": "すべて更新 ({count})",
-  "manage.updates.view_release": "リリースを表示",
   "manage.stores.tab.deals": "セール",
   "manage.stores.tab.stores": "ストア",
   "manage.stores.connected": "接続済み",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. 下にトークンを貼り付けて保存します。",
   "manage.launchers.wine_tooltip": "新しいランチャーのセットアップ時に使用されます。",
   "manage.stores.description.deals": "無料ゲームを入手して、PC ストアごとの地域別セールをチェックできます。",
-  "manage.deals.ggdeals.key_connected_description": "GG.deals API キーは有効です。解除または別のキーを入力する場合は以下から削除してください。",
-  "manage.stores.deals.free_badge_one": "ライブラリに未所持の無料ゲームが1本あります",
-  "manage.stores.deals.free_badge_other": "ライブラリに未所持の無料ゲームが{count}本あります"
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API キーは有効です。解除または別のキーを入力する場合は以下から削除してください。"
 }

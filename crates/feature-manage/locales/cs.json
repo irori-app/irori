@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Kopírovat příkaz",
   "manage.updates.irori_copied": "Zkopírováno",
   "manage.updates.ignore_tooltip": "Nenabízet aktualizace pro tuto hru",
-  "manage.downloads.current.idle": "Nic se nestahuje.",
-  "manage.updates.empty_description": "Irori na pozadí hledá nové verze her a komponent.",
-  "manage.updates.summary_one": "Je dostupná {count} aktualizace",
-  "manage.updates.summary_other": "Dostupné aktualizace: {count}",
-  "manage.updates.title": "Aktualizace",
-  "manage.updates.update_all": "Aktualizovat vše ({count})",
-  "manage.updates.view_release": "Zobrazit vydání",
   "manage.stores.tab.deals": "Slevy",
   "manage.stores.tab.stores": "Obchody",
   "manage.stores.connected": "Připojeno",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Vložte token níže a uložte.",
   "manage.launchers.wine_tooltip": "Použije se při nastavování nových launcherů.",
   "manage.stores.description.deals": "Získejte hry zdarma a sledujte regionální slevy napříč PC obchody.",
-  "manage.deals.ggdeals.key_connected_description": "Váš klíč API GG.deals je aktivní. Pokud jej chcete odpojit nebo zadat jiný klíč, odstraňte jej níže.",
-  "manage.stores.deals.free_badge_one": "1 hra zdarma k vyzvednutí, kterou ještě nemáte v knihovně",
-  "manage.stores.deals.free_badge_other": "{count} her zdarma k vyzvednutí, které ještě nemáte v knihovně"
+  "manage.deals.ggdeals.key_connected_description": "Váš klíč API GG.deals je aktivní. Pokud jej chcete odpojit nebo zadat jiný klíč, odstraňte jej níže."
 }

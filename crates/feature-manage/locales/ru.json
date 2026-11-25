@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Копировать команду",
   "manage.updates.irori_copied": "Скопировано",
   "manage.updates.ignore_tooltip": "Не предлагать обновления для этой игры",
-  "manage.downloads.current.idle": "Ничего не загружается.",
-  "manage.updates.empty_description": "Irori в фоне ищет новые версии игр и компонентов.",
-  "manage.updates.summary_one": "Доступно обновлений: {count}",
-  "manage.updates.summary_other": "Доступно обновлений: {count}",
-  "manage.updates.title": "Обновления",
-  "manage.updates.update_all": "Обновить всё ({count})",
-  "manage.updates.view_release": "Открыть выпуск",
   "manage.stores.tab.deals": "Скидки",
   "manage.stores.tab.stores": "Магазины",
   "manage.stores.connected": "Подключено",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Вставьте токен ниже и сохраните.",
   "manage.launchers.wine_tooltip": "Используется при настройке новых лаунчеров.",
   "manage.stores.description.deals": "Забирайте бесплатные игры и отслеживайте региональные скидки в магазинах ПК.",
-  "manage.deals.ggdeals.key_connected_description": "Ваш API-ключ GG.deals активен. Удалите его ниже, чтобы отключить или ввести другой ключ.",
-  "manage.stores.deals.free_badge_one": "1 бесплатная игра для получения, которой нет в вашей библиотеке",
-  "manage.stores.deals.free_badge_other": "{count} бесплатных игр для получения, которых нет в вашей библиотеке"
+  "manage.deals.ggdeals.key_connected_description": "Ваш API-ключ GG.deals активен. Удалите его ниже, чтобы отключить или ввести другой ключ."
 }

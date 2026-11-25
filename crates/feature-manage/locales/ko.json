@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "명령 복사",
   "manage.updates.irori_copied": "복사됨",
   "manage.updates.ignore_tooltip": "이 게임의 업데이트를 제안하지 않음",
-  "manage.downloads.current.idle": "다운로드 중인 항목이 없습니다.",
-  "manage.updates.empty_description": "Irori가 백그라운드에서 새 게임 버전과 구성 요소를 확인합니다.",
-  "manage.updates.summary_one": "업데이트 {count}개 있음",
-  "manage.updates.summary_other": "업데이트 {count}개 있음",
-  "manage.updates.title": "업데이트",
-  "manage.updates.update_all": "모두 업데이트 ({count})",
-  "manage.updates.view_release": "릴리스 보기",
   "manage.stores.tab.deals": "할인",
   "manage.stores.tab.stores": "스토어",
   "manage.stores.connected": "연결됨",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. 아래에 토큰을 붙여넣고 저장하세요.",
   "manage.launchers.wine_tooltip": "새 런처를 설정할 때 사용됩니다.",
   "manage.stores.description.deals": "무료 게임을 받고 PC 스토어별 지역 할인을 확인하세요.",
-  "manage.deals.ggdeals.key_connected_description": "GG.deals API 키가 활성화되어 있습니다. 연결을 해제하거나 다른 키를 입력하려면 아래에서 제거하세요.",
-  "manage.stores.deals.free_badge_one": "라이브러리에 없는 무료 게임 1개를 받을 수 있습니다",
-  "manage.stores.deals.free_badge_other": "라이브러리에 없는 무료 게임 {count}개를 받을 수 있습니다"
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API 키가 활성화되어 있습니다. 연결을 해제하거나 다른 키를 입력하려면 아래에서 제거하세요."
 }

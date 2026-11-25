@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Kopiera kommando",
   "manage.updates.irori_copied": "Kopierat",
   "manage.updates.ignore_tooltip": "Erbjud inte uppdateringar för det här spelet",
-  "manage.downloads.current.idle": "Inget laddas ned.",
-  "manage.updates.empty_description": "Irori letar i bakgrunden efter nya versioner av spel och komponenter.",
-  "manage.updates.summary_one": "{count} uppdatering tillgänglig",
-  "manage.updates.summary_other": "{count} uppdateringar tillgängliga",
-  "manage.updates.title": "Uppdateringar",
-  "manage.updates.update_all": "Uppdatera alla ({count})",
-  "manage.updates.view_release": "Visa version",
   "manage.stores.tab.deals": "Erbjudanden",
   "manage.stores.tab.stores": "Butiker",
   "manage.stores.connected": "Ansluten",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Klistra in token nedan och spara.",
   "manage.launchers.wine_tooltip": "Används när nya startprogram ställs in.",
   "manage.stores.description.deals": "Hämta gratisspel och följ regionala erbjudanden i PC-butiker.",
-  "manage.deals.ggdeals.key_connected_description": "Din GG.deals API-nyckel är aktiv. Ta bort den nedan om du vill koppla från eller ange en annan nyckel.",
-  "manage.stores.deals.free_badge_one": "1 gratis spel att hämta som inte finns i ditt bibliotek",
-  "manage.stores.deals.free_badge_other": "{count} gratis spel att hämta som inte finns i ditt bibliotek"
+  "manage.deals.ggdeals.key_connected_description": "Din GG.deals API-nyckel är aktiv. Ta bort den nedan om du vill koppla från eller ange en annan nyckel."
 }

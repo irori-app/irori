@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Copiar comando",
   "manage.updates.irori_copied": "Copiado",
   "manage.updates.ignore_tooltip": "Não oferecer atualizações para este jogo",
-  "manage.downloads.current.idle": "Nada sendo baixado.",
-  "manage.updates.empty_description": "O Irori procura em segundo plano novas versões de jogos e componentes.",
-  "manage.updates.summary_one": "{count} atualização disponível",
-  "manage.updates.summary_other": "{count} atualizações disponíveis",
-  "manage.updates.title": "Atualizações",
-  "manage.updates.update_all": "Atualizar tudo ({count})",
-  "manage.updates.view_release": "Ver versão",
   "manage.stores.tab.deals": "Ofertas",
   "manage.stores.tab.stores": "Lojas",
   "manage.stores.connected": "Conectada",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Cole o token abaixo e salve.",
   "manage.launchers.wine_tooltip": "Usado ao configurar novos launchers.",
   "manage.stores.description.deals": "Resgate jogos grátis e acompanhe ofertas regionais em lojas de PC.",
-  "manage.deals.ggdeals.key_connected_description": "Sua chave da API do GG.deals está ativa. Remova abaixo se quiser desconectar ou informar outra chave.",
-  "manage.stores.deals.free_badge_one": "1 jogo grátis disponível para resgatar que não está na sua biblioteca",
-  "manage.stores.deals.free_badge_other": "{count} jogos grátis disponíveis para resgatar que não estão na sua biblioteca"
+  "manage.deals.ggdeals.key_connected_description": "Sua chave da API do GG.deals está ativa. Remova abaixo se quiser desconectar ou informar outra chave."
 }

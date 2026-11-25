@@ -865,13 +865,6 @@
   "manage.updates.irori_copy_command": "Befehl kopieren",
   "manage.updates.irori_copied": "Kopiert",
   "manage.updates.ignore_tooltip": "Keine Updates für dieses Spiel anbieten",
-  "manage.downloads.current.idle": "Es wird nichts heruntergeladen.",
-  "manage.updates.empty_description": "Irori sucht im Hintergrund nach neuen Spielversionen und Komponenten.",
-  "manage.updates.summary_one": "{count} Update verfügbar",
-  "manage.updates.summary_other": "{count} Updates verfügbar",
-  "manage.updates.title": "Updates",
-  "manage.updates.update_all": "Alle aktualisieren ({count})",
-  "manage.updates.view_release": "Release ansehen",
   "manage.stores.tab.deals": "Angebote",
   "manage.stores.tab.stores": "Stores",
   "manage.stores.connected": "Verbunden",
@@ -933,7 +926,5 @@
   "manage.deals.ggdeals.step3": "3. Füge den Token unten ein und speichere.",
   "manage.launchers.wine_tooltip": "Wird beim Einrichten neuer Launcher verwendet.",
   "manage.stores.description.deals": "Sichere dir Gratis-Spiele und verfolge regionale Angebote in PC-Stores.",
-  "manage.deals.ggdeals.key_connected_description": "Dein GG.deals-API-Schlüssel ist aktiv. Entferne ihn unten, um die Verbindung zu trennen oder einen anderen Schlüssel einzugeben.",
-  "manage.stores.deals.free_badge_one": "1 kostenloses Spiel zum Abholen, das noch nicht in deiner Bibliothek ist",
-  "manage.stores.deals.free_badge_other": "{count} kostenlose Spiele zum Abholen, die noch nicht in deiner Bibliothek sind"
+  "manage.deals.ggdeals.key_connected_description": "Dein GG.deals-API-Schlüssel ist aktiv. Entferne ihn unten, um die Verbindung zu trennen oder einen anderen Schlüssel einzugeben."
 }

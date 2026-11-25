@@ -45,7 +45,9 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use crate::accounts::store_cards;
-use crate::common::{backend_op, card, card_grid, notify_error, notify_success, wrapped_tooltip};
+use crate::common::{
+    backend_op, card, card_grid, card_grid_capped, notify_error, notify_success, wrapped_tooltip,
+};
 use crate::store_window::open_store_window;
 
 /// Deals rendered per "Show more" step.
@@ -525,21 +527,6 @@ pub(crate) fn relates_to_library(title: &str, owned: &HashSet<String>) -> bool {
 
 pub(crate) fn is_owned_base_game(title: &str, owned: &HashSet<String>) -> bool {
     owned.contains(&sort_key(title))
-}
-
-fn is_owned_free_game(title: &str, owned: &HashSet<String>) -> bool {
-    if is_owned_base_game(title, owned) {
-        return true;
-    }
-    let stripped = wiki::strip_edition_suffix(title);
-    !stripped.is_empty() && is_owned_base_game(&stripped, owned)
-}
-
-pub(crate) fn count_unowned_free_games(free_games: &[FreeGame], owned: &HashSet<String>) -> usize {
-    free_games
-        .iter()
-        .filter(|g| !g.upcoming && !is_owned_free_game(&g.title, owned))
-        .count()
 }
 
 pub(crate) fn has_divergent_currency(
@@ -1285,15 +1272,6 @@ impl DealsSection {
         this
     }
 
-    pub(crate) fn unowned_free_count(&self, cx: &App) -> usize {
-        match &self.cache.read(cx).state {
-            DealsState::Loaded { free_games, .. } => {
-                count_unowned_free_games(free_games, &self.owned)
-            }
-            _ => 0,
-        }
-    }
-
     fn is_global_search_active(&self, cx: &App) -> bool {
         self.search.read(cx).value().trim().len() >= 2
     }
@@ -1846,7 +1824,7 @@ impl DealsSection {
         window: &mut Window,
         cx: &mut App,
     ) -> AnyElement {
-        let width = rems(6.);
+        let width = rems(10.);
         let art = p
             .cover_horizontal
             .clone()
@@ -1900,7 +1878,8 @@ impl DealsSection {
             "list",
             p,
             div()
-                .font_medium()
+                .text_base()
+                .font_semibold()
                 .truncate()
                 .child(p.title.clone())
                 .into_any_element(),
@@ -1910,9 +1889,10 @@ impl DealsSection {
         h_flex()
             .id(ElementId::Name(format!("deal-list-{}", p.id).into()))
             .w_full()
-            .gap_3()
-            .px_3()
-            .py_2()
+            .items_center()
+            .gap_4()
+            .px_4()
+            .py_3()
             .rounded(radius)
             .border_1()
             .border_color(border)
@@ -1922,7 +1902,7 @@ impl DealsSection {
                 div()
                     .id(ElementId::Name(format!("list-art-{}", p.id).into()))
                     .w(width)
-                    .h(rems(3.4))
+                    .h(rems(5.6))
                     .flex_shrink_0()
                     .cursor_pointer()
                     .rounded(radius)
@@ -1936,7 +1916,7 @@ impl DealsSection {
                     }),
             )
             .child(
-                v_flex().flex_1().min_w_0().gap_0p5().child(title_el).child(
+                v_flex().flex_1().min_w_0().gap_1().child(title_el).child(
                     h_flex()
                         .gap_2()
                         .flex_wrap()
@@ -1967,7 +1947,7 @@ impl DealsSection {
                     .flex_shrink_0()
                     .items_center()
                     .when(percent > 0, |this| {
-                        this.child(Tag::success().xsmall().child(t_args(
+                        this.child(Tag::success().small().child(t_args(
                             "manage.deals.discount",
                             &[("percent", &percent.to_string())],
                         )))
@@ -1975,7 +1955,7 @@ impl DealsSection {
                     .when(!p.price.base.is_empty(), |this| {
                         this.child(
                             div()
-                                .text_xs()
+                                .text_sm()
                                 .line_through()
                                 .text_color(muted)
                                 .child(p.price.base.clone()),
@@ -1983,7 +1963,7 @@ impl DealsSection {
                     })
                     .child(
                         div()
-                            .text_sm()
+                            .text_base()
                             .font_semibold()
                             .child(p.price.r#final.clone()),
                     )
@@ -2317,12 +2297,7 @@ impl Render for DealsSection {
                     } else if layout == DealsLayout::Grid {
                         card_grid(&self.grid_width, 17.5, cards, window).into_any_element()
                     } else {
-                        v_flex()
-                            .w_full()
-                            .max_w(rems(68.))
-                            .gap_2()
-                            .children(cards)
-                            .into_any_element()
+                        card_grid_capped(&self.grid_width, 40., 2, cards, window).into_any_element()
                     })
                     .when(total > self.shown, |this| {
                         this.child(
@@ -2494,33 +2469,6 @@ mod tests {
         assert_eq!(region_selected_index("EU").row, eu_row);
         assert_eq!(region_selected_index("DE").row, eu_row);
         assert_eq!(region_selected_index("unknown").row, 0);
-    }
-
-    #[test]
-    fn counts_only_active_unowned_free_games() {
-        let free = |id: &str, title: &str, upcoming: bool| FreeGame {
-            id: id.into(),
-            title: title.into(),
-            store: FreeStore::Epic,
-            image_url: None,
-            claim_url: "https://example.invalid".into(),
-            original_price: None,
-            ends_at: None,
-            upcoming,
-            steam_app_id: None,
-            from_gamerpower: false,
-        };
-        let list = vec![
-            free("1", "Unowned Active", false),
-            free("2", "Owned Exact", false),
-            free("3", "Dwarven Realms (Steam) Key", false),
-            free("4", "Future Giveaway", true),
-        ];
-        let owned: HashSet<String> = ["Owned Exact", "Dwarven Realms"]
-            .into_iter()
-            .map(sort_key)
-            .collect();
-        assert_eq!(count_unowned_free_games(&list, &owned), 1);
     }
 
     #[test]
