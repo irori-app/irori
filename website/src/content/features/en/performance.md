@@ -1,7 +1,7 @@
 ---
 title: Fast, light and quiet
 seoTitle: 'A lightweight game launcher: 88 MiB empty, 126 MiB with 1,000 games, no Electron'
-description: 'Irori is one native Rust process drawn on your GPU: 88.3 MiB empty, 119.4 MiB with 300 games, and 126.0 MiB with 1,000 games (108.1 MB binary), against 478 MiB for Heroic 2.22.4 in the 0.2.0 empty-profile baseline.'
+description: 'Irori is one native Rust process drawn on your GPU: 88.3 MiB empty, 119.4 MiB with 300 games, and 126.0 MiB with 1,000 games, vs 478 MiB for Heroic 2.22.4.'
 tag: Performance
 summary: 'One native process drawn on your GPU: 88.3 MiB empty and 126.0 MiB with 1,000 games and cover art.'
 icon: gauge
