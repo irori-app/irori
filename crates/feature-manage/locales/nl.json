@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "SLEUTEL=waarde, gescheiden door spaties. Ze gelden voor de launcher en elke game die ermee start, boven de standaardinstellingen.",
   "manage.launchers.wine.save": "Opslaan",
   "manage.launchers.wine.saved": "{launcher} gebruikt de nieuwe Wine-instellingen vanaf de volgende start",
-  "manage.launchers.wine.failed": "Kan de Wine-instellingen van {launcher} niet opslaan"
+  "manage.launchers.wine.failed": "Kan de Wine-instellingen van {launcher} niet opslaan",
+  "manage.wine.prefixes.search": "Zoek prefixes of spellen",
+  "manage.wine.prefixes.filter.all": "Alle",
+  "manage.wine.prefixes.filter.in_use": "In gebruik",
+  "manage.wine.prefixes.filter.unused": "Ongebruikt",
+  "manage.wine.prefixes.tag.unused": "Ongebruikt",
+  "manage.wine.prefixes.no_match": "Geen prefixes gevonden voor je zoekopdracht.",
+  "manage.wine.prefixes.open_game": "Spel openen"
 }

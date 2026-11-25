@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "CLAVE=valor, separadas por espacios. Se aplican al lanzador y a cada juego iniciado con él, por encima de los valores predeterminados.",
   "manage.launchers.wine.save": "Guardar",
   "manage.launchers.wine.saved": "{launcher} usará los nuevos ajustes de Wine desde su próximo inicio",
-  "manage.launchers.wine.failed": "No se pudieron guardar los ajustes de Wine de {launcher}"
+  "manage.launchers.wine.failed": "No se pudieron guardar los ajustes de Wine de {launcher}",
+  "manage.wine.prefixes.search": "Buscar prefijos o juegos",
+  "manage.wine.prefixes.filter.all": "Todos",
+  "manage.wine.prefixes.filter.in_use": "En uso",
+  "manage.wine.prefixes.filter.unused": "Sin uso",
+  "manage.wine.prefixes.tag.unused": "Sin uso",
+  "manage.wine.prefixes.no_match": "Ningún prefijo coincide con tu búsqueda.",
+  "manage.wine.prefixes.open_game": "Abrir juego"
 }

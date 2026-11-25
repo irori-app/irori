@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "ANAHTAR=değer, boşlukla ayrılır. Başlatıcıya ve onunla açılan her oyuna, oyun varsayılanlarının üzerine uygulanır.",
   "manage.launchers.wine.save": "Kaydet",
   "manage.launchers.wine.saved": "{launcher}, yeni Wine ayarlarını bir sonraki açılışta kullanacak",
-  "manage.launchers.wine.failed": "{launcher} Wine ayarları kaydedilemedi"
+  "manage.launchers.wine.failed": "{launcher} Wine ayarları kaydedilemedi",
+  "manage.wine.prefixes.search": "Önek veya oyun ara",
+  "manage.wine.prefixes.filter.all": "Tümü",
+  "manage.wine.prefixes.filter.in_use": "Kullanımda",
+  "manage.wine.prefixes.filter.unused": "Kullanılmayan",
+  "manage.wine.prefixes.tag.unused": "Kullanılmıyor",
+  "manage.wine.prefixes.no_match": "Aramanızla eşleşen önek yok.",
+  "manage.wine.prefixes.open_game": "Oyunu aç"
 }

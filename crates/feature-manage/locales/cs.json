@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "KLÍČ=hodnota, oddělené mezerami. Platí pro spouštěč a každou hru spuštěnou přes něj, nad výchozím nastavením her.",
   "manage.launchers.wine.save": "Uložit",
   "manage.launchers.wine.saved": "{launcher} použije nové nastavení Wine od příštího spuštění",
-  "manage.launchers.wine.failed": "Nastavení Wine pro {launcher} se nepodařilo uložit"
+  "manage.launchers.wine.failed": "Nastavení Wine pro {launcher} se nepodařilo uložit",
+  "manage.wine.prefixes.search": "Hledat prefixy nebo hry",
+  "manage.wine.prefixes.filter.all": "Vše",
+  "manage.wine.prefixes.filter.in_use": "Používané",
+  "manage.wine.prefixes.filter.unused": "Nepoužívané",
+  "manage.wine.prefixes.tag.unused": "Nepoužívaný",
+  "manage.wine.prefixes.no_match": "Žádný prefix neodpovídá hledání.",
+  "manage.wine.prefixes.open_game": "Otevřít hru"
 }

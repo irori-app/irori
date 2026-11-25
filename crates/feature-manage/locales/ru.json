@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "КЛЮЧ=значение через пробел. Действуют для лаунчера и каждой запущенной через него игры, поверх настроек игр по умолчанию.",
   "manage.launchers.wine.save": "Сохранить",
   "manage.launchers.wine.saved": "{launcher} будет использовать новые настройки Wine со следующего запуска",
-  "manage.launchers.wine.failed": "Не удалось сохранить настройки Wine для {launcher}"
+  "manage.launchers.wine.failed": "Не удалось сохранить настройки Wine для {launcher}",
+  "manage.wine.prefixes.search": "Поиск префиксов или игр",
+  "manage.wine.prefixes.filter.all": "Все",
+  "manage.wine.prefixes.filter.in_use": "Используются",
+  "manage.wine.prefixes.filter.unused": "Не используются",
+  "manage.wine.prefixes.tag.unused": "Не используется",
+  "manage.wine.prefixes.no_match": "Ни один префикс не подходит под запрос.",
+  "manage.wine.prefixes.open_game": "Открыть игру"
 }

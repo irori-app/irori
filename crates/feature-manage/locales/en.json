@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "KEY=value, separated by spaces. They apply to the launcher and every game started through it, over the game defaults.",
   "manage.launchers.wine.save": "Save",
   "manage.launchers.wine.saved": "{launcher} uses its new Wine settings from its next start",
-  "manage.launchers.wine.failed": "Couldn’t save the Wine settings of {launcher}"
+  "manage.launchers.wine.failed": "Couldn’t save the Wine settings of {launcher}",
+  "manage.wine.prefixes.search": "Search prefixes or games",
+  "manage.wine.prefixes.filter.all": "All",
+  "manage.wine.prefixes.filter.in_use": "In use",
+  "manage.wine.prefixes.filter.unused": "Unused",
+  "manage.wine.prefixes.tag.unused": "Unused",
+  "manage.wine.prefixes.no_match": "No prefixes match your search.",
+  "manage.wine.prefixes.open_game": "Open game"
 }

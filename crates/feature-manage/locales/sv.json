@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "NYCKEL=värde, åtskilda med mellanslag. De gäller startprogrammet och varje spel som startas genom det, ovanpå spelens standardvärden.",
   "manage.launchers.wine.save": "Spara",
   "manage.launchers.wine.saved": "{launcher} använder de nya Wine-inställningarna från nästa start",
-  "manage.launchers.wine.failed": "Det gick inte att spara Wine-inställningarna för {launcher}"
+  "manage.launchers.wine.failed": "Det gick inte att spara Wine-inställningarna för {launcher}",
+  "manage.wine.prefixes.search": "Sök prefix eller spel",
+  "manage.wine.prefixes.filter.all": "Alla",
+  "manage.wine.prefixes.filter.in_use": "Används",
+  "manage.wine.prefixes.filter.unused": "Oanvända",
+  "manage.wine.prefixes.tag.unused": "Oanvänd",
+  "manage.wine.prefixes.no_match": "Inga prefix matchar sökningen.",
+  "manage.wine.prefixes.open_game": "Öppna spel"
 }
