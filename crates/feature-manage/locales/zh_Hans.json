@@ -715,8 +715,8 @@
   "manage.launchers.description": "在隔离的 Wine 前缀中配置第三方启动器。",
   "manage.launchers.description_windows": "在库中显示第三方启动器的游戏。",
   "manage.launchers.wine": "默认 Proton / Wine",
-  "manage.launchers.set_up": "设置 {launcher}",
-  "manage.launchers.open": "打开 {launcher}",
+  "manage.launchers.set_up": "设置",
+  "manage.launchers.open": "打开",
   "manage.launchers.scan": "查找游戏",
   "manage.launchers.downloading": "正在下载安装程序…",
   "manage.launchers.creating_prefix": "正在创建 Wine 前缀…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG 没有为其他程序提供好友 API；你的好友只在 GOG Galaxy 中显示。",
   "manage.friends.other.launchers": "这些启动器只在自己的应用中保存好友，其他程序无法读取。",
   "manage.launchers.xbox.account.about": "同步 Xbox 游玩时长、成就与 PC 游戏记录。",
-  "manage.launchers.xbox.account.sign_in": "登录 Xbox",
+  "manage.launchers.xbox.account.sign_in": "登录",
   "manage.launchers.xbox.account.sign_in_again": "重新登录",
   "manage.launchers.xbox.account.signed_in": "已以 {name} 身份登录 Xbox",
   "manage.launchers.xbox.account.titles_one": "玩过 1 款 PC 游戏",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "精选推荐",
   "manage.deals.sort.discount": "折扣力度最大",
   "manage.deals.sort.lowest_price": "价格最低",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "全部",
   "manage.deals.shop_type.official": "官方",
   "manage.deals.shop_type.keyshops": "Key 商店",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. 打开 API 页面，点击 \"Get Your API key\" 并复制令牌:",
   "manage.deals.ggdeals.step3": "3. 将令牌粘贴到下方并保存。",
   "manage.launchers.wine_tooltip": "配置新启动器时使用。",
-  "manage.stores.description.deals": "领取免费游戏并跟踪各 PC 商店的地区特惠。"
+  "manage.stores.description.deals": "领取免费游戏并跟踪各 PC 商店的地区特惠。",
+  "manage.deals.ggdeals.key_connected_description": "您的 GG.deals API 密钥已启用。如需断开连接或更换密钥，请在下方移除。"
 }

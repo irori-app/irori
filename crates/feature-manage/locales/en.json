@@ -715,8 +715,8 @@
   "manage.launchers.description": "Set up third-party launchers in isolated Wine prefixes.",
   "manage.launchers.description_windows": "Show games from third-party launchers in your library.",
   "manage.launchers.wine": "Default Proton / Wine",
-  "manage.launchers.set_up": "Set up {launcher}",
-  "manage.launchers.open": "Open {launcher}",
+  "manage.launchers.set_up": "Setup",
+  "manage.launchers.open": "Open",
   "manage.launchers.scan": "Look for games",
   "manage.launchers.downloading": "Downloading the installer…",
   "manage.launchers.creating_prefix": "Creating the Wine prefix…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG offers no friends API to other programs; your friends stay in GOG Galaxy.",
   "manage.friends.other.launchers": "These launchers keep friends inside their own apps, with no way for other programs to read them.",
   "manage.launchers.xbox.account.about": "Sync Xbox playtime, achievements and played PC games.",
-  "manage.launchers.xbox.account.sign_in": "Sign in to Xbox",
+  "manage.launchers.xbox.account.sign_in": "Sign in",
   "manage.launchers.xbox.account.sign_in_again": "Sign in again",
   "manage.launchers.xbox.account.signed_in": "Signed in to Xbox as {name}",
   "manage.launchers.xbox.account.titles_one": "1 PC game played",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "Featured",
   "manage.deals.sort.discount": "Biggest discount",
   "manage.deals.sort.lowest_price": "Lowest price",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "All",
   "manage.deals.shop_type.official": "Official",
   "manage.deals.shop_type.keyshops": "Keyshops",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. Open the API page, click \"Get Your API key\", and copy the token:",
   "manage.deals.ggdeals.step3": "3. Paste the token below and save.",
   "manage.launchers.wine_tooltip": "Used when setting up new launchers.",
-  "manage.stores.description.deals": "Claim free games and track regional deals across PC stores."
+  "manage.stores.description.deals": "Claim free games and track regional deals across PC stores.",
+  "manage.deals.ggdeals.key_connected_description": "Your GG.deals API key is active. Remove it below if you want to disconnect or enter a different key."
 }

@@ -715,8 +715,8 @@
   "manage.launchers.description": "在隔離的 Wine 前綴中設定第三方啟動器。",
   "manage.launchers.description_windows": "在收藏庫中顯示第三方啟動器的遊戲。",
   "manage.launchers.wine": "預設 Proton / Wine",
-  "manage.launchers.set_up": "設定 {launcher}",
-  "manage.launchers.open": "開啟 {launcher}",
+  "manage.launchers.set_up": "設定",
+  "manage.launchers.open": "開啟",
   "manage.launchers.scan": "尋找遊戲",
   "manage.launchers.downloading": "正在下載安裝程式…",
   "manage.launchers.creating_prefix": "正在建立 Wine 前綴…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG 沒有為其他程式提供好友 API；你的好友只在 GOG Galaxy 中顯示。",
   "manage.friends.other.launchers": "這些啟動器只在自己的應用程式中保存好友，其他程式無法讀取。",
   "manage.launchers.xbox.account.about": "同步 Xbox 遊玩時數、成就與 PC 遊戲記錄。",
-  "manage.launchers.xbox.account.sign_in": "登入 Xbox",
+  "manage.launchers.xbox.account.sign_in": "登入",
   "manage.launchers.xbox.account.sign_in_again": "重新登入",
   "manage.launchers.xbox.account.signed_in": "已以 {name} 身分登入 Xbox",
   "manage.launchers.xbox.account.titles_one": "玩過 1 款 PC 遊戲",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "精選推薦",
   "manage.deals.sort.discount": "折扣最多",
   "manage.deals.sort.lowest_price": "價格最低",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "全部",
   "manage.deals.shop_type.official": "官方",
   "manage.deals.shop_type.keyshops": "Key 商店",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. 開啟 API 頁面，點擊 \"Get Your API key\" 並複製權杖:",
   "manage.deals.ggdeals.step3": "3. 將權杖貼到下方並儲存。",
   "manage.launchers.wine_tooltip": "設定新啟動器時使用。",
-  "manage.stores.description.deals": "領取免費遊戲並追蹤各 PC 商店的地區特惠。"
+  "manage.stores.description.deals": "領取免費遊戲並追蹤各 PC 商店的地區特惠。",
+  "manage.deals.ggdeals.key_connected_description": "您的 GG.deals API 金鑰已啟用。如需中斷連線或更換金鑰，請在下方移除。"
 }

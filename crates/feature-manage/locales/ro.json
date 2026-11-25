@@ -715,8 +715,8 @@
   "manage.launchers.description": "Configurează lansatoare terțe în prefixuri Wine izolate.",
   "manage.launchers.description_windows": "Afișează jocurile din alte lansatoare în bibliotecă.",
   "manage.launchers.wine": "Proton / Wine implicit",
-  "manage.launchers.set_up": "Configurează {launcher}",
-  "manage.launchers.open": "Deschide {launcher}",
+  "manage.launchers.set_up": "Configurează",
+  "manage.launchers.open": "Deschide",
   "manage.launchers.scan": "Caută jocuri",
   "manage.launchers.downloading": "Se descarcă programul de instalare…",
   "manage.launchers.creating_prefix": "Se creează prefixul Wine…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG nu oferă altor programe niciun API pentru prieteni; prietenii tăi rămân în GOG Galaxy.",
   "manage.friends.other.launchers": "Aceste launchere păstrează prietenii în propriile aplicații, fără ca alte programe să-i poată citi.",
   "manage.launchers.xbox.account.about": "Sincronizează timpul jucat, realizările și jocurile PC Xbox.",
-  "manage.launchers.xbox.account.sign_in": "Conectează-te la Xbox",
+  "manage.launchers.xbox.account.sign_in": "Conectează-te",
   "manage.launchers.xbox.account.sign_in_again": "Conectează-te din nou",
   "manage.launchers.xbox.account.signed_in": "Conectat la Xbox ca {name}",
   "manage.launchers.xbox.account.titles_one": "1 joc PC jucat",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "Recomandate",
   "manage.deals.sort.discount": "Cea mai mare reducere",
   "manage.deals.sort.lowest_price": "Cel mai mic preț",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "Toate",
   "manage.deals.shop_type.official": "Oficiale",
   "manage.deals.shop_type.keyshops": "Keyshop-uri",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. Deschide pagina API, apasă pe \"Get Your API key\" și copiază tokenul:",
   "manage.deals.ggdeals.step3": "3. Lipește tokenul mai jos și salvează.",
   "manage.launchers.wine_tooltip": "Folosit la configurarea lansatoarelor noi.",
-  "manage.stores.description.deals": "Revendică jocuri gratuite și urmărește reducerile regionale în magazinele PC."
+  "manage.stores.description.deals": "Revendică jocuri gratuite și urmărește reducerile regionale în magazinele PC.",
+  "manage.deals.ggdeals.key_connected_description": "Cheia ta API GG.deals este activă. Elimin-o mai jos dacă vrei să deconectezi sau să introduci altă cheie."
 }

@@ -64,15 +64,13 @@ pub(crate) enum DealSort {
     Featured,
     Discount,
     LowestPrice,
-    TitleAsc,
 }
 
 impl DealSort {
-    const ALL: [DealSort; 4] = [
+    const ALL: [DealSort; 3] = [
         DealSort::Featured,
         DealSort::Discount,
         DealSort::LowestPrice,
-        DealSort::TitleAsc,
     ];
 
     fn id(self) -> &'static str {
@@ -80,7 +78,6 @@ impl DealSort {
             DealSort::Featured => "featured",
             DealSort::Discount => "discount",
             DealSort::LowestPrice => "lowest_price",
-            DealSort::TitleAsc => "title_asc",
         }
     }
 
@@ -88,7 +85,6 @@ impl DealSort {
         match id {
             "discount" => DealSort::Discount,
             "lowest_price" => DealSort::LowestPrice,
-            "title_asc" => DealSort::TitleAsc,
             _ => DealSort::Featured,
         }
     }
@@ -98,7 +94,6 @@ impl DealSort {
             DealSort::Featured => t("manage.deals.sort.featured"),
             DealSort::Discount => t("manage.deals.sort.discount"),
             DealSort::LowestPrice => t("manage.deals.sort.lowest_price"),
-            DealSort::TitleAsc => t("manage.deals.sort.title_asc"),
         }
     }
 }
@@ -162,6 +157,7 @@ pub(crate) struct DealsCache {
     enrichment_requested: HashSet<String>,
     ggdeals: HashMap<String, GgDealsPrice>,
     ggdeals_requested: HashSet<String>,
+    ggdeals_error: Option<SharedString>,
     ggdeals_key_saved: bool,
     anticheat_warmed: bool,
 }
@@ -177,6 +173,7 @@ impl Default for DealsCache {
             enrichment_requested: HashSet::new(),
             ggdeals: HashMap::new(),
             ggdeals_requested: HashSet::new(),
+            ggdeals_error: None,
             ggdeals_key_saved: false,
             anticheat_warmed: false,
         }
@@ -227,8 +224,10 @@ fn load(entity: Entity<DealsCache>, region: &'static DealsRegion, cx: &mut App) 
         if c.region_code != region.code {
             c.ggdeals.clear();
             c.ggdeals_requested.clear();
+            c.ggdeals_error = None;
             c.search_state = SearchState::Idle;
         }
+        c.ggdeals_error = None;
         c.region_code = region.code.to_string();
         c.state = DealsState::Loading;
         if warm_ac {
@@ -413,13 +412,24 @@ fn enrich_visible(
             };
             discounts::ggdeals_prices(&key, region, &missing_ggdeals).await
         });
-        cx.spawn(async move |cx| {
-            if let Ok(prices) = task.await
-                && !prices.is_empty()
-            {
+        cx.spawn(async move |cx| match task.await {
+            Ok(prices) => {
                 target.update(cx, |c, cx| {
                     if c.region_code == region_code {
-                        c.ggdeals.extend(prices);
+                        c.ggdeals_error = None;
+                        if !prices.is_empty() {
+                            c.ggdeals.extend(prices);
+                        }
+                        cx.notify();
+                    }
+                });
+            }
+            Err(e) => {
+                tracing::warn!("GG.deals prices fetch failed: {e:#}");
+                let msg: SharedString = format!("{e:#}").into();
+                target.update(cx, |c, cx| {
+                    if c.region_code == region_code {
+                        c.ggdeals_error = Some(msg);
                         cx.notify();
                     }
                 });
@@ -567,9 +577,6 @@ pub(crate) fn filter_and_sort_deals(
                     .partial_cmp(&final_amount(&products[b]))
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
-        }
-        DealSort::TitleAsc => {
-            ix.sort_by(|&a, &b| sort_key(&products[a].title).cmp(&sort_key(&products[b].title)));
         }
     }
     ix
@@ -744,7 +751,12 @@ fn open_ggdeals_key_dialog(
         };
         dialog
             .title(t("manage.deals.ggdeals.dialog_title"))
-            .child(
+            .child(if key_saved {
+                div()
+                    .text_sm()
+                    .child(t("manage.deals.ggdeals.key_connected_description"))
+                    .into_any_element()
+            } else {
                 v_flex()
                     .gap_3()
                     .child(
@@ -903,100 +915,103 @@ fn open_ggdeals_key_dialog(
                                     .child(t("manage.deals.ggdeals.step3")),
                             ),
                     )
-                    .child(Input::new(&input)),
-            )
+                    .child(Input::new(&input))
+                    .into_any_element()
+            })
             .footer({
                 let save_input = input.clone();
                 let save_cache = weak_cache.clone();
                 let remove_cache = weak_cache.clone();
-                let mut footer = DialogFooter::new();
+                let footer = DialogFooter::new();
                 if key_saved {
-                    footer =
-                        footer.child(
-                            Button::new("ggdeals-key-remove")
-                                .outline()
-                                .label(t("manage.deals.ggdeals.remove_key"))
-                                .on_click(move |_, window, cx| {
-                                    let b = backend(cx);
-                                    let target = remove_cache.clone();
-                                    let task = irori_ui::run(cx, async move {
-                                        b.set_ggdeals_api_key(None).await
-                                    });
-                                    window
-                                        .spawn(cx, async move |cx| {
-                                            let res = task.await;
-                                            let _ = cx.update(|window, cx| match res {
-                                                Ok(()) => {
-                                                    let _ = target.update(cx, |c, cx| {
-                                                        c.ggdeals_key_saved = false;
-                                                        c.ggdeals.clear();
-                                                        c.ggdeals_requested.clear();
-                                                        cx.notify();
-                                                    });
-                                                    notify_success(
-                                                        t("manage.deals.ggdeals.key_removed"),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                    window.close_dialog(cx);
-                                                }
-                                                Err(e) => notify_error(
-                                                    t("manage.deals.ggdeals.key_save_failed"),
-                                                    &e,
+                    footer.child(
+                        Button::new("ggdeals-key-remove")
+                            .outline()
+                            .label(t("manage.deals.ggdeals.remove_key"))
+                            .on_click(move |_, window, cx| {
+                                let b = backend(cx);
+                                let target = remove_cache.clone();
+                                let task =
+                                    irori_ui::run(
+                                        cx,
+                                        async move { b.set_ggdeals_api_key(None).await },
+                                    );
+                                window
+                                    .spawn(cx, async move |cx| {
+                                        let res = task.await;
+                                        let _ = cx.update(|window, cx| match res {
+                                            Ok(()) => {
+                                                let _ = target.update(cx, |c, cx| {
+                                                    c.ggdeals_key_saved = false;
+                                                    c.ggdeals.clear();
+                                                    c.ggdeals_requested.clear();
+                                                    c.ggdeals_error = None;
+                                                    cx.notify();
+                                                });
+                                                notify_success(
+                                                    t("manage.deals.ggdeals.key_removed"),
                                                     window,
                                                     cx,
-                                                ),
-                                            });
-                                        })
-                                        .detach();
-                                }),
-                        );
-                }
-                footer.child(
-                    Button::new("ggdeals-key-save")
-                        .primary()
-                        .label(t("manage.deals.ggdeals.save_key"))
-                        .on_click(move |_, window, cx| {
-                            let val = save_input.read(cx).value().trim().to_string();
-                            if val.is_empty() {
-                                return;
-                            }
-                            let b = backend(cx);
-                            let target = save_cache.clone();
-                            let task =
-                                irori_ui::run(
-                                    cx,
-                                    async move { b.set_ggdeals_api_key(Some(val)).await },
-                                );
-                            window
-                                .spawn(cx, async move |cx| {
-                                    let res = task.await;
-                                    let _ = cx.update(|window, cx| match res {
-                                        Ok(()) => {
-                                            let _ = target.update(cx, |c, cx| {
-                                                c.ggdeals_key_saved = true;
-                                                c.ggdeals.clear();
-                                                c.ggdeals_requested.clear();
-                                                cx.notify();
-                                            });
-                                            notify_success(
-                                                t("manage.deals.ggdeals.key_saved"),
+                                                );
+                                                window.close_dialog(cx);
+                                            }
+                                            Err(e) => notify_error(
+                                                t("manage.deals.ggdeals.key_save_failed"),
+                                                &e,
                                                 window,
                                                 cx,
-                                            );
-                                            window.close_dialog(cx);
-                                        }
-                                        Err(e) => notify_error(
-                                            t("manage.deals.ggdeals.key_save_failed"),
-                                            &e,
-                                            window,
-                                            cx,
-                                        ),
-                                    });
-                                })
-                                .detach();
-                        }),
-                )
+                                            ),
+                                        });
+                                    })
+                                    .detach();
+                            }),
+                    )
+                } else {
+                    footer.child(
+                        Button::new("ggdeals-key-save")
+                            .primary()
+                            .label(t("manage.deals.ggdeals.save_key"))
+                            .on_click(move |_, window, cx| {
+                                let val = save_input.read(cx).value().trim().to_string();
+                                if val.is_empty() {
+                                    return;
+                                }
+                                let b = backend(cx);
+                                let target = save_cache.clone();
+                                let task = irori_ui::run(cx, async move {
+                                    b.set_ggdeals_api_key(Some(val)).await
+                                });
+                                window
+                                    .spawn(cx, async move |cx| {
+                                        let res = task.await;
+                                        let _ = cx.update(|window, cx| match res {
+                                            Ok(()) => {
+                                                let _ = target.update(cx, |c, cx| {
+                                                    c.ggdeals_key_saved = true;
+                                                    c.ggdeals.clear();
+                                                    c.ggdeals_requested.clear();
+                                                    c.ggdeals_error = None;
+                                                    cx.notify();
+                                                });
+                                                notify_success(
+                                                    t("manage.deals.ggdeals.key_saved"),
+                                                    window,
+                                                    cx,
+                                                );
+                                                window.close_dialog(cx);
+                                            }
+                                            Err(e) => notify_error(
+                                                t("manage.deals.ggdeals.key_save_failed"),
+                                                &e,
+                                                window,
+                                                cx,
+                                            ),
+                                        });
+                                    })
+                                    .detach();
+                            }),
+                    )
+                }
             })
     });
 }
@@ -1833,6 +1848,7 @@ impl Render for DealsSection {
         let state = cache.state.clone();
         let search_state = cache.search_state.clone();
         let ggdeals_key_saved = cache.ggdeals_key_saved;
+        let ggdeals_error = cache.ggdeals_error.clone();
         let muted = cx.theme().muted_foreground;
 
         let free_strip: Option<AnyElement> = match &state {
@@ -2097,6 +2113,9 @@ impl Render for DealsSection {
                             "deals-partial",
                             t_args("manage.deals.partial", &[("stores", &failed.join(", "))]),
                         ))
+                    })
+                    .when_some(ggdeals_error, |this, err| {
+                        this.child(Alert::warning("deals-ggdeals-error", err))
                     })
                     .child(if cards.is_empty() {
                         div()

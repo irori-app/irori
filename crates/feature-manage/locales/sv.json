@@ -715,8 +715,8 @@
   "manage.launchers.description": "Ställ in tredjepartslaunchers i isolerade Wine-prefix.",
   "manage.launchers.description_windows": "Visa spel från tredjepartslaunchers i biblioteket.",
   "manage.launchers.wine": "Standard Proton / Wine",
-  "manage.launchers.set_up": "Konfigurera {launcher}",
-  "manage.launchers.open": "Öppna {launcher}",
+  "manage.launchers.set_up": "Konfigurera",
+  "manage.launchers.open": "Öppna",
   "manage.launchers.scan": "Leta efter spel",
   "manage.launchers.downloading": "Hämtar installationsprogrammet…",
   "manage.launchers.creating_prefix": "Skapar Wine-prefixet…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG erbjuder inget vän-API för andra program; dina vänner stannar i GOG Galaxy.",
   "manage.friends.other.launchers": "De här startprogrammen håller vänner i sina egna appar, utan något sätt för andra program att läsa dem.",
   "manage.launchers.xbox.account.about": "Synka speltid, prestationer och spelade PC-spel.",
-  "manage.launchers.xbox.account.sign_in": "Logga in på Xbox",
+  "manage.launchers.xbox.account.sign_in": "Logga in",
   "manage.launchers.xbox.account.sign_in_again": "Logga in igen",
   "manage.launchers.xbox.account.signed_in": "Inloggad på Xbox som {name}",
   "manage.launchers.xbox.account.titles_one": "1 spelat pc-spel",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "Utvalda",
   "manage.deals.sort.discount": "Störst rabatt",
   "manage.deals.sort.lowest_price": "Lägsta pris",
-  "manage.deals.sort.title_asc": "A-Ö",
   "manage.deals.shop_type.all": "Alla",
   "manage.deals.shop_type.official": "Officiella",
   "manage.deals.shop_type.keyshops": "Keyshops",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. Öppna API-sidan, klicka på \"Get Your API key\" och kopiera token:",
   "manage.deals.ggdeals.step3": "3. Klistra in token nedan och spara.",
   "manage.launchers.wine_tooltip": "Används när nya startprogram ställs in.",
-  "manage.stores.description.deals": "Hämta gratisspel och följ regionala erbjudanden i PC-butiker."
+  "manage.stores.description.deals": "Hämta gratisspel och följ regionala erbjudanden i PC-butiker.",
+  "manage.deals.ggdeals.key_connected_description": "Din GG.deals API-nyckel är aktiv. Ta bort den nedan om du vill koppla från eller ange en annan nyckel."
 }

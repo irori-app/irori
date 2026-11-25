@@ -715,8 +715,8 @@
   "manage.launchers.description": "Üçüncü taraf başlatıcıları izole Wine öneklerinde kurun.",
   "manage.launchers.description_windows": "Diğer başlatıcılardaki oyunları kütüphanenizde gösterin.",
   "manage.launchers.wine": "Varsayılan Proton / Wine",
-  "manage.launchers.set_up": "{launcher} uygulamasını kur",
-  "manage.launchers.open": "{launcher} uygulamasını aç",
+  "manage.launchers.set_up": "Kur",
+  "manage.launchers.open": "Aç",
   "manage.launchers.scan": "Oyunları ara",
   "manage.launchers.downloading": "Yükleyici indiriliyor…",
   "manage.launchers.creating_prefix": "Wine öneki oluşturuluyor…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG diğer programlara arkadaş API’si sunmaz; arkadaşların GOG Galaxy’de kalır.",
   "manage.friends.other.launchers": "Bu başlatıcılar arkadaşları kendi uygulamalarında tutar; diğer programların onları okuma yolu yoktur.",
   "manage.launchers.xbox.account.about": "Xbox oynama süresini, başarımları ve PC oyunlarını eşitleyin.",
-  "manage.launchers.xbox.account.sign_in": "Xbox’ta oturum aç",
+  "manage.launchers.xbox.account.sign_in": "Oturum aç",
   "manage.launchers.xbox.account.sign_in_again": "Yeniden oturum aç",
   "manage.launchers.xbox.account.signed_in": "Xbox’ta {name} olarak oturum açıldı",
   "manage.launchers.xbox.account.titles_one": "Oynanan 1 PC oyunu",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "Öne çıkanlar",
   "manage.deals.sort.discount": "En yüksek indirim",
   "manage.deals.sort.lowest_price": "En düşük fiyat",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "Tümü",
   "manage.deals.shop_type.official": "Resmi",
   "manage.deals.shop_type.keyshops": "Keyshop",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. API sayfasını açın, \"Get Your API key\" düğmesine tıklayın ve belirteci kopyalayın:",
   "manage.deals.ggdeals.step3": "3. Belirteci aşağıya yapıştırın ve kaydedin.",
   "manage.launchers.wine_tooltip": "Yeni başlatıcıları kurarken kullanılır.",
-  "manage.stores.description.deals": "Ücretsiz oyunları alın ve PC mağazalarındaki bölgesel indirimleri takip edin."
+  "manage.stores.description.deals": "Ücretsiz oyunları alın ve PC mağazalarındaki bölgesel indirimleri takip edin.",
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API anahtarınız etkin. Bağlantıyı kesmek veya farklı bir anahtar girmek için aşağıdan kaldırın."
 }

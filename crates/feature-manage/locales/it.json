@@ -715,8 +715,8 @@
   "manage.launchers.description": "Configura launcher di terze parti in prefissi Wine isolati.",
   "manage.launchers.description_windows": "Mostra i giochi di altri launcher nella libreria.",
   "manage.launchers.wine": "Proton / Wine predefinito",
-  "manage.launchers.set_up": "Configura {launcher}",
-  "manage.launchers.open": "Apri {launcher}",
+  "manage.launchers.set_up": "Configura",
+  "manage.launchers.open": "Apri",
   "manage.launchers.scan": "Cerca giochi",
   "manage.launchers.downloading": "Download del programma di installazione…",
   "manage.launchers.creating_prefix": "Creazione del prefisso Wine…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG non offre ad altri programmi alcuna API per gli amici; i tuoi amici restano in GOG Galaxy.",
   "manage.friends.other.launchers": "Questi launcher tengono gli amici nelle proprie app, senza alcun modo per altri programmi di leggerli.",
   "manage.launchers.xbox.account.about": "Sincronizza ore di gioco, obiettivi e titoli PC Xbox.",
-  "manage.launchers.xbox.account.sign_in": "Accedi a Xbox",
+  "manage.launchers.xbox.account.sign_in": "Accedi",
   "manage.launchers.xbox.account.sign_in_again": "Accedi di nuovo",
   "manage.launchers.xbox.account.signed_in": "Accesso a Xbox come {name}",
   "manage.launchers.xbox.account.titles_one": "1 gioco PC giocato",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "In evidenza",
   "manage.deals.sort.discount": "Sconto maggiore",
   "manage.deals.sort.lowest_price": "Prezzo più basso",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "Tutti",
   "manage.deals.shop_type.official": "Ufficiali",
   "manage.deals.shop_type.keyshops": "Keyshop",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. Apri la pagina API, clicca su \"Get Your API key\" e copia il token:",
   "manage.deals.ggdeals.step3": "3. Incolla il token qui sotto e salva.",
   "manage.launchers.wine_tooltip": "Usato durante la configurazione dei nuovi launcher.",
-  "manage.stores.description.deals": "Riscatta giochi gratis e segui le offerte regionali nei negozi PC."
+  "manage.stores.description.deals": "Riscatta giochi gratis e segui le offerte regionali nei negozi PC.",
+  "manage.deals.ggdeals.key_connected_description": "La tua chiave API di GG.deals è attiva. Rimuovila qui sotto se vuoi scollegarla o inserire un'altra chiave."
 }

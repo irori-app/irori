@@ -153,11 +153,24 @@ impl Default for CatalogLocale {
     }
 }
 
+fn gog_catalog_locale(locale: &str) -> &'static str {
+    match locale {
+        "de-DE" => "de-DE",
+        "fr-FR" => "fr-FR",
+        "pl-PL" => "pl-PL",
+        "ru-RU" => "ru-RU",
+        "zh-Hans" => "zh-Hans",
+        _ => "en-US",
+    }
+}
+
 impl From<&DealsRegion> for CatalogLocale {
     fn from(r: &DealsRegion) -> Self {
         Self {
             country_code: r.code.to_string(),
-            locale: r.locale.to_string(),
+            // GOG's catalog returns [] for locales it doesn't serve (e.g. pt-BR);
+            // keep the user's country and currency while requesting a valid UI locale.
+            locale: gog_catalog_locale(r.locale).to_string(),
             currency_code: r.currency_code.to_string(),
         }
     }
@@ -258,14 +271,25 @@ async fn fetch_all(locale: &CatalogLocale, token: Option<&str>) -> Result<Vec<Ca
 }
 
 /// GOG's discounted catalog. With `access_token`, owned games are hidden.
-/// An empty result for a non-default locale is retried with `US/en-US/USD`.
+/// An empty result retries with `en-US` in the user's country/currency first,
+/// and only falls back to `US/en-US/USD` if still empty.
 pub async fn gog_discounts(
     locale: &CatalogLocale,
     access_token: Option<&str>,
 ) -> Result<Vec<CatalogProduct>> {
-    let products = fetch_all(locale, access_token)
+    let mut products = fetch_all(locale, access_token)
         .await
         .context("Failed to fetch GOG discounts")?;
+    if products.is_empty() && locale.locale != "en-US" {
+        let same_region = CatalogLocale {
+            country_code: locale.country_code.clone(),
+            locale: "en-US".into(),
+            currency_code: locale.currency_code.clone(),
+        };
+        products = fetch_all(&same_region, access_token)
+            .await
+            .context("Failed to fetch GOG discounts")?;
+    }
     let fallback = CatalogLocale::default();
     if products.is_empty() && *locale != fallback {
         tracing::info!(
@@ -609,6 +633,10 @@ mod tests {
         assert_eq!(resolve_region("auto", Some("de-DE")).currency_code, "EUR");
         assert_eq!(resolve_region("unknown", None).code, "US");
         let br = resolve_region("BR", None);
+        let br_cat = CatalogLocale::from(br);
+        assert_eq!(br_cat.country_code, "BR");
+        assert_eq!(br_cat.currency_code, "BRL");
+        assert_eq!(br_cat.locale, "en-US");
         assert_eq!(gg_deals_browse_url(br), "https://gg.deals/br/deals/");
         assert_eq!(
             gg_deals_search_url("Shadow of Mordor", br),
@@ -700,13 +728,21 @@ mod tests {
         assert_eq!(deals[0].steam_app_id.as_deref(), Some("241930"));
         assert_eq!(deals[0].price.r#final, "$3.99");
 
-        let gg = r#"{"success": true, "data": {"241930": {"url": "https://gg.deals/game/shadow/",
-            "prices": {"currentRetail": "17.99", "currentKeyshops": "11.50", "historicalRetail": "8.99", "currency": "BRL"}}}}"#;
+        let gg = r#"{"success": true, "data": {
+            "241930": {"url": "https://gg.deals/game/shadow/",
+                "prices": {"currentRetail": "17.99", "currentKeyshops": "11.50", "historicalRetail": "8.99", "currency": "BRL"}},
+            "999999": [],
+            "888888": {"url": "https://gg.deals/game/other/", "prices": []},
+            "777777": {"url": "https://gg.deals/game/no-cur/", "prices": {"currentRetail": 10, "currency": null}}
+        }}"#;
         let map = parse_ggdeals_prices(gg.as_bytes(), "BRL").unwrap();
+        assert_eq!(map.len(), 2);
         let p = &map["241930"];
         assert_eq!(p.retail.as_deref(), Some("R$17.99"));
         assert_eq!(p.keyshop.as_deref(), Some("R$11.50"));
         assert_eq!(p.historical_retail.as_deref(), Some("R$8.99"));
+        assert_eq!(map["777777"].retail.as_deref(), Some("R$10.00"));
+        assert_eq!(map["777777"].currency, "BRL");
     }
 
     #[test]

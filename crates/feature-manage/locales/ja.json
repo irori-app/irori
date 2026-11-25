@@ -715,8 +715,8 @@
   "manage.launchers.description": "外部ランチャーを独立した Wine プレフィックスにセットアップします。",
   "manage.launchers.description_windows": "他のランチャーのゲームをライブラリに表示します。",
   "manage.launchers.wine": "既定の Proton / Wine",
-  "manage.launchers.set_up": "{launcher} をセットアップ",
-  "manage.launchers.open": "{launcher} を開く",
+  "manage.launchers.set_up": "セットアップ",
+  "manage.launchers.open": "開く",
   "manage.launchers.scan": "ゲームを探す",
   "manage.launchers.downloading": "インストーラーをダウンロードしています…",
   "manage.launchers.creating_prefix": "Wine プレフィックスを作成しています…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG は他のプログラム向けのフレンド API を提供していません。フレンドは GOG Galaxy で確認してください。",
   "manage.friends.other.launchers": "これらのランチャーはフレンドを自身のアプリ内に保持しており、他のプログラムが読み取る方法はありません。",
   "manage.launchers.xbox.account.about": "Xbox のプレイ時間、実績、PC ゲームを同期します。",
-  "manage.launchers.xbox.account.sign_in": "Xbox にサインイン",
+  "manage.launchers.xbox.account.sign_in": "サインイン",
   "manage.launchers.xbox.account.sign_in_again": "もう一度サインイン",
   "manage.launchers.xbox.account.signed_in": "{name} として Xbox にサインイン中",
   "manage.launchers.xbox.account.titles_one": "プレイ済みの PC ゲーム 1 本",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "おすすめ",
   "manage.deals.sort.discount": "割引率が高い順",
   "manage.deals.sort.lowest_price": "価格が安い順",
-  "manage.deals.sort.title_asc": "名前順",
   "manage.deals.shop_type.all": "すべて",
   "manage.deals.shop_type.official": "公式",
   "manage.deals.shop_type.keyshops": "キーショップ",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. API ページを開き、「Get Your API key」をクリックしてトークンをコピーします:",
   "manage.deals.ggdeals.step3": "3. 下にトークンを貼り付けて保存します。",
   "manage.launchers.wine_tooltip": "新しいランチャーのセットアップ時に使用されます。",
-  "manage.stores.description.deals": "無料ゲームを入手して、PC ストアごとの地域別セールをチェックできます。"
+  "manage.stores.description.deals": "無料ゲームを入手して、PC ストアごとの地域別セールをチェックできます。",
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API キーは有効です。解除または別のキーを入力する場合は以下から削除してください。"
 }

@@ -703,7 +703,7 @@ impl LaunchersSection {
                     Button::new("launcher-xbox-open")
                         .debug_selector(|| "launcher-xbox-open".to_string())
                         .icon(IconName::ExternalLink)
-                        .label(t_args("manage.launchers.open", &[("launcher", name)]))
+                        .label(t("manage.launchers.open"))
                         .on_click(
                             cx.listener(|this, _, window, cx| this.xbox_act(true, window, cx)),
                         )
@@ -910,7 +910,7 @@ impl LaunchersSection {
                 .child(
                     Button::new("launcher-open")
                         .icon(IconName::ExternalLink)
-                        .label(t_args("manage.launchers.open", &[("launcher", name)]))
+                        .label(t("manage.launchers.open"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.act(launcher, Action::Open, window, cx)
                         })),
@@ -940,7 +940,7 @@ impl LaunchersSection {
                         .debug_selector(move || format!("launcher-{}-set-up", launcher.id()))
                         .primary()
                         .icon(IconName::Download)
-                        .label(t_args("manage.launchers.set_up", &[("launcher", name)]))
+                        .label(t("manage.launchers.set_up"))
                         .disabled(no_wine)
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.set_up(launcher, window, cx)

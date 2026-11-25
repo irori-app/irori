@@ -715,8 +715,8 @@
   "manage.launchers.description": "Stel externe launchers in geïsoleerde Wine-prefixes in.",
   "manage.launchers.description_windows": "Toon games van externe launchers in je bibliotheek.",
   "manage.launchers.wine": "Standaard Proton / Wine",
-  "manage.launchers.set_up": "{launcher} instellen",
-  "manage.launchers.open": "{launcher} openen",
+  "manage.launchers.set_up": "Instellen",
+  "manage.launchers.open": "Openen",
   "manage.launchers.scan": "Games zoeken",
   "manage.launchers.downloading": "Installatieprogramma downloaden…",
   "manage.launchers.creating_prefix": "Wine-prefix aanmaken…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG biedt andere programma’s geen API voor vrienden; je vrienden blijven in GOG Galaxy.",
   "manage.friends.other.launchers": "Deze launchers houden vrienden in hun eigen apps, zonder manier voor andere programma’s om ze te lezen.",
   "manage.launchers.xbox.account.about": "Synchroniseer Xbox-speeltijd, prestaties en pc-games.",
-  "manage.launchers.xbox.account.sign_in": "Aanmelden bij Xbox",
+  "manage.launchers.xbox.account.sign_in": "Aanmelden",
   "manage.launchers.xbox.account.sign_in_again": "Opnieuw aanmelden",
   "manage.launchers.xbox.account.signed_in": "Aangemeld bij Xbox als {name}",
   "manage.launchers.xbox.account.titles_one": "1 gespeelde pc-game",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "Uitgelicht",
   "manage.deals.sort.discount": "Hoogste korting",
   "manage.deals.sort.lowest_price": "Laagste prijs",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "Alle",
   "manage.deals.shop_type.official": "Officieel",
   "manage.deals.shop_type.keyshops": "Keyshops",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. Open de API-pagina, klik op \"Get Your API key\" en kopieer het token:",
   "manage.deals.ggdeals.step3": "3. Plak het token hieronder en sla op.",
   "manage.launchers.wine_tooltip": "Gebruikt bij het instellen van nieuwe launchers.",
-  "manage.stores.description.deals": "Claim gratis games en volg regionale aanbiedingen bij PC-winkels."
+  "manage.stores.description.deals": "Claim gratis games en volg regionale aanbiedingen bij PC-winkels.",
+  "manage.deals.ggdeals.key_connected_description": "Je GG.deals-API-sleutel is actief. Verwijder hem hieronder om te ontkoppelen of een andere sleutel in te voeren."
 }

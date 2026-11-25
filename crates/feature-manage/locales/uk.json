@@ -715,8 +715,8 @@
   "manage.launchers.description": "Налаштовуйте сторонні лаунчери в ізольованих префіксах Wine.",
   "manage.launchers.description_windows": "Показуйте ігри з інших лаунчерів у своїй бібліотеці.",
   "manage.launchers.wine": "Proton / Wine за замовчуванням",
-  "manage.launchers.set_up": "Налаштувати {launcher}",
-  "manage.launchers.open": "Відкрити {launcher}",
+  "manage.launchers.set_up": "Налаштувати",
+  "manage.launchers.open": "Відкрити",
   "manage.launchers.scan": "Знайти ігри",
   "manage.launchers.downloading": "Завантаження інсталятора…",
   "manage.launchers.creating_prefix": "Створення префікса Wine…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG не надає іншим програмам API друзів; ваші друзі залишаються в GOG Galaxy.",
   "manage.friends.other.launchers": "Ці лаунчери зберігають друзів у власних застосунках, і інші програми не можуть їх прочитати.",
   "manage.launchers.xbox.account.about": "Синхронізуйте час гри, досягнення та ПК-ігри Xbox.",
-  "manage.launchers.xbox.account.sign_in": "Увійти в Xbox",
+  "manage.launchers.xbox.account.sign_in": "Увійти",
   "manage.launchers.xbox.account.sign_in_again": "Увійти знову",
   "manage.launchers.xbox.account.signed_in": "Вхід у Xbox виконано: {name}",
   "manage.launchers.xbox.account.titles_one": "Зіграно 1 гру для ПК",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "Рекомендовані",
   "manage.deals.sort.discount": "Найбільша знижка",
   "manage.deals.sort.lowest_price": "Найнижча ціна",
-  "manage.deals.sort.title_asc": "А-Я",
   "manage.deals.shop_type.all": "Усі",
   "manage.deals.shop_type.official": "Офіційні",
   "manage.deals.shop_type.keyshops": "Keyshops",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. Відкрийте сторінку API, натисніть «Get Your API key» та скопіюйте токен:",
   "manage.deals.ggdeals.step3": "3. Вставте токен нижче та збережіть.",
   "manage.launchers.wine_tooltip": "Використовується під час налаштування нових лаунчерів.",
-  "manage.stores.description.deals": "Забирайте безкоштовні ігри та стежте за регіональними знижками в крамницях ПК."
+  "manage.stores.description.deals": "Забирайте безкоштовні ігри та стежте за регіональними знижками в крамницях ПК.",
+  "manage.deals.ggdeals.key_connected_description": "Ваш API-ключ GG.deals активний. Видаліть його нижче, щоб відключити або ввести інший ключ."
 }

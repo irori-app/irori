@@ -715,8 +715,8 @@
   "manage.launchers.description": "Nastavte externí launchery v izolovaných Wine prefixech.",
   "manage.launchers.description_windows": "Zobrazte hry z jiných launcherů ve své knihovně.",
   "manage.launchers.wine": "Výchozí Proton / Wine",
-  "manage.launchers.set_up": "Nastavit {launcher}",
-  "manage.launchers.open": "Otevřít {launcher}",
+  "manage.launchers.set_up": "Nastavit",
+  "manage.launchers.open": "Otevřít",
   "manage.launchers.scan": "Vyhledat hry",
   "manage.launchers.downloading": "Stahování instalátoru…",
   "manage.launchers.creating_prefix": "Vytváření prefixu Wine…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG jiným programům nenabízí žádné API pro přátele; vaši přátelé zůstávají v GOG Galaxy.",
   "manage.friends.other.launchers": "Tyto spouštěče uchovávají přátele ve vlastních aplikacích a jiné programy je číst nemohou.",
   "manage.launchers.xbox.account.about": "Synchronizujte odehraný čas, úspěchy a PC hry z Xboxu.",
-  "manage.launchers.xbox.account.sign_in": "Přihlásit se k Xboxu",
+  "manage.launchers.xbox.account.sign_in": "Přihlásit se",
   "manage.launchers.xbox.account.sign_in_again": "Přihlásit se znovu",
   "manage.launchers.xbox.account.signed_in": "Přihlášeno k Xboxu jako {name}",
   "manage.launchers.xbox.account.titles_one": "1 hraná PC hra",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "Doporučené",
   "manage.deals.sort.discount": "Největší sleva",
   "manage.deals.sort.lowest_price": "Nejnižší cena",
-  "manage.deals.sort.title_asc": "A-Z",
   "manage.deals.shop_type.all": "Vše",
   "manage.deals.shop_type.official": "Oficiální",
   "manage.deals.shop_type.keyshops": "Keyshopy",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. Otevřete stránku API, klikněte na \"Get Your API key\" a zkopírujte token:",
   "manage.deals.ggdeals.step3": "3. Vložte token níže a uložte.",
   "manage.launchers.wine_tooltip": "Použije se při nastavování nových launcherů.",
-  "manage.stores.description.deals": "Získejte hry zdarma a sledujte regionální slevy napříč PC obchody."
+  "manage.stores.description.deals": "Získejte hry zdarma a sledujte regionální slevy napříč PC obchody.",
+  "manage.deals.ggdeals.key_connected_description": "Váš klíč API GG.deals je aktivní. Pokud jej chcete odpojit nebo zadat jiný klíč, odstraňte jej níže."
 }

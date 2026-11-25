@@ -715,8 +715,8 @@
   "manage.launchers.description": "외부 런처를 격리된 Wine 프리픽스에 설정합니다.",
   "manage.launchers.description_windows": "다른 런처의 게임을 라이브러리에 표시합니다.",
   "manage.launchers.wine": "기본 Proton / Wine",
-  "manage.launchers.set_up": "{launcher} 설정",
-  "manage.launchers.open": "{launcher} 열기",
+  "manage.launchers.set_up": "설정",
+  "manage.launchers.open": "열기",
   "manage.launchers.scan": "게임 찾기",
   "manage.launchers.downloading": "설치 프로그램 다운로드 중…",
   "manage.launchers.creating_prefix": "Wine 접두사 생성 중…",
@@ -801,7 +801,7 @@
   "manage.friends.other.gog": "GOG는 다른 프로그램에 친구 API를 제공하지 않습니다. 친구는 GOG Galaxy에서 확인하세요.",
   "manage.friends.other.launchers": "이 런처들은 친구를 자체 앱 안에만 두며, 다른 프로그램이 읽을 방법이 없습니다.",
   "manage.launchers.xbox.account.about": "Xbox 플레이 시간, 도전 과제 및 PC 게임을 동기화합니다.",
-  "manage.launchers.xbox.account.sign_in": "Xbox에 로그인",
+  "manage.launchers.xbox.account.sign_in": "로그인",
   "manage.launchers.xbox.account.sign_in_again": "다시 로그인",
   "manage.launchers.xbox.account.signed_in": "{name}(으)로 Xbox에 로그인됨",
   "manage.launchers.xbox.account.titles_one": "플레이한 PC 게임 1개",
@@ -894,7 +894,6 @@
   "manage.deals.sort.featured": "추천순",
   "manage.deals.sort.discount": "할인율순",
   "manage.deals.sort.lowest_price": "낮은 가격순",
-  "manage.deals.sort.title_asc": "이름순",
   "manage.deals.shop_type.all": "전체",
   "manage.deals.shop_type.official": "공식",
   "manage.deals.shop_type.keyshops": "키샵",
@@ -933,5 +932,6 @@
   "manage.deals.ggdeals.step2": "2. API 페이지를 열고 \"Get Your API key\"를 클릭한 뒤 토큰을 복사하세요:",
   "manage.deals.ggdeals.step3": "3. 아래에 토큰을 붙여넣고 저장하세요.",
   "manage.launchers.wine_tooltip": "새 런처를 설정할 때 사용됩니다.",
-  "manage.stores.description.deals": "무료 게임을 받고 PC 스토어별 지역 할인을 확인하세요."
+  "manage.stores.description.deals": "무료 게임을 받고 PC 스토어별 지역 할인을 확인하세요.",
+  "manage.deals.ggdeals.key_connected_description": "GG.deals API 키가 활성화되어 있습니다. 연결을 해제하거나 다른 키를 입력하려면 아래에서 제거하세요."
 }

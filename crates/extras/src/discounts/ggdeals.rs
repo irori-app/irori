@@ -25,31 +25,6 @@ pub struct GgDealsPrice {
     pub url: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct ApiResponse {
-    #[serde(default)]
-    success: bool,
-    #[serde(default)]
-    data: HashMap<String, Option<ApiEntry>>,
-}
-
-#[derive(Deserialize)]
-struct ApiEntry {
-    url: Option<String>,
-    prices: Option<ApiPrices>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ApiPrices {
-    current_retail: Option<serde_json::Value>,
-    current_keyshops: Option<serde_json::Value>,
-    historical_retail: Option<serde_json::Value>,
-    historical_keyshops: Option<serde_json::Value>,
-    #[serde(default)]
-    currency: String,
-}
-
 fn parse_money_field(val: Option<&serde_json::Value>, currency: &str) -> Option<String> {
     let val = val?;
     let amount = match val {
@@ -60,45 +35,92 @@ fn parse_money_field(val: Option<&serde_json::Value>, currency: &str) -> Option<
     (amount.is_finite() && amount >= 0.0).then(|| format_money(amount, currency))
 }
 
-/// Parse GG.deals `/v1/prices/by-steam-app-id/` JSON response.
+fn api_error_message(bytes: &[u8]) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    v.pointer("/data/message")
+        .or_else(|| v.get("message"))
+        .and_then(|m| m.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// Parse GG.deals `/v1/prices/by-steam-app-id/` JSON response, tolerating
+/// per-entry `null` or PHP empty `[]` placeholders returned for unindexed IDs.
 pub fn parse_ggdeals_prices(
     bytes: &[u8],
     default_currency: &str,
 ) -> Result<HashMap<String, GgDealsPrice>> {
-    let parsed: ApiResponse =
+    let root: serde_json::Value =
         serde_json::from_slice(bytes).context("parsing GG.deals API response")?;
-    if !parsed.success {
-        bail!("GG.deals API returned success=false");
+    if !root
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        let msg = api_error_message(bytes).unwrap_or_else(|| "success=false".into());
+        bail!("GG.deals API error: {msg}");
     }
+    let Some(data) = root.get("data").and_then(|d| d.as_object()) else {
+        return Ok(HashMap::new());
+    };
     let mut out = HashMap::new();
-    for (app_id, entry) in parsed.data {
-        let Some(entry) = entry else {
+    for (app_id, entry_val) in data {
+        let Some(entry) = entry_val.as_object() else {
             continue;
         };
-        let Some(prices) = entry.prices else {
+        let Some(prices) = entry.get("prices").and_then(|p| p.as_object()) else {
             continue;
         };
-        let currency = if prices.currency.trim().is_empty() {
-            default_currency.to_string()
-        } else {
-            prices.currency.to_uppercase()
-        };
+        let currency = prices
+            .get("currency")
+            .and_then(|c| c.as_str())
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .map(str::to_uppercase)
+            .unwrap_or_else(|| default_currency.to_string());
+        let url = entry
+            .get("url")
+            .and_then(|u| u.as_str())
+            .map(str::trim)
+            .filter(|u| !u.is_empty())
+            .map(str::to_string);
         out.insert(
-            app_id,
+            app_id.clone(),
             GgDealsPrice {
-                retail: parse_money_field(prices.current_retail.as_ref(), &currency),
-                keyshop: parse_money_field(prices.current_keyshops.as_ref(), &currency),
-                historical_retail: parse_money_field(prices.historical_retail.as_ref(), &currency),
-                historical_keyshop: parse_money_field(
-                    prices.historical_keyshops.as_ref(),
-                    &currency,
-                ),
+                retail: parse_money_field(prices.get("currentRetail"), &currency),
+                keyshop: parse_money_field(prices.get("currentKeyshops"), &currency),
+                historical_retail: parse_money_field(prices.get("historicalRetail"), &currency),
+                historical_keyshop: parse_money_field(prices.get("historicalKeyshops"), &currency),
                 currency,
-                url: entry.url.filter(|u| !u.trim().is_empty()),
+                url,
             },
         );
     }
     Ok(out)
+}
+
+async fn fetch_ggdeals_chunk(
+    ids: &str,
+    key: &str,
+    slug: &str,
+    default_currency: &str,
+) -> Result<HashMap<String, GgDealsPrice>> {
+    let resp = irori_core::http::client()
+        .get(GGDEALS_PRICES_URL)
+        .query(&[("ids", ids), ("key", key), ("region", slug)])
+        .header(reqwest::header::USER_AGENT, user_agent())
+        .timeout(Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("GG.deals request failed: {}", e.without_url()))?;
+    let status = resp.status();
+    let bytes = resp.bytes().await?;
+    if !status.is_success() {
+        let detail = api_error_message(&bytes).unwrap_or_else(|| format!("HTTP {status}"));
+        bail!("GG.deals API ({slug}): {detail}");
+    }
+    parse_ggdeals_prices(&bytes, default_currency)
 }
 
 /// Fetch Official vs Keyshop prices and historical lows for a batch of Steam
@@ -134,24 +156,27 @@ pub async fn ggdeals_prices(
 
     for chunk in missing.chunks(100) {
         let ids = chunk.join(",");
-        let resp = irori_core::http::client()
-            .get(GGDEALS_PRICES_URL)
-            .query(&[
-                ("ids", ids.as_str()),
-                ("key", key),
-                ("region", region.gg_deals_slug),
-            ])
-            .header(reqwest::header::USER_AGENT, user_agent())
-            .timeout(Duration::from_secs(15))
-            .send()
-            .await
-            .map_err(|e| anyhow::anyhow!("GG.deals request failed: {}", e.without_url()))?;
-        let status = resp.status();
-        if !status.is_success() {
-            bail!("GG.deals API returned HTTP {status}");
-        }
-        let bytes = resp.bytes().await?;
-        let parsed = parse_ggdeals_prices(&bytes, region.currency_code)?;
+        let parsed = match fetch_ggdeals_chunk(
+            &ids,
+            key,
+            region.gg_deals_slug,
+            region.currency_code,
+        )
+        .await
+        {
+            Ok(p) => p,
+            Err(e)
+                if region.gg_deals_slug != "us"
+                    && e.to_string().to_ascii_lowercase().contains("region") =>
+            {
+                tracing::info!(
+                    "GG.deals region '{}' rejected, falling back to 'us'",
+                    region.gg_deals_slug
+                );
+                fetch_ggdeals_chunk(&ids, key, "us", "USD").await?
+            }
+            Err(e) => return Err(e),
+        };
         for (id, entry) in parsed {
             let cache = dir.join(format!("{id}.json"));
             let _ = util::cache_write(&cache, &entry).await;
