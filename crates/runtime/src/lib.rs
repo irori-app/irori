@@ -716,7 +716,7 @@ async fn gather_facts(
     let (wc, metalfx) = match how {
         Gather::Launch(ctx) => {
             let wc = wine_context(app, settings, target.game, ctx, true).await?;
-            let metalfx = set_up_prefix(app, settings, target, &wc, ctx).await?;
+            let metalfx = Box::pin(set_up_prefix(app, settings, target, &wc, ctx)).await?;
             (wc, metalfx)
         }
         Gather::Preview => {
