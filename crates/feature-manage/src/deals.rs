@@ -214,7 +214,12 @@ pub(crate) fn interleave_featured(groups: Vec<Vec<CatalogProduct>>) -> Vec<Catal
     out
 }
 
-fn load(entity: Entity<DealsCache>, region: &'static DealsRegion, cx: &mut App) {
+fn load(
+    entity: Entity<DealsCache>,
+    region: &'static DealsRegion,
+    force_refresh: bool,
+    cx: &mut App,
+) {
     let is_same_region = entity.read(cx).region_code == region.code;
     if is_same_region && matches!(entity.read(cx).state, DealsState::Loading) {
         return;
@@ -222,10 +227,12 @@ fn load(entity: Entity<DealsCache>, region: &'static DealsRegion, cx: &mut App) 
     let warm_ac = cfg!(target_os = "linux") && !entity.read(cx).anticheat_warmed;
     entity.update(cx, |c, cx| {
         if c.region_code != region.code {
+            c.search_state = SearchState::Idle;
+        }
+        if c.region_code != region.code || force_refresh {
             c.ggdeals.clear();
             c.ggdeals_requested.clear();
             c.ggdeals_error = None;
-            c.search_state = SearchState::Idle;
         }
         c.ggdeals_error = None;
         c.region_code = region.code.to_string();
@@ -237,6 +244,9 @@ fn load(entity: Entity<DealsCache>, region: &'static DealsRegion, cx: &mut App) 
     });
     let b = backend(cx);
     let task = irori_ui::run(cx, async move {
+        if force_refresh {
+            discounts::clear_cache().await;
+        }
         let locale = CatalogLocale::from(region);
         let ac_warm = async {
             if warm_ac {
@@ -685,16 +695,21 @@ fn open_in_store_or_browser(
     }
 }
 
+fn open_deal_page(store: DealStore, url: &str, window: &mut Window, cx: &mut App) {
+    open_in_store_or_browser(deal_store_runner(store), url.to_string(), window, cx);
+}
+
 fn deal_title_link(id_prefix: &str, p: &CatalogProduct, label: AnyElement, cx: &App) -> AnyElement {
     let store_runner = deal_store_runner(p.store);
-    if let Some(r) = store_runner.filter(|&r| is_store_connected(r, cx)) {
+    if can_open_in_store_window(store_runner, cx) {
+        let store = p.store;
         let store_link = p.store_link.clone();
         return div()
             .id(ElementId::Name(format!("{id_prefix}-open-{}", p.id).into()))
             .cursor_pointer()
             .hover(|s| s.underline())
             .on_click(move |_, window, cx| {
-                open_store_window(r, Some(store_link.clone()), window, cx);
+                open_deal_page(store, &store_link, window, cx);
             })
             .child(label)
             .into_any_element();
@@ -769,6 +784,7 @@ fn render_protondb_badge(
 fn open_ggdeals_key_dialog(
     cache_entity: Entity<DealsCache>,
     key_saved: bool,
+    gg_browse_url: String,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -781,6 +797,7 @@ fn open_ggdeals_key_dialog(
     window.open_dialog(cx, move |dialog, _, cx| {
         let input = input.clone();
         let weak_cache = weak_cache.clone();
+        let gg_browse_url = gg_browse_url.clone();
         let (border, muted_bg, muted_fg, primary, primary_fg, panel_bg, radius) = {
             let theme = cx.theme();
             (
@@ -796,9 +813,24 @@ fn open_ggdeals_key_dialog(
         dialog
             .title(t("manage.deals.ggdeals.dialog_title"))
             .child(if key_saved {
-                div()
-                    .text_sm()
-                    .child(t("manage.deals.ggdeals.key_connected_description"))
+                v_flex()
+                    .gap_3()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(t("manage.deals.ggdeals.key_connected_description")),
+                    )
+                    .child(
+                        Link::new("ggdeals-browse-connected")
+                            .href(gg_browse_url)
+                            .child(
+                                h_flex()
+                                    .gap_1()
+                                    .text_sm()
+                                    .child(t("manage.deals.ggdeals.browse_tooltip"))
+                                    .child(Icon::new(IconName::ExternalLink).xsmall()),
+                            ),
+                    )
                     .into_any_element()
             } else {
                 v_flex()
@@ -1142,15 +1174,25 @@ impl DealsSection {
                 cx.notify();
             }),
             cx.observe_in(&settings, window, |this, s, window, cx| {
-                let setting = s.read(cx).app.deals_region.clone();
+                let (setting, hide_owned_next) = {
+                    let app = &s.read(cx).app;
+                    (app.deals_region.clone(), app.deals_hide_owned)
+                };
                 let target_region =
                     discounts::resolve_region(&setting, irori_ui::age_rating::system_locale());
                 let reg_ix = region_selected_index(&setting);
                 this.region_select.update(cx, |sel, cx| {
                     sel.set_selected_index(Some(reg_ix), window, cx)
                 });
+                let hide_owned_changed = this.hide_owned != hide_owned_next;
+                if hide_owned_changed {
+                    this.hide_owned = hide_owned_next;
+                    this.shown = PAGE;
+                    this.refilter(cx);
+                    this.schedule_enrichment(window, cx);
+                }
                 if this.cache.read(cx).region_code != target_region.code {
-                    load(this.cache.clone(), target_region, cx);
+                    load(this.cache.clone(), target_region, false, cx);
                 }
                 cx.notify();
             }),
@@ -1212,10 +1254,11 @@ impl DealsSection {
             ),
         ];
         let initial_region = active_region(cx);
+        let initial_hide_owned = models(cx).settings.read(cx).app.deals_hide_owned;
         if matches!(cache.read(cx).state, DealsState::Idle)
             || cache.read(cx).region_code != initial_region.code
         {
-            load(cache.clone(), initial_region, cx);
+            load(cache.clone(), initial_region, false, cx);
         }
         let mut this = Self {
             cache,
@@ -1226,7 +1269,7 @@ impl DealsSection {
             shop_filter: ShopFilter::Official,
             sort: DealSort::Featured,
             library_related: false,
-            hide_owned: false,
+            hide_owned: initial_hide_owned,
             owned: owned_titles(cx),
             shown: PAGE,
             visible: Vec::new(),
@@ -1500,35 +1543,68 @@ impl DealsSection {
             )
             .into_any_element()
     }
+}
 
+pub(crate) fn is_at_historical_low(
+    current_cents: Option<u64>,
+    historical_cents: Option<u64>,
+) -> bool {
+    let (Some(cur), Some(low)) = (current_cents, historical_cents) else {
+        return false;
+    };
+    low > 0 && cur <= low.saturating_add(1)
+}
+
+fn product_final_cents(p: &CatalogProduct, expected_currency: &str) -> Option<u64> {
+    let m = p.price.final_money.as_ref()?;
+    if !m.currency.trim().eq_ignore_ascii_case(expected_currency) {
+        return None;
+    }
+    let amt: f64 = m.amount.trim().parse().ok()?;
+    (amt.is_finite() && amt >= 0.0).then(|| (amt * 100.0).round() as u64)
+}
+
+impl DealsSection {
     fn render_ggdeals_line(
         &self,
-        id_prefix: &str,
+        mode: &str,
+        p: &CatalogProduct,
         steam_app_id: Option<&str>,
         gg_url: String,
         ggdeals: &HashMap<String, GgDealsPrice>,
         cx: &App,
     ) -> Option<AnyElement> {
         let info = steam_app_id.and_then(|id| ggdeals.get(id))?;
-        let muted = cx.theme().muted_foreground;
-        let mut parts = Vec::new();
+        let (muted, success) = {
+            let theme = cx.theme();
+            (theme.muted_foreground, theme.success)
+        };
+        let card_cents = product_final_cents(p, &info.currency);
+        let mut parts: Vec<(SharedString, bool)> = Vec::new();
         match self.shop_filter {
             ShopFilter::Official => {
                 if let Some(r) = &info.retail {
-                    parts.push(t_args(
-                        "manage.deals.ggdeals.official_price",
-                        &[("price", r)],
+                    parts.push((
+                        t_args("manage.deals.ggdeals.official_price", &[("price", r)]),
+                        false,
                     ));
                 }
                 if let Some(l) = &info.historical_retail {
-                    parts.push(t_args("manage.deals.ggdeals.low_price", &[("price", l)]));
+                    let at_low = is_at_historical_low(
+                        info.retail_cents.or(card_cents),
+                        info.historical_retail_cents,
+                    );
+                    parts.push((
+                        t_args("manage.deals.ggdeals.low_price", &[("price", l)]),
+                        at_low,
+                    ));
                 }
             }
             ShopFilter::Keyshops => {
                 if let Some(k) = &info.keyshop {
-                    parts.push(t_args(
-                        "manage.deals.ggdeals.keyshop_price",
-                        &[("price", k)],
+                    parts.push((
+                        t_args("manage.deals.ggdeals.keyshop_price", &[("price", k)]),
+                        false,
                     ));
                 }
                 if let Some(l) = info
@@ -1536,20 +1612,28 @@ impl DealsSection {
                     .as_ref()
                     .or(info.historical_retail.as_ref())
                 {
-                    parts.push(t_args("manage.deals.ggdeals.low_price", &[("price", l)]));
+                    let at_low = is_at_historical_low(
+                        info.keyshop_cents,
+                        info.historical_keyshop_cents
+                            .or(info.historical_retail_cents),
+                    );
+                    parts.push((
+                        t_args("manage.deals.ggdeals.low_price", &[("price", l)]),
+                        at_low,
+                    ));
                 }
             }
             ShopFilter::All => {
                 if let Some(r) = &info.retail {
-                    parts.push(t_args(
-                        "manage.deals.ggdeals.official_price",
-                        &[("price", r)],
+                    parts.push((
+                        t_args("manage.deals.ggdeals.official_price", &[("price", r)]),
+                        false,
                     ));
                 }
                 if let Some(k) = &info.keyshop {
-                    parts.push(t_args(
-                        "manage.deals.ggdeals.keyshop_price",
-                        &[("price", k)],
+                    parts.push((
+                        t_args("manage.deals.ggdeals.keyshop_price", &[("price", k)]),
+                        false,
                     ));
                 }
             }
@@ -1559,7 +1643,7 @@ impl DealsSection {
         }
         let tip = t("manage.deals.ggdeals.compare_tooltip");
         let mut line = h_flex()
-            .id(ElementId::Name(format!("ggline-{id_prefix}").into()))
+            .id(ElementId::Name(format!("ggline-{mode}-{}", p.id).into()))
             .cursor_pointer()
             .flex_wrap()
             .items_center()
@@ -1570,11 +1654,15 @@ impl DealsSection {
             .hover(|s| s.underline())
             .tooltip(move |window, cx| wrapped_tooltip(tip.clone(), window, cx))
             .on_click(move |_, _, cx| cx.open_url(&gg_url));
-        for (ix, part) in parts.into_iter().enumerate() {
+        for (ix, (part, highlight)) in parts.into_iter().enumerate() {
             if ix > 0 {
                 line = line.child(div().child("·"));
             }
-            line = line.child(div().child(part));
+            if highlight {
+                line = line.child(div().text_color(success).font_semibold().child(part));
+            } else {
+                line = line.child(div().child(part));
+            }
         }
         Some(line.into_any_element())
     }
@@ -1592,9 +1680,13 @@ impl DealsSection {
             .clone()
             .or_else(|| p.cover_vertical.clone())
             .and_then(|url| art_img(&url, physical_width(width, window), false, cx));
-        let (muted, muted_bg) = {
+        let (muted, muted_bg, hover_border) = {
             let theme = cx.theme();
-            (theme.muted_foreground, theme.muted)
+            (
+                theme.muted_foreground,
+                theme.muted,
+                theme.primary.opacity(0.45),
+            )
         };
         let percent = discount_percent(p);
         let (compat, gg_line) = {
@@ -1616,7 +1708,8 @@ impl DealsSection {
                 .and_then(|g| g.url.clone())
                 .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
             let gg_line = self.render_ggdeals_line(
-                &format!("grid-{}", p.id),
+                "grid",
+                p,
                 eff_steam_id.as_deref(),
                 gg_url,
                 &cache.ggdeals,
@@ -1626,6 +1719,8 @@ impl DealsSection {
         };
         let divergent_cur = has_divergent_currency(p, region);
         let in_library = is_owned_base_game(&p.title, &self.owned);
+        let cover_store = p.store;
+        let cover_link = p.store_link.clone();
         let title_el = deal_title_link(
             "grid",
             p,
@@ -1643,6 +1738,7 @@ impl DealsSection {
             .p_0()
             .gap_0()
             .overflow_hidden()
+            .hover(move |s| s.border_color(hover_border))
             .child(
                 div()
                     .relative()
@@ -1651,9 +1747,19 @@ impl DealsSection {
                     .flex_shrink_0()
                     .overflow_hidden()
                     .bg(muted_bg)
-                    .when_some(art, |this, img| {
-                        this.child(img.size_full().object_fit(ObjectFit::Cover))
-                    })
+                    .child(
+                        div()
+                            .id(ElementId::Name(format!("grid-art-{}", p.id).into()))
+                            .absolute()
+                            .inset_0()
+                            .cursor_pointer()
+                            .when_some(art, |this, img| {
+                                this.child(img.size_full().object_fit(ObjectFit::Cover))
+                            })
+                            .on_click(move |_, window, cx| {
+                                open_deal_page(cover_store, &cover_link, window, cx);
+                            }),
+                    )
                     .child(
                         div().absolute().top_2().left_2().child(
                             Tag::secondary()
@@ -1746,7 +1852,7 @@ impl DealsSection {
             .clone()
             .or_else(|| p.cover_vertical.clone())
             .and_then(|url| art_img(&url, physical_width(width, window), false, cx));
-        let (muted, muted_bg, radius, border, group_box) = {
+        let (muted, muted_bg, radius, border, group_box, hover_border) = {
             let theme = cx.theme();
             (
                 theme.muted_foreground,
@@ -1754,6 +1860,7 @@ impl DealsSection {
                 theme.radius,
                 theme.border,
                 theme.group_box,
+                theme.primary.opacity(0.45),
             )
         };
         let percent = discount_percent(p);
@@ -1776,7 +1883,8 @@ impl DealsSection {
                 .and_then(|g| g.url.clone())
                 .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
             let gg_line = self.render_ggdeals_line(
-                &format!("list-{}", p.id),
+                "list",
+                p,
                 eff_steam_id.as_deref(),
                 gg_url,
                 &cache.ggdeals,
@@ -1785,6 +1893,9 @@ impl DealsSection {
             (compat, gg_line)
         };
         let divergent_cur = has_divergent_currency(p, region);
+        let in_library = is_owned_base_game(&p.title, &self.owned);
+        let cover_store = p.store;
+        let cover_link = p.store_link.clone();
         let title_el = deal_title_link(
             "list",
             p,
@@ -1806,16 +1917,22 @@ impl DealsSection {
             .border_1()
             .border_color(border)
             .bg(group_box)
+            .hover(move |s| s.border_color(hover_border))
             .child(
                 div()
+                    .id(ElementId::Name(format!("list-art-{}", p.id).into()))
                     .w(width)
                     .h(rems(3.4))
                     .flex_shrink_0()
+                    .cursor_pointer()
                     .rounded(radius)
                     .overflow_hidden()
                     .bg(muted_bg)
                     .when_some(art, |this, img| {
                         this.child(img.size_full().rounded(radius).object_fit(ObjectFit::Cover))
+                    })
+                    .on_click(move |_, window, cx| {
+                        open_deal_page(cover_store, &cover_link, window, cx);
                     }),
             )
             .child(
@@ -1830,6 +1947,16 @@ impl DealsSection {
                                 .text_color(muted)
                                 .child(store_label(p.store, p.store_name.as_deref())),
                         )
+                        .when(in_library, |r| {
+                            r.child(Tag::info().xsmall().child(t("manage.deals.in_library")))
+                        })
+                        .when(p.store == DealStore::Gog, |r| {
+                            r.child(
+                                Tag::secondary()
+                                    .xsmall()
+                                    .child(t("manage.deals.installable_short")),
+                            )
+                        })
                         .children(compat)
                         .children(gg_line),
                 ),
@@ -1938,16 +2065,6 @@ impl Render for DealsSection {
             .flex_wrap()
             .items_center()
             .child(div().w(rems(13.)).child(Select::new(&self.region_select)))
-            .when(ggdeals_key_saved, |bar| {
-                bar.child(
-                    Button::new("deals-ggdeals-browse")
-                        .outline()
-                        .icon(IconName::ExternalLink)
-                        .label("GG.deals")
-                        .tooltip(t("manage.deals.ggdeals.browse_tooltip"))
-                        .on_click(move |_, _, cx| cx.open_url(&gg_browse_url)),
-                )
-            })
             .child(
                 Button::new("deals-ggdeals-key")
                     .outline()
@@ -1962,6 +2079,7 @@ impl Render for DealsSection {
                         open_ggdeals_key_dialog(
                             cache_for_dialog.clone(),
                             ggdeals_key_saved,
+                            gg_browse_url.clone(),
                             window,
                             cx,
                         );
@@ -1974,7 +2092,7 @@ impl Render for DealsSection {
                     .label(t("manage.deals.reload"))
                     .disabled(matches!(state, DealsState::Loading))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        load(this.cache.clone(), region, cx);
+                        load(this.cache.clone(), region, true, cx);
                     })),
             );
 
@@ -2163,10 +2281,14 @@ impl Render for DealsSection {
                                     .tooltip(t("manage.deals.hide_owned_tooltip"))
                                     .checked(self.hide_owned)
                                     .on_change(cx.listener(|this, on: &bool, window, cx| {
-                                        this.hide_owned = *on;
+                                        let next = *on;
+                                        this.hide_owned = next;
                                         this.shown = PAGE;
                                         this.refilter(cx);
                                         this.schedule_enrichment(window, cx);
+                                        backend_op(cx, move |b| {
+                                            b.settings.update_app(|s| s.deals_hide_owned = next);
+                                        });
                                         cx.notify();
                                     })),
                             ),
@@ -2399,5 +2521,14 @@ mod tests {
             .map(sort_key)
             .collect();
         assert_eq!(count_unowned_free_games(&list, &owned), 1);
+    }
+
+    #[test]
+    fn detects_historical_low_matches_safely() {
+        assert!(is_at_historical_low(Some(1999), Some(1999)));
+        assert!(is_at_historical_low(Some(2000), Some(1999)));
+        assert!(!is_at_historical_low(Some(2499), Some(1999)));
+        assert!(!is_at_historical_low(Some(289), Some(0)));
+        assert!(!is_at_historical_low(None, Some(1999)));
     }
 }

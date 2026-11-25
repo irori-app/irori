@@ -16,23 +16,37 @@ const GGDEALS_PRICES_URL: &str = "https://api.gg.deals/v1/prices/by-steam-app-id
 const CACHE_TTL: Duration = Duration::from_secs(3600);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct GgDealsPrice {
     pub retail: Option<String>,
     pub keyshop: Option<String>,
     pub historical_retail: Option<String>,
     pub historical_keyshop: Option<String>,
+    pub retail_cents: Option<u64>,
+    pub keyshop_cents: Option<u64>,
+    pub historical_retail_cents: Option<u64>,
+    pub historical_keyshop_cents: Option<u64>,
     pub currency: String,
     pub url: Option<String>,
 }
 
-fn parse_money_field(val: Option<&serde_json::Value>, currency: &str) -> Option<String> {
-    let val = val?;
-    let amount = match val {
-        serde_json::Value::String(s) => s.trim().parse::<f64>().ok()?,
-        serde_json::Value::Number(n) => n.as_f64()?,
-        _ => return None,
+fn parse_money_field(
+    val: Option<&serde_json::Value>,
+    currency: &str,
+) -> (Option<String>, Option<u64>) {
+    let Some(val) = val else {
+        return (None, None);
     };
-    (amount.is_finite() && amount >= 0.0).then(|| format_money(amount, currency))
+    let amount = match val {
+        serde_json::Value::String(s) => s.trim().parse::<f64>().ok(),
+        serde_json::Value::Number(n) => n.as_f64(),
+        _ => None,
+    };
+    let Some(amount) = amount.filter(|a| a.is_finite() && *a >= 0.0) else {
+        return (None, None);
+    };
+    let cents = (amount * 100.0).round() as u64;
+    (Some(format_money(amount, currency)), Some(cents))
 }
 
 fn api_error_message(bytes: &[u8]) -> Option<String> {
@@ -85,13 +99,23 @@ pub fn parse_ggdeals_prices(
             .map(str::trim)
             .filter(|u| !u.is_empty())
             .map(str::to_string);
+        let (retail, retail_cents) = parse_money_field(prices.get("currentRetail"), &currency);
+        let (keyshop, keyshop_cents) = parse_money_field(prices.get("currentKeyshops"), &currency);
+        let (historical_retail, historical_retail_cents) =
+            parse_money_field(prices.get("historicalRetail"), &currency);
+        let (historical_keyshop, historical_keyshop_cents) =
+            parse_money_field(prices.get("historicalKeyshops"), &currency);
         out.insert(
             app_id.clone(),
             GgDealsPrice {
-                retail: parse_money_field(prices.get("currentRetail"), &currency),
-                keyshop: parse_money_field(prices.get("currentKeyshops"), &currency),
-                historical_retail: parse_money_field(prices.get("historicalRetail"), &currency),
-                historical_keyshop: parse_money_field(prices.get("historicalKeyshops"), &currency),
+                retail,
+                keyshop,
+                historical_retail,
+                historical_keyshop,
+                retail_cents,
+                keyshop_cents,
+                historical_retail_cents,
+                historical_keyshop_cents,
                 currency,
                 url,
             },

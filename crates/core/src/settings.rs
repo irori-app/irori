@@ -992,6 +992,10 @@ pub struct AppSettings {
     /// (`iroriDealsLayout`). Irori-only.
     #[serde(rename = "iroriDealsLayout")]
     pub deals_layout: DealsLayout,
+    /// Hide base games already owned in the library on the Stores Deals tab
+    /// (`iroriDealsHideOwned`). Irori-only.
+    #[serde(rename = "iroriDealsHideOwned")]
+    pub deals_hide_owned: bool,
     /// Whether Irori probes the connection, takes it as working, or works
     /// offline and never reaches the internet. Irori-only.
     #[serde(rename = "iroriNetworkMode")]
@@ -1124,6 +1128,7 @@ impl Default for AppSettings {
             deals: true,
             deals_region: String::new(),
             deals_layout: DealsLayout::Grid,
+            deals_hide_owned: true,
             network_mode: crate::net::NetworkMode::Auto,
             network_timeout: 0,
             save_snapshots: DEFAULT_SAVE_SNAPSHOTS,
@@ -2423,13 +2428,15 @@ mod tests {
         assert!(app.deals);
         assert_eq!(app.deals_region, "");
         assert_eq!(app.deals_layout, DealsLayout::Grid);
+        assert!(app.deals_hide_owned);
         let app: AppSettings = serde_json::from_str(
-            r#"{"iroriDeals": false, "iroriDealsRegion": "BR", "iroriDealsLayout": "list"}"#,
+            r#"{"iroriDeals": false, "iroriDealsRegion": "BR", "iroriDealsLayout": "list", "iroriDealsHideOwned": false}"#,
         )
         .unwrap();
         assert!(!app.deals);
         assert_eq!(app.deals_region, "BR");
         assert_eq!(app.deals_layout, DealsLayout::List);
+        assert!(!app.deals_hide_owned);
     }
 
     #[test]

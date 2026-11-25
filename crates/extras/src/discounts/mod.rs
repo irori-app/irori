@@ -666,6 +666,16 @@ pub async fn gmg_discounts(currency: Option<&str>) -> Result<Vec<CatalogProduct>
     Ok(deals)
 }
 
+/// Delete cached discounts data so a manual reload fetches fresh store prices.
+pub async fn clear_cache() {
+    let dir = util::cache_dir("discounts");
+    if let Err(e) = tokio::fs::remove_dir_all(&dir).await
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::debug!("clearing discounts cache: {e}");
+    }
+}
+
 /// Humble deals (USD only).
 pub async fn humble_discounts() -> Result<Vec<CatalogProduct>> {
     let mut deals = feed_deals(DealStore::Humble, "USD").await?;
@@ -944,6 +954,9 @@ mod tests {
         assert_eq!(p.retail.as_deref(), Some("R$17.99"));
         assert_eq!(p.keyshop.as_deref(), Some("R$11.50"));
         assert_eq!(p.historical_retail.as_deref(), Some("R$8.99"));
+        assert_eq!(p.retail_cents, Some(1799));
+        assert_eq!(p.keyshop_cents, Some(1150));
+        assert_eq!(p.historical_retail_cents, Some(899));
         assert_eq!(map["777777"].retail.as_deref(), Some("R$10.00"));
         assert_eq!(map["777777"].currency, "BRL");
     }
