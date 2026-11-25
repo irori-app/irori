@@ -470,15 +470,10 @@ fn accounts_page_caps_available_grid_columns_on_ultrawide(cx: &mut TestAppContex
     setup_with(cx, || {
         vec![
             TestStore::signed_out(Runner::Legendary),
+            TestStore::signed_out(Runner::Gog),
             TestStore::signed_out(Runner::Nile),
             TestStore::signed_out(Runner::Zoom),
-            TestStore::signed_out(Runner::Itch),
         ]
-    });
-    cx.update(|cx| {
-        irori_ui::backend(cx)
-            .settings
-            .update_app(|s| s.itch_io = true)
     });
     let options = cx.update(|cx| WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
@@ -506,13 +501,13 @@ fn accounts_page_caps_available_grid_columns_on_ultrawide(cx: &mut TestAppContex
             .unwrap_or_else(|| panic!("{id} is rendered"))
     };
     let legendary = card("account-legendary");
+    let gog = card("account-gog");
     let nile = card("account-nile");
     let zoom = card("account-zoom");
-    let itch = card("account-itch");
-    assert_eq!(legendary.top(), nile.top());
-    assert_eq!(nile.top(), zoom.top());
+    assert_eq!(legendary.top(), gog.top());
+    assert_eq!(gog.top(), nile.top());
     assert!(
-        itch.top() > legendary.bottom(),
+        zoom.top() > legendary.bottom(),
         "4 available cards wrap to a second row even on ultrawide screens"
     );
 }
