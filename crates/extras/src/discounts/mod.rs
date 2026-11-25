@@ -476,6 +476,9 @@ fn normalize_feed(feed: Feed, store: DealStore) -> Vec<CatalogProduct> {
                     .unwrap_or_default(),
             ),
         };
+        if store == DealStore::Gmg && operating_systems.iter().any(|os| os == "xbox") {
+            return None;
+        }
         Some(CatalogProduct {
             id: format!("{prefix}{id}"),
             title,
@@ -619,19 +622,30 @@ mod tests {
 
     #[test]
     fn parses_steam_featured_and_search() {
-        let featured = r#"{"specials": {"items": [
-            {"id": 241930, "name": "Middle-earth: Shadow of Mordor", "discounted": true, "discount_percent": 80,
-             "original_price": 8999, "final_price": 1799, "currency": "BRL",
-             "header_image": "https://cdn/241930/header.jpg", "windows_available": true, "linux_available": true},
-            {"id": 999, "name": "Full Price", "discounted": false, "discount_percent": 0, "final_price": 1000}
-        ]}}"#;
+        let featured = r#"{
+            "specials": {"items": [
+                {"id": 241930, "name": "Middle-earth: Shadow of Mordor", "discounted": true, "discount_percent": 80,
+                 "original_price": 8999, "final_price": 1799, "currency": "BRL",
+                 "header_image": "https://cdn/241930/header.jpg", "windows_available": true, "linux_available": true},
+                {"id": 999, "name": "Full Price", "discounted": false, "discount_percent": 0, "final_price": 1000}
+            ]},
+            "top_sellers": {"items": [
+                {"id": 241930, "name": "Middle-earth: Shadow of Mordor", "discounted": true, "discount_percent": 80,
+                 "original_price": 8999, "final_price": 1799, "currency": "BRL"},
+                {"id": 1145360, "name": "Hades", "discounted": true, "discount_percent": 60,
+                 "original_price": 7399, "final_price": 2959, "currency": "BRL"},
+                {"id": 888, "name": "Unreduced Hit", "discounted": false, "discount_percent": 0, "final_price": 19900}
+            ]}
+        }"#;
         let deals = parse_steam_featured(featured.as_bytes(), "BRL").unwrap();
-        assert_eq!(deals.len(), 1);
+        assert_eq!(deals.len(), 2);
         assert_eq!(deals[0].store, DealStore::Steam);
         assert_eq!(deals[0].steam_app_id.as_deref(), Some("241930"));
         assert_eq!(deals[0].price.discount, "-80%");
         assert_eq!(deals[0].price.r#final, "R$17.99");
         assert_eq!(deals[0].operating_systems, ["windows", "linux"]);
+        assert_eq!(deals[1].title, "Hades");
+        assert_eq!(deals[1].price.discount, "-60%");
 
         let search = r#"{"items": [
             {"id": 241930, "name": "Middle-earth: Shadow of Mordor", "price": {"currency": "BRL", "initial": 8999, "final": 1799}}
@@ -707,11 +721,10 @@ mod tests {
             {"CatalogItemId": "Thing - Xbox One", "Name": "X", "Url": "u", "CurrentPrice": "1", "OriginalPrice": "4", "Currency": "TRL"}
         ]}"#).unwrap();
         let deals = normalize_feed(feed, DealStore::Gmg);
-        assert_eq!(deals.len(), 3);
+        assert_eq!(deals.len(), 2);
         assert_eq!(deals[0].id, "gmg-Mega Sudoku - PC");
         assert_eq!(deals[0].price.discount, "-70%");
         assert_eq!(deals[1].price.r#final, "₩1,500");
-        assert_eq!(deals[2].operating_systems, ["xbox"]);
     }
 
     #[test]

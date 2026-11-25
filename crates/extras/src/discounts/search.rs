@@ -23,6 +23,7 @@ const STORES_CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
 #[derive(Deserialize)]
 struct SteamFeatured {
     specials: Option<SteamCategory>,
+    top_sellers: Option<SteamCategory>,
 }
 
 #[derive(Deserialize)]
@@ -72,11 +73,16 @@ fn steam_os_list(win: bool, mac: bool, linux: bool) -> Vec<String> {
     os
 }
 
-/// Parse Steam's `/api/featuredcategories` JSON payload into normalized deals.
+/// Parse Steam's `/api/featuredcategories` JSON payload into normalized deals,
+/// combining `specials` with discounted `top_sellers`.
 pub fn parse_steam_featured(bytes: &[u8], default_currency: &str) -> Result<Vec<CatalogProduct>> {
     let parsed: SteamFeatured =
         serde_json::from_slice(bytes).context("parsing Steam featuredcategories")?;
-    let items = parsed.specials.map(|s| s.items).unwrap_or_default();
+    let items = parsed
+        .specials
+        .into_iter()
+        .chain(parsed.top_sellers)
+        .flat_map(|c| c.items);
     let mut out = Vec::new();
     for item in items {
         if (!item.discounted && item.discount_percent == 0) || item.name.trim().is_empty() {

@@ -537,10 +537,15 @@ pub(crate) fn filter_and_sort_deals(
     filter: &DealQuery<'_>,
 ) -> Vec<usize> {
     let q = filter.query.trim().to_lowercase();
+    let curated_featured = filter.store.is_none()
+        && filter.sort == DealSort::Featured
+        && !filter.global_search_active
+        && q.is_empty();
     let mut ix: Vec<usize> = products
         .iter()
         .enumerate()
         .filter(|(_, p)| filter.store.is_none_or(|s| p.store == s))
+        .filter(|(_, p)| !curated_featured || matches!(p.store, DealStore::Steam | DealStore::Gog))
         .filter(|(_, p)| {
             matches_shop_filter(p, filter.shop, filter.ggdeals_key_saved, filter.ggdeals)
         })
@@ -725,12 +730,15 @@ fn open_ggdeals_key_dialog(
     window.open_dialog(cx, move |dialog, _, cx| {
         let input = input.clone();
         let weak_cache = weak_cache.clone();
-        let (border, muted_bg, muted_fg, radius) = {
+        let (border, muted_bg, muted_fg, primary, primary_fg, panel_bg, radius) = {
             let theme = cx.theme();
             (
                 theme.border,
                 theme.muted.opacity(0.35),
                 theme.muted_foreground,
+                theme.primary,
+                theme.primary_foreground,
+                theme.group_box,
                 theme.radius,
             )
         };
@@ -777,7 +785,7 @@ fn open_ggdeals_key_dialog(
                             )
                             .child(
                                 v_flex()
-                                    .gap_1()
+                                    .gap_1p5()
                                     .child(
                                         div()
                                             .text_xs()
@@ -794,6 +802,96 @@ fn open_ggdeals_key_dialog(
                                                     .child(t("manage.deals.ggdeals.get_key"))
                                                     .child(
                                                         Icon::new(IconName::ExternalLink).xsmall(),
+                                                    ),
+                                            ),
+                                    )
+                                    .child(
+                                        h_flex()
+                                            .gap_2()
+                                            .w_full()
+                                            .child(
+                                                v_flex()
+                                                    .flex_1()
+                                                    .gap_1()
+                                                    .p_2()
+                                                    .rounded(radius)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .bg(panel_bg)
+                                                    .child(
+                                                        h_flex()
+                                                            .gap_1()
+                                                            .items_center()
+                                                            .child(Tag::info().xsmall().child("1"))
+                                                            .child(
+                                                                div()
+                                                                    .text_xs()
+                                                                    .text_color(muted_fg)
+                                                                    .child("gg.deals/api"),
+                                                            ),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .px_2p5()
+                                                            .py_1()
+                                                            .rounded(radius)
+                                                            .bg(primary)
+                                                            .text_color(primary_fg)
+                                                            .text_xs()
+                                                            .font_semibold()
+                                                            .child("Get Your API key"),
+                                                    ),
+                                            )
+                                            .child(
+                                                v_flex()
+                                                    .flex_1()
+                                                    .gap_1()
+                                                    .p_2()
+                                                    .rounded(radius)
+                                                    .border_1()
+                                                    .border_color(border)
+                                                    .bg(panel_bg)
+                                                    .child(
+                                                        h_flex()
+                                                            .gap_1()
+                                                            .items_center()
+                                                            .child(Tag::info().xsmall().child("2"))
+                                                            .child(
+                                                                div()
+                                                                    .text_xs()
+                                                                    .text_color(muted_fg)
+                                                                    .child("Token"),
+                                                            ),
+                                                    )
+                                                    .child(
+                                                        h_flex()
+                                                            .gap_2()
+                                                            .px_2()
+                                                            .py_1()
+                                                            .rounded(radius)
+                                                            .border_1()
+                                                            .border_color(border)
+                                                            .justify_between()
+                                                            .items_center()
+                                                            .child(
+                                                                div()
+                                                                    .text_xs()
+                                                                    .text_color(muted_fg)
+                                                                    .child("mtCx••••••"),
+                                                            )
+                                                            .child(
+                                                                h_flex()
+                                                                    .gap_1()
+                                                                    .items_center()
+                                                                    .text_xs()
+                                                                    .font_semibold()
+                                                                    .text_color(primary)
+                                                                    .child("COPY")
+                                                                    .child(
+                                                                        Icon::new(IconName::Copy)
+                                                                            .xsmall(),
+                                                                    ),
+                                                            ),
                                                     ),
                                             ),
                                     ),
@@ -1333,7 +1431,9 @@ impl DealsSection {
 
     fn render_ggdeals_line(
         &self,
+        id_prefix: &str,
         steam_app_id: Option<&str>,
+        gg_url: String,
         ggdeals: &HashMap<String, GgDealsPrice>,
         cx: &App,
     ) -> Option<AnyElement> {
@@ -1385,11 +1485,17 @@ impl DealsSection {
         if parts.is_empty() {
             return None;
         }
+        let tip = t("manage.deals.ggdeals.compare_tooltip");
         Some(
             div()
+                .id(ElementId::Name(format!("ggline-{id_prefix}").into()))
+                .cursor_pointer()
                 .text_xs()
                 .text_color(muted)
                 .truncate()
+                .hover(|s| s.underline())
+                .tooltip(move |window, cx| wrapped_tooltip(tip.clone(), window, cx))
+                .on_click(move |_, _, cx| cx.open_url(&gg_url))
                 .child(parts.join(" · "))
                 .into_any_element(),
         )
@@ -1413,7 +1519,7 @@ impl DealsSection {
             (theme.muted_foreground, theme.muted)
         };
         let percent = discount_percent(p);
-        let (compat, gg_line, ggdeals_key_saved, gg_url) = {
+        let (compat, gg_line) = {
             let cache = self.cache.read(cx);
             let eff_steam_id = p
                 .steam_app_id
@@ -1426,13 +1532,19 @@ impl DealsSection {
                 eff_steam_id.as_deref(),
                 &cache.protondb,
             );
-            let gg_line = self.render_ggdeals_line(eff_steam_id.as_deref(), &cache.ggdeals, cx);
             let gg_url = eff_steam_id
                 .as_deref()
                 .and_then(|id| cache.ggdeals.get(id))
                 .and_then(|g| g.url.clone())
                 .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
-            (compat, gg_line, cache.ggdeals_key_saved, gg_url)
+            let gg_line = self.render_ggdeals_line(
+                &format!("grid-{}", p.id),
+                eff_steam_id.as_deref(),
+                gg_url,
+                &cache.ggdeals,
+                cx,
+            );
+            (compat, gg_line)
         };
         let divergent_cur = has_divergent_currency(p, region);
         let in_library = is_owned_base_game(&p.title, &self.owned);
@@ -1517,45 +1629,26 @@ impl DealsSection {
                     )
                     .child(
                         h_flex()
-                            .gap_2()
-                            .justify_between()
+                            .gap_1p5()
                             .items_center()
-                            .child(
-                                h_flex()
-                                    .gap_1p5()
-                                    .items_center()
-                                    .min_w_0()
-                                    .when(!p.price.base.is_empty(), |row| {
-                                        row.child(
-                                            div()
-                                                .text_xs()
-                                                .line_through()
-                                                .text_color(muted)
-                                                .child(p.price.base.clone()),
-                                        )
-                                    })
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_semibold()
-                                            .child(p.price.r#final.clone()),
-                                    )
-                                    .when_some(divergent_cur, |row, cur| {
-                                        row.child(Tag::secondary().xsmall().child(cur))
-                                    }),
-                            )
-                            .when(ggdeals_key_saved, |row| {
+                            .min_w_0()
+                            .when(!p.price.base.is_empty(), |row| {
                                 row.child(
-                                    Button::new(ElementId::Name(
-                                        format!("ggdeals-grid-{}", p.id).into(),
-                                    ))
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(IconName::ExternalLink)
-                                    .label("GG.deals")
-                                    .tooltip(t("manage.deals.ggdeals.compare_tooltip"))
-                                    .on_click(move |_, _, cx| cx.open_url(&gg_url)),
+                                    div()
+                                        .text_xs()
+                                        .line_through()
+                                        .text_color(muted)
+                                        .child(p.price.base.clone()),
                                 )
+                            })
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_semibold()
+                                    .child(p.price.r#final.clone()),
+                            )
+                            .when_some(divergent_cur, |row, cur| {
+                                row.child(Tag::secondary().xsmall().child(cur))
                             }),
                     ),
             )
@@ -1586,7 +1679,7 @@ impl DealsSection {
             )
         };
         let percent = discount_percent(p);
-        let (compat, gg_line, ggdeals_key_saved, gg_url) = {
+        let (compat, gg_line) = {
             let cache = self.cache.read(cx);
             let eff_steam_id = p
                 .steam_app_id
@@ -1599,13 +1692,19 @@ impl DealsSection {
                 eff_steam_id.as_deref(),
                 &cache.protondb,
             );
-            let gg_line = self.render_ggdeals_line(eff_steam_id.as_deref(), &cache.ggdeals, cx);
             let gg_url = eff_steam_id
                 .as_deref()
                 .and_then(|id| cache.ggdeals.get(id))
                 .and_then(|g| g.url.clone())
                 .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
-            (compat, gg_line, cache.ggdeals_key_saved, gg_url)
+            let gg_line = self.render_ggdeals_line(
+                &format!("list-{}", p.id),
+                eff_steam_id.as_deref(),
+                gg_url,
+                &cache.ggdeals,
+                cx,
+            );
+            (compat, gg_line)
         };
         let divergent_cur = has_divergent_currency(p, region);
         let title_el = deal_title_link(
@@ -1685,17 +1784,6 @@ impl DealsSection {
                     )
                     .when_some(divergent_cur, |row, cur| {
                         row.child(Tag::secondary().xsmall().child(cur))
-                    })
-                    .when(ggdeals_key_saved, |row| {
-                        row.child(
-                            Button::new(ElementId::Name(format!("ggdeals-list-{}", p.id).into()))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::ExternalLink)
-                                .label("GG.deals")
-                                .tooltip(t("manage.deals.ggdeals.compare_tooltip"))
-                                .on_click(move |_, _, cx| cx.open_url(&gg_url)),
-                        )
                     }),
             )
             .into_any_element()
@@ -1844,19 +1932,11 @@ impl Render for DealsSection {
             .position(|&s| s == self.store_filter)
             .unwrap_or(0);
 
-        let shop_options = if ggdeals_key_saved {
-            [
-                (ShopFilter::Official, t("manage.deals.shop_type.official")),
-                (ShopFilter::All, t("manage.deals.shop_type.all")),
-                (ShopFilter::Keyshops, t("manage.deals.shop_type.keyshops")),
-            ]
-        } else {
-            [
-                (ShopFilter::All, t("manage.deals.shop_type.all")),
-                (ShopFilter::Official, t("manage.deals.shop_type.direct")),
-                (ShopFilter::Keyshops, t("manage.deals.shop_type.resellers")),
-            ]
-        };
+        let shop_options = [
+            (ShopFilter::Official, t("manage.deals.shop_type.official")),
+            (ShopFilter::All, t("manage.deals.shop_type.all")),
+            (ShopFilter::Keyshops, t("manage.deals.shop_type.keyshops")),
+        ];
         let selected_shop_ix = shop_options
             .iter()
             .position(|(f, _)| *f == self.shop_filter)
@@ -1934,25 +2014,31 @@ impl Render for DealsSection {
                                     )
                                     .when(search_loading, |r| r.child(Spinner::new().small())),
                             )
-                            .child(
-                                TabBar::new("deal-shop-type")
-                                    .segmented()
-                                    .selected_index(selected_shop_ix)
-                                    .children(
-                                        shop_options
-                                            .into_iter()
-                                            .map(|(_, label)| Tab::new().label(label)),
-                                    )
-                                    .on_click(cx.listener(move |this, ix: &usize, window, cx| {
-                                        if let Some((f, _)) = shop_options_for_click.get(*ix) {
-                                            this.shop_filter = *f;
-                                            this.shown = PAGE;
-                                            this.refilter(cx);
-                                            this.schedule_enrichment(window, cx);
-                                            cx.notify();
-                                        }
-                                    })),
-                            )
+                            .when(ggdeals_key_saved, |row| {
+                                row.child(
+                                    TabBar::new("deal-shop-type")
+                                        .segmented()
+                                        .selected_index(selected_shop_ix)
+                                        .children(
+                                            shop_options
+                                                .into_iter()
+                                                .map(|(_, label)| Tab::new().label(label)),
+                                        )
+                                        .on_click(cx.listener(
+                                            move |this, ix: &usize, window, cx| {
+                                                if let Some((f, _)) =
+                                                    shop_options_for_click.get(*ix)
+                                                {
+                                                    this.shop_filter = *f;
+                                                    this.shown = PAGE;
+                                                    this.refilter(cx);
+                                                    this.schedule_enrichment(window, cx);
+                                                    cx.notify();
+                                                }
+                                            },
+                                        )),
+                                )
+                            })
                             .child(div().w(rems(12.)).child(Select::new(&self.sort_select)))
                             .child(
                                 ButtonGroup::new("deals-layout")
@@ -2124,10 +2210,21 @@ mod tests {
             ggdeals: &gg,
         };
 
-        // Featured preserves order.
+        // Featured on All stores curates Steam + GOG only.
         assert_eq!(
             filter_and_sort_deals(&products, &base(DealSort::Featured)),
-            vec![0, 1, 2, 3]
+            vec![0, 1, 3]
+        );
+        // Explicit Humble tab shows Humble in Featured too.
+        assert_eq!(
+            filter_and_sort_deals(
+                &products,
+                &DealQuery {
+                    store: Some(DealStore::Humble),
+                    ..base(DealSort::Featured)
+                },
+            ),
+            vec![2]
         );
         // Discount puts -90% first.
         assert_eq!(
