@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Startvertraging",
   "settings.pair.interval": "Interval",
   "settings.sysinfo.hardware": "Hardware & beeldschermen",
-  "settings.sysinfo.software": "Systeem & hulpmiddelen"
+  "settings.sysinfo.software": "Systeem & hulpmiddelen",
+  "settings.crash.title": "Crashrapport",
+  "settings.crash.saved_at": "Opgeslagen op {when}",
+  "settings.crash.location": "Locatie: {location}",
+  "settings.crash.privacy_note": "Er wordt niets automatisch verzonden. Controleer het rapport hieronder voordat je het kopieert, uploadt of een GitHub-issue opent.",
+  "settings.crash.report_github": "Melden op GitHub",
+  "settings.crash.copied_for_github": "Crashrapport gekopieerd. Plak het in het GitHub-issue.",
+  "settings.crash.copy": "Rapport kopiëren",
+  "settings.crash.redact_home": "Pad naar persoonlijke thuismap verbergen",
+  "settings.crash.open_logs": "Launcherlog openen",
+  "settings.crash.recent_title": "Recente crashrapporten",
+  "settings.crash.recent_help": "Rapporten van onverwachte afsluitingen blijven hier totdat je ze verwijdert.",
+  "settings.crash.review_action": "Bekijken en melden",
+  "settings.crash.delete": "Rapport verwijderen",
+  "settings.crash.delete_failed": "Kan het crashrapport niet verwijderen"
 }

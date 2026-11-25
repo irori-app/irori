@@ -14,6 +14,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::{App, Task, Window};
+use irori_core::crash::CrashSummary;
 use irori_runtime::sysinfo::{self, SystemInfo};
 use irori_services::app_update::InstallKind;
 use irori_ui::i18n::t;
@@ -109,11 +110,19 @@ const QUESTION_BODY: &str = "Kind: question\n\n### Your question\n\n\n\n\
 
 /// The new-issue form with `label` and `body` filled in.
 fn new_issue(label: &str, body: &str) -> String {
+    new_issue_with_title(label, None, body)
+}
+
+fn new_issue_with_title(label: &str, title: Option<&str>, body: &str) -> String {
     let mut url =
         url::Url::parse(&format!("{REPOSITORY}/issues/new")).expect("the issue address is valid");
-    url.query_pairs_mut()
-        .append_pair("labels", label)
-        .append_pair("body", body);
+    let mut pairs = url.query_pairs_mut();
+    pairs.append_pair("labels", label);
+    if let Some(title) = title.filter(|t| !t.trim().is_empty()) {
+        pairs.append_pair("title", title);
+    }
+    pairs.append_pair("body", body);
+    drop(pairs);
     url.into()
 }
 
@@ -206,9 +215,7 @@ fn install_words(install: &InstallKind) -> String {
     .to_string()
 }
 
-/// The body of a new issue: the user's three questions, then the system.
-/// Issues are read in English, so the template is too.
-pub fn report_body(facts: &ReportFacts) -> String {
+fn system_lines(facts: &ReportFacts) -> Vec<String> {
     let mut system = vec![
         format!("- Irori: {} ({})", facts.version, facts.install),
         format!("- System: {}", facts.os),
@@ -231,16 +238,28 @@ pub fn report_body(facts: &ReportFacts) -> String {
             if vulkan { "available" } else { "not available" }
         ));
     }
+    system
+}
+
+fn fit_system_lines(system: Vec<String>, render: impl Fn(&str) -> String) -> String {
     let mut lines = String::new();
     for line in system {
         // Leave out whole lines past the limit, never half of one.
-        if report_template(&lines).len() + line.len() + 1 > BODY_LIMIT {
+        let mut candidate = lines.clone();
+        candidate.push_str(&line);
+        candidate.push('\n');
+        if render(&candidate).len() > BODY_LIMIT {
             break;
         }
-        lines.push_str(&line);
-        lines.push('\n');
+        lines = candidate;
     }
-    report_template(&lines)
+    render(&lines)
+}
+
+/// The body of a new issue: the user's three questions, then the system.
+/// Issues are read in English, so the template is too.
+pub fn report_body(facts: &ReportFacts) -> String {
+    fit_system_lines(system_lines(facts), report_template)
 }
 
 /// A report's body around the lines of its System section. Its first line
@@ -257,6 +276,80 @@ fn report_template(system: &str) -> String {
 /// The new-issue address with the report's body filled in.
 pub fn report_url(facts: &ReportFacts) -> String {
     new_issue("bug", &report_body(facts))
+}
+
+fn single_line_excerpt(text: &str, max_chars: usize) -> String {
+    let cleaned: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut out = String::new();
+    for ch in cleaned.chars() {
+        if out.chars().count() >= max_chars {
+            out.push_str("...");
+            break;
+        }
+        out.push(ch);
+    }
+    out
+}
+
+/// Short single-line GitHub issue title derived from a crash summary.
+pub fn crash_issue_title(crash: &CrashSummary) -> String {
+    let detail = crash
+        .message
+        .as_deref()
+        .filter(|m| !m.trim().is_empty() && *m != "(no message)")
+        .or_else(|| {
+            crash
+                .location
+                .as_deref()
+                .filter(|l| !l.trim().is_empty() && *l != "unknown")
+        });
+    match detail {
+        Some(text) => format!("Crash: {}", single_line_excerpt(text, 80)),
+        None => "Crash report".to_string(),
+    }
+}
+
+fn crash_summary_block(crash: &CrashSummary) -> String {
+    let mut parts = Vec::new();
+    if let Some(msg) = &crash.message {
+        parts.push(format!("- Message: {}", single_line_excerpt(msg, 200)));
+    }
+    if let Some(loc) = &crash.location {
+        parts.push(format!("- Location: {}", single_line_excerpt(loc, 160)));
+    }
+    if let Some(thread) = &crash.thread {
+        parts.push(format!("- Thread: {}", single_line_excerpt(thread, 80)));
+    }
+    if parts.is_empty() {
+        "- Details: pasted below".to_string()
+    } else {
+        parts.join("\n")
+    }
+}
+
+fn crash_report_template(summary: &str, system: &str) -> String {
+    format!(
+        "Kind: crash report (bug)\n\n### What happened\n\n\n\n\
+         ### Crash summary\n\n{summary}\n\n\
+         ### System\n\n{system}\n\
+         ### Full crash report\n\n\
+         Paste the crash report copied to your clipboard (or attach the file)."
+    )
+}
+
+/// The body of a crash report GitHub issue, bounded to [`BODY_LIMIT`].
+pub fn crash_report_body(facts: &ReportFacts, crash: &CrashSummary) -> String {
+    let summary = crash_summary_block(crash);
+    fit_system_lines(system_lines(facts), |system| {
+        crash_report_template(&summary, system)
+    })
+}
+
+/// Pre-filled GitHub new-issue URL for a crash report.
+pub fn crash_report_url(facts: &ReportFacts, crash: &CrashSummary) -> String {
+    let title = crash_issue_title(crash);
+    let body = crash_report_body(facts, crash);
+    new_issue_with_title("bug", Some(&title), &body)
 }
 
 /// Open one of the ways to reach the project in the browser. A report
@@ -391,5 +484,35 @@ mod tests {
         assert!(body.starts_with("Kind: problem report"));
         assert!(body.contains("- Irori: 1.2.0 (Flatpak)"));
         assert_eq!(Feedback::KnownIssues.label(), None);
+    }
+
+    #[test]
+    fn crash_report_url_includes_bounded_title_and_summary() {
+        let crash = CrashSummary {
+            version: Some("1.2.0".into()),
+            os: Some("linux x86_64".into()),
+            thread: Some("main".into()),
+            location: Some("~/src/inline_flow.rs:42:5".into()),
+            message: Some("index out of bounds\nwith newline".into()),
+        };
+        let mut many = facts();
+        many.gpus = (0..200).map(|i| format!("GPU number {i}")).collect();
+        let body = crash_report_body(&many, &crash);
+        assert!(body.len() <= BODY_LIMIT);
+        assert!(body.contains("### Crash summary"));
+        assert!(body.contains("index out of bounds with newline"));
+
+        let url = crash_report_url(&facts(), &crash);
+        assert!(url.starts_with(&format!("{REPOSITORY}/issues/new?")));
+        assert_eq!(query(&url, "labels").as_deref(), Some("bug"));
+        assert_eq!(
+            query(&url, "title").as_deref(),
+            Some("Crash: index out of bounds with newline")
+        );
+        assert!(
+            query(&url, "body")
+                .unwrap()
+                .contains("- Irori: 1.2.0 (Flatpak)")
+        );
     }
 }

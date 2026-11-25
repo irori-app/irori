@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Délai initial",
   "settings.pair.interval": "Intervalle",
   "settings.sysinfo.hardware": "Matériel et écrans",
-  "settings.sysinfo.software": "Système et outils"
+  "settings.sysinfo.software": "Système et outils",
+  "settings.crash.title": "Rapport de plantage",
+  "settings.crash.saved_at": "Enregistré le {when}",
+  "settings.crash.location": "Emplacement : {location}",
+  "settings.crash.privacy_note": "Rien n’est envoyé automatiquement. Relisez le rapport ci-dessous avant de le copier, de le téléverser ou d’ouvrir un ticket GitHub.",
+  "settings.crash.report_github": "Signaler sur GitHub",
+  "settings.crash.copied_for_github": "Rapport copié. Collez-le dans le ticket GitHub.",
+  "settings.crash.copy": "Copier le rapport",
+  "settings.crash.redact_home": "Masquer le chemin du dossier personnel",
+  "settings.crash.open_logs": "Ouvrir le journal du lanceur",
+  "settings.crash.recent_title": "Rapports de plantage récents",
+  "settings.crash.recent_help": "Les rapports des fermetures inattendues restent ici jusqu’à leur suppression.",
+  "settings.crash.review_action": "Examiner et signaler",
+  "settings.crash.delete": "Supprimer le rapport",
+  "settings.crash.delete_failed": "Impossible de supprimer le rapport de plantage"
 }

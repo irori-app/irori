@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} 외 {more}개",
   "shell.notice.crashed_last_time": "지난번에 Irori가 예기치 않게 종료되었습니다",
-  "shell.notice.crashed_last_time_message": "충돌 보고서를 {path}에 저장했습니다. 문제를 보고할 때 첨부하세요.",
+  "shell.notice.crashed_last_time_message": "충돌 보고서가 저장되었습니다. 문제를 해결하는 데 도움이 되도록 확인하거나 공유하세요.",
   "shell.notice.login_expired": "{store}에 다시 로그인하세요",
   "shell.notice.login_expired_message": "저장된 로그인이 더 이상 작동하지 않습니다. 계정을 열어 다시 로그인하세요.",
   "shell.notice.xbox_login_expired_message": "저장된 Xbox 로그인이 더 이상 작동하지 않습니다. 스토어 페이지의 기타 런처에서 다시 로그인하세요.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "중복된 추가 게임 검토",
   "shell.palette.duplicates_keywords": "중복 병합 같은 두 번 추가 lutris 가져오기",
   "shell.palette.performance_hud": "게임 내 통계",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal 오버레이 fps 프레임타임 카운터 성능 게임 내 통계 in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 오버레이 fps 프레임타임 카운터 성능 게임 내 통계 in-game stats",
+  "shell.notice.crashed_review_action": "검토 및 신고",
+  "shell.palette.latest_crash_report": "최근 충돌 보고서 보기",
+  "shell.palette.latest_crash_report_keywords": "crash 충돌 보고서 로그 버그"
 }

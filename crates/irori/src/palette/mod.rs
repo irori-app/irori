@@ -199,6 +199,8 @@ pub(crate) enum PaletteTarget {
     /// Report a problem, suggest an idea, ask a question or read the
     /// known issues, in the browser.
     Feedback(irori_settings::feedback::Feedback),
+    /// Open the most recent saved crash report sheet.
+    LatestCrashReport(std::path::PathBuf),
     /// Download Irori's update, or restart into it once it is ready.
     AppUpdate {
         ready: bool,
@@ -1080,6 +1082,18 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         );
         targets.push(PaletteTarget::Downloads(command));
     }
+    if let Some(latest) = irori_core::crash::list_reports(&irori_core::Paths::get().logs_dir())
+        .into_iter()
+        .next()
+    {
+        items.push(
+            Entry::new()
+                .label(t("shell.palette.latest_crash_report"))
+                .keywords([t("shell.palette.latest_crash_report_keywords")])
+                .icon(IconName::TriangleAlert),
+        );
+        targets.push(PaletteTarget::LatestCrashReport(latest.path));
+    }
     items
         .into_iter()
         .zip(targets)
@@ -1170,6 +1184,9 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::Downloads(command) => irori_manage::run_download_command(command, cx),
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::Feedback(way) => irori_settings::feedback::open(way, window, cx).detach(),
+        PaletteTarget::LatestCrashReport(path) => window.defer(cx, move |window, cx| {
+            irori_settings::open_crash_report_sheet(path, window, cx)
+        }),
         PaletteTarget::AppUpdate { ready: true } => {
             irori_settings::app_update::restart_into_update(window, cx)
         }

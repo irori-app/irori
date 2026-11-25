@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Počáteční prodleva",
   "settings.pair.interval": "Interval",
   "settings.sysinfo.hardware": "Hardware a displeje",
-  "settings.sysinfo.software": "Systém a nástroje"
+  "settings.sysinfo.software": "Systém a nástroje",
+  "settings.crash.title": "Zpráva o pádu",
+  "settings.crash.saved_at": "Uloženo {when}",
+  "settings.crash.location": "Místo: {location}",
+  "settings.crash.privacy_note": "Nic se neodesílá automaticky. Před kopírováním, nahráním nebo založením problému na GitHubu zprávu níže zkontrolujte.",
+  "settings.crash.report_github": "Nahlásit na GitHubu",
+  "settings.crash.copied_for_github": "Zpráva o pádu zkopírována. Vložte ji do problému na GitHubu.",
+  "settings.crash.copy": "Kopírovat zprávu",
+  "settings.crash.redact_home": "Skrýt cestu k domovské složce",
+  "settings.crash.open_logs": "Otevřít záznam spouštěče",
+  "settings.crash.recent_title": "Nedávné zprávy o pádech",
+  "settings.crash.recent_help": "Zprávy o neočekávaném ukončení tu zůstanou, dokud je neodstraníte.",
+  "settings.crash.review_action": "Zkontrolovat a nahlásit",
+  "settings.crash.delete": "Smazat zprávu",
+  "settings.crash.delete_failed": "Zprávu o pádu se nepodařilo smazat"
 }

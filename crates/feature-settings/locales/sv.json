@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Startfördröjning",
   "settings.pair.interval": "Intervall",
   "settings.sysinfo.hardware": "Hårdvara och bildskärmar",
-  "settings.sysinfo.software": "System och verktyg"
+  "settings.sysinfo.software": "System och verktyg",
+  "settings.crash.title": "Kraschrapport",
+  "settings.crash.saved_at": "Sparad {when}",
+  "settings.crash.location": "Plats: {location}",
+  "settings.crash.privacy_note": "Inget skickas automatiskt. Granska rapporten nedan innan du kopierar, laddar upp eller öppnar ett ärende på GitHub.",
+  "settings.crash.report_github": "Rapportera på GitHub",
+  "settings.crash.copied_for_github": "Kraschrapport kopierad. Klistra in den i GitHub-ärendet.",
+  "settings.crash.copy": "Kopiera rapport",
+  "settings.crash.redact_home": "Dölj sökvägen till hemmappen",
+  "settings.crash.open_logs": "Öppna startprogrammets logg",
+  "settings.crash.recent_title": "Senaste kraschrapporter",
+  "settings.crash.recent_help": "Rapporter från oväntade avslut stannar här tills du tar bort dem.",
+  "settings.crash.review_action": "Granska och rapportera",
+  "settings.crash.delete": "Ta bort rapport",
+  "settings.crash.delete_failed": "Kunde inte ta bort kraschrapporten"
 }

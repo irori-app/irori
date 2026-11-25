@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "初始延迟",
   "settings.pair.interval": "间隔",
   "settings.sysinfo.hardware": "硬件与显示器",
-  "settings.sysinfo.software": "系统与工具"
+  "settings.sysinfo.software": "系统与工具",
+  "settings.crash.title": "崩溃报告",
+  "settings.crash.saved_at": "保存于 {when}",
+  "settings.crash.location": "位置：{location}",
+  "settings.crash.privacy_note": "不会自动发送任何内容。在复制、上传或提交 GitHub Issue 前，请先查看下方报告。",
+  "settings.crash.report_github": "在 GitHub 报告",
+  "settings.crash.copied_for_github": "已复制崩溃报告，请粘贴到 GitHub Issue 中。",
+  "settings.crash.copy": "复制报告",
+  "settings.crash.redact_home": "隐藏个人主目录路径",
+  "settings.crash.open_logs": "打开启动器日志",
+  "settings.crash.recent_title": "最近的崩溃报告",
+  "settings.crash.recent_help": "意外退出的报告会保留在此处，直到你将其删除。",
+  "settings.crash.review_action": "查看并报告",
+  "settings.crash.delete": "删除报告",
+  "settings.crash.delete_failed": "无法删除崩溃报告"
 }

@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} i jeszcze {more}",
   "shell.notice.crashed_last_time": "Irori ostatnio nieoczekiwanie się zamknął",
-  "shell.notice.crashed_last_time_message": "Raport o awarii zapisano w {path}. Dołącz go, zgłaszając problem.",
+  "shell.notice.crashed_last_time_message": "Zapisano raport o awarii. Przejrzyj go lub udostępnij, aby pomóc rozwiązać problem.",
   "shell.notice.login_expired": "Zaloguj się ponownie do {store}",
   "shell.notice.login_expired_message": "Zapisane logowanie już nie działa. Otwórz Konta, aby zalogować się ponownie.",
   "shell.notice.xbox_login_expired_message": "Zapisane logowanie do Xboksa już nie działa. Zaloguj się ponownie na stronie Sklepy, w sekcji Inne launchery.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Przejrzyj zduplikowane dodane gry",
   "shell.palette.duplicates_keywords": "duplikat scal ten sam dwa razy dodane lutris import",
   "shell.palette.performance_hud": "Statystyki w grze",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal nakładka overlay fps frametime licznik wydajność statystyki w grze in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal nakładka overlay fps frametime licznik wydajność statystyki w grze in-game stats",
+  "shell.notice.crashed_review_action": "Przejrzyj i zgłoś",
+  "shell.palette.latest_crash_report": "Zobacz ostatni raport o awarii",
+  "shell.palette.latest_crash_report_keywords": "crash awaria raport log błąd bug"
 }

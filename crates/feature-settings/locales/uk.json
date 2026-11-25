@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Початкова затримка",
   "settings.pair.interval": "Інтервал",
   "settings.sysinfo.hardware": "Обладнання та дисплеї",
-  "settings.sysinfo.software": "Система та інструменти"
+  "settings.sysinfo.software": "Система та інструменти",
+  "settings.crash.title": "Звіт про збій",
+  "settings.crash.saved_at": "Збережено {when}",
+  "settings.crash.location": "Розташування: {location}",
+  "settings.crash.privacy_note": "Нічого не надсилається автоматично. Перегляньте звіт нижче перед копіюванням, завантаженням або створенням звернення на GitHub.",
+  "settings.crash.report_github": "Повідомити на GitHub",
+  "settings.crash.copied_for_github": "Звіт про збій скопійовано. Вставте його у звернення на GitHub.",
+  "settings.crash.copy": "Копіювати звіт",
+  "settings.crash.redact_home": "Приховати шлях до домашньої теки",
+  "settings.crash.open_logs": "Відкрити журнал лаунчера",
+  "settings.crash.recent_title": "Останні звіти про збої",
+  "settings.crash.recent_help": "Звіти про несподіване завершення залишаються тут, доки ви їх не видалите.",
+  "settings.crash.review_action": "Переглянути й повідомити",
+  "settings.crash.delete": "Видалити звіт",
+  "settings.crash.delete_failed": "Не вдалося видалити звіт про збій"
 }

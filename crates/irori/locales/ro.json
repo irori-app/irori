@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} și încă {more}",
   "shell.notice.crashed_last_time": "Irori s-a închis neașteptat data trecută",
-  "shell.notice.crashed_last_time_message": "Un raport de eroare a fost salvat în {path}. Atașează-l când raportezi problema.",
+  "shell.notice.crashed_last_time_message": "A fost salvat un raport de blocare. Revizuiește-l sau trimite-l pentru a ajuta la remedierea problemei.",
   "shell.notice.login_expired": "Conectează-te din nou la {store}",
   "shell.notice.login_expired_message": "Conectarea salvată nu mai funcționează. Deschide Conturi ca să te conectezi din nou.",
   "shell.notice.xbox_login_expired_message": "Conectarea salvată la Xbox nu mai funcționează. Conectează-te din nou din pagina Magazine, la Alte launchere.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Verifică jocurile adăugate duplicate",
   "shell.palette.duplicates_keywords": "duplicat îmbină același de două ori adăugat lutris import",
   "shell.palette.performance_hud": "Statistici în joc",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal suprapunere overlay fps frametime contor performanță statistici în joc in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal suprapunere overlay fps frametime contor performanță statistici în joc in-game stats",
+  "shell.notice.crashed_review_action": "Revizuiește și raportează",
+  "shell.palette.latest_crash_report": "Vezi ultimul raport de blocare",
+  "shell.palette.latest_crash_report_keywords": "crash blocare raport jurnal log bug"
 }

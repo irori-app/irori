@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Opóźnienie początkowe",
   "settings.pair.interval": "Interwał",
   "settings.sysinfo.hardware": "Sprzęt i ekrany",
-  "settings.sysinfo.software": "System i narzędzia"
+  "settings.sysinfo.software": "System i narzędzia",
+  "settings.crash.title": "Raport o awarii",
+  "settings.crash.saved_at": "Zapisano: {when}",
+  "settings.crash.location": "Lokalizacja: {location}",
+  "settings.crash.privacy_note": "Nic nie jest wysyłane automatycznie. Przejrzyj poniższy raport przed skopiowaniem, wysłaniem lub zgłoszeniem na GitHubie.",
+  "settings.crash.report_github": "Zgłoś na GitHubie",
+  "settings.crash.copied_for_github": "Skopiowano raport. Wklej go w zgłoszeniu na GitHubie.",
+  "settings.crash.copy": "Kopiuj raport",
+  "settings.crash.redact_home": "Ukryj ścieżkę katalogu domowego",
+  "settings.crash.open_logs": "Otwórz dziennik launchera",
+  "settings.crash.recent_title": "Ostatnie raporty o awariach",
+  "settings.crash.recent_help": "Raporty z nieoczekiwanych zamknięć pozostają tutaj, dopóki ich nie usuniesz.",
+  "settings.crash.review_action": "Przejrzyj i zgłoś",
+  "settings.crash.delete": "Usuń raport",
+  "settings.crash.delete_failed": "Nie udało się usunąć raportu o awarii"
 }

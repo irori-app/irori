@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "İlk gecikme",
   "settings.pair.interval": "Aralık",
   "settings.sysinfo.hardware": "Donanım ve ekranlar",
-  "settings.sysinfo.software": "Sistem ve araçlar"
+  "settings.sysinfo.software": "Sistem ve araçlar",
+  "settings.crash.title": "Çökme raporu",
+  "settings.crash.saved_at": "Kaydedildi: {when}",
+  "settings.crash.location": "Konum: {location}",
+  "settings.crash.privacy_note": "Hiçbir şey otomatik olarak gönderilmez. Kopyalamadan, yüklemeden veya GitHub sorunu açmadan önce aşağıdaki raporu inceleyin.",
+  "settings.crash.report_github": "GitHub’da bildir",
+  "settings.crash.copied_for_github": "Çökme raporu kopyalandı. GitHub sorununa yapıştırın.",
+  "settings.crash.copy": "Raporu kopyala",
+  "settings.crash.redact_home": "Kişisel ev klasörü yolunu gizle",
+  "settings.crash.open_logs": "Başlatıcı günlüğünü aç",
+  "settings.crash.recent_title": "Son çökme raporları",
+  "settings.crash.recent_help": "Beklenmeyen kapanma raporları siz kaldırana kadar burada kalır.",
+  "settings.crash.review_action": "İncele ve bildir",
+  "settings.crash.delete": "Raporu sil",
+  "settings.crash.delete_failed": "Çökme raporu silinemedi"
 }

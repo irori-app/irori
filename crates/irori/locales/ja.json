@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} ほか {more} 件",
   "shell.notice.crashed_last_time": "前回 Irori が予期せず終了しました",
-  "shell.notice.crashed_last_time_message": "クラッシュレポートを {path} に保存しました。問題を報告するときに添付してください。",
+  "shell.notice.crashed_last_time_message": "クラッシュレポートを保存しました。問題の修正に役立てるため、内容を確認して共有してください。",
   "shell.notice.login_expired": "{store} にもう一度ログインしてください",
   "shell.notice.login_expired_message": "保存されたログインが使えなくなりました。［アカウント］を開いてもう一度ログインしてください。",
   "shell.notice.xbox_login_expired_message": "保存された Xbox のサインインが使えなくなりました。「ストア」ページの「その他のランチャー」でもう一度サインインしてください。",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "重複している追加したゲームを確認",
   "shell.palette.duplicates_keywords": "重複 統合 同じ 2 回 追加 Lutris インポート",
   "shell.palette.performance_hud": "ゲーム内統計",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal オーバーレイ fps フレームタイム カウンター パフォーマンス ゲーム内統計 統計 in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal オーバーレイ fps フレームタイム カウンター パフォーマンス ゲーム内統計 統計 in-game stats",
+  "shell.notice.crashed_review_action": "確認して報告",
+  "shell.palette.latest_crash_report": "最新のクラッシュレポートを表示",
+  "shell.palette.latest_crash_report_keywords": "crash クラッシュ レポート ログ バグ"
 }

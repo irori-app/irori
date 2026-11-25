@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} e mais {more}",
   "shell.notice.crashed_last_time": "O Irori fechou inesperadamente da última vez",
-  "shell.notice.crashed_last_time_message": "Foi guardado um relatório de falha em {path}. Anexe-o quando comunicar o problema.",
+  "shell.notice.crashed_last_time_message": "Foi guardado um relatório de falha. Reveja ou partilhe para ajudar a corrigir o problema.",
   "shell.notice.login_expired": "Inicie sessão novamente na {store}",
   "shell.notice.login_expired_message": "A sessão guardada já não funciona. Abra Contas para iniciar sessão novamente.",
   "shell.notice.xbox_login_expired_message": "A sua sessão guardada da Xbox já não funciona. Inicie sessão novamente na página Lojas, em Outros launchers.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Rever jogos adicionados duplicados",
   "shell.palette.duplicates_keywords": "duplicado fundir mesmo duas vezes adicionado lutris importar",
   "shell.palette.performance_hud": "Estatísticas no jogo",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal sobreposição overlay fps frametime contador desempenho estatísticas no jogo in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal sobreposição overlay fps frametime contador desempenho estatísticas no jogo in-game stats",
+  "shell.notice.crashed_review_action": "Rever e reportar",
+  "shell.palette.latest_crash_report": "Ver último relatório de falha",
+  "shell.palette.latest_crash_report_keywords": "crash relatório falha log panic erro bug"
 }

@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "初回の遅延",
   "settings.pair.interval": "間隔",
   "settings.sysinfo.hardware": "ハードウェアとディスプレイ",
-  "settings.sysinfo.software": "システムとツール"
+  "settings.sysinfo.software": "システムとツール",
+  "settings.crash.title": "クラッシュレポート",
+  "settings.crash.saved_at": "保存日時: {when}",
+  "settings.crash.location": "場所: {location}",
+  "settings.crash.privacy_note": "自動送信されることはありません。コピー、アップロード、または GitHub で Issue を作成する前に下の内容を確認してください。",
+  "settings.crash.report_github": "GitHub で報告",
+  "settings.crash.copied_for_github": "レポートをコピーしました。GitHub の Issue に貼り付けてください。",
+  "settings.crash.copy": "レポートをコピー",
+  "settings.crash.redact_home": "ホームフォルダーのパスを隠す",
+  "settings.crash.open_logs": "ランチャーログを開く",
+  "settings.crash.recent_title": "最近のクラッシュレポート",
+  "settings.crash.recent_help": "予期しない終了時のレポートは削除するまでここに残ります。",
+  "settings.crash.review_action": "確認して報告",
+  "settings.crash.delete": "レポートを削除",
+  "settings.crash.delete_failed": "クラッシュレポートを削除できませんでした"
 }

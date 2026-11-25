@@ -152,7 +152,7 @@ fn main() -> Result<()> {
     limit_malloc_arenas();
 
     let backend = Backend::start(stores::build)?;
-    crash::notice_last_crash(&backend.bus);
+    let last_crash = crash::take_last_crash();
     let (tx, rx) = mpsc::unbounded::<ShellCommand>();
     {
         let tx = tx.clone();
@@ -176,6 +176,7 @@ fn main() -> Result<()> {
     });
     application.run(move |cx| {
         gpui_kit::init(cx);
+        crash::install_pending(last_crash, cx);
         irori_ui::init(backend.clone(), cx);
         irori_ui::i18n::register(strings::CATALOGS);
         irori_ui::hooks::install(stores::hooks(), cx);

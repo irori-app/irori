@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Retardo inicial",
   "settings.pair.interval": "Intervalo",
   "settings.sysinfo.hardware": "Hardware y pantallas",
-  "settings.sysinfo.software": "Sistema y herramientas"
+  "settings.sysinfo.software": "Sistema y herramientas",
+  "settings.crash.title": "Informe de fallo",
+  "settings.crash.saved_at": "Guardado el {when}",
+  "settings.crash.location": "Ubicación: {location}",
+  "settings.crash.privacy_note": "No se envía nada automáticamente. Revisa el informe abajo antes de copiarlo, subirlo o abrir un problema en GitHub.",
+  "settings.crash.report_github": "Informar en GitHub",
+  "settings.crash.copied_for_github": "Informe copiado. Pégalo en la incidencia de GitHub.",
+  "settings.crash.copy": "Copiar informe",
+  "settings.crash.redact_home": "Ocultar la ruta de tu carpeta personal",
+  "settings.crash.open_logs": "Abrir registro del lanzador",
+  "settings.crash.recent_title": "Informes de fallo recientes",
+  "settings.crash.recent_help": "Los informes de cierres inesperados permanecen aquí hasta que los elimines.",
+  "settings.crash.review_action": "Revisar e informar",
+  "settings.crash.delete": "Eliminar informe",
+  "settings.crash.delete_failed": "No se pudo eliminar el informe de fallo"
 }

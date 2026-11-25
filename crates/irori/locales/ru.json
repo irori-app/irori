@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} и ещё {more}",
   "shell.notice.crashed_last_time": "В прошлый раз Irori неожиданно закрылся",
-  "shell.notice.crashed_last_time_message": "Отчёт о сбое сохранён в {path}. Приложите его, когда будете сообщать о проблеме.",
+  "shell.notice.crashed_last_time_message": "Отчёт о сбое сохранён. Просмотрите или отправьте его, чтобы помочь исправить проблему.",
   "shell.notice.login_expired": "Войдите в {store} снова",
   "shell.notice.login_expired_message": "Сохранённый вход больше не работает. Откройте «Аккаунты», чтобы войти снова.",
   "shell.notice.xbox_login_expired_message": "Сохранённый вход в Xbox больше не работает. Войдите снова на странице «Магазины», в разделе «Другие лаунчеры».",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Проверить повторяющиеся добавленные игры",
   "shell.palette.duplicates_keywords": "повтор объединить одинаковые дважды добавленные lutris импорт",
   "shell.palette.performance_hud": "Статистика в игре",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime счётчик производительность статистика в игре in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime счётчик производительность статистика в игре in-game stats",
+  "shell.notice.crashed_review_action": "Просмотреть и сообщить",
+  "shell.palette.latest_crash_report": "Открыть последний отчёт о сбое",
+  "shell.palette.latest_crash_report_keywords": "crash сбой отчёт лог ошибка bug"
 }

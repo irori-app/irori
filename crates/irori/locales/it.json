@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} e altri {more}",
   "shell.notice.crashed_last_time": "Irori si è chiuso inaspettatamente l’ultima volta",
-  "shell.notice.crashed_last_time_message": "È stato salvato un rapporto sull’arresto anomalo in {path}. Allegalo quando segnali il problema.",
+  "shell.notice.crashed_last_time_message": "È stato salvato un rapporto di arresto anomalo. Controllalo o condividilo per aiutare a risolvere il problema.",
   "shell.notice.login_expired": "Accedi di nuovo a {store}",
   "shell.notice.login_expired_message": "L’accesso salvato non funziona più. Apri Account per accedere di nuovo.",
   "shell.notice.xbox_login_expired_message": "L’accesso a Xbox salvato non funziona più. Accedi di nuovo dalla pagina Negozi, in Altri launcher.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Controlla i giochi aggiunti duplicati",
   "shell.palette.duplicates_keywords": "duplicato unisci stesso due volte aggiunto lutris importa",
   "shell.palette.performance_hud": "Statistiche in gioco",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime contatore prestazioni statistiche in gioco in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime contatore prestazioni statistiche in gioco in-game stats",
+  "shell.notice.crashed_review_action": "Esamina e segnala",
+  "shell.palette.latest_crash_report": "Visualizza l’ultimo rapporto di arresto anomalo",
+  "shell.palette.latest_crash_report_keywords": "crash arresto rapporto log panic bug"
 }

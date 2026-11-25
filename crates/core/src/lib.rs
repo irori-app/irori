@@ -8,6 +8,7 @@ pub mod archive_guard;
 pub mod big_picture_prefs;
 pub mod controller_prefs;
 pub mod controller_support;
+pub mod crash;
 pub mod dll_override;
 pub mod events;
 pub mod fs_guard;

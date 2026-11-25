@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} 等另外 {more} 個",
   "shell.notice.crashed_last_time": "Irori 上次意外關閉",
-  "shell.notice.crashed_last_time_message": "當機報告已儲存至 {path}。回報問題時請附上它。",
+  "shell.notice.crashed_last_time_message": "已儲存當機報告。請檢視或分享以協助修正此問題。",
   "shell.notice.login_expired": "請重新登入 {store}",
   "shell.notice.login_expired_message": "已儲存的登入已失效。請開啟「帳號」重新登入。",
   "shell.notice.xbox_login_expired_message": "已儲存的 Xbox 登入已失效。請在「商店」頁面的「其他啟動器」中重新登入。",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "檢查重複的已加入遊戲",
   "shell.palette.duplicates_keywords": "重複 合併 相同 兩次 已加入 lutris 匯入",
   "shell.palette.performance_hud": "遊戲內統計",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆蓋層 overlay fps 幀時間 計數器 效能 遊戲內統計 統計 in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆蓋層 overlay fps 幀時間 計數器 效能 遊戲內統計 統計 in-game stats",
+  "shell.notice.crashed_review_action": "檢視並回報",
+  "shell.palette.latest_crash_report": "檢視最新當機報告",
+  "shell.palette.latest_crash_report_keywords": "crash 當機 報告 日誌 錯誤 bug"
 }
