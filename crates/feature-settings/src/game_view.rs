@@ -514,14 +514,14 @@ impl GameSettingsView {
                             .installed_platform()
                             .unwrap_or(InstallPlatform::Windows),
                     };
-                    irori_runtime::set_dx_tool(
+                    Box::pin(irori_runtime::set_dx_tool(
                         &b.settings.app(),
                         &b.settings.game(&id),
                         target,
                         dx,
                         enable,
                         OpContext::detached(),
-                    )
+                    ))
                     .await
                 }
                 _ => b.run_in_prefix(&id, argv).await.map(|_| ()),
