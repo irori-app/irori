@@ -1609,9 +1609,13 @@ mod tests {
     fn star_citizen_script_persists_prefix_overrides_and_umu_id() {
         crate::tests::isolate_paths();
         let tmp = tempfile::tempdir().unwrap();
-        let game_dir = tmp.path().join("Games/Irori/Star Citizen");
+        let game_dir = tmp.path().join("Games").join("Irori").join("Star Citizen");
         let exe_path = game_dir
-            .join("drive_c/Program Files/Roberts Space Industries/RSI Launcher/RSI Launcher.exe");
+            .join("drive_c")
+            .join("Program Files")
+            .join("Roberts Space Industries")
+            .join("RSI Launcher")
+            .join("RSI Launcher.exe");
         std::fs::create_dir_all(exe_path.parent().unwrap()).unwrap();
         std::fs::write(&exe_path, b"MZ").unwrap();
 
@@ -1738,6 +1742,7 @@ mod tests {
             }),
             ..Default::default()
         };
+        assert_eq!(PathBuf::from(&effective.wine_prefix), game_dir);
         assert_eq!(effective.wine_prefix, game_dir.to_string_lossy());
         assert_eq!(
             irori_runtime::prefix_path(&app, &effective, &game_info),
