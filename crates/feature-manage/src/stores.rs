@@ -1,6 +1,6 @@
-//! Storefront hub ([`Route::Stores`](irori_ui::Route::Stores)): underlined tabs
-//! for Deals (Free to claim, regional deals, global search), Stores (official
-//! websites and sign-in), and Launchers (Battle.net, EA, Ubisoft, Rockstar, Xbox).
+//! Storefront hub ([`Route::Stores`](irori_ui::Route::Stores)): two large
+//! underlined tabs for Stores (websites, sign-in, and third-party launchers)
+//! and Deals (Free to claim, regional deals, global search).
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -8,13 +8,13 @@ use std::rc::Rc;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::scroll::ScrollableElement as _;
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Render, SharedString, Styled as _, Subscription, Window, div, px,
+    ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Window, div, px,
 };
 use irori_core::Runner;
 use irori_ui::components::PageHeader;
@@ -86,9 +86,17 @@ const MIN_CARD_REM: f32 = 17.5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StoresTab {
-    Deals,
     Stores,
-    Launchers,
+    Deals,
+}
+
+impl StoresTab {
+    fn id(self) -> &'static str {
+        match self {
+            StoresTab::Stores => "stores",
+            StoresTab::Deals => "deals",
+        }
+    }
 }
 
 /// Store websites, launchers and deals under underlined tabs.
@@ -117,13 +125,8 @@ impl StoresView {
         ];
         let deals = deals_shown(cx).then(|| cx.new(|cx| DealsSection::new(window, cx)));
         let launchers = cx.new(|cx| crate::launchers::LaunchersSection::new(window, cx));
-        let tab = if deals.is_some() {
-            StoresTab::Deals
-        } else {
-            StoresTab::Stores
-        };
         Self {
-            tab,
+            tab: StoresTab::Stores,
             cards: store_cards(cx),
             grid_width: Rc::new(Cell::new(px(0.))),
             deals,
@@ -159,12 +162,11 @@ impl StoresView {
     }
 
     fn tabs(&self) -> Vec<StoresTab> {
-        let mut tabs = Vec::with_capacity(3);
+        let mut tabs = Vec::with_capacity(2);
+        tabs.push(StoresTab::Stores);
         if self.deals.is_some() {
             tabs.push(StoresTab::Deals);
         }
-        tabs.push(StoresTab::Stores);
-        tabs.push(StoresTab::Launchers);
         tabs
     }
 
@@ -251,13 +253,16 @@ impl StoresView {
 impl Render for StoresView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tabs = self.tabs();
-        let selected_ix = tabs.iter().position(|&t| t == self.tab).unwrap_or(0);
-        let tabs_for_click = tabs.clone();
+        let (fg, muted, border, primary) = {
+            let theme = cx.theme();
+            (
+                theme.foreground,
+                theme.muted_foreground,
+                theme.border,
+                theme.primary,
+            )
+        };
         let body: AnyElement = match self.tab {
-            StoresTab::Deals => match &self.deals {
-                Some(deals) => deals.clone().into_any_element(),
-                None => div().into_any_element(),
-            },
             StoresTab::Stores => {
                 let mut sorted: Vec<StoreCard> = self
                     .cards
@@ -271,9 +276,16 @@ impl Render for StoresView {
                     .iter()
                     .filter_map(|c| self.render_store(c, cx))
                     .collect();
-                card_grid(&self.grid_width, MIN_CARD_REM, cards, window).into_any_element()
+                v_flex()
+                    .gap_8()
+                    .child(card_grid(&self.grid_width, MIN_CARD_REM, cards, window))
+                    .child(self.launchers.clone())
+                    .into_any_element()
             }
-            StoresTab::Launchers => self.launchers.clone().into_any_element(),
+            StoresTab::Deals => match &self.deals {
+                Some(deals) => deals.clone().into_any_element(),
+                None => div().into_any_element(),
+            },
         };
 
         v_flex()
@@ -291,22 +303,42 @@ impl Render for StoresView {
                             .description(t("manage.stores.description")),
                     )
                     .child(
-                        TabBar::new("stores-tabs")
-                            .underline()
-                            .large()
-                            .selected_index(selected_ix)
-                            .children(tabs.iter().map(|tab| {
-                                Tab::new().label(match tab {
-                                    StoresTab::Deals => t("manage.stores.tab.deals"),
+                        h_flex()
+                            .w_full()
+                            .gap_8()
+                            .border_b_1()
+                            .border_color(border)
+                            .children(tabs.iter().map(|&tab| {
+                                let active = self.tab == tab;
+                                let label = match tab {
                                     StoresTab::Stores => t("manage.stores.tab.stores"),
-                                    StoresTab::Launchers => t("manage.stores.tab.launchers"),
-                                })
-                            }))
-                            .on_click(cx.listener(move |this, ix: &usize, _, cx| {
-                                if let Some(&next) = tabs_for_click.get(*ix) {
-                                    this.tab = next;
-                                    cx.notify();
-                                }
+                                    StoresTab::Deals => t("manage.stores.tab.deals"),
+                                };
+                                v_flex()
+                                    .id(ElementId::Name(format!("stores-tab-{}", tab.id()).into()))
+                                    .cursor_pointer()
+                                    .gap_2p5()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        if this.tab != tab {
+                                            this.tab = tab;
+                                            cx.notify();
+                                        }
+                                    }))
+                                    .child(
+                                        div()
+                                            .text_xl()
+                                            .font_semibold()
+                                            .text_color(if active { fg } else { muted })
+                                            .hover(move |s| s.text_color(fg))
+                                            .child(label),
+                                    )
+                                    .child(
+                                        div()
+                                            .h(px(3.))
+                                            .w_full()
+                                            .rounded_full()
+                                            .when(active, |b| b.bg(primary)),
+                                    )
                             })),
                     )
                     .child(body),

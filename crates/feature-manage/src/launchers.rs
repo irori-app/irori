@@ -29,7 +29,6 @@ use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::select::{Select, SelectItem, SelectState};
-use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
@@ -284,6 +283,7 @@ impl LaunchersSection {
         if self.running.contains_key(&launcher) {
             return;
         }
+        ensure_third_party_launchers_enabled(cx);
         let wine = self.chosen_wine(cx);
         let live = Arc::new(Mutex::new(Live::default()));
         let (progress_live, step_live) = (live.clone(), live.clone());
@@ -449,6 +449,7 @@ impl LaunchersSection {
                 return;
             };
             let Ok(task) = this.update(cx, |_, cx| {
+                ensure_third_party_launchers_enabled(cx);
                 irori_ui::run(cx, async move { store.adopt(launcher, prefix, wine).await })
             }) else {
                 return;
@@ -477,6 +478,7 @@ impl LaunchersSection {
         let Some(store) = launchers_store(cx) else {
             return;
         };
+        ensure_third_party_launchers_enabled(cx);
         let task = irori_ui::run(cx, async move {
             if open {
                 store.open_xbox_app().await
@@ -547,6 +549,7 @@ impl LaunchersSection {
                 .icon(IconName::LogIn)
                 .label(label)
                 .on_click(|_, window, cx| {
+                    ensure_third_party_launchers_enabled(cx);
                     crate::login::open_login_dialog(Runner::Launchers, window, cx)
                 })
         };
@@ -1006,56 +1009,46 @@ impl LaunchersSection {
     }
 }
 
+fn ensure_third_party_launchers_enabled(cx: &mut App) {
+    if !models(cx).settings.read(cx).app.third_party_launchers {
+        backend_op(cx, |b| {
+            b.settings.update_app(|s| s.third_party_launchers = true);
+            b.bus
+                .emit(irori_core::Event::LibraryChanged(Runner::Launchers));
+        });
+    }
+}
+
 impl Render for LaunchersSection {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
-        let enabled = models(cx).settings.read(cx).app.third_party_launchers;
-        let cards: Vec<AnyElement> = if enabled {
-            let mut cards: Vec<AnyElement> = self
-                .statuses
-                .clone()
-                .iter()
-                .map(|s| self.render_card(s, cx))
-                .collect();
-            cards.extend(self.xbox.map(|x| self.render_xbox_card(x, cx)));
-            cards
-        } else {
-            Vec::new()
-        };
+        let mut cards: Vec<AnyElement> = self
+            .statuses
+            .clone()
+            .iter()
+            .map(|s| self.render_card(s, cx))
+            .collect();
+        cards.extend(self.xbox.map(|x| self.render_xbox_card(x, cx)));
         v_flex()
             .gap_4()
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(div().font_semibold().child(t("manage.launchers.title")))
-                    .child(div().text_sm().text_color(muted).child(if cfg!(windows) {
-                        t("manage.launchers.description_windows")
-                    } else {
-                        t("manage.launchers.description")
-                    })),
-            )
             .child(
                 h_flex()
                     .w_full()
                     .gap_4()
                     .flex_wrap()
                     .justify_between()
-                    .items_center()
+                    .items_end()
                     .child(
-                        Switch::new("launchers-enabled")
-                            .label(t("manage.launchers.enable"))
-                            .checked(enabled)
-                            .on_change(|on: &bool, _, cx| {
-                                let on = *on;
-                                backend_op(cx, move |b| {
-                                    b.settings.update_app(|s| s.third_party_launchers = on);
-                                    b.bus.emit(irori_core::Event::LibraryChanged(
-                                        irori_core::Runner::Launchers,
-                                    ));
-                                });
-                            }),
+                        v_flex()
+                            .gap_1()
+                            .child(div().font_semibold().child(t("manage.launchers.title")))
+                            .child(div().text_sm().text_color(muted).child(if cfg!(windows) {
+                                t("manage.launchers.description_windows")
+                            } else {
+                                t("manage.launchers.description")
+                            })),
                     )
-                    .when(enabled && !cfg!(windows), |bar| {
+                    .when(!cfg!(windows), |bar| {
                         bar.child(
                             h_flex()
                                 .gap_3()
@@ -1074,8 +1067,6 @@ impl Render for LaunchersSection {
                         )
                     }),
             )
-            .when(enabled, |d| {
-                d.child(card_grid(&self.grid_width, 20., cards, window))
-            })
+            .child(card_grid(&self.grid_width, 20., cards, window))
     }
 }

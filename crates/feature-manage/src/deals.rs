@@ -32,25 +32,31 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Task, Window,
     div, px, rems,
 };
-use irori_core::{DealsLayout, sort_key};
+use irori_core::{DealsLayout, Runner, sort_key};
 use irori_extras::anticheat;
 use irori_extras::discounts::{
     self, CatalogLocale, CatalogProduct, DEALS_REGIONS, DealStore, DealsRegion, FreeGame,
-    GgDealsPrice,
+    FreeStore, GgDealsPrice,
 };
-use irori_extras::wiki::{self, ProtonDbTier};
+use irori_extras::wiki::{self, ProtonDbLookup, ProtonDbTier};
 use irori_ui::art::{LruImageCache, art_store};
 use irori_ui::components::{SectionTitle, art_img, physical_width};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
+use crate::accounts::store_cards;
 use crate::common::{backend_op, card, card_grid, notify_error, notify_success, wrapped_tooltip};
+use crate::store_window::open_store_window;
 
 /// Deals rendered per "Show more" step.
 const PAGE: usize = 40;
 /// Cap on lazy per-batch ProtonDB/GG.deals lookups per page.
-const ENRICH_BATCH: usize = 36;
+const ENRICH_BATCH: usize = 48;
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(350);
+const PROTONDB_SVG: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../assets/brand/protondb.svg"
+));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum DealSort {
@@ -151,8 +157,9 @@ pub(crate) struct DealsCache {
     pub region_code: String,
     pub state: DealsState,
     search_state: SearchState,
+    resolved_steam_ids: HashMap<String, String>,
     protondb: HashMap<String, ProtonDbTier>,
-    protondb_requested: HashSet<String>,
+    enrichment_requested: HashSet<String>,
     ggdeals: HashMap<String, GgDealsPrice>,
     ggdeals_requested: HashSet<String>,
     ggdeals_key_saved: bool,
@@ -165,8 +172,9 @@ impl Default for DealsCache {
             region_code: String::new(),
             state: DealsState::Idle,
             search_state: SearchState::Idle,
+            resolved_steam_ids: HashMap::new(),
             protondb: HashMap::new(),
-            protondb_requested: HashSet::new(),
+            enrichment_requested: HashSet::new(),
             ggdeals: HashMap::new(),
             ggdeals_requested: HashSet::new(),
             ggdeals_key_saved: false,
@@ -353,42 +361,41 @@ fn run_global_search(
 
 fn enrich_visible(
     entity: Entity<DealsCache>,
-    app_ids: Vec<String>,
+    lookups: Vec<ProtonDbLookup>,
+    gg_candidate_ids: Vec<String>,
     region: &'static DealsRegion,
     cx: &mut App,
 ) {
-    let (missing_proton, missing_ggdeals) = entity.update(cx, |c, _| {
-        let mut p_ids = Vec::new();
-        let mut g_ids = Vec::new();
-        for id in app_ids {
-            if cfg!(target_os = "linux")
-                && p_ids.len() < ENRICH_BATCH
-                && c.protondb_requested.insert(id.clone())
-            {
-                p_ids.push(id.clone());
-            }
-            if c.ggdeals_key_saved
-                && g_ids.len() < ENRICH_BATCH
-                && c.ggdeals_requested.insert(id.clone())
-            {
-                g_ids.push(id);
+    let (missing_lookups, missing_ggdeals) = entity.update(cx, |c, _| {
+        let mut req_lookups = Vec::new();
+        for item in lookups {
+            if req_lookups.len() < ENRICH_BATCH && c.enrichment_requested.insert(item.key.clone()) {
+                req_lookups.push(item);
             }
         }
-        (p_ids, g_ids)
+        let mut g_ids = Vec::new();
+        if c.ggdeals_key_saved {
+            for id in gg_candidate_ids {
+                if g_ids.len() < ENRICH_BATCH && c.ggdeals_requested.insert(id.clone()) {
+                    g_ids.push(id);
+                }
+            }
+        }
+        (req_lookups, g_ids)
     });
 
-    if !missing_proton.is_empty() {
+    if !missing_lookups.is_empty() {
         let target = entity.clone();
-        let task = irori_ui::run(
-            cx,
-            async move { Ok(wiki::protondb_batch(missing_proton).await) },
-        );
+        let task = irori_ui::run(cx, async move {
+            Ok(wiki::resolve_protondb_batch(missing_lookups).await)
+        });
         cx.spawn(async move |cx| {
-            if let Ok(tiers) = task.await
-                && !tiers.is_empty()
+            if let Ok(res) = task.await
+                && (!res.resolved_steam_ids.is_empty() || !res.tiers.is_empty())
             {
                 target.update(cx, |c, cx| {
-                    c.protondb.extend(tiers);
+                    c.resolved_steam_ids.extend(res.resolved_steam_ids);
+                    c.protondb.extend(res.tiers);
                     cx.notify();
                 });
             }
@@ -583,6 +590,65 @@ fn store_short_label(store: DealStore, custom_name: Option<&str>) -> String {
     }
 }
 
+fn free_store_runner(store: FreeStore) -> Option<Runner> {
+    match store {
+        FreeStore::Epic => Some(Runner::Legendary),
+        FreeStore::Gog => Some(Runner::Gog),
+        FreeStore::Itch => Some(Runner::Itch),
+        FreeStore::Steam => None,
+    }
+}
+
+fn deal_store_runner(store: DealStore) -> Option<Runner> {
+    match store {
+        DealStore::Gog => Some(Runner::Gog),
+        DealStore::Steam | DealStore::Gmg | DealStore::Humble | DealStore::Other => None,
+    }
+}
+
+fn is_store_connected(runner: Runner, cx: &App) -> bool {
+    store_cards(cx)
+        .into_iter()
+        .any(|c| c.runner == runner && c.user.is_some())
+}
+
+fn can_open_in_store_window(runner: Option<Runner>, cx: &App) -> bool {
+    runner.is_some_and(|r| is_store_connected(r, cx))
+}
+
+fn open_in_store_or_browser(
+    runner: Option<Runner>,
+    url: String,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if let Some(r) = runner.filter(|&r| is_store_connected(r, cx)) {
+        open_store_window(r, Some(url), window, cx);
+    } else if let Some(valid) = irori_ui::web_url(&url) {
+        cx.open_url(&valid);
+    }
+}
+
+fn deal_title_link(id_prefix: &str, p: &CatalogProduct, label: AnyElement, cx: &App) -> AnyElement {
+    let store_runner = deal_store_runner(p.store);
+    if let Some(r) = store_runner.filter(|&r| is_store_connected(r, cx)) {
+        let store_link = p.store_link.clone();
+        return div()
+            .id(ElementId::Name(format!("{id_prefix}-open-{}", p.id).into()))
+            .cursor_pointer()
+            .hover(|s| s.underline())
+            .on_click(move |_, window, cx| {
+                open_store_window(r, Some(store_link.clone()), window, cx);
+            })
+            .child(label)
+            .into_any_element();
+    }
+    Link::new("open")
+        .when_some(irori_ui::web_url(&p.store_link), |link, url| link.href(url))
+        .child(label)
+        .into_any_element()
+}
+
 fn protondb_tag_and_tip(tier: ProtonDbTier) -> Option<(Tag, SharedString)> {
     let (tag, tip) = match tier {
         ProtonDbTier::Native => (Tag::info(), t("manage.deals.protondb.native")),
@@ -593,7 +659,12 @@ fn protondb_tag_and_tip(tier: ProtonDbTier) -> Option<(Tag, SharedString)> {
         ProtonDbTier::Borked => (Tag::danger(), t("manage.deals.protondb.borked")),
         ProtonDbTier::Pending | ProtonDbTier::Unknown => return None,
     };
-    Some((tag.xsmall().child(tier.label()), tip))
+    let badge = h_flex()
+        .gap_1()
+        .items_center()
+        .child(Icon::empty().data(PROTONDB_SVG).xsmall())
+        .child(tier.label());
+    Some((tag.xsmall().child(badge), tip))
 }
 
 fn render_protondb_badge(
@@ -1068,30 +1139,60 @@ impl DealsSection {
 
     fn schedule_enrichment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let region = active_region(cx);
-        let mut ids = Vec::new();
-        {
+        let (lookups, gg_ids) = {
             let c = self.cache.read(cx);
+            let mut lookups = Vec::new();
+            let mut gg_ids = Vec::new();
+            let mut push_item = |key: String,
+                                 title: String,
+                                 gog_id: Option<String>,
+                                 steam_app_id: Option<String>| {
+                if let Some(id) = steam_app_id
+                    .as_deref()
+                    .or_else(|| c.resolved_steam_ids.get(&key).map(String::as_str))
+                    && !id.is_empty()
+                {
+                    gg_ids.push(id.to_string());
+                }
+                if !c.enrichment_requested.contains(&key) {
+                    lookups.push(ProtonDbLookup {
+                        key,
+                        title,
+                        gog_id,
+                        steam_app_id,
+                    });
+                }
+            };
             if let DealsState::Loaded { free_games, .. } = &c.state {
                 for g in free_games.iter() {
-                    if let Some(id) = &g.steam_app_id {
-                        ids.push(id.clone());
-                    }
+                    push_item(
+                        format!("free:{}", g.id),
+                        g.title.clone(),
+                        (g.store == FreeStore::Gog).then(|| g.id.clone()),
+                        g.steam_app_id.clone(),
+                    );
                 }
             }
             if let Some((products, _)) = self.active_products(cx) {
                 for &ix in self.visible.iter().take(self.shown) {
-                    if let Some(p) = products.get(ix)
-                        && let Some(id) = &p.steam_app_id
-                    {
-                        ids.push(id.clone());
+                    if let Some(p) = products.get(ix) {
+                        let gog_id = (p.store == DealStore::Gog && !p.id.starts_with("cs-"))
+                            .then(|| p.id.clone());
+                        push_item(
+                            p.id.clone(),
+                            p.title.clone(),
+                            gog_id,
+                            p.steam_app_id.clone(),
+                        );
                     }
                 }
             }
-        }
-        if !ids.is_empty() {
+            (lookups, gg_ids)
+        };
+        if !lookups.is_empty() || !gg_ids.is_empty() {
             let target = self.cache.clone();
             window.defer(cx, move |_, cx| {
-                enrich_visible(target, ids, region, cx);
+                enrich_visible(target, lookups, gg_ids, region, cx);
             });
         }
     }
@@ -1106,12 +1207,17 @@ impl DealsSection {
             .image_url
             .as_ref()
             .and_then(|url| art_img(url, physical_width(width, window), false, cx));
+        let free_key = format!("free:{}", g.id);
         let compat = {
             let cache = self.cache.read(cx);
+            let steam_id = g
+                .steam_app_id
+                .as_deref()
+                .or_else(|| cache.resolved_steam_ids.get(&free_key).map(String::as_str));
             render_protondb_badge(
                 &format!("free-{}", g.id),
                 &g.title,
-                g.steam_app_id.as_deref(),
+                steam_id,
                 &cache.protondb,
             )
         };
@@ -1124,6 +1230,8 @@ impl DealsSection {
             }
         });
         let claim_url = g.claim_url.clone();
+        let claim_runner = free_store_runner(g.store);
+        let in_store_window = can_open_in_store_window(claim_runner, cx);
         card(cx)
             .id(ElementId::Name(format!("free-{}", g.id).into()))
             .p_3()
@@ -1200,13 +1308,24 @@ impl DealsSection {
                         Button::new(ElementId::Name(format!("free-claim-{}", g.id).into()))
                             .small()
                             .outline()
-                            .icon(IconName::ExternalLink)
+                            .icon(if in_store_window {
+                                IconName::Store
+                            } else {
+                                IconName::ExternalLink
+                            })
                             .label(if g.upcoming {
                                 t("manage.deals.free.view")
                             } else {
                                 t("manage.deals.free.claim")
                             })
-                            .on_click(move |_, _, cx| cx.open_url(&claim_url)),
+                            .on_click(move |_, window, cx| {
+                                open_in_store_or_browser(
+                                    claim_runner,
+                                    claim_url.clone(),
+                                    window,
+                                    cx,
+                                );
+                            }),
                     ),
             )
             .into_any_element()
@@ -1214,11 +1333,11 @@ impl DealsSection {
 
     fn render_ggdeals_line(
         &self,
-        p: &CatalogProduct,
+        steam_app_id: Option<&str>,
         ggdeals: &HashMap<String, GgDealsPrice>,
         cx: &App,
     ) -> Option<AnyElement> {
-        let info = p.steam_app_id.as_deref().and_then(|id| ggdeals.get(id))?;
+        let info = steam_app_id.and_then(|id| ggdeals.get(id))?;
         let muted = cx.theme().muted_foreground;
         let mut parts = Vec::new();
         match self.shop_filter {
@@ -1289,25 +1408,45 @@ impl DealsSection {
             .clone()
             .or_else(|| p.cover_vertical.clone())
             .and_then(|url| art_img(&url, physical_width(width, window), false, cx));
-        let theme = cx.theme();
-        let muted = theme.muted_foreground;
+        let (muted, muted_bg) = {
+            let theme = cx.theme();
+            (theme.muted_foreground, theme.muted)
+        };
         let percent = discount_percent(p);
-        let cache = self.cache.read(cx);
-        let compat = render_protondb_badge(
-            &format!("grid-{}", p.id),
-            &p.title,
-            p.steam_app_id.as_deref(),
-            &cache.protondb,
-        );
-        let gg_line = self.render_ggdeals_line(p, &cache.ggdeals, cx);
+        let (compat, gg_line, ggdeals_key_saved, gg_url) = {
+            let cache = self.cache.read(cx);
+            let eff_steam_id = p
+                .steam_app_id
+                .as_deref()
+                .or_else(|| cache.resolved_steam_ids.get(&p.id).map(String::as_str))
+                .map(str::to_string);
+            let compat = render_protondb_badge(
+                &format!("grid-{}", p.id),
+                &p.title,
+                eff_steam_id.as_deref(),
+                &cache.protondb,
+            );
+            let gg_line = self.render_ggdeals_line(eff_steam_id.as_deref(), &cache.ggdeals, cx);
+            let gg_url = eff_steam_id
+                .as_deref()
+                .and_then(|id| cache.ggdeals.get(id))
+                .and_then(|g| g.url.clone())
+                .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
+            (compat, gg_line, cache.ggdeals_key_saved, gg_url)
+        };
         let divergent_cur = has_divergent_currency(p, region);
-        let gg_url = p
-            .steam_app_id
-            .as_deref()
-            .and_then(|id| cache.ggdeals.get(id))
-            .and_then(|g| g.url.clone())
-            .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
         let in_library = is_owned_base_game(&p.title, &self.owned);
+        let title_el = deal_title_link(
+            "grid",
+            p,
+            div()
+                .text_sm()
+                .font_semibold()
+                .line_clamp(2)
+                .child(p.title.clone())
+                .into_any_element(),
+            cx,
+        );
 
         card(cx)
             .id(ElementId::Name(format!("deal-grid-{}", p.id).into()))
@@ -1319,7 +1458,9 @@ impl DealsSection {
                     .relative()
                     .w_full()
                     .h(rems(9.5))
-                    .bg(theme.muted)
+                    .flex_shrink_0()
+                    .overflow_hidden()
+                    .bg(muted_bg)
                     .when_some(art, |this, img| {
                         this.child(img.size_full().object_fit(ObjectFit::Cover))
                     })
@@ -1351,19 +1492,7 @@ impl DealsSection {
                         v_flex()
                             .flex_1()
                             .gap_1()
-                            .child(
-                                Link::new("open")
-                                    .when_some(irori_ui::web_url(&p.store_link), |link, url| {
-                                        link.href(url)
-                                    })
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_semibold()
-                                            .line_clamp(2)
-                                            .child(p.title.clone()),
-                                    ),
-                            )
+                            .child(title_el)
                             .when(in_library || p.store == DealStore::Gog, |col| {
                                 col.child(
                                     h_flex()
@@ -1415,17 +1544,19 @@ impl DealsSection {
                                         row.child(Tag::secondary().xsmall().child(cur))
                                     }),
                             )
-                            .child(
-                                Button::new(ElementId::Name(
-                                    format!("ggdeals-grid-{}", p.id).into(),
-                                ))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::ExternalLink)
-                                .label("GG.deals")
-                                .tooltip(t("manage.deals.ggdeals.compare_tooltip"))
-                                .on_click(move |_, _, cx| cx.open_url(&gg_url)),
-                            ),
+                            .when(ggdeals_key_saved, |row| {
+                                row.child(
+                                    Button::new(ElementId::Name(
+                                        format!("ggdeals-grid-{}", p.id).into(),
+                                    ))
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::ExternalLink)
+                                    .label("GG.deals")
+                                    .tooltip(t("manage.deals.ggdeals.compare_tooltip"))
+                                    .on_click(move |_, _, cx| cx.open_url(&gg_url)),
+                                )
+                            }),
                     ),
             )
             .into_any_element()
@@ -1444,24 +1575,49 @@ impl DealsSection {
             .clone()
             .or_else(|| p.cover_vertical.clone())
             .and_then(|url| art_img(&url, physical_width(width, window), false, cx));
-        let theme = cx.theme();
-        let muted = theme.muted_foreground;
+        let (muted, muted_bg, radius, border, group_box) = {
+            let theme = cx.theme();
+            (
+                theme.muted_foreground,
+                theme.muted,
+                theme.radius,
+                theme.border,
+                theme.group_box,
+            )
+        };
         let percent = discount_percent(p);
-        let cache = self.cache.read(cx);
-        let compat = render_protondb_badge(
-            &format!("list-{}", p.id),
-            &p.title,
-            p.steam_app_id.as_deref(),
-            &cache.protondb,
-        );
-        let gg_line = self.render_ggdeals_line(p, &cache.ggdeals, cx);
+        let (compat, gg_line, ggdeals_key_saved, gg_url) = {
+            let cache = self.cache.read(cx);
+            let eff_steam_id = p
+                .steam_app_id
+                .as_deref()
+                .or_else(|| cache.resolved_steam_ids.get(&p.id).map(String::as_str))
+                .map(str::to_string);
+            let compat = render_protondb_badge(
+                &format!("list-{}", p.id),
+                &p.title,
+                eff_steam_id.as_deref(),
+                &cache.protondb,
+            );
+            let gg_line = self.render_ggdeals_line(eff_steam_id.as_deref(), &cache.ggdeals, cx);
+            let gg_url = eff_steam_id
+                .as_deref()
+                .and_then(|id| cache.ggdeals.get(id))
+                .and_then(|g| g.url.clone())
+                .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
+            (compat, gg_line, cache.ggdeals_key_saved, gg_url)
+        };
         let divergent_cur = has_divergent_currency(p, region);
-        let gg_url = p
-            .steam_app_id
-            .as_deref()
-            .and_then(|id| cache.ggdeals.get(id))
-            .and_then(|g| g.url.clone())
-            .unwrap_or_else(|| discounts::gg_deals_search_url(&p.title, region));
+        let title_el = deal_title_link(
+            "list",
+            p,
+            div()
+                .font_medium()
+                .truncate()
+                .child(p.title.clone())
+                .into_any_element(),
+            cx,
+        );
 
         h_flex()
             .id(ElementId::Name(format!("deal-list-{}", p.id).into()))
@@ -1469,50 +1625,37 @@ impl DealsSection {
             .gap_3()
             .px_3()
             .py_2()
-            .rounded(theme.radius)
+            .rounded(radius)
             .border_1()
-            .border_color(theme.border)
-            .bg(theme.group_box)
+            .border_color(border)
+            .bg(group_box)
             .child(
                 div()
                     .w(width)
                     .h(rems(3.4))
                     .flex_shrink_0()
-                    .rounded(theme.radius)
+                    .rounded(radius)
                     .overflow_hidden()
-                    .bg(theme.muted)
+                    .bg(muted_bg)
                     .when_some(art, |this, img| {
-                        this.child(
-                            img.size_full()
-                                .rounded(theme.radius)
-                                .object_fit(ObjectFit::Cover),
-                        )
+                        this.child(img.size_full().rounded(radius).object_fit(ObjectFit::Cover))
                     }),
             )
             .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap_0p5()
-                    .child(
-                        Link::new("open")
-                            .when_some(irori_ui::web_url(&p.store_link), |link, url| link.href(url))
-                            .child(div().font_medium().truncate().child(p.title.clone())),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .flex_wrap()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(muted)
-                                    .child(store_label(p.store, p.store_name.as_deref())),
-                            )
-                            .children(compat)
-                            .children(gg_line),
-                    ),
+                v_flex().flex_1().min_w_0().gap_0p5().child(title_el).child(
+                    h_flex()
+                        .gap_2()
+                        .flex_wrap()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(store_label(p.store, p.store_name.as_deref())),
+                        )
+                        .children(compat)
+                        .children(gg_line),
+                ),
             )
             .child(
                 h_flex()
@@ -1543,15 +1686,17 @@ impl DealsSection {
                     .when_some(divergent_cur, |row, cur| {
                         row.child(Tag::secondary().xsmall().child(cur))
                     })
-                    .child(
-                        Button::new(ElementId::Name(format!("ggdeals-list-{}", p.id).into()))
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::ExternalLink)
-                            .label("GG.deals")
-                            .tooltip(t("manage.deals.ggdeals.compare_tooltip"))
-                            .on_click(move |_, _, cx| cx.open_url(&gg_url)),
-                    ),
+                    .when(ggdeals_key_saved, |row| {
+                        row.child(
+                            Button::new(ElementId::Name(format!("ggdeals-list-{}", p.id).into()))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::ExternalLink)
+                                .label("GG.deals")
+                                .tooltip(t("manage.deals.ggdeals.compare_tooltip"))
+                                .on_click(move |_, _, cx| cx.open_url(&gg_url)),
+                        )
+                    }),
             )
             .into_any_element()
     }
@@ -1604,7 +1749,6 @@ impl Render for DealsSection {
 
         let free_strip: Option<AnyElement> = match &state {
             DealsState::Loaded { free_games, .. } if !free_games.is_empty() => {
-                let has_gp = free_games.iter().any(|g| g.from_gamerpower);
                 let cards: Vec<AnyElement> = free_games
                     .iter()
                     .map(|g| self.render_free_card(g, window, cx))
@@ -1612,16 +1756,7 @@ impl Render for DealsSection {
                 Some(
                     v_flex()
                         .gap_3()
-                        .child(
-                            SectionTitle::new(t("manage.deals.free.title")).when(has_gp, |s| {
-                                s.trailing(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted)
-                                        .child(t("manage.deals.free.attribution")),
-                                )
-                            }),
-                        )
+                        .child(SectionTitle::new(t("manage.deals.free.title")))
                         .child(card_grid(&self.free_grid_width, 20., cards, window))
                         .into_any_element(),
                 )
@@ -1635,24 +1770,20 @@ impl Render for DealsSection {
             .gap_2()
             .flex_wrap()
             .items_center()
-            .child(
-                div()
-                    .w(rems(12.))
-                    .child(Select::new(&self.region_select).small()),
-            )
-            .child(
-                Button::new("deals-ggdeals-browse")
-                    .outline()
-                    .small()
-                    .icon(IconName::ExternalLink)
-                    .label("GG.deals")
-                    .tooltip(t("manage.deals.ggdeals.browse_tooltip"))
-                    .on_click(move |_, _, cx| cx.open_url(&gg_browse_url)),
-            )
+            .child(div().w(rems(13.)).child(Select::new(&self.region_select)))
+            .when(ggdeals_key_saved, |bar| {
+                bar.child(
+                    Button::new("deals-ggdeals-browse")
+                        .outline()
+                        .icon(IconName::ExternalLink)
+                        .label("GG.deals")
+                        .tooltip(t("manage.deals.ggdeals.browse_tooltip"))
+                        .on_click(move |_, _, cx| cx.open_url(&gg_browse_url)),
+                )
+            })
             .child(
                 Button::new("deals-ggdeals-key")
                     .outline()
-                    .small()
                     .icon(IconName::KeyRound)
                     .tooltip(t("manage.deals.ggdeals.key_tooltip"))
                     .label(if ggdeals_key_saved {
@@ -1672,21 +1803,12 @@ impl Render for DealsSection {
             .child(
                 Button::new("deals-reload")
                     .ghost()
-                    .small()
                     .icon(IconName::RefreshCw)
                     .label(t("manage.deals.reload"))
                     .disabled(matches!(state, DealsState::Loading))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         load(this.cache.clone(), region, cx);
                     })),
-            )
-            .child(
-                Button::new("deals-hide")
-                    .ghost()
-                    .small()
-                    .icon(IconName::EyeOff)
-                    .label(t("manage.deals.hide"))
-                    .on_click(|_, window, cx| set_deals_shown(false, window, cx)),
             );
 
         let global_active = self.is_global_search_active(cx);
@@ -1766,11 +1888,10 @@ impl Render for DealsSection {
                 let store_tabs_for_click = store_tabs.clone();
                 let shop_options_for_click = shop_options.clone();
                 v_flex()
-                    .gap_3()
+                    .gap_4()
                     .child(
                         TabBar::new("deal-stores")
                             .segmented()
-                            .small()
                             .selected_index(selected_store_ix)
                             .children(store_tabs.iter().map(|s| {
                                 Tab::new().label(
@@ -1800,14 +1921,13 @@ impl Render for DealsSection {
                             .child(
                                 h_flex()
                                     .flex_1()
-                                    .min_w(rems(16.))
+                                    .min_w(rems(17.))
                                     .max_w(rems(28.))
                                     .gap_2()
                                     .items_center()
                                     .child(
                                         div().flex_1().child(
                                             Input::new(&self.search)
-                                                .small()
                                                 .prefix(Icon::new(IconName::Search).small())
                                                 .cleanable(true),
                                         ),
@@ -1817,7 +1937,6 @@ impl Render for DealsSection {
                             .child(
                                 TabBar::new("deal-shop-type")
                                     .segmented()
-                                    .small()
                                     .selected_index(selected_shop_ix)
                                     .children(
                                         shop_options
@@ -1834,14 +1953,9 @@ impl Render for DealsSection {
                                         }
                                     })),
                             )
-                            .child(
-                                div()
-                                    .w(rems(11.))
-                                    .child(Select::new(&self.sort_select).small()),
-                            )
+                            .child(div().w(rems(12.)).child(Select::new(&self.sort_select)))
                             .child(
                                 ButtonGroup::new("deals-layout")
-                                    .small()
                                     .outline()
                                     .child(
                                         Button::new("deals-layout-grid")

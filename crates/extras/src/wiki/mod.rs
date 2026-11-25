@@ -13,6 +13,7 @@ pub mod hltb;
 pub mod pcgamingwiki;
 pub mod sources;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -474,6 +475,166 @@ pub async fn umu_id(runner: Runner, app_name: &str) -> Result<Option<String>> {
     Ok(id)
 }
 
+/// Input item for batch ProtonDB resolution across store deals and giveaways.
+#[derive(Debug, Clone)]
+pub struct ProtonDbLookup {
+    pub key: String,
+    pub title: String,
+    pub gog_id: Option<String>,
+    pub steam_app_id: Option<String>,
+}
+
+/// Batch output mapping deal keys to resolved Steam app IDs and those IDs to
+/// non-pending ProtonDB compatibility tiers.
+#[derive(Debug, Default)]
+pub struct ProtonDbBatchResult {
+    pub resolved_steam_ids: HashMap<String, String>,
+    pub tiers: HashMap<String, ProtonDbTier>,
+}
+
+const EDITION_SUFFIXES: &[&str] = &[
+    "(steam) key",
+    "(gog) key",
+    "(epic) key",
+    "steam key",
+    "game of the year edition",
+    "goty edition",
+    "special edition",
+    "definitive edition",
+    "enhanced edition",
+    "complete edition",
+    "deluxe edition",
+    "ultimate edition",
+    "anniversary edition",
+    "gold edition",
+    "collector's edition",
+    "collectors edition",
+    "director's cut",
+    "directors cut",
+    "remastered",
+    "enhanced",
+    "goty",
+    "key",
+];
+
+fn strip_edition_suffix(title: &str) -> String {
+    let mut s = title.trim().to_string();
+    loop {
+        let trimmed = s
+            .trim_end_matches([' ', '-', ':', '–', '—', '™', '®'])
+            .trim();
+        let lower = trimmed.to_ascii_lowercase();
+        let matched = EDITION_SUFFIXES
+            .iter()
+            .find(|&&suf| {
+                if !lower.ends_with(suf) {
+                    return false;
+                }
+                let idx = trimmed.len() - suf.len();
+                idx == 0
+                    || !trimmed[..idx]
+                        .chars()
+                        .next_back()
+                        .is_some_and(char::is_alphanumeric)
+            })
+            .copied();
+        let Some(suf) = matched else {
+            return trimmed.to_string();
+        };
+        let next = trimmed[..trimmed.len() - suf.len()]
+            .trim_end_matches([' ', '-', ':', '–', '—', '™', '®'])
+            .trim();
+        if next.is_empty() {
+            return trimmed.to_string();
+        }
+        s = next.to_string();
+    }
+}
+
+async fn resolve_deal_steam_app_id(title: &str, gog_id: Option<&str>) -> Option<String> {
+    let key = match gog_id {
+        Some(gid) => format!("gog-{gid}"),
+        None => {
+            let cleaned = clean_title(title).to_ascii_lowercase();
+            let stripped = strip_edition_suffix(&cleaned);
+            if stripped.is_empty() {
+                cleaned
+            } else {
+                stripped
+            }
+        }
+    };
+    let path =
+        util::cache_dir("steam-ids").join(format!("{}.json", irori_core::paths::sanitize(&key)));
+    match util::cache_read_entry::<Option<String>>(&path).await {
+        Some((Some(id), _)) => return Some(id),
+        Some((None, age)) if age <= UMU_MISS_TTL => return None,
+        _ => {}
+    }
+
+    let mut resolved = if let Some(gid) = gog_id {
+        sources::gamesdb_steam_id(Runner::Gog, gid)
+            .await
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
+
+    if resolved.is_none() {
+        let cleaned = clean_title(title);
+        resolved = steam_search_app_id(&cleaned).await;
+        if resolved.is_none() {
+            let stripped = strip_edition_suffix(&cleaned);
+            if !stripped.is_empty() && stripped != cleaned {
+                resolved = steam_search_app_id(&stripped).await;
+            }
+        }
+    }
+
+    if let Err(e) = util::cache_write(&path, &resolved).await {
+        tracing::debug!("caching deal Steam app ID for {key}: {e}");
+    }
+    resolved
+}
+
+/// Resolve Steam app IDs (for non-Steam deals/giveaways via GOG GamesDB or
+/// Steam Store Search, cached on disk) and fetch ProtonDB tiers with bounded
+/// concurrency.
+pub async fn resolve_protondb_batch(items: Vec<ProtonDbLookup>) -> ProtonDbBatchResult {
+    use futures::stream::{self, StreamExt as _};
+
+    let entries: Vec<(String, String, Option<ProtonDbTier>)> = stream::iter(items)
+        .map(|item| async move {
+            let id = match item
+                .steam_app_id
+                .filter(|s| !s.trim().is_empty() && s.trim().chars().all(|c| c.is_ascii_digit()))
+            {
+                Some(id) => id,
+                None => resolve_deal_steam_app_id(&item.title, item.gog_id.as_deref()).await?,
+            };
+            let tier = sources::protondb_cached(&id)
+                .await
+                .ok()
+                .flatten()
+                .filter(|t| !matches!(t, ProtonDbTier::Unknown | ProtonDbTier::Pending));
+            Some((item.key, id, tier))
+        })
+        .buffer_unordered(4)
+        .filter_map(|v| async move { v })
+        .collect()
+        .await;
+
+    let mut out = ProtonDbBatchResult::default();
+    for (key, id, tier) in entries {
+        if let Some(t) = tier {
+            out.tiers.insert(id.clone(), t);
+        }
+        out.resolved_steam_ids.insert(key, id);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,6 +734,26 @@ mod tests {
         assert_eq!(
             steam_search_query("Shambles - Sons of Apocalypse"),
             "Shambles Sons of Apocalypse"
+        );
+    }
+
+    #[test]
+    fn strips_edition_and_key_suffixes() {
+        assert_eq!(
+            strip_edition_suffix("Fallout 4: Game of the Year Edition"),
+            "Fallout 4"
+        );
+        assert_eq!(
+            strip_edition_suffix("The Elder Scrolls III: Morrowind GOTY Edition"),
+            "The Elder Scrolls III: Morrowind"
+        );
+        assert_eq!(
+            strip_edition_suffix("Dwarven Realms (Steam) Key"),
+            "Dwarven Realms"
+        );
+        assert_eq!(
+            strip_edition_suffix("The Elder Scrolls V: Skyrim Special Edition"),
+            "The Elder Scrolls V: Skyrim"
         );
     }
 }
