@@ -714,7 +714,7 @@
   "manage.launchers.title": "다른 런처",
   "manage.launchers.description": "외부 런처를 격리된 Wine 프리픽스에 설정합니다.",
   "manage.launchers.description_windows": "다른 런처의 게임을 라이브러리에 표시합니다.",
-  "manage.launchers.wine": "새 런처용 Wine 빌드",
+  "manage.launchers.wine": "기본 Proton / Wine",
   "manage.launchers.set_up": "{launcher} 설정",
   "manage.launchers.open": "{launcher} 열기",
   "manage.launchers.scan": "게임 찾기",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. GG.deals에서 무료 계정을 만들고 이메일을 인증하세요:",
   "manage.deals.ggdeals.register_link": "GG.deals 가입하기",
   "manage.deals.ggdeals.step2": "2. API 페이지를 열고 \"Get Your API key\"를 클릭한 뒤 토큰을 복사하세요:",
-  "manage.deals.ggdeals.step3": "3. 아래에 토큰을 붙여넣고 저장하세요."
+  "manage.deals.ggdeals.step3": "3. 아래에 토큰을 붙여넣고 저장하세요.",
+  "manage.launchers.wine_tooltip": "새 런처를 설정할 때 사용됩니다."
 }

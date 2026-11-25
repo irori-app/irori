@@ -714,7 +714,7 @@
   "manage.launchers.title": "その他のランチャー",
   "manage.launchers.description": "外部ランチャーを独立した Wine プレフィックスにセットアップします。",
   "manage.launchers.description_windows": "他のランチャーのゲームをライブラリに表示します。",
-  "manage.launchers.wine": "新しいランチャー用の Wine ビルド",
+  "manage.launchers.wine": "既定の Proton / Wine",
   "manage.launchers.set_up": "{launcher} をセットアップ",
   "manage.launchers.open": "{launcher} を開く",
   "manage.launchers.scan": "ゲームを探す",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. GG.deals で無料アカウントを作成し、メールを確認します:",
   "manage.deals.ggdeals.register_link": "GG.deals で登録",
   "manage.deals.ggdeals.step2": "2. API ページを開き、「Get Your API key」をクリックしてトークンをコピーします:",
-  "manage.deals.ggdeals.step3": "3. 下にトークンを貼り付けて保存します。"
+  "manage.deals.ggdeals.step3": "3. 下にトークンを貼り付けて保存します。",
+  "manage.launchers.wine_tooltip": "新しいランチャーのセットアップ時に使用されます。"
 }

@@ -714,7 +714,7 @@
   "manage.launchers.title": "Andere launchers",
   "manage.launchers.description": "Stel externe launchers in geïsoleerde Wine-prefixes in.",
   "manage.launchers.description_windows": "Toon games van externe launchers in je bibliotheek.",
-  "manage.launchers.wine": "Wine-versie voor nieuwe launchers",
+  "manage.launchers.wine": "Standaard Proton / Wine",
   "manage.launchers.set_up": "{launcher} instellen",
   "manage.launchers.open": "{launcher} openen",
   "manage.launchers.scan": "Games zoeken",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Maak een gratis account aan op GG.deals en bevestig je e-mail:",
   "manage.deals.ggdeals.register_link": "Registreren op GG.deals",
   "manage.deals.ggdeals.step2": "2. Open de API-pagina, klik op \"Get Your API key\" en kopieer het token:",
-  "manage.deals.ggdeals.step3": "3. Plak het token hieronder en sla op."
+  "manage.deals.ggdeals.step3": "3. Plak het token hieronder en sla op.",
+  "manage.launchers.wine_tooltip": "Gebruikt bij het instellen van nieuwe launchers."
 }

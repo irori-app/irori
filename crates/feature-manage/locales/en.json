@@ -714,7 +714,7 @@
   "manage.launchers.title": "Other launchers",
   "manage.launchers.description": "Set up third-party launchers in isolated Wine prefixes.",
   "manage.launchers.description_windows": "Show games from third-party launchers in your library.",
-  "manage.launchers.wine": "Wine build for new launchers",
+  "manage.launchers.wine": "Default Proton / Wine",
   "manage.launchers.set_up": "Set up {launcher}",
   "manage.launchers.open": "Open {launcher}",
   "manage.launchers.scan": "Look for games",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Create a free account on GG.deals and confirm your email:",
   "manage.deals.ggdeals.register_link": "Register on GG.deals",
   "manage.deals.ggdeals.step2": "2. Open the API page, click \"Get Your API key\", and copy the token:",
-  "manage.deals.ggdeals.step3": "3. Paste the token below and save."
+  "manage.deals.ggdeals.step3": "3. Paste the token below and save.",
+  "manage.launchers.wine_tooltip": "Used when setting up new launchers."
 }

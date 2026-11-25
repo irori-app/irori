@@ -714,7 +714,7 @@
   "manage.launchers.title": "Другие лаунчеры",
   "manage.launchers.description": "Настраивайте сторонние лаунчеры в изолированных Wine-префиксах.",
   "manage.launchers.description_windows": "Показывайте игры из других лаунчеров в вашей библиотеке.",
-  "manage.launchers.wine": "Сборка Wine для новых лаунчеров",
+  "manage.launchers.wine": "Proton / Wine по умолчанию",
   "manage.launchers.set_up": "Настроить {launcher}",
   "manage.launchers.open": "Открыть {launcher}",
   "manage.launchers.scan": "Найти игры",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Создайте бесплатный аккаунт на GG.deals и подтвердите электронную почту:",
   "manage.deals.ggdeals.register_link": "Зарегистрироваться на GG.deals",
   "manage.deals.ggdeals.step2": "2. Откройте страницу API, нажмите «Get Your API key» и скопируйте токен:",
-  "manage.deals.ggdeals.step3": "3. Вставьте токен ниже и сохраните."
+  "manage.deals.ggdeals.step3": "3. Вставьте токен ниже и сохраните.",
+  "manage.launchers.wine_tooltip": "Используется при настройке новых лаунчеров."
 }

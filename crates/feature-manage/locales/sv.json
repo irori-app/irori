@@ -714,7 +714,7 @@
   "manage.launchers.title": "Andra startprogram",
   "manage.launchers.description": "Ställ in tredjepartslaunchers i isolerade Wine-prefix.",
   "manage.launchers.description_windows": "Visa spel från tredjepartslaunchers i biblioteket.",
-  "manage.launchers.wine": "Wine-version för nya startprogram",
+  "manage.launchers.wine": "Standard Proton / Wine",
   "manage.launchers.set_up": "Konfigurera {launcher}",
   "manage.launchers.open": "Öppna {launcher}",
   "manage.launchers.scan": "Leta efter spel",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Skapa ett gratis konto på GG.deals och bekräfta din e-post:",
   "manage.deals.ggdeals.register_link": "Registrera på GG.deals",
   "manage.deals.ggdeals.step2": "2. Öppna API-sidan, klicka på \"Get Your API key\" och kopiera token:",
-  "manage.deals.ggdeals.step3": "3. Klistra in token nedan och spara."
+  "manage.deals.ggdeals.step3": "3. Klistra in token nedan och spara.",
+  "manage.launchers.wine_tooltip": "Används när nya startprogram ställs in."
 }

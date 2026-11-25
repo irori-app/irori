@@ -714,7 +714,7 @@
   "manage.launchers.title": "Otros lanzadores",
   "manage.launchers.description": "Configura lanzadores de terceros en prefijos de Wine aislados.",
   "manage.launchers.description_windows": "Muestra juegos de otros lanzadores en tu biblioteca.",
-  "manage.launchers.wine": "Versión de Wine para nuevos lanzadores",
+  "manage.launchers.wine": "Proton / Wine predeterminado",
   "manage.launchers.set_up": "Configurar {launcher}",
   "manage.launchers.open": "Abrir {launcher}",
   "manage.launchers.scan": "Buscar juegos",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Crea una cuenta gratuita en GG.deals y confirma tu correo:",
   "manage.deals.ggdeals.register_link": "Registrarse en GG.deals",
   "manage.deals.ggdeals.step2": "2. Abre la página API, haz clic en \"Get Your API key\" y copia el token:",
-  "manage.deals.ggdeals.step3": "3. Pega el token abajo y guarda."
+  "manage.deals.ggdeals.step3": "3. Pega el token abajo y guarda.",
+  "manage.launchers.wine_tooltip": "Se usa al configurar nuevos lanzadores."
 }

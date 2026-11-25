@@ -714,7 +714,7 @@
   "manage.launchers.title": "Diğer başlatıcılar",
   "manage.launchers.description": "Üçüncü taraf başlatıcıları izole Wine öneklerinde kurun.",
   "manage.launchers.description_windows": "Diğer başlatıcılardaki oyunları kütüphanenizde gösterin.",
-  "manage.launchers.wine": "Yeni başlatıcılar için Wine sürümü",
+  "manage.launchers.wine": "Varsayılan Proton / Wine",
   "manage.launchers.set_up": "{launcher} uygulamasını kur",
   "manage.launchers.open": "{launcher} uygulamasını aç",
   "manage.launchers.scan": "Oyunları ara",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. GG.deals üzerinde ücretsiz hesap oluşturun ve e-postanızı onaylayın:",
   "manage.deals.ggdeals.register_link": "GG.deals'e Kayıt Ol",
   "manage.deals.ggdeals.step2": "2. API sayfasını açın, \"Get Your API key\" düğmesine tıklayın ve belirteci kopyalayın:",
-  "manage.deals.ggdeals.step3": "3. Belirteci aşağıya yapıştırın ve kaydedin."
+  "manage.deals.ggdeals.step3": "3. Belirteci aşağıya yapıştırın ve kaydedin.",
+  "manage.launchers.wine_tooltip": "Yeni başlatıcıları kurarken kullanılır."
 }

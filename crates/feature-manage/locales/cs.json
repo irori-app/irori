@@ -714,7 +714,7 @@
   "manage.launchers.title": "Další spouštěče",
   "manage.launchers.description": "Nastavte externí launchery v izolovaných Wine prefixech.",
   "manage.launchers.description_windows": "Zobrazte hry z jiných launcherů ve své knihovně.",
-  "manage.launchers.wine": "Wine pro nové spouštěče",
+  "manage.launchers.wine": "Výchozí Proton / Wine",
   "manage.launchers.set_up": "Nastavit {launcher}",
   "manage.launchers.open": "Otevřít {launcher}",
   "manage.launchers.scan": "Vyhledat hry",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Vytvořte si bezplatný účet na GG.deals a potvrďte svůj e-mail:",
   "manage.deals.ggdeals.register_link": "Registrovat se na GG.deals",
   "manage.deals.ggdeals.step2": "2. Otevřete stránku API, klikněte na \"Get Your API key\" a zkopírujte token:",
-  "manage.deals.ggdeals.step3": "3. Vložte token níže a uložte."
+  "manage.deals.ggdeals.step3": "3. Vložte token níže a uložte.",
+  "manage.launchers.wine_tooltip": "Použije se při nastavování nových launcherů."
 }

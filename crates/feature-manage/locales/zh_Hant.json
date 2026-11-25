@@ -714,7 +714,7 @@
   "manage.launchers.title": "其他啟動器",
   "manage.launchers.description": "在隔離的 Wine 前綴中設定第三方啟動器。",
   "manage.launchers.description_windows": "在收藏庫中顯示第三方啟動器的遊戲。",
-  "manage.launchers.wine": "新啟動器使用的 Wine 版本",
+  "manage.launchers.wine": "預設 Proton / Wine",
   "manage.launchers.set_up": "設定 {launcher}",
   "manage.launchers.open": "開啟 {launcher}",
   "manage.launchers.scan": "尋找遊戲",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. 在 GG.deals 建立免費帳號並確認電子郵件:",
   "manage.deals.ggdeals.register_link": "在 GG.deals 註冊",
   "manage.deals.ggdeals.step2": "2. 開啟 API 頁面，點擊 \"Get Your API key\" 並複製權杖:",
-  "manage.deals.ggdeals.step3": "3. 將權杖貼到下方並儲存。"
+  "manage.deals.ggdeals.step3": "3. 將權杖貼到下方並儲存。",
+  "manage.launchers.wine_tooltip": "設定新啟動器時使用。"
 }

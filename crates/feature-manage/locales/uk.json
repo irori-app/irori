@@ -714,7 +714,7 @@
   "manage.launchers.title": "Інші лаунчери",
   "manage.launchers.description": "Налаштовуйте сторонні лаунчери в ізольованих префіксах Wine.",
   "manage.launchers.description_windows": "Показуйте ігри з інших лаунчерів у своїй бібліотеці.",
-  "manage.launchers.wine": "Збірка Wine для нових лаунчерів",
+  "manage.launchers.wine": "Proton / Wine за замовчуванням",
   "manage.launchers.set_up": "Налаштувати {launcher}",
   "manage.launchers.open": "Відкрити {launcher}",
   "manage.launchers.scan": "Знайти ігри",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Створіть безкоштовний обліковий запис на GG.deals та підтвердьте електронну пошту:",
   "manage.deals.ggdeals.register_link": "Зареєструватися на GG.deals",
   "manage.deals.ggdeals.step2": "2. Відкрийте сторінку API, натисніть «Get Your API key» та скопіюйте токен:",
-  "manage.deals.ggdeals.step3": "3. Вставте токен нижче та збережіть."
+  "manage.deals.ggdeals.step3": "3. Вставте токен нижче та збережіть.",
+  "manage.launchers.wine_tooltip": "Використовується під час налаштування нових лаунчерів."
 }

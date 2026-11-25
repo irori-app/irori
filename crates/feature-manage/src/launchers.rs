@@ -1034,10 +1034,9 @@ impl Render for LaunchersSection {
             .child(
                 h_flex()
                     .w_full()
-                    .gap_4()
+                    .gap_6()
                     .flex_wrap()
-                    .justify_between()
-                    .items_end()
+                    .items_center()
                     .child(
                         v_flex()
                             .gap_1()
@@ -1055,15 +1054,19 @@ impl Render for LaunchersSection {
                                 .items_center()
                                 .child(
                                     div()
+                                        .id("launchers-wine-label")
                                         .text_sm()
                                         .text_color(muted)
+                                        .tooltip(|window, cx| {
+                                            crate::common::wrapped_tooltip(
+                                                t("manage.launchers.wine_tooltip"),
+                                                window,
+                                                cx,
+                                            )
+                                        })
                                         .child(t("manage.launchers.wine")),
                                 )
-                                .child(
-                                    div()
-                                        .w(rems(16.))
-                                        .child(Select::new(&self.wine_select).small()),
-                                ),
+                                .child(div().w(rems(16.)).child(Select::new(&self.wine_select))),
                         )
                     }),
             )

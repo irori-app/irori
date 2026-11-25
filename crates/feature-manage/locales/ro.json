@@ -714,7 +714,7 @@
   "manage.launchers.title": "Alte lansatoare",
   "manage.launchers.description": "Configurează lansatoare terțe în prefixuri Wine izolate.",
   "manage.launchers.description_windows": "Afișează jocurile din alte lansatoare în bibliotecă.",
-  "manage.launchers.wine": "Versiunea Wine pentru lansatoare noi",
+  "manage.launchers.wine": "Proton / Wine implicit",
   "manage.launchers.set_up": "Configurează {launcher}",
   "manage.launchers.open": "Deschide {launcher}",
   "manage.launchers.scan": "Caută jocuri",
@@ -931,5 +931,6 @@
   "manage.deals.ggdeals.step1": "1. Creează un cont gratuit pe GG.deals și confirmă-ți e-mailul:",
   "manage.deals.ggdeals.register_link": "Înregistrează-te pe GG.deals",
   "manage.deals.ggdeals.step2": "2. Deschide pagina API, apasă pe \"Get Your API key\" și copiază tokenul:",
-  "manage.deals.ggdeals.step3": "3. Lipește tokenul mai jos și salvează."
+  "manage.deals.ggdeals.step3": "3. Lipește tokenul mai jos și salvează.",
+  "manage.launchers.wine_tooltip": "Folosit la configurarea lansatoarelor noi."
 }
