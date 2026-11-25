@@ -265,6 +265,11 @@ pub fn sanitize(name: &str) -> String {
 
 /// Expand a leading `~` to the home directory.
 pub fn expand_home(path: &str) -> PathBuf {
+    if path == "~"
+        && let Some(home) = dirs::home_dir()
+    {
+        return home;
+    }
     if let Some(rest) = path.strip_prefix("~/")
         && let Some(home) = dirs::home_dir()
     {
@@ -411,5 +416,15 @@ mod tests {
         assert_eq!(paths.config, tmp.path().join("config"));
         assert_eq!(paths.data, tmp.path().join("data"));
         assert_eq!(paths.cache, tmp.path().join("cache"));
+    }
+
+    #[test]
+    fn expand_home_resolves_bare_tilde_and_subpaths() {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        assert_eq!(expand_home("~"), home);
+        assert_eq!(expand_home("~/Games"), home.join("Games"));
+        assert_eq!(expand_home("/opt/games"), PathBuf::from("/opt/games"));
     }
 }

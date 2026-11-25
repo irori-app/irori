@@ -926,3 +926,162 @@ async fn blank_game_prefix_falls_back_to_created_prefix() {
     let game = out.game.unwrap();
     assert_eq!(game.prefix, Some(ctx.game_dir.join("pfx")));
 }
+
+/// A Proton host that lays out files in `<prefix>/pfx/drive_c/...` (direct
+/// Proton without umu) instead of flat `<prefix>/drive_c/...`.
+struct DirectProtonHost {
+    setup_rel: &'static str,
+}
+
+#[async_trait]
+impl ScriptHost for DirectProtonHost {
+    async fn pick_file(&self, _: &FileRequest) -> anyhow::Result<Option<PathBuf>> {
+        Ok(None)
+    }
+    async fn steam_file(&self, _: &str, _: &str, _: &CancellationToken) -> anyhow::Result<PathBuf> {
+        anyhow::bail!("unused")
+    }
+    async fn choose(&self, _: &MenuRequest) -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
+    async fn insert_disc(&self, _: &DiscRequest) -> anyhow::Result<Option<PathBuf>> {
+        Ok(None)
+    }
+    async fn wine_bin(&self) -> anyhow::Result<PathBuf> {
+        Ok(PathBuf::from("/opt/proton/files/bin/wine"))
+    }
+    async fn create_prefix(&self, r: &PrefixRequest, _: &CancellationToken) -> anyhow::Result<()> {
+        std::fs::create_dir_all(r.prefix.join("pfx/drive_c"))?;
+        Ok(())
+    }
+    async fn wineexec(&self, r: &WineExecRequest, _: &CancellationToken) -> anyhow::Result<i32> {
+        let p = r.prefix.join("pfx").join(self.setup_rel);
+        std::fs::create_dir_all(p.parent().unwrap())?;
+        std::fs::write(p, b"MZ")?;
+        Ok(0)
+    }
+    async fn winetricks(&self, _: &WinetricksRequest, _: &CancellationToken) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn set_regedit(&self, _: &RegistryRequest, _: &CancellationToken) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn winekill(&self, _: &WineKillRequest, _: &CancellationToken) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn dosexec(&self, _: &DosExecRequest, _: &CancellationToken) -> anyhow::Result<i32> {
+        Ok(0)
+    }
+    async fn execute(&self, _: &ExecRequest, _: &CancellationToken) -> anyhow::Result<i32> {
+        Ok(0)
+    }
+    async fn run_shell(&self, _: &ShellRequest, _: &CancellationToken) -> anyhow::Result<i32> {
+        Ok(0)
+    }
+    async fn store_autosetup(
+        &self,
+        _: &AutosetupRequest,
+        _: &CancellationToken,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn star_citizen_script_preserves_prefix_under_flat_and_direct_proton_layouts() {
+    let server = serve(vec![("/RSI%20Launcher-Setup-2.13.3.exe", b"MZ".to_vec())]);
+    let yaml = format!(
+        r#"
+id: 38430
+game_slug: star-citizen
+name: Star Citizen
+slug: star-citizen-liversi480
+version: LIVE/RSI/4.8.0
+runner: wine
+script:
+  files:
+  - client: {base}/RSI%20Launcher-Setup-2.13.3.exe
+  game:
+    exe: $GAMEDIR/drive_c/Program Files/Roberts Space Industries/RSI Launcher/RSI Launcher.exe
+    prefix: $GAMEDIR
+  installer:
+  - task:
+      arch: win64
+      description: Creating Wine prefix
+      name: create_prefix
+      prefix: $GAMEDIR
+  - task:
+      app: arial tahoma powershell win10
+      arch: win64
+      description: Installing dlls
+      name: winetricks
+      prefix: $GAMEDIR
+  - task:
+      arch: win64
+      args: /S
+      description: Installing client
+      executable: client
+      name: wineexec
+      prefix: $GAMEDIR
+  system:
+    env:
+      DXVK_HUD: 0
+      GAMEID: umu-starcitizen
+      MESA_SHADER_CACHE_DIR: $GAMEDIR
+      MESA_SHADER_CACHE_MAX_SIZE: 10G
+      __GL_SHADER_DISK_CACHE: 1
+      __GL_SHADER_DISK_CACHE_PATH: $GAMEDIR
+      __GL_SHADER_DISK_CACHE_SIZE: 10737418240
+      __GL_SHADER_DISK_CACHE_SKIP_CLEANUP: 1
+    prefer_system_libs: true
+  wine:
+    overrides:
+      libglesv2: builtin
+"#,
+        base = server.base()
+    );
+    let script = Script::parse(&yaml).unwrap();
+    let rel = "drive_c/Program Files/Roberts Space Industries/RSI Launcher/RSI Launcher.exe";
+
+    // Flat / umu layout.
+    let tmp_flat = tempfile::tempdir().unwrap();
+    let ctx_flat = ctx(tmp_flat.path());
+    let flat_host = Host {
+        setup_creates: Some(rel),
+        ..Default::default()
+    };
+    let out_flat = install(&script, &ctx_flat, &flat_host).await.unwrap();
+    let game_flat = out_flat.game.unwrap();
+    assert_eq!(game_flat.exe, Some(ctx_flat.game_dir.join(rel)));
+    assert_eq!(game_flat.prefix, Some(ctx_flat.game_dir.clone()));
+    assert!(game_flat.prefer_system_libs);
+    assert_eq!(
+        game_flat.env.get("GAMEID").map(String::as_str),
+        Some("umu-starcitizen")
+    );
+    assert_eq!(
+        game_flat.dll_overrides,
+        vec![irori_core::DllOverride::new("libglesv2", "b").unwrap()]
+    );
+
+    // Direct Proton layout (`$GAMEDIR/pfx/drive_c/...`).
+    let tmp_proton = tempfile::tempdir().unwrap();
+    let ctx_proton = ctx(tmp_proton.path());
+    let proton_host = DirectProtonHost { setup_rel: rel };
+    let out_proton = run(
+        &script,
+        &ctx_proton,
+        &proton_host,
+        &Approvals::all(&consent(&script, &ctx_proton)),
+        &CancellationToken::new(),
+        no_progress(),
+    )
+    .await
+    .unwrap();
+    let game_proton = out_proton.game.unwrap();
+    assert_eq!(
+        game_proton.exe,
+        Some(ctx_proton.game_dir.join("pfx").join(rel))
+    );
+    assert_eq!(game_proton.prefix, Some(ctx_proton.game_dir.clone()));
+}
