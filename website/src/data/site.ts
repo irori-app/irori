@@ -11,8 +11,8 @@ export const ALTERNATIVETO = 'https://alternativeto.net/software/irori/about/?ut
 
 /** Measured on Irori 1.1.0 on Linux with an empty profile and the window open (docs/BENCHMARKS.md). Heroic from 0.2.0 comparison baseline. */
 export const MEASURED = {
-  memoryMiB: 88,
-  idleCpu: 2.3,
+  memoryMiB: 122,
+  idleCpu: 0,
   binaryMB: 108,
   languages: 19,
   heroicMiB: 478,

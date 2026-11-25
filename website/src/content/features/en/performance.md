@@ -1,13 +1,13 @@
 ---
 title: Fast, light and quiet
-seoTitle: 'A lightweight game launcher: 88 MiB empty, 126 MiB with 1,000 games, no Electron'
-description: 'Irori is one native Rust process drawn on your GPU: 88.3 MiB empty, 119.4 MiB with 300 games, and 126.0 MiB with 1,000 games, vs 478 MiB for Heroic 2.22.4.'
+seoTitle: 'A lightweight game launcher: 122 MiB empty, 148 MiB with 1,000 games, no Electron'
+description: 'Irori is a native Rust GPU launcher: 122.4 MiB empty, 147.7 MiB with 1,000 seeded games, and 385.1 MiB on a 1,440-game real library.'
 tag: Performance
-summary: 'One native process drawn on your GPU: 88.3 MiB empty and 126.0 MiB with 1,000 games and cover art.'
+summary: 'One native process drawn on your GPU: 122.4 MiB empty, 147.7 MiB with 1,000 seeded games, and 0.02 % idle CPU.'
 icon: gauge
 screen: library-list
 order: 9
-updated: 2026-11-24
+updated: 2026-11-25
 related: [library, bigpicture, downloads]
 highlights:
   - title: One process
@@ -26,13 +26,14 @@ highlights:
 
 ## The numbers
 
-Measured on Irori 1.1.0 on Linux (CachyOS, KDE Wayland, AMD Radeon RX 9070 XT, Mesa 26.3.1, 108.1 MB binary, `--settle 20 --idle 15` across 2 rounds):
+Measured on Irori 1.1.0 on Linux (CachyOS, KDE Wayland, AMD Radeon RX 9070 XT, Mesa 26.3.1, 108.1 MB binary, `--settle 45 --idle 30` across 2 rounds, host overlays disabled):
 
 | Scenario | Memory PSS (median) | Processes | Idle CPU (median) | Binary size |
 | --- | --- | --- | --- | --- |
-| 0 games (empty profile) | 88.3 MiB | 1 | 2.30 % | 108.1 MB |
-| 300 games (with covers) | 119.4 MiB | 1 | 2.00 % | 108.1 MB |
-| 1,000 games (with covers) | 126.0 MiB | 1 | 1.90 % | 108.1 MB |
+| 0 games (synthetic empty) | 122.4 MiB | 1 | 0.02 % | 108.1 MB |
+| 300 games (rich synthetic + art) | 146.8 MiB | 1 | 0.00 % | 108.1 MB |
+| 1,000 games (rich synthetic + art) | 147.7 MiB | 1 | 0.02 % | 108.1 MB |
+| 1,440 games (real multi-store library) | 385.1 MiB | 1 | 0.03 % | 108.1 MB |
 
 Historical 0.2.0 empty-profile baseline (`--settle 45 --idle 30`, Nobara Linux, RX 7900 XTX):
 

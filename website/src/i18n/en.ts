@@ -159,7 +159,7 @@ export const en = {
       versus: 'Memory with the window open',
       irori: 'Irori 1.1.0, one process',
       heroic: 'Heroic 2.22.4, seven processes (0.2.0 baseline)',
-      note: 'Measured on Linux (CachyOS, Wayland, RX 9070 XT): 88.3 MiB empty, 119.4 MiB with 300 games, and 126.0 MiB with 1,000 games. Heroic figure is from the 0.2.0 empty-profile baseline.',
+      note: 'Measured on Linux (CachyOS, Wayland, RX 9070 XT): 122.4 MiB empty, 147.7 MiB with 1,000 seeded games, and 385.1 MiB on a 1,440-game real library. Heroic figure is from the 0.2.0 empty-profile baseline.',
       link: 'How Irori stays fast',
     },
     platforms: {

@@ -100,15 +100,16 @@ Ordered by package trust channel on each operating system (all files are on the 
 
 ## Performance
 
-Measured on Linux (`Irori 1.1.0`, CachyOS, KDE Wayland, AMD Radeon RX 9070 XT, Mesa `26.3.1`, `108.1 MB` binary) across seeded local libraries (`compare.py --irori-only --settle 20 --idle 15`):
+Measured on Linux (`Irori 1.1.0`, CachyOS, KDE Wayland, AMD Radeon RX 9070 XT, Mesa `26.3.1`, `108.1 MB` binary, `--settle 45 --idle 30`, host overlays disabled):
 
-| Library size | Memory PSS (median) | Processes | Idle CPU (median) |
+| Scenario | Memory PSS (median) | Processes | Idle CPU (median) |
 | --- | --- | --- | --- |
-| 0 games | 88.3 MiB | 1 | 2.30 % |
-| 300 games (with covers) | 119.4 MiB | 1 | 2.00 % |
-| 1,000 games (with covers) | 126.0 MiB | 1 | 1.90 % |
+| 0 games (synthetic empty) | 122.4 MiB | 1 | 0.02 % |
+| 300 games (rich synthetic + art) | 146.8 MiB | 1 | 0.00 % |
+| 1,000 games (rich synthetic + art) | 147.7 MiB | 1 | 0.02 % |
+| 1,440 games (real multi-store library) | 385.1 MiB | 1 | 0.03 % |
 
-In the historical `0.2.0` empty-profile comparison (`--settle 45`, `--idle 30`), Irori used 87.5 MiB across 1 process while Heroic 2.22.4 used 478.2 MiB across 7 processes. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology, hardware details, and limits.
+In the historical `0.2.0` empty-profile comparison (`--settle 45`, `--idle 30`), Irori used 87.5 MiB across 1 process while Heroic 2.22.4 used 478.2 MiB across 7 processes. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for methodology, screenshots, hardware details, and limits.
 
 ## Building
 
