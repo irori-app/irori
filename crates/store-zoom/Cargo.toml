@@ -14,7 +14,6 @@ irori-secrets.workspace = true
 irori-runtime.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
-async-trait.workspace = true
 tokio.workspace = true
 futures.workspace = true
 reqwest.workspace = true
@@ -32,8 +31,7 @@ zstd.workspace = true
 bzip2.workspace = true
 irori-depot.workspace = true
 zip.workspace = true
-md5.workspace = true
-sha2.workspace = true
+md-5.workspace = true
 hex.workspace = true
 which.workspace = true
 

@@ -17,14 +17,12 @@ async-trait.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-regex.workspace = true
 once_cell.workspace = true
 parking_lot.workspace = true
 tracing.workspace = true
-dirs.workspace = true
 reqwest.workspace = true
 sha2.workspace = true
-md5.workspace = true
+md-5.workspace = true
 aes.workspace = true
 cbc = { workspace = true, features = ["alloc"] }
 

@@ -442,11 +442,8 @@ packaging/install.sh
 | `crates/services` | Backend facade: library, settings, download queue, launching |
 | `crates/ui` | Shared UI layer: models, navigation, art pipeline, theme, components |
 | `crates/feature-*` | Screens: library, game page, settings, downloads/Wine/accounts, Big Picture |
-| `crates/*/locales` | Translation catalogs per crate (`docs/I18N_BRIEF.md`) |
+| `crates/*/locales` | Translation catalogs per crate |
 | `crates/irori` | The application shell and binary |
-
-`docs/parity/` documents the behaviour Irori matches, `docs/AGENT_BRIEF.md`,
-`docs/UI_BRIEF.md` and `docs/I18N_BRIEF.md` the engineering rules.
 
 ## Notes
 

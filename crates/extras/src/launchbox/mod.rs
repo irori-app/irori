@@ -23,6 +23,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use md5::{Digest as _, Md5};
+
 use anyhow::{Context as _, Result, bail};
 use irori_core::json_store;
 use serde::{Deserialize, Serialize};
@@ -135,7 +137,7 @@ impl IndexState {
 pub fn table_key(platforms: &HashMap<String, String>) -> String {
     let mut pairs: Vec<String> = platforms.iter().map(|(p, s)| format!("{p}={s}")).collect();
     pairs.sort();
-    format!("{:x}", md5::compute(pairs.join("\n")))
+    format!("{:x}", Md5::digest(pairs.join("\n")))
 }
 
 /// Seconds since the Unix epoch.

@@ -12,9 +12,10 @@ use std::path::Path;
 use aes::cipher::{BlockDecrypt as _, BlockDecryptMut as _, KeyInit as _, KeyIvInit as _};
 use anyhow::{Context as _, Result, bail};
 use irori_amazon_api::{Credentials, Entitlement};
+use md5::{Digest as _, Md5};
 use serde::Deserialize;
 use serde_json::Value;
-use sha2::{Digest as _, Sha256};
+use sha2::Sha256;
 
 use crate::state::{InstalledGame, Layout};
 
@@ -103,7 +104,7 @@ fn read_login(nile_dir: &Path) -> Result<Option<Credentials>> {
     let user: NileUser =
         irori_core::json_store::read(&nile_dir.join("current_user.json"))?.unwrap_or_default();
     let record: Option<Value> = if !user.user_id.is_empty() {
-        let name = format!("{:x}.enc", md5::compute(user.user_id.as_bytes()));
+        let name = format!("{:x}.enc", Md5::digest(user.user_id.as_bytes()));
         match std::fs::read(nile_dir.join(name)) {
             Ok(bytes) => Some(serde_json::from_slice(&decrypt(&bytes, &user.user_id)?)?),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -212,7 +213,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(
-            nile.join(format!("{:x}.enc", md5::compute(uid))),
+            nile.join(format!("{:x}.enc", Md5::digest(uid))),
             encrypt(record().to_string().as_bytes(), uid),
         )
         .unwrap();

@@ -9,6 +9,7 @@ use irori_core::{
     AppSettings, EventBus, InstallPlatform, InstallRequest, LaunchEnvironment, LaunchRequest,
     OpContext, Outcome, RemoveArgs, Store,
 };
+use md5::{Digest as _, Md5};
 use serde_json::json;
 
 use super::*;
@@ -47,7 +48,7 @@ fn fixture() -> Fixture {
     );
     let archive = Arc::new(std::fs::read(&archive_path).unwrap());
     let archive_len = archive.len();
-    let md5 = hex::encode(md5::compute(&*archive).0);
+    let md5 = hex::encode(Md5::digest(&*archive));
     let new_build = Arc::new(AtomicBool::new(false));
     let slow = Arc::new(AtomicBool::new(false));
     let (nb, sl) = (new_build.clone(), slow.clone());

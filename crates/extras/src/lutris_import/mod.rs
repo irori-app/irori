@@ -1,5 +1,5 @@
 //! Plan an import of an existing Lutris setup (`docs/design/engines.md`
-//! section 7, `docs/parity/lutris.md` sections 2 and 3): its installed
+//! section 7): its installed
 //! games, favourites, hidden games, categories, playtime, last played dates
 //! and cover art.
 //!

@@ -1807,7 +1807,7 @@ selection, release asset architecture selection, macOS bundle layouts and native
 launches, argument quoting, instance forwarding, and native shortcuts. Platform
 specific process tests run on their native CI hosts.
 
-`postman/simulations/runtime-releases.context.md` explains the local HTTP test for
+`tests/postman/simulations/runtime-releases.context.md` explains the local HTTP test for
 the three macOS release sources, including GitHub rate-limit errors. No real store
 accounts or purchases are used by automated tests.
 

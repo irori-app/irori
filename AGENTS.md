@@ -1,10 +1,7 @@
 # AGENTS.md
 
 Instructions for anyone, human or coding agent, changing Irori. Read this file
-before your first change. Where it disagrees with `docs/AGENT_BRIEF.md`,
-`docs/UI_BRIEF.md` or `docs/I18N_BRIEF.md`, this file wins. Those briefs were written
-for the first, crate-by-crate build of Irori and point at scratch paths that no
-longer exist.
+before your first change.
 
 Contents:
 
@@ -35,9 +32,8 @@ Wine, Proton or umu, and on macOS through Wine, CrossOver or Game Porting Toolki
 - Written in Rust (edition 2024, Rust 1.95+), with a [GPUI](https://www.gpui.rs) UI
   through [GPUI Kit](https://gpui-kit.com) (`gpui-kit = "0.8.0"`).
 - It aims to match the features of Heroic Games Launcher 2.22.4 without Electron. It
-  is **not a fork or port of Heroic's code**. Heroic is a reference for behaviour only
-  (`docs/parity/*.md`). Its bugs, marked `[QUIRK]` in the parity docs, are fixed, not
-  copied.
+  is **not a fork or port of Heroic's code**. Heroic is a reference for behaviour only,
+  and its known quirks are fixed rather than copied.
 - Store protocols are Rust ports of legendary (Epic), gogdl (GOG) and nile (Amazon);
   itch.io uses its public API directly.
   GOG Galaxy's comet runs as a library. Irori never shells out to those tools.
@@ -45,7 +41,7 @@ Wine, Proton or umu, and on macOS through Wine, CrossOver or Game Porting Toolki
   process, renders on the GPU, uses no CPU when idle, keeps memory bounded, and
   virtualizes every long list.
 - License: MIT. Bundled themes are from GPUI Kit (Apache-2.0). The
-  vendored `crates/webview`, `crates/comet` and `crates/gpui-pre-windows` are
+  vendored `crates/comet` and `crates/gpui-pre-windows` are
   Apache-2.0 and keep their own `LICENSE-APACHE`; the vendored `crates/gilrs-core`
   is used under MIT and keeps its `LICENSE-MIT`.
 
@@ -217,7 +213,6 @@ Directory names and package names differ. Use the package name with `-p`.
 | `crates/feature-bigpicture` | `irori-bigpicture` | Big Picture mode and controller input for the whole app |
 | `crates/irori` | `irori` | The application shell and binary: window, sidebar, routing, palette, tray, single instance, CLI |
 | `crates/sign-in` | `irori-sign-in` | Store sign-in and store windows (Wry/Tao): library and the `irori-sign-in` program |
-| `crates/webview` | `gpui-webview` | Vendored GPUI WebView, **excluded from the workspace and unused** |
 | `crates/gpui-pre-windows` | `gpui-pre-windows` | GPUI's Windows backend with Irori's fixes, used through `[patch.crates-io]` and **excluded from the workspace**; `PATCHES.md` lists every change |
 | `crates/gilrs-core` | `gilrs-core` | gilrs' platform layer with Irori's fixes to its Windows.Gaming.Input backend, used through `[patch.crates-io]` and **excluded from the workspace**; `PATCHES.md` lists every change |
 
@@ -229,13 +224,10 @@ Other top-level paths:
   `install-windows.ps1`, the desktop entry, icons and entitlements.
 - `docs/`:
   - `PLATFORMS.md`: paths, desktop behaviour, translucency, packaging, release checklist.
-  - `parity/`: the Heroic behaviour Irori matches, and the Lutris behaviour
-    (`parity/lutris.md`).
   - `design/`: designs of larger features (`design/engines.md`: emulators, ROM
     libraries, Lutris import and scripts, third-party launchers).
-  - The three briefs (see the top of this file).
 - `website/`: the project site (Vue, shadcn-vue), deployed with Coolify; see its README.
-- `postman/`: contract, mock and simulation used by an ignored runtime test.
+- `tests/postman/`: contract, mock and simulation used by an ignored runtime test.
 - `.github/`: CI, the PR-rule check and the PR template.
 
 ### Layering
@@ -1882,7 +1874,7 @@ Microsoft's approval page (`irori_manage::login`).
 
 ### 4.8 Engines (emulators)
 
-Design: `docs/design/engines.md`; Lutris behaviour: `docs/parity/lutris.md`.
+Design: `docs/design/engines.md`.
 
 - **Words.** `Runner` is a store. An emulator, RetroArch, ScummVM or DOSBox is an
   **engine** in code (`irori_engines::EngineManifest`) and an "emulator" in the UI. A
@@ -2776,7 +2768,7 @@ dev-dependency instead.
 **Ignored tests** (`#[ignore]`) need explicit setup:
 
 - `irori-runtime`'s release test needs `IRORI_RELEASE_TEST_URL` pointing at the local
-  Postman mock in `postman/`.
+  Postman mock in `tests/postman/`.
 - The macOS runtime smoke test needs `IRORI_HOME` and `IRORI_RUNTIME_SMOKE=1`, and
   downloads a real runtime.
 - `irori-secrets`' keyring test needs `IRORI_KEYRING_SMOKE=1` and writes a real key, so
@@ -3013,8 +3005,7 @@ These are things that have bitten this codebase before:
 - **Port 9977 is open to every local program.** comet panics abort all of Irori, and a
   client may be anything: gate new handlers on sign-in, turn bad input into an error,
   and never let the account's own token out.
-- **Never add a web engine to Irori's window.** `crates/webview` is vendored but
-  excluded and unused. Sign-in runs in its own process.
+- **Never add a web engine to Irori's window.** Sign-in runs in its own process.
 - **WebKitGTK must stay optional on Linux.** Linking it into `irori` would stop Irori
   from starting on systems without it.
 - **macOS packages must not link Homebrew libraries.** `package.py` rejects them. Link
@@ -3037,8 +3028,7 @@ These are things that have bitten this codebase before:
 
 ## 14. Notes for coding agents
 
-- Read the files you're changing and their callers before editing. Read the relevant
-  `docs/parity/*.md` before changing store, launch or download behaviour.
+- Read the files you're changing and their callers before editing.
 - When several agents build in one checkout, give each its own target directory
   (`CARGO_TARGET_DIR=target/agents/<name>`) to avoid lock contention. It's
   unnecessary on your own.

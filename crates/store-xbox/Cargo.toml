@@ -13,12 +13,10 @@ irori-runtime.workspace = true
 irori-secrets.workspace = true
 irori-msixvc.workspace = true
 irori-msstore-api.workspace = true
-irori-xbox-api.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 tokio = { workspace = true, features = ["net"] }
 tokio-util.workspace = true
-futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 parking_lot.workspace = true

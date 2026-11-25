@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use irori_core::{AppSettings, InstallRequest, OpContext, Outcome, RemoveArgs, UpdateRequest};
 use irori_depot::test_server::{Resp, TestServer};
 use irori_gog_api::content::{Endpoints, galaxy_path};
+use md5::{Digest as _, Md5};
 use serde_json::{Value, json};
 
 use super::*;
@@ -22,7 +23,7 @@ fn zlib(data: &[u8]) -> Vec<u8> {
 }
 
 fn md5_hex(data: &[u8]) -> String {
-    format!("{:x}", md5::compute(data))
+    format!("{:x}", Md5::digest(data))
 }
 
 /// A v2 chunk of `data`: its manifest entry and its CDN bytes.

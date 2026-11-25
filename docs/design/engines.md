@@ -1,7 +1,7 @@
 # Design: engines, ROM libraries and the rest of Lutris (P4)
 
 Status: accepted for implementation, October 2026.
-Behaviour reference: [`docs/parity/lutris.md`](../parity/lutris.md) (Lutris at commit 1f32fe0).
+Behaviour reference: Lutris upstream at commit `1f32fe0`.
 
 P4 makes Irori the launcher that replaces Lutris as well as Heroic: emulators and ROM
 libraries, community install scripts, the official third-party launchers (Battle.net, EA
