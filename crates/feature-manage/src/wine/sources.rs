@@ -120,8 +120,8 @@ pub(super) fn source_description(kind: ReleaseKind) -> SharedString {
     }
 }
 
-/// Sources shown directly as quick-pick buttons. When three or fewer exist (macOS),
-/// all of them fit without a secondary dropdown menu.
+/// Sources shown directly as primary quick-pick buttons. When three or fewer exist (macOS),
+/// all of them fit without a secondary group or dropdown menu.
 pub(super) fn quick_sources(available: &[ReleaseKind]) -> Vec<ReleaseKind> {
     if available.len() <= 3 {
         return available.to_vec();
@@ -132,15 +132,38 @@ pub(super) fn quick_sources(available: &[ReleaseKind]) -> Vec<ReleaseKind> {
         .collect()
 }
 
-/// Available sources partitioned into non-empty groups for the "More builds" menu.
+/// Additional Proton sources displayed after a subtle divider on platforms
+/// with many downloadable builds (Linux).
+pub(super) fn secondary_quick_sources(available: &[ReleaseKind]) -> Vec<ReleaseKind> {
+    if available.len() <= 3 {
+        return Vec::new();
+    }
+    [
+        ReleaseKind::UmuProton,
+        ReleaseKind::DwProton,
+        ReleaseKind::ProtonEm,
+    ]
+    .into_iter()
+    .filter(|kind| available.contains(kind))
+    .collect()
+}
+
+/// Remaining sources not shown as quick-pick buttons, partitioned into
+/// non-empty groups for the "More builds" menu.
 pub(super) fn grouped_sources(available: &[ReleaseKind]) -> Vec<(SourceGroup, Vec<ReleaseKind>)> {
+    let quick = quick_sources(available);
+    let secondary = secondary_quick_sources(available);
     SourceGroup::ALL
         .into_iter()
         .filter_map(|group| {
             let items: Vec<ReleaseKind> = available
                 .iter()
                 .copied()
-                .filter(|kind| source_group(*kind) == group)
+                .filter(|kind| {
+                    !quick.contains(kind)
+                        && !secondary.contains(kind)
+                        && source_group(*kind) == group
+                })
                 .collect();
             (!items.is_empty()).then_some((group, items))
         })
@@ -244,17 +267,39 @@ mod tests {
     #[test]
     fn quick_and_grouped_sources_cover_linux_and_mac() {
         let linux = ReleaseKind::for_host(irori_core::HostPlatform::Linux);
+        let primary = quick_sources(linux);
+        let secondary = secondary_quick_sources(linux);
         assert_eq!(
-            quick_sources(linux),
+            primary,
             vec![ReleaseKind::GeProton, ReleaseKind::ProtonCachyOs]
         );
+        assert_eq!(
+            secondary,
+            vec![
+                ReleaseKind::UmuProton,
+                ReleaseKind::DwProton,
+                ReleaseKind::ProtonEm
+            ]
+        );
+        assert!(secondary.iter().all(|s| !primary.contains(s)));
         let groups = grouped_sources(linux);
-        assert_eq!(groups.len(), 3);
-        let flattened: usize = groups.iter().map(|(_, items)| items.len()).sum();
-        assert_eq!(flattened, linux.len());
+        assert_eq!(groups.len(), 2);
+        let more_items: Vec<ReleaseKind> =
+            groups.into_iter().flat_map(|(_, items)| items).collect();
+        assert!(
+            more_items
+                .iter()
+                .all(|s| !primary.contains(s) && !secondary.contains(s))
+        );
+        assert_eq!(
+            primary.len() + secondary.len() + more_items.len(),
+            linux.len()
+        );
 
         let mac = ReleaseKind::for_host(irori_core::HostPlatform::Mac);
         assert_eq!(quick_sources(mac), mac.to_vec());
+        assert!(secondary_quick_sources(mac).is_empty());
+        assert!(grouped_sources(mac).is_empty());
     }
 
     #[test]

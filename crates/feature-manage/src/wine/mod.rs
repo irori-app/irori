@@ -21,7 +21,6 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
@@ -30,8 +29,8 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, ElementId, Entity, InteractiveElement as _,
-    IntoElement, ParentElement as _, PathPromptOptions, Render, SharedString, Styled as _,
-    Subscription, Task, Window, div, rems,
+    IntoElement, ParentElement as _, PathPromptOptions, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, px, rems,
 };
 use irori_core::{Event, Paths, WineInstallation};
 use irori_runtime::manager::{self, Release, ReleaseKind};
@@ -631,7 +630,9 @@ impl WineManagerView {
         let query = self.search.read(cx).value().trim().to_string();
         let available = ReleaseKind::available();
         let quick = sources::quick_sources(available);
-        let other_selected = !quick.contains(&kind);
+        let secondary = sources::secondary_quick_sources(available);
+        let other_selected = !quick.contains(&kind) && !secondary.contains(&kind);
+        let has_more = available.len() > quick.len() + secondary.len();
         let expanded = self.show_older.contains(&kind);
 
         let body: AnyElement = match self.lists.get(&kind) {
@@ -729,7 +730,33 @@ impl WineManagerView {
                             }),
                         )
                     }))
-                    .when(available.len() > quick.len(), |row| {
+                    .when(!secondary.is_empty(), |row| {
+                        row.child(
+                            div()
+                                .w(px(1.))
+                                .h(rems(1.25))
+                                .mx_1()
+                                .flex_shrink_0()
+                                .bg(border),
+                        )
+                        .children(secondary.iter().copied().map(|q| {
+                            Button::new(ElementId::Name(
+                                format!("wine-source-{}", q.type_str()).into(),
+                            ))
+                            .label(source_label(q))
+                            .map(|b| {
+                                if q == kind {
+                                    b.primary()
+                                } else {
+                                    b.outline().text_color(muted)
+                                }
+                            })
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| this.select_source(q, window, cx),
+                            ))
+                        }))
+                    })
+                    .when(has_more, |row| {
                         let groups = sources::grouped_sources(available);
                         let view = cx.entity().downgrade();
                         row.child(
@@ -1005,6 +1032,15 @@ impl Render for WineManagerView {
                 s.set_placeholder(t("manage.wine.search"), window, cx)
             });
         }
+        let (fg, muted, border, primary) = {
+            let theme = cx.theme();
+            (
+                theme.foreground,
+                theme.muted_foreground,
+                theme.border,
+                theme.primary,
+            )
+        };
         let running = self.ops.read(cx).running.len();
         let has_downloads = !ReleaseKind::available().is_empty();
         let selected_tab = match self.active_tab {
@@ -1012,12 +1048,13 @@ impl Render for WineManagerView {
             WineTab::Prefixes => usize::from(has_downloads) + 1,
             _ => usize::from(has_downloads),
         };
-        let mut tabs = Vec::with_capacity(3);
+        let mut tabs: Vec<(usize, &'static str, SharedString)> = Vec::with_capacity(3);
         if has_downloads {
-            tabs.push(Tab::new().label(t("manage.wine.tab.download")));
+            tabs.push((0, "download", t("manage.wine.tab.download")));
         }
-        tabs.push(Tab::new().label(t("manage.wine.tab.system")));
-        tabs.push(Tab::new().label(t("manage.wine.tab.prefixes")));
+        let sys_ix = usize::from(has_downloads);
+        tabs.push((sys_ix, "system", t("manage.wine.tab.system")));
+        tabs.push((sys_ix + 1, "prefixes", t("manage.wine.tab.prefixes")));
         let on_prefixes = self.on_prefixes();
         let content = match self.active_source() {
             Some(kind) => self.render_source(kind, cx),
@@ -1071,12 +1108,37 @@ impl Render for WineManagerView {
                             ),
                     )
                     .child(
-                        TabBar::new("wine-tabs")
-                            .underline()
-                            .selected_index(selected_tab)
-                            .children(tabs)
-                            .on_click(cx.listener(|this, ix: &usize, window, cx| {
-                                this.select_tab(*ix, window, cx)
+                        h_flex()
+                            .id("wine-tabs")
+                            .w_full()
+                            .gap_8()
+                            .border_b_1()
+                            .border_color(border)
+                            .children(tabs.into_iter().map(|(ix, id, label)| {
+                                let active = selected_tab == ix;
+                                v_flex()
+                                    .id(ElementId::Name(format!("wine-tab-{id}").into()))
+                                    .debug_selector(move || format!("wine-tab-{id}"))
+                                    .cursor_pointer()
+                                    .gap_2p5()
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.select_tab(ix, window, cx)
+                                    }))
+                                    .child(
+                                        div()
+                                            .text_xl()
+                                            .font_semibold()
+                                            .text_color(if active { fg } else { muted })
+                                            .hover(move |s| s.text_color(fg))
+                                            .child(label),
+                                    )
+                                    .child(
+                                        div()
+                                            .h(px(3.))
+                                            .w_full()
+                                            .rounded_full()
+                                            .when(active, |b| b.bg(primary)),
+                                    )
                             })),
                     ),
             )
