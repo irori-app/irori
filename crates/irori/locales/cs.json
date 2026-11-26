@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal překrytí fps frametime počítadlo výkon statistiky ve hře in-game stats",
   "shell.notice.crashed_review_action": "Zkontrolovat a nahlásit",
   "shell.palette.latest_crash_report": "Zobrazit poslední zprávu o pádu",
-  "shell.palette.latest_crash_report_keywords": "crash pád zpráva log chyba bug"
+  "shell.palette.latest_crash_report_keywords": "crash pád zpráva log chyba bug",
+  "shell.notice.manage_rollback": "Spravovat / Vrátit zpět"
 }

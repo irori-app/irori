@@ -33,12 +33,12 @@ struct PowerChoices {
 impl Global for PowerChoices {}
 
 /// Of what [`irori_services::Backend::power_actions`] offers, what a
-/// finished queue may do: sleep and power off. Empty until the system has
-/// answered; the answer redraws the windows.
-pub(crate) fn power_choices(cx: &mut App) -> Vec<PowerAction> {
+/// finished queue may do: sleep and power off. Returns `None` while the system
+/// is still answering so callers don't flash a fallback button before redraw.
+fn power_choices_loaded(cx: &mut App) -> Option<Vec<PowerAction>> {
     let state = cx.default_global::<PowerChoices>();
     if let Some(actions) = &state.actions {
-        return actions.clone();
+        return Some(actions.clone());
     }
     if !state.asking {
         state.asking = true;
@@ -55,7 +55,14 @@ pub(crate) fn power_choices(cx: &mut App) -> Vec<PowerAction> {
         })
         .detach();
     }
-    Vec::new()
+    None
+}
+
+/// Of what [`irori_services::Backend::power_actions`] offers, what a
+/// finished queue may do: sleep and power off. Empty until the system has
+/// answered; the answer redraws the windows.
+pub(crate) fn power_choices(cx: &mut App) -> Vec<PowerAction> {
+    power_choices_loaded(cx).unwrap_or_default()
 }
 
 /// The finished-queue choices among what the system offers, in their order.
@@ -103,39 +110,71 @@ pub fn keep_on(cx: &App) {
     b.set_when_downloads_done(None);
 }
 
-/// The downloads page's "When downloads finish" menu button, shown while
-/// something is queued and the system lets Irori sleep or power off.
-pub(crate) fn choice_button(queue: &DownloadQueueSnapshot, cx: &mut App) -> Option<AnyElement> {
-    let choices = power_choices(cx);
-    if choices.is_empty() || queue.active.is_empty() {
+/// Unified power & display menu button shown while downloads run: labeled
+/// `Stay on` (with caret) by default, `When done: Sleep` / `Power off` when
+/// armed, or a direct `Turn the screen off` button when no power action is
+/// available. Combines "Turn the screen off" into the menu when supported.
+pub(crate) fn power_menu_button(queue: &DownloadQueueSnapshot, cx: &mut App) -> Option<AnyElement> {
+    if queue.active.is_empty() {
         return None;
     }
+    let choices = power_choices_loaded(cx)?;
+    let can_screen_off = offers_screen_off(queue, cx);
+    if choices.is_empty() && !can_screen_off {
+        return None;
+    }
+    if choices.is_empty() && can_screen_off {
+        return Some(
+            Button::new("when-done")
+                .outline()
+                .icon(IconName::MonitorOff)
+                .label(t("manage.downloads.screen_off"))
+                .tooltip(t("manage.downloads.screen_off_tooltip"))
+                .on_click(|_, _, cx| turn_screen_off(cx))
+                .into_any_element(),
+        );
+    }
     let current = queue.when_done;
+    let icon = match current {
+        Some(PowerAction::PowerOff) => IconName::Power,
+        _ => IconName::Moon,
+    };
+    let mut btn = Button::new("when-done")
+        .outline()
+        .icon(icon)
+        .dropdown_caret(true);
+    btn = if current.is_some() {
+        btn.label(t_args(
+            "manage.downloads.when_done.button",
+            &[("choice", &choice_label(current))],
+        ))
+    } else {
+        btn.label(choice_label(None)).tooltip(t_args(
+            "manage.downloads.when_done.button",
+            &[("choice", &choice_label(None))],
+        ))
+    };
     Some(
-        Button::new("when-done")
-            .icon(match current {
-                Some(PowerAction::PowerOff) => IconName::Power,
-                Some(_) => IconName::Moon,
-                None => IconName::Clock,
-            })
-            .label(t_args(
-                "manage.downloads.when_done.button",
-                &[("choice", &choice_label(current))],
-            ))
-            .dropdown_caret(true)
-            .dropdown_menu(move |mut menu, _, _| {
-                for choice in std::iter::once(None).chain(choices.iter().copied().map(Some)) {
-                    menu = menu.item(
-                        PopupMenuItem::new(choice_label(choice))
-                            .checked(choice == current)
-                            .on_click(move |_, _, cx| {
-                                backend(cx).set_when_downloads_done(choice);
-                            }),
-                    );
-                }
-                menu
-            })
-            .into_any_element(),
+        btn.dropdown_menu(move |mut menu, _, _| {
+            for choice in std::iter::once(None).chain(choices.iter().copied().map(Some)) {
+                menu = menu.item(
+                    PopupMenuItem::new(choice_label(choice))
+                        .checked(choice == current)
+                        .on_click(move |_, _, cx| {
+                            backend(cx).set_when_downloads_done(choice);
+                        }),
+                );
+            }
+            if can_screen_off {
+                menu = menu.separator().item(
+                    PopupMenuItem::new(t("manage.downloads.screen_off"))
+                        .icon(IconName::MonitorOff)
+                        .on_click(|_, _, cx| turn_screen_off(cx)),
+                );
+            }
+            menu
+        })
+        .into_any_element(),
     )
 }
 
@@ -194,18 +233,6 @@ pub fn turn_screen_off(cx: &mut App) {
         }
     })
     .detach();
-}
-
-/// The downloads page's "Turn the screen off" button.
-pub(crate) fn screen_off_button(queue: &DownloadQueueSnapshot, cx: &App) -> Option<AnyElement> {
-    offers_screen_off(queue, cx).then(|| {
-        Button::new("screen-off")
-            .icon(IconName::MonitorOff)
-            .label(t("manage.downloads.screen_off"))
-            .tooltip(t("manage.downloads.screen_off_tooltip"))
-            .on_click(|_, _, cx| turn_screen_off(cx))
-            .into_any_element()
-    })
 }
 
 /// A download command of the command palette.

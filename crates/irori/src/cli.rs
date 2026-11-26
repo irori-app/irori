@@ -144,8 +144,7 @@ impl Cli {
                     .filter(|s| is_slug(s))
             }
             "library" => self.route = Some(Route::Library),
-            "downloads" => self.route = Some(Route::Downloads),
-            "updates" => self.route = Some(Route::Updates),
+            "downloads" | "updates" => self.route = Some(Route::Downloads),
             "accounts" => self.route = Some(Route::Accounts),
             "stores" => self.route = Some(Route::Stores),
             "stats" => {
@@ -446,6 +445,8 @@ mod tests {
         );
         assert!(parse(&["--big-picture"]).big_picture);
         assert_eq!(parse(&["irori://library"]).route, Some(Route::Library));
+        assert_eq!(parse(&["irori://downloads"]).route, Some(Route::Downloads));
+        assert_eq!(parse(&["irori://updates"]).route, Some(Route::Downloads));
         assert_eq!(
             parse(&["irori://settings/wine"]).route,
             Some(Route::Settings("wine".into()))

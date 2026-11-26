@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal katman overlay fps frametime sayaç performans oyun içi istatistikler in-game stats",
   "shell.notice.crashed_review_action": "İncele ve bildir",
   "shell.palette.latest_crash_report": "Son çökme raporunu görüntüle",
-  "shell.palette.latest_crash_report_keywords": "crash çökme rapor günlük hata bug"
+  "shell.palette.latest_crash_report_keywords": "crash çökme rapor günlük hata bug",
+  "shell.notice.manage_rollback": "Yönet / Geri al"
 }

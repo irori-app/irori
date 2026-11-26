@@ -69,12 +69,23 @@ enum BadgeIcon {
     Joystick,
 }
 
+/// Visual scale of a [`StoreBadge`]. Compact keeps covers uncluttered; medium
+/// and large match row titles and hero headers in Downloads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum BadgeSize {
+    #[default]
+    Compact,
+    Medium,
+    Large,
+}
+
 /// Small neutral label naming a game's store, a ROM's emulator, or how
 /// many more stores there are.
 #[derive(IntoElement)]
 pub struct StoreBadge {
     label: Option<SharedString>,
     icon: Option<BadgeIcon>,
+    size: BadgeSize,
 }
 
 impl StoreBadge {
@@ -89,6 +100,7 @@ impl StoreBadge {
         Self {
             label: Some(label.into()),
             icon: None,
+            size: BadgeSize::Compact,
         }
     }
 
@@ -96,7 +108,20 @@ impl StoreBadge {
         Self {
             label: None,
             icon: Some(BadgeIcon::Logo(logo)),
+            size: BadgeSize::Compact,
         }
+    }
+
+    /// Medium badge (`16 px` store mark) for list rows.
+    pub fn medium(mut self) -> Self {
+        self.size = BadgeSize::Medium;
+        self
+    }
+
+    /// Large badge (`20 px` store mark) for hero headers.
+    pub fn large(mut self) -> Self {
+        self.size = BadgeSize::Large;
+        self
     }
 
     /// The badge of `mark`.
@@ -115,6 +140,7 @@ impl StoreBadge {
                     Some(logo) => BadgeIcon::Logo(logo),
                     None => BadgeIcon::Joystick,
                 }),
+                size: BadgeSize::Compact,
             },
         }
     }
@@ -127,18 +153,44 @@ impl StoreBadge {
 
 impl RenderOnce for StoreBadge {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        let size_icon = |glyph: Icon| match self.size {
+            BadgeSize::Compact => glyph.xsmall(),
+            BadgeSize::Medium => glyph.small(),
+            BadgeSize::Large => glyph.size(rems(1.25)),
+        };
         let icon = self.icon.map(|icon| match icon {
-            BadgeIcon::Logo(logo) => logo.icon().xsmall(),
-            BadgeIcon::Joystick => Icon::new(IconName::Joystick).xsmall(),
+            BadgeIcon::Logo(logo) => size_icon(logo.icon()),
+            BadgeIcon::Joystick => size_icon(Icon::new(IconName::Joystick)),
         });
-        Tag::secondary().xsmall().outline().font_medium().child(
-            h_flex()
-                .gap_0p5()
-                // A mark alone keeps the height a line of text gives.
-                .min_h(rems(1.))
-                .children(icon)
-                .children(self.label),
-        )
+        match self.size {
+            BadgeSize::Compact => Tag::secondary().xsmall().outline().font_medium().child(
+                h_flex()
+                    .gap_0p5()
+                    // A mark alone keeps the height a line of text gives.
+                    .min_h(rems(1.))
+                    .children(icon)
+                    .children(self.label),
+            ),
+            BadgeSize::Medium => Tag::secondary().small().outline().font_medium().child(
+                h_flex()
+                    .gap_1()
+                    .px_1()
+                    .min_h(rems(1.25))
+                    .items_center()
+                    .children(icon)
+                    .children(self.label),
+            ),
+            BadgeSize::Large => Tag::secondary().outline().font_medium().child(
+                h_flex()
+                    .gap_1p5()
+                    .px_1()
+                    .py_0p5()
+                    .min_h(rems(1.5))
+                    .items_center()
+                    .children(icon)
+                    .children(self.label),
+            ),
+        }
     }
 }
 

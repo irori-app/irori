@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal оверлей fps frametime счётчик производительность статистика в игре in-game stats",
   "shell.notice.crashed_review_action": "Просмотреть и сообщить",
   "shell.palette.latest_crash_report": "Открыть последний отчёт о сбое",
-  "shell.palette.latest_crash_report_keywords": "crash сбой отчёт лог ошибка bug"
+  "shell.palette.latest_crash_report_keywords": "crash сбой отчёт лог ошибка bug",
+  "shell.notice.manage_rollback": "Управление / Откат"
 }

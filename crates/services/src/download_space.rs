@@ -9,15 +9,17 @@ use irori_core::GameId;
 use crate::Backend;
 use crate::downloads::{DownloadItem, DownloadKind, DownloadState};
 
-/// One disk the queue downloads to.
+/// One disk the queue downloads to, or an installed-games disk shown when idle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueDisk {
-    /// The first folder the queue installs to on this disk, to name it by.
+    /// The first folder on this disk, to name it by.
     pub folder: PathBuf,
     /// Bytes the queue still downloads there.
     pub needed: u64,
     /// Bytes free there, when they could be read.
     pub free: Option<u64>,
+    /// Total disk capacity in bytes, when it could be read.
+    pub total: Option<u64>,
 }
 
 impl QueueDisk {
@@ -69,15 +71,16 @@ fn remaining(total: u64, percent: Option<f32>) -> u64 {
 
 /// Add the needs up per disk, in the order the queue reaches each disk.
 /// `disk_of` names the disk a folder is on (two folders on one disk share a
-/// name) and the bytes free there; a folder whose disk can't be told is a
-/// disk of its own with its free space unknown.
+/// name) and its `(free, total)` bytes; a folder whose disk can't be told is a
+/// disk of its own with its space unknown.
 pub(crate) fn per_disk(
     needs: Vec<(PathBuf, u64)>,
-    disk_of: impl Fn(&Path) -> Option<(String, Option<u64>)>,
+    disk_of: impl Fn(&Path) -> Option<(String, Option<u64>, Option<u64>)>,
 ) -> Vec<QueueDisk> {
     let mut disks: Vec<(String, QueueDisk)> = Vec::new();
     for (folder, bytes) in needs {
-        let (key, free) = disk_of(&folder).unwrap_or_else(|| (folder.display().to_string(), None));
+        let (key, free, total) =
+            disk_of(&folder).unwrap_or_else(|| (folder.display().to_string(), None, None));
         match disks.iter_mut().find(|(k, _)| *k == key) {
             Some((_, disk)) => disk.needed = disk.needed.saturating_add(bytes),
             None => disks.push((
@@ -86,6 +89,7 @@ pub(crate) fn per_disk(
                     folder,
                     needed: bytes,
                     free,
+                    total,
                 },
             )),
         }
@@ -93,11 +97,12 @@ pub(crate) fn per_disk(
     disks.into_iter().map(|(_, disk)| disk).collect()
 }
 
-/// The disk holding `path` (its nearest existing folder) and its free bytes.
-fn this_disk(path: &Path) -> Option<(String, Option<u64>)> {
+/// The disk holding `path` (its nearest existing folder) and its `(free, total)` bytes.
+fn this_disk(path: &Path) -> Option<(String, Option<u64>, Option<u64>)> {
     let existing = path.ancestors().find(|p| p.is_dir())?;
     let free = fs4::available_space(existing).ok();
-    Some((disk_key(existing)?, free))
+    let total = fs4::total_space(existing).ok();
+    Some((disk_key(existing)?, free, total))
 }
 
 /// What tells disks apart: the device on Unix, the drive or share elsewhere.
@@ -111,11 +116,14 @@ fn disk_key(existing: &Path) -> Option<String> {
 
 #[cfg(not(unix))]
 fn disk_key(existing: &Path) -> Option<String> {
-    use std::path::Component;
+    use std::path::{Component, Prefix};
     match existing.components().next()? {
-        Component::Prefix(prefix) => {
-            Some(prefix.as_os_str().to_string_lossy().to_ascii_uppercase())
-        }
+        Component::Prefix(prefix) => Some(match prefix.kind() {
+            Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) => {
+                format!("{}:", (drive as char).to_ascii_uppercase())
+            }
+            _ => prefix.as_os_str().to_string_lossy().to_ascii_uppercase(),
+        }),
         _ => Some(existing.display().to_string()),
     }
 }
@@ -130,9 +138,27 @@ impl Backend {
             self.statuses
                 .get(id)
                 .and_then(|s| s.progress)
+                .or_else(|| active.iter().find(|i| &i.id == id).and_then(|i| i.progress))
                 .and_then(|p| p.percent)
         });
         per_disk(needs, this_disk)
+    }
+
+    /// Free and total space for the configured game install folders, grouped
+    /// per physical disk. Reads the disks, so call it off the UI thread.
+    pub fn install_disks(&self) -> Vec<QueueDisk> {
+        let folders: Vec<(PathBuf, u64)> = self
+            .settings
+            .app()
+            .library_folders()
+            .into_iter()
+            .filter(|f| !f.path.trim().is_empty())
+            .map(|f| (irori_core::paths::expand_home(&f.path), 0))
+            .collect();
+        per_disk(folders, this_disk)
+            .into_iter()
+            .filter(|d| d.free.is_some())
+            .collect()
     }
 }
 
@@ -194,9 +220,9 @@ mod tests {
         ];
         let disks = per_disk(needs, |p| {
             if p.starts_with("/mnt/big") {
-                Some(("big".into(), Some(250)))
+                Some(("big".into(), Some(250), Some(1_000)))
             } else if p.starts_with("/home") {
-                Some(("home".into(), Some(1_000)))
+                Some(("home".into(), Some(1_000), Some(2_000)))
             } else {
                 None
             }
@@ -204,17 +230,33 @@ mod tests {
         assert_eq!(disks.len(), 3);
         assert_eq!(disks[0].folder, PathBuf::from("/mnt/big/a"));
         assert_eq!(disks[0].needed, 300);
+        assert_eq!(disks[0].total, Some(1_000));
         assert!(disks[0].is_short(), "300 needed, 250 free");
         assert!(!disks[1].is_short());
         assert_eq!(disks[2].free, None);
+        assert_eq!(disks[2].total, None);
         assert!(!disks[2].is_short(), "unknown free space is never short");
     }
 
     #[test]
     fn reads_a_real_folder() {
         let dir = tempfile::tempdir().unwrap();
-        let (key, free) = this_disk(&dir.path().join("not/yet/made")).unwrap();
+        let (key, free, total) = this_disk(&dir.path().join("not/yet/made")).unwrap();
         assert!(!key.is_empty());
         assert!(free.is_some());
+        assert!(total.is_some());
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn disk_key_deduplicates_verbatim_and_plain_drive_paths() {
+        assert_eq!(
+            disk_key(Path::new(r"c:\Games")),
+            disk_key(Path::new(r"\\?\C:\Library"))
+        );
+        assert_ne!(
+            disk_key(Path::new(r"C:\Games")),
+            disk_key(Path::new(r"D:\Games"))
+        );
     }
 }

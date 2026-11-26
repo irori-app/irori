@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal överlägg overlay fps frametime räknare prestanda statistik i spelet in-game stats",
   "shell.notice.crashed_review_action": "Granska och rapportera",
   "shell.palette.latest_crash_report": "Visa senaste kraschrapporten",
-  "shell.palette.latest_crash_report_keywords": "crash krasch rapport logg bugg"
+  "shell.palette.latest_crash_report_keywords": "crash krasch rapport logg bugg",
+  "shell.notice.manage_rollback": "Hantera / Återställ"
 }

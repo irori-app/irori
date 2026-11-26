@@ -285,5 +285,6 @@
   "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime teller prestaties statistieken in het spel in-game stats",
   "shell.notice.crashed_review_action": "Bekijken en melden",
   "shell.palette.latest_crash_report": "Laatste crashrapport bekijken",
-  "shell.palette.latest_crash_report_keywords": "crash rapport log panic bug fout"
+  "shell.palette.latest_crash_report_keywords": "crash rapport log panic bug fout",
+  "shell.notice.manage_rollback": "Beheren / Terugdraaien"
 }

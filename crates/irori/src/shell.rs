@@ -4,8 +4,8 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, TitleBar,
-    WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, TitleBar, WindowExt as _, h_flex,
+    v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -260,6 +260,18 @@ impl AppShell {
             }
             if let Some(route) = irori_ui::system_notify::notice_route(&n) {
                 note = note.on_click(move |_, _, cx| nav::navigate(route.clone(), cx));
+            }
+            if !cfg!(windows) && has_wine_rollback_shortcut(&n) {
+                note = note.action(|_, _, cx| {
+                    Button::new("component-rollback-shortcut")
+                        .small()
+                        .ghost()
+                        .label(t("shell.notice.manage_rollback"))
+                        .on_click(cx.listener(|note, _, window, cx| {
+                            nav::navigate(Route::WineManager, cx);
+                            note.dismiss(window, cx);
+                        }))
+                });
             }
             if is_power_countdown(&n) {
                 // Stays until the countdown ends or is cancelled, with the
@@ -527,23 +539,9 @@ impl AppShell {
                 cx,
             )
         };
-        let count_badge = |count: usize| {
-            (count > 0).then(|| {
-                div()
-                    .text_xs()
-                    .font_bold()
-                    .px_1p5()
-                    .rounded_full()
-                    .bg(theme.primary)
-                    .text_color(theme.primary_foreground)
-                    .child(count.to_string())
-                    .into_any_element()
-            })
-        };
-        // The running download's percent, else how many are queued.
+        // Active download percent, else queue count, else pending updates count.
         let download_count =
-            (downloads > 0).then(|| self.downloads_badge.clone().into_any_element());
-        let update_count = count_badge(updates);
+            (downloads > 0 || updates > 0).then(|| self.downloads_badge.clone().into_any_element());
 
         v_flex()
             .id("main-sidebar")
@@ -595,15 +593,6 @@ impl AppShell {
                 "downloads",
                 Route::Downloads,
                 download_count,
-                cx,
-            ))
-            .child(item(
-                "nav-updates",
-                "shell.nav.updates",
-                IconName::RefreshCw,
-                "updates",
-                Route::Updates,
-                update_count,
                 cx,
             ))
             .child(item(
@@ -712,6 +701,15 @@ fn is_power_countdown(n: &irori_core::Notice) -> bool {
             n.message_key,
             Some("shell.notice.sleep_soon" | "shell.notice.power_off_soon")
         )
+}
+
+/// Whether `n` reports an in-place Wine/Proton component update that saved a
+/// rollback build, so the toast can offer a direct shortcut to Wine Manager.
+fn has_wine_rollback_shortcut(n: &irori_core::Notice) -> bool {
+    n.title_key == Some("shell.notice.component_updated")
+        && n.args
+            .iter()
+            .any(|(k, v)| *k == irori_services::COMPONENT_ROLLBACK_ARG && !v.is_empty())
 }
 
 /// The title bar's contents: navigation, the search button and the live status
@@ -1082,6 +1080,35 @@ mod start_tests {
     }
 
     #[test]
+    fn only_in_place_wine_updates_with_rollback_offer_the_shortcut() {
+        let with_rollback = irori_core::Notice::new(NoticeLevel::Success, "GE-Proton updated")
+            .keys(
+                "shell.notice.component_updated",
+                None,
+                &[
+                    ("name", "GE-Proton"),
+                    ("version", "2026-11-24"),
+                    (irori_services::COMPONENT_ROLLBACK_ARG, "GE-Proton-latest"),
+                ],
+            );
+        assert!(has_wine_rollback_shortcut(&with_rollback));
+
+        let side_by_side = irori_core::Notice::new(NoticeLevel::Success, "GE-Proton updated").keys(
+            "shell.notice.component_updated",
+            None,
+            &[("name", "GE-Proton"), ("version", "GE-Proton10-25")],
+        );
+        assert!(!has_wine_rollback_shortcut(&side_by_side));
+
+        let other_notice = irori_core::Notice::new(NoticeLevel::Success, "Other").keys(
+            "shell.notice.updated",
+            None,
+            &[(irori_services::COMPONENT_ROLLBACK_ARG, "GE-Proton-latest")],
+        );
+        assert!(!has_wine_rollback_shortcut(&other_notice));
+    }
+
+    #[test]
     fn big_picture_activates_on_exit() {
         let game = GameId::new(Runner::Gog, "123");
         let other = GameId::new(Runner::Legendary, "other");
@@ -1362,7 +1389,7 @@ pub(crate) mod title_bar_tests {
         });
         let mut vcx = VisualTestContext::from_window(window.into(), cx);
         vcx.update(|window, cx| {
-            nav::navigate(Route::Updates, cx);
+            nav::navigate(Route::Downloads, cx);
             window.refresh();
             let _ = window.draw(cx);
         });
@@ -1386,7 +1413,7 @@ pub(crate) mod title_bar_tests {
         vcx.run_until_parked();
         assert_eq!(
             vcx.read(|cx| navigator(cx).read(cx).current().clone()),
-            Route::Updates
+            Route::Downloads
         );
 
         // An occluded overlay (dialog, sheet, palette) must absorb pointer clicks.
@@ -1405,7 +1432,7 @@ pub(crate) mod title_bar_tests {
         vcx.run_until_parked();
         assert_eq!(
             vcx.read(|cx| navigator(cx).read(cx).current().clone()),
-            Route::Updates
+            Route::Downloads
         );
 
         // Disabled (Big Picture mode) ignores mouse side buttons.
@@ -1425,7 +1452,7 @@ pub(crate) mod title_bar_tests {
         vcx.run_until_parked();
         assert_eq!(
             vcx.read(|cx| navigator(cx).read(cx).current().clone()),
-            Route::Updates
+            Route::Downloads
         );
     }
 }

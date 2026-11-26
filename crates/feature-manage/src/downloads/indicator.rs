@@ -1,7 +1,7 @@
 //! The downloads indicator outside the downloads page: the title bar's pill
 //! (progress ring, percent, speed, how many more wait, and a panel with
 //! pause and resume) and the sidebar's badge (the percent while a download
-//! runs, else how many wait).
+//! runs, else how many wait, else pending game and component updates).
 //!
 //! Each is its own small view that re-renders only when what it shows
 //! changes: progress arrives a few times a second while downloading, and the
@@ -46,6 +46,9 @@ pub(crate) struct Indicator {
     pub paused: bool,
     /// Downloads waiting after the current one.
     pub waiting: usize,
+    /// Unqueued game updates plus non-skipped component updates, shown on the
+    /// sidebar badge when the download queue is idle.
+    pub pending_updates: usize,
     /// The countdown to sleeping or powering off, once the queue is done.
     pub countdown: Option<PowerCountdown>,
 }
@@ -54,7 +57,11 @@ pub(crate) struct Indicator {
 const SPEED_STEP: u64 = 100 * 1024;
 
 impl Indicator {
-    pub fn new(queue: &DownloadQueueSnapshot, progress: Option<InstallProgress>) -> Self {
+    pub fn new(
+        queue: &DownloadQueueSnapshot,
+        progress: Option<InstallProgress>,
+        pending_updates: usize,
+    ) -> Self {
         let current = queue.current();
         let paused = queue.paused || current.is_some_and(|c| c.state == DownloadState::Paused);
         let running = current.filter(|_| !paused);
@@ -74,6 +81,7 @@ impl Indicator {
                 .map(|s| if s > 60 { s.div_ceil(60) * 60 } else { s }),
             paused,
             waiting: queue.active.len() - usize::from(current.is_some()),
+            pending_updates,
             countdown: queue.countdown,
         }
     }
@@ -84,15 +92,16 @@ impl Indicator {
     }
 
     /// The sidebar badge: the percent of the running download, else how
-    /// many downloads are in the queue.
+    /// many downloads are in the queue, else pending updates when idle.
     pub fn badge(&self) -> Option<String> {
-        match self.percent {
-            Some(p) => Some(format!("{p}%")),
-            None => {
-                let count = self.waiting + usize::from(self.title.is_some());
-                (count > 0).then(|| count.to_string())
-            }
+        if let Some(p) = self.percent {
+            return Some(format!("{p}%"));
         }
+        let queued = self.waiting + usize::from(self.title.is_some());
+        if queued > 0 {
+            return Some(queued.to_string());
+        }
+        (self.pending_updates > 0).then(|| self.pending_updates.to_string())
     }
 
     /// Read the indicator from the models.
@@ -103,12 +112,20 @@ impl Indicator {
             .current()
             .and_then(|c| m.statuses.read(cx).get(&c.id))
             .and_then(|s| s.progress);
-        Self::new(queue, progress)
+        let pending_games = m
+            .library
+            .read(cx)
+            .updates
+            .iter()
+            .filter(|id| !queue.active.iter().any(|i| &i.id == *id))
+            .count();
+        let pending_components = m.components.read(cx).report.pending().count();
+        Self::new(queue, progress, pending_games + pending_components)
     }
 }
 
-/// Follow the queue and the statuses, redrawing the view only when its
-/// indicator changed.
+/// Follow the queue, statuses and update models, redrawing the view only when
+/// its indicator changed.
 fn follow<V: 'static>(cx: &mut Context<V>, get: fn(&mut V) -> &mut Indicator) -> Vec<Subscription> {
     let m = models(cx).clone();
     let refresh = move |this: &mut V, cx: &mut Context<V>| {
@@ -122,6 +139,8 @@ fn follow<V: 'static>(cx: &mut Context<V>, get: fn(&mut V) -> &mut Indicator) ->
     vec![
         cx.observe(&m.downloads, move |this, _, cx| refresh(this, cx)),
         cx.observe(&m.statuses, move |this, _, cx| refresh(this, cx)),
+        cx.observe(&m.library, move |this, _, cx| refresh(this, cx)),
+        cx.observe(&m.components, move |this, _, cx| refresh(this, cx)),
     ]
 }
 
@@ -402,7 +421,7 @@ impl Render for DownloadsPanel {
 }
 
 /// The sidebar's Downloads badge: the running download's percent, else how
-/// many downloads are queued; nothing while the queue is empty.
+/// many downloads are queued, else pending game and component updates when idle.
 pub struct DownloadsBadge {
     state: Indicator,
     _subscriptions: Vec<Subscription>,
@@ -458,7 +477,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let s = Indicator::new(&queue, progress(42.7, 3 * SPEED_STEP + 5, 125));
+        let s = Indicator::new(&queue, progress(42.7, 3 * SPEED_STEP + 5, 125), 4);
         assert_eq!(s.title.as_deref(), Some("A"));
         assert_eq!(s.percent, Some(42));
         assert_eq!(s.speed, Some(3 * SPEED_STEP), "rounded down to the step");
@@ -468,7 +487,7 @@ mod tests {
         // A rate that moves inside its step doesn't change what shows.
         assert_eq!(
             s,
-            Indicator::new(&queue, progress(42.9, 3 * SPEED_STEP + 900, 121))
+            Indicator::new(&queue, progress(42.9, 3 * SPEED_STEP + 900, 121), 4)
         );
     }
 
@@ -482,13 +501,24 @@ mod tests {
             paused: true,
             ..Default::default()
         };
-        let s = Indicator::new(&paused, progress(50.0, SPEED_STEP, 60));
+        let s = Indicator::new(&paused, progress(50.0, SPEED_STEP, 60), 5);
         assert!(s.paused);
         assert_eq!(s.percent, None, "a paused download shows no live numbers");
         assert_eq!(s.speed, None);
-        assert_eq!(s.badge().as_deref(), Some("2"));
-        let idle = Indicator::new(&DownloadQueueSnapshot::default(), None);
+        assert_eq!(
+            s.badge().as_deref(),
+            Some("2"),
+            "queue count wins over pending updates while paused"
+        );
+        let idle = Indicator::new(&DownloadQueueSnapshot::default(), None, 0);
         assert!(!idle.is_active());
         assert_eq!(idle.badge(), None);
+        let idle_updates = Indicator::new(&DownloadQueueSnapshot::default(), None, 3);
+        assert!(!idle_updates.is_active());
+        assert_eq!(
+            idle_updates.badge().as_deref(),
+            Some("3"),
+            "idle badge surfaces pending updates"
+        );
     }
 }

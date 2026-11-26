@@ -868,3 +868,100 @@ async fn reports_the_speed_limit_as_the_bottleneck() {
         seen.lock()
     );
 }
+
+#[tokio::test]
+async fn cancelling_assemble_rolls_back_uncommitted_bytes() {
+    let a = data(60_000, 1);
+    let b0 = data(40_000, 2);
+    let b1 = data(40_000, 3);
+    let b: Vec<u8> = [b0.as_slice(), b1.as_slice()].concat();
+    let (a_body, b0_body, b1_body) = (a.clone(), b0.clone(), b1.clone());
+    let server = TestServer::start(move |req| match req.path.as_str() {
+        "/f/a" => serve_bytes(req, &a_body, true),
+        "/f/b0" => serve_bytes(req, &b0_body, true),
+        "/f/b1" => {
+            let mut r = serve_bytes(req, &b1_body, true);
+            r.hang_after = Some(1);
+            r
+        }
+        _ => Resp::status(404),
+    });
+    let chunk_entry = |key: &str, url: String, slice: &[u8]| {
+        Part::new(
+            Arc::new(Chunk {
+                key: key.into(),
+                urls: vec![url],
+                download_size: slice.len() as u64,
+                size: slice.len() as u64,
+                hash: None,
+                codec: Codec::Raw,
+                range: None,
+            }),
+            0,
+            slice.len() as u64,
+        )
+    };
+    let files = [
+        chunked("a", &a, vec![server.url("/f/a")]),
+        FileEntry {
+            path: "b".into(),
+            size: b.len() as u64,
+            hash: Some(sha256(&b)),
+            parts: vec![
+                chunk_entry("b0", server.url("/f/b0"), &b0),
+                chunk_entry("b1", server.url("/f/b1"), &b1),
+            ],
+            executable: false,
+        },
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let reports = Arc::new(Mutex::new(Vec::new()));
+    let sink = {
+        let reports = reports.clone();
+        Arc::new(move |p: Progress| reports.lock().push(p)) as ProgressFn
+    };
+    let cancel = CancellationToken::new();
+    let opts = Options {
+        workers: 1,
+        retries: 0,
+        ..Default::default()
+    };
+    let root = dir.path().to_path_buf();
+    let task = {
+        let cancel = cancel.clone();
+        tokio::spawn(async move {
+            download(
+                &client(),
+                Job {
+                    root: &root,
+                    files: &files,
+                    remove: &[],
+                },
+                &opts,
+                sink,
+                &cancel,
+            )
+            .await
+        })
+    };
+    // Wait until file `a` is committed and `b`'s first part has inflated `bytes_done`.
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            if reports
+                .lock()
+                .last()
+                .is_some_and(|p| p.bytes_done > a.len() as u64)
+            {
+                break;
+            }
+            assert!(!task.is_finished(), "download finished before stalling");
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("in-flight assemble progress was reported");
+    cancel.cancel();
+    assert_eq!(task.await.unwrap().unwrap(), Finished::Cancelled);
+    let last = *reports.lock().last().unwrap();
+    assert_eq!(last.bytes_done, a.len() as u64);
+}

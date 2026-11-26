@@ -326,6 +326,9 @@ impl SettingsView {
     /// Show a section (route id); the shell calls this when the route
     /// changes while the page is open.
     pub fn set_section(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if id == "downloads" {
+            self.general_tab = "integrations";
+        }
         self.open(SettingsSection::from_id(id), window, cx);
     }
 

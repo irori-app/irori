@@ -10,9 +10,8 @@ pub enum Route {
     /// The library, optionally scoped to a named view (e.g. a category).
     Library,
     Game(GameId),
+    /// Active downloads, queue, game and component updates, and history.
     Downloads,
-    /// What can be updated: games, components and Irori.
-    Updates,
     /// Settings, opened on a section id (e.g. "general", "wine").
     Settings(SharedString),
     /// Settings of one game, opened on a section id.
@@ -39,7 +38,6 @@ impl Route {
         match self {
             Route::Library | Route::Game(_) | Route::GameSettings(..) => "library",
             Route::Downloads => "downloads",
-            Route::Updates => "updates",
             Route::Settings(_) => "settings",
             Route::WineManager => "wine",
             Route::Emulators => "emulators",
@@ -236,5 +234,10 @@ mod tests {
             h.go(Route::Settings(format!("s{i}").into()));
         }
         assert_eq!(h.back.len(), HISTORY_LIMIT);
+    }
+
+    #[test]
+    fn downloads_route_owns_downloads_section() {
+        assert_eq!(Route::Downloads.section(), "downloads");
     }
 }

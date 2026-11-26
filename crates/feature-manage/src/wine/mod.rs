@@ -152,6 +152,8 @@ impl WineManagerView {
                     }
                 },
             ),
+            // In-place Wine updates and rollbacks change the saved previous builds.
+            cx.observe(&models(cx).components.clone(), |_, _, cx| cx.notify()),
         ];
         let seen_revision = ops.read(cx).revision;
         let selected_source = ReleaseKind::available().first().copied();
@@ -444,6 +446,113 @@ impl WineManagerView {
             });
         })
         .detach();
+    }
+
+    /// Ask, then restore the build replaced by the last in-place update of `version`.
+    fn confirm_go_back(&self, version: String, window: &mut Window, cx: &mut Context<Self>) {
+        let view = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, _| {
+            let version = version.clone();
+            let view = view.clone();
+            alert
+                .title(t_args(
+                    "manage.updates.go_back_title",
+                    &[("name", &version)],
+                ))
+                .description(t_args(
+                    "manage.updates.go_back_description",
+                    &[("name", &version)],
+                ))
+                .show_cancel(true)
+                .cancel_text(t("manage.updates.cancel"))
+                .ok_text(t("manage.updates.go_back"))
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let (b, name) = (backend(cx), version.clone());
+                    let task = irori_ui::run(cx, async move { b.roll_back_build(&name).await });
+                    let name = version.clone();
+                    let view = view.clone();
+                    window
+                        .spawn(cx, async move |cx| {
+                            let result = task.await;
+                            let _ = cx.update(|window, cx| match result {
+                                Ok(()) => {
+                                    window.push_notification(
+                                        Notification::success(t_args(
+                                            "manage.updates.went_back",
+                                            &[("name", &name)],
+                                        )),
+                                        cx,
+                                    );
+                                    let _ = view.update(cx, |this, cx| {
+                                        this.reload_after_change(window, cx)
+                                    });
+                                }
+                                Err(e) => notify_error(
+                                    t_args("manage.updates.go_back_failed", &[("name", &name)]),
+                                    &e,
+                                    window,
+                                    cx,
+                                ),
+                            });
+                        })
+                        .detach();
+                    true
+                })
+        });
+    }
+
+    /// Saved builds from previous in-place Wine/Proton updates, offered for rollback.
+    fn render_previous_builds(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let previous = models(cx).components.read(cx).report.previous.clone();
+        if previous.is_empty() {
+            return None;
+        }
+        let muted = cx.theme().muted_foreground;
+        let rows: Vec<AnyElement> = previous
+            .into_iter()
+            .map(|p| {
+                let version = p.version;
+                let target = version.clone();
+                let selector = version.clone();
+                h_flex()
+                    .debug_selector(move || format!("rollback-{selector}"))
+                    .w_full()
+                    .gap_3()
+                    .items_center()
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0p5()
+                            .child(div().font_medium().truncate().child(version.clone()))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .truncate()
+                                    .text_color(muted)
+                                    .child(t("manage.updates.previous_detail")),
+                            ),
+                    )
+                    .child(
+                        Button::new(ElementId::Name(format!("go-back-{version}").into()))
+                            .small()
+                            .outline()
+                            .label(t("manage.updates.go_back"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.confirm_go_back(target.clone(), window, cx)
+                            })),
+                    )
+                    .into_any_element()
+            })
+            .collect();
+        Some(
+            v_flex()
+                .gap_2()
+                .child(SectionTitle::new(t("manage.updates.section.previous")))
+                .child(card(cx).children(rows))
+                .into_any_element(),
+        )
     }
 
     fn add_custom_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1176,6 +1285,9 @@ impl Render for WineManagerView {
             None => self.render_system(cx),
         };
         // The prefix list is virtual and scrolls itself.
+        let previous = (!on_prefixes)
+            .then(|| self.render_previous_builds(cx))
+            .flatten();
         let body = if on_prefixes {
             content
         } else {
@@ -1185,12 +1297,14 @@ impl Render for WineManagerView {
                 .min_h_0()
                 .overflow_y_scrollbar()
                 .child(
-                    div()
+                    v_flex()
                         .id("wine-content")
                         .debug_selector(|| "wine-content".into())
                         .w_full()
                         .px_6()
                         .py_4()
+                        .gap_6()
+                        .children(previous)
                         .child(content),
                 )
                 .into_any_element()

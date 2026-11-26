@@ -25,7 +25,6 @@ mod onboarding;
 mod steam_library;
 mod store_window;
 mod stores;
-mod updates;
 mod wine;
 #[cfg(target_os = "linux")]
 mod xbox;
@@ -75,7 +74,6 @@ pub use steam_library::{
 };
 pub use store_window::{open_store_window, store_window_stores};
 pub use stores::StoresView;
-pub use updates::UpdatesView;
 pub use wine::WineManagerView;
 #[cfg(target_os = "linux")]
 pub use xbox::install_xbox_store;

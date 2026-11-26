@@ -120,6 +120,15 @@ enum StopReason {
     Cancel { keep_files: bool },
 }
 
+fn paused_snapshot(progress: InstallProgress) -> InstallProgress {
+    InstallProgress {
+        percent: progress.percent,
+        bytes_done: progress.bytes_done,
+        bytes_total: progress.bytes_total,
+        ..Default::default()
+    }
+}
+
 fn file() -> std::path::PathBuf {
     Paths::get().state_dir().join("downloads.json")
 }
@@ -158,6 +167,29 @@ impl QueueState {
         item.progress = None;
         self.finished.insert(0, item);
         self.finished.truncate(FINISHED_LIMIT);
+    }
+
+    /// Put `id` at the front of `active`, unpause the queue, and pause any
+    /// other running download so the worker switches to `id` next.
+    fn prioritize(&mut self, id: &GameId) -> bool {
+        let Some(pos) = self.active.iter().position(|i| &i.id == id) else {
+            return false;
+        };
+        if pos == 0 && !self.paused && self.running.as_ref().is_some_and(|r| &r.id == id) {
+            return false;
+        }
+        if pos > 0 {
+            let item = self.active.remove(pos);
+            self.active.insert(0, item);
+        }
+        self.paused = false;
+        if let Some(r) = self.running.as_mut()
+            && &r.id != id
+        {
+            r.stop = Some(StopReason::Pause);
+            r.cancel.cancel();
+        }
+        true
     }
 }
 
@@ -324,6 +356,20 @@ impl Backend {
         self.bus.emit(Event::DownloadQueueChanged);
     }
 
+    /// Move `id` to the front of the active queue and start downloading it now.
+    /// If another item is running, it pauses cleanly (retaining its committed
+    /// progress) and drops to the top of the waiting list.
+    pub fn prioritize_download(&self, id: &GameId) {
+        let mut q = self.downloads.lock();
+        if !q.prioritize(id) {
+            return;
+        }
+        q.save();
+        drop(q);
+        self.bus.emit(Event::DownloadQueueChanged);
+        self.downloads_wake.notify_one();
+    }
+
     pub fn clear_finished_downloads(&self) {
         let mut q = self.downloads.lock();
         q.finished.clear();
@@ -353,6 +399,7 @@ impl Backend {
                     .find(|i| matches!(i.state, DownloadState::Queued | DownloadState::Paused))
                 {
                     item.state = DownloadState::Running;
+                    item.progress = None;
                     item.started_at.get_or_insert(util::unix_now());
                     let item = item.clone();
                     let cancel = CancellationToken::new();
@@ -427,6 +474,11 @@ impl Backend {
             Done,
             Failed(String),
         }
+        let paused_progress = self
+            .statuses
+            .get(&id)
+            .and_then(|s| s.progress)
+            .map(paused_snapshot);
         let after = {
             let mut q = self.downloads.lock();
             let pos = q.active.iter().position(|i| i.id == id);
@@ -454,6 +506,7 @@ impl Backend {
             if let Some(p) = pos {
                 if state == DownloadState::Paused {
                     q.active[p].state = DownloadState::Paused;
+                    q.active[p].progress = paused_progress;
                 } else {
                     let it = q.active.remove(p);
                     q.finish(it, state, error);
@@ -591,6 +644,78 @@ mod tests {
         };
         assert_eq!(paused.queue_place(&id("a")), Some(1), "resumes first");
         assert_eq!(paused.queue_place(&id("b")), Some(2));
+    }
+
+    #[test]
+    fn paused_snapshot_keeps_totals_only() {
+        let p = InstallProgress {
+            percent: Some(22.4),
+            bytes_done: Some(144_000_000),
+            bytes_total: Some(656_000_000),
+            eta_secs: Some(90),
+            download_speed: Some(9_000_000),
+            disk_speed: Some(12_000_000),
+            bottleneck: Some(irori_core::Bottleneck::Network),
+            preparing: Some(irori_core::Preparing {
+                stage: irori_core::PrepareStage::CheckingFiles,
+                done: 1,
+                total: 2,
+            }),
+        };
+        let snap = paused_snapshot(p);
+        assert_eq!(snap.percent, Some(22.4));
+        assert_eq!(snap.bytes_done, Some(144_000_000));
+        assert_eq!(snap.bytes_total, Some(656_000_000));
+        assert_eq!(snap.eta_secs, None);
+        assert_eq!(snap.download_speed, None);
+        assert_eq!(snap.disk_speed, None);
+        assert_eq!(snap.bottleneck, None);
+        assert_eq!(snap.preparing, None);
+    }
+
+    #[test]
+    fn prioritize_swaps_paused_and_running_items() {
+        let id = |app| GameId::new(irori_core::Runner::Gog, app);
+        let mut paused_a = queued("a", DownloadState::Paused);
+        paused_a.progress = Some(InstallProgress {
+            percent: Some(14.0),
+            ..Default::default()
+        });
+        let mut state = QueueState {
+            active: vec![paused_a, queued("b", DownloadState::Queued)],
+            paused: true,
+            ..Default::default()
+        };
+        assert!(state.prioritize(&id("b")));
+        assert!(!state.paused);
+        assert_eq!(state.active[0].id, id("b"));
+        assert_eq!(state.active[1].id, id("a"));
+        assert_eq!(state.active[1].state, DownloadState::Paused);
+        assert_eq!(state.active[1].progress.and_then(|p| p.percent), Some(14.0));
+
+        // Promoting another item while one runs cancels the running one with Pause.
+        let token = CancellationToken::new();
+        let mut running = QueueState {
+            active: vec![
+                queued("a", DownloadState::Running),
+                queued("b", DownloadState::Queued),
+            ],
+            running: Some(Running {
+                id: id("a"),
+                cancel: token.clone(),
+                stop: None,
+            }),
+            ..Default::default()
+        };
+        assert!(!running.prioritize(&id("a")), "already downloading");
+        assert!(running.prioritize(&id("b")));
+        assert_eq!(running.active[0].id, id("b"));
+        assert_eq!(running.active[1].id, id("a"));
+        assert!(token.is_cancelled());
+        assert!(matches!(
+            running.running.as_ref().and_then(|r| r.stop),
+            Some(StopReason::Pause)
+        ));
     }
 
     #[tokio::test]
