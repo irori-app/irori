@@ -112,7 +112,7 @@ export const ROWS: Row[] = [
     feature: 'Licence',
     home: true,
     cells: {
-      irori: { v: 'info', note: 'MIT' },
+      irori: { v: 'info', note: 'GPL-3.0' },
       heroic: { v: 'info', note: 'GPL-3.0' },
       playnite: { v: 'info', note: 'MIT' },
       lutris: { v: 'info', note: 'GPL-3.0' },

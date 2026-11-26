@@ -56,7 +56,7 @@ const software = {
   description: h.description,
   applicationCategory: 'GameApplication',
   operatingSystem: 'Linux, macOS, Windows',
-  license: 'https://opensource.org/licenses/MIT',
+  license: 'https://www.gnu.org/licenses/gpl-3.0.html',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   ...(latest ? { softwareVersion: latest.version, downloadUrl: `${REPO}/releases/latest` } : {}),
   sameAs: [REPO, X_ACCOUNT],

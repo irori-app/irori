@@ -54,7 +54,7 @@ rows:
     irori: About 88 MiB, 1 process
     rival: About 478 MiB, 7 processes
   - feature: Licence
-    irori: MIT
+    irori: GPL-3.0
     rival: GPL-3.0
 ---
 
@@ -88,7 +88,6 @@ Irori even reads Heroic’s settings with Heroic’s own names, which is why
 - **Several accounts per store.** Epic Games, GOG, Amazon Games, ZOOM Platform and itch.io each
   take more than one account, in one library.
 - **Big Picture.** A full controller interface that opens by itself in the Steam Deck’s Game Mode.
-- **MIT licence**, where Heroic is GPL-3.0.
 
 ## Where Heroic is ahead
 

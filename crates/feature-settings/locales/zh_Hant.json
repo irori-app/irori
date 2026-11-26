@@ -2,7 +2,7 @@
   "settings.about.credit_gpui": "GPUI 與 GPUI Kit",
   "settings.about.credit_lucide": "Lucide 圖示",
   "settings.about.credit_themes": "內建主題",
-  "settings.about.tagline": "適用於 Linux 的遊戲啟動器。依 MIT 授權條款釋出。",
+  "settings.about.tagline": "適用於 Linux 的遊戲啟動器。依 GPL-3.0-or-later 授權條款釋出。",
   "settings.about.third_party": "第三方軟體",
   "settings.about.tour_help": "主視窗簡短導覽：各部分的位置，以及通往一切的快捷鍵。",
   "settings.about.tour": "帶我看看",

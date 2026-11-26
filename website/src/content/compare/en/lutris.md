@@ -36,7 +36,7 @@ rows:
     irori: Big Picture
     rival: No
   - feature: Licence
-    irori: MIT
+    irori: GPL-3.0
     rival: GPL-3.0
 ---
 

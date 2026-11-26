@@ -36,7 +36,7 @@ rows:
     irori: Bundled themes, Big Picture themes you can make and share
     rival: Community themes and extensions
   - feature: Licence
-    irori: MIT
+    irori: GPL-3.0
     rival: MIT
 ---
 

@@ -17,7 +17,7 @@ and nile, the tools Heroic runs.
 
 ## What does it cost?
 
-Nothing. Irori is free software under the MIT licence. Its source is on
+Nothing. Irori is free software under the GPL-3.0 licence. Its source is on
 [GitHub](https://github.com/irori-app/irori).
 
 ## Does Irori collect data about me?
