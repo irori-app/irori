@@ -36,7 +36,7 @@ sevenz-rust2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 # Links game folders into converted games without developer mode.
-junction = "1"
+junction = "2"
 
 [dev-dependencies]
 irori-depot = { workspace = true, features = ["test-server"] }
