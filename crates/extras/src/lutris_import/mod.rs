@@ -424,10 +424,21 @@ fn classify(
     let env = cascade.env();
     match runner {
         "wine" => ImportKind::Windows {
+            prefix: cascade
+                .game_str("prefix")
+                .map(|p| resolve(&p))
+                .or_else(|| {
+                    directory
+                        .as_deref()
+                        .filter(|d| {
+                            d.join("system.reg").is_file() || d.join("pfx/system.reg").is_file()
+                        })
+                        .map(Path::to_path_buf)
+                })
+                .or_else(|| enclosing_wine_prefix(&entry)),
             exe: entry,
             args,
             working_dir,
-            prefix: cascade.game_str("prefix").map(|p| resolve(&p)),
             wine_version: cascade.runner_str("version"),
             arch: cascade
                 .game_str("arch")
@@ -497,4 +508,35 @@ fn cover(dirs: &LutrisDirs, slug: &str) -> Option<PathBuf> {
                 .map(move |ext| folder.join(format!("{slug}.{ext}")))
         })
         .find(|p| p.is_file())
+}
+
+/// Find the Wine or Proton prefix that encloses `path` (`drive_c` with
+/// `system.reg` beside it, or `pfx/drive_c` with Proton metadata files).
+fn enclosing_wine_prefix(path: &Path) -> Option<PathBuf> {
+    for drive_c in path.ancestors() {
+        if !drive_c
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.eq_ignore_ascii_case("drive_c"))
+        {
+            continue;
+        }
+        let Some(parent) = drive_c.parent() else {
+            continue;
+        };
+        if parent.file_name().and_then(|n| n.to_str()) == Some("pfx")
+            && let Some(grandparent) = parent.parent()
+        {
+            let has_proton_meta = ["version", "pfx.lock", "config_info"]
+                .iter()
+                .any(|f| grandparent.join(f).is_file());
+            if parent.join("system.reg").is_file() && has_proton_meta {
+                return Some(grandparent.to_path_buf());
+            }
+        }
+        if parent.join("system.reg").is_file() {
+            return Some(parent.to_path_buf());
+        }
+    }
+    None
 }

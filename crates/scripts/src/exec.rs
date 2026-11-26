@@ -849,6 +849,7 @@ impl Runner<'_> {
         let program = lexical(program);
         let mut roots = vec![lexical(&self.ctx.game_dir), lexical(&self.ctx.cache_dir)];
         roots.extend(self.ctx.prefix.as_deref().map(lexical));
+        roots.extend(self.prefix_used.as_deref().map(lexical));
         if let Some(raw) = &self.script.game.prefix {
             roots.push(lexical(&self.path(raw, "Game section")?));
         }
@@ -877,6 +878,23 @@ impl Runner<'_> {
         }
         let g = &self.script.game;
         let loc = "Game section";
+        let runner = self.script.info.runner.clone();
+        let is_wine = runner == "wine";
+        let prefix = if is_wine {
+            Some(if let Some(p) = &self.ctx.prefix {
+                p.clone()
+            } else if let Some(p) = self.non_blank_path(g.prefix.as_deref(), loc)? {
+                p
+            } else {
+                // Where the script put the prefix, so the game doesn't
+                // start in another one.
+                self.prefix_used
+                    .clone()
+                    .unwrap_or_else(|| self.ctx.game_dir.clone())
+            })
+        } else {
+            None
+        };
         let mut resolved: [Option<PathBuf>; 5] = Default::default();
         let mut any = false;
         let mut missing = None;
@@ -898,15 +916,10 @@ impl Runner<'_> {
             }
             let path = self.path(raw, loc)?;
             let game_dir = lexical(&self.ctx.game_dir);
+            let prefix_search = prefix.as_deref().map(lexical);
             let found = tokio::task::spawn_blocking({
                 let path = path.clone();
-                move || {
-                    if std::fs::symlink_metadata(&path).is_ok() {
-                        return Some(path);
-                    }
-                    let rel = path.strip_prefix(&game_dir).ok()?;
-                    fsops::find_case_insensitive(&game_dir, rel)
-                }
+                move || find_entry_path(&path, &game_dir, prefix_search.as_deref())
             })
             .await?;
             match found {
@@ -923,7 +936,6 @@ impl Runner<'_> {
                 }
             }
         }
-        let runner = self.script.info.runner.clone();
         if !any && matches!(runner.as_str(), "wine" | "linux") {
             missing.get_or_insert(ScriptError::MissingExecutable { expected: None });
         }
@@ -932,7 +944,6 @@ impl Runner<'_> {
             self.substitute_value(v, loc)?;
         }
         let [exe, main_file, iso, rom, path] = resolved;
-        let is_wine = runner == "wine";
         let entry = GameEntry {
             name: self.script.info.name.clone(),
             game_slug: self.script.info.game_slug.clone(),
@@ -943,21 +954,7 @@ impl Runner<'_> {
             path,
             args: g.args.as_deref().map(|a| self.text(a, loc)).transpose()?,
             working_dir: self.opt_path(g.working_dir.as_deref(), loc)?,
-            prefix: if is_wine {
-                Some(if let Some(p) = &self.ctx.prefix {
-                    p.clone()
-                } else if let Some(p) = self.non_blank_path(g.prefix.as_deref(), loc)? {
-                    p
-                } else {
-                    // Where the script put the prefix, so the game doesn't
-                    // start in another one.
-                    self.prefix_used
-                        .clone()
-                        .unwrap_or_else(|| self.ctx.game_dir.clone())
-                })
-            } else {
-                None
-            },
+            prefix,
             arch: g.arch.as_deref().map(|a| self.text(a, loc)).transpose()?,
             wine_version: self.script.wine_version().map(str::to_string),
             env: self.env(&BTreeMap::new(), loc)?,
@@ -966,6 +963,12 @@ impl Runner<'_> {
             } else {
                 Vec::new()
             },
+            prefer_system_libs: self
+                .script
+                .system
+                .get("prefer_system_libs")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             options,
             runner_options: self
                 .script
@@ -1030,4 +1033,42 @@ impl Runner<'_> {
             tracing::warn!("rolling back the install: {p}");
         }
     }
+}
+
+/// Find a game entry path on disk: exact match, case-insensitive match under
+/// `game_dir` or `prefix`, or inside `<prefix>/pfx/drive_c/...` when Proton
+/// run directly placed Windows files inside `pfx/` while the script named
+/// `$GAMEDIR/drive_c/...`.
+fn find_entry_path(path: &Path, game_dir: &Path, prefix: Option<&Path>) -> Option<PathBuf> {
+    if std::fs::symlink_metadata(path).is_ok() {
+        return Some(path.to_path_buf());
+    }
+    if let Ok(rel) = path.strip_prefix(game_dir)
+        && let Some(found) = fsops::find_case_insensitive(game_dir, rel)
+    {
+        return Some(found);
+    }
+    if let Some(prefix) = prefix
+        && let Ok(rel) = path.strip_prefix(prefix)
+    {
+        if let Some(found) = fsops::find_case_insensitive(prefix, rel) {
+            return Some(found);
+        }
+        let starts_with_drive_c = rel
+            .components()
+            .next()
+            .and_then(|c| c.as_os_str().to_str())
+            .is_some_and(|c| c.eq_ignore_ascii_case("drive_c"));
+        let pfx = prefix.join("pfx");
+        if starts_with_drive_c && pfx.is_dir() {
+            let direct = pfx.join(rel);
+            if std::fs::symlink_metadata(&direct).is_ok() {
+                return Some(direct);
+            }
+            if let Some(found) = fsops::find_case_insensitive(&pfx, rel) {
+                return Some(found);
+            }
+        }
+    }
+    None
 }

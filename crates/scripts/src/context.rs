@@ -96,6 +96,8 @@ pub struct GameEntry {
     pub env: BTreeMap<String, String>,
     /// The script's Wine DLL overrides (Wine scripts only).
     pub dll_overrides: Vec<irori_core::DllOverride>,
+    /// Whether the script's `system.prefer_system_libs` is set.
+    pub prefer_system_libs: bool,
     /// The rest of the game section, substituted.
     pub options: Map<String, Value>,
     /// The script's section for its runner.

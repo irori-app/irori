@@ -1360,6 +1360,43 @@ pub fn is_prefix(path: &Path) -> bool {
     path.join("system.reg").is_file() || path.join("pfx/system.reg").is_file()
 }
 
+/// Find the Wine or Proton prefix that encloses `path` (typically a Windows
+/// executable inside `drive_c`), if any. Recognises flat Wine/umu prefixes,
+/// Proton compatdata directories (`pfx/drive_c` with Proton metadata files),
+/// and umu's `pfx -> .` symlink.
+pub fn enclosing_wine_prefix(path: &Path) -> Option<PathBuf> {
+    for drive_c in path.ancestors() {
+        if !drive_c
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.eq_ignore_ascii_case("drive_c"))
+        {
+            continue;
+        }
+        let Some(parent) = drive_c.parent() else {
+            continue;
+        };
+        if parent.file_name().and_then(|n| n.to_str()) == Some("pfx")
+            && let Some(grandparent) = parent.parent()
+        {
+            if prefix::prefix_layout(grandparent) == (prefix::PrefixLayout::Flat { pfx_link: true })
+            {
+                return Some(grandparent.to_path_buf());
+            }
+            let has_proton_meta = ["version", "pfx.lock", "config_info"]
+                .iter()
+                .any(|f| grandparent.join(f).is_file());
+            if parent.join("system.reg").is_file() && has_proton_meta {
+                return Some(grandparent.to_path_buf());
+            }
+        }
+        if parent.join("system.reg").is_file() {
+            return Some(parent.to_path_buf());
+        }
+    }
+    None
+}
+
 /// Wait until every process in the game's prefix has exited (`wineserver -w`).
 /// Used to keep tracking games whose launcher process exits early.
 pub async fn wait_prefix(settings: &GameSettings) -> Result<()> {
@@ -1603,6 +1640,61 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(prefixes_root(&app), PathBuf::from("/games/Prefixes"));
+    }
+
+    #[test]
+    fn enclosing_wine_prefix_detects_flat_proton_and_umu_prefixes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        // Flat Wine prefix.
+        let wine = root.join("wine");
+        let wine_exe = wine.join("drive_c/Program Files/App/app.exe");
+        std::fs::create_dir_all(wine_exe.parent().unwrap()).unwrap();
+        std::fs::write(wine.join("system.reg"), "").unwrap();
+        std::fs::write(&wine_exe, b"MZ").unwrap();
+        assert_eq!(enclosing_wine_prefix(&wine_exe), Some(wine.clone()));
+
+        // Direct Proton prefix (`<dir>/pfx/drive_c/...` with Proton metadata).
+        let proton = root.join("proton");
+        let proton_exe = proton.join("pfx/drive_c/Program Files/App/app.exe");
+        std::fs::create_dir_all(proton_exe.parent().unwrap()).unwrap();
+        std::fs::write(proton.join("pfx/system.reg"), "").unwrap();
+        std::fs::write(proton.join("version"), "9.0").unwrap();
+        std::fs::write(&proton_exe, b"MZ").unwrap();
+        assert_eq!(enclosing_wine_prefix(&proton_exe), Some(proton.clone()));
+
+        // Flat Wine prefix literally named `pfx` (no Proton metadata in grandparent).
+        let literal_pfx = root.join("holder/pfx");
+        let literal_exe = literal_pfx.join("drive_c/game.exe");
+        std::fs::create_dir_all(literal_exe.parent().unwrap()).unwrap();
+        std::fs::write(literal_pfx.join("system.reg"), "").unwrap();
+        std::fs::write(&literal_exe, b"MZ").unwrap();
+        assert_eq!(
+            enclosing_wine_prefix(&literal_exe),
+            Some(literal_pfx.clone())
+        );
+
+        // Plain folder containing `drive_c` without `system.reg` is not a prefix.
+        let not_prefix = root.join("plain");
+        let plain_exe = not_prefix.join("drive_c/game.exe");
+        std::fs::create_dir_all(plain_exe.parent().unwrap()).unwrap();
+        std::fs::write(&plain_exe, b"MZ").unwrap();
+        assert_eq!(enclosing_wine_prefix(&plain_exe), None);
+
+        // umu symlink (`<dir>/pfx -> <dir>`).
+        #[cfg(unix)]
+        {
+            let umu = root.join("umu");
+            std::fs::create_dir_all(umu.join("drive_c")).unwrap();
+            std::fs::write(umu.join("system.reg"), "").unwrap();
+            std::fs::write(umu.join("drive_c/game.exe"), b"MZ").unwrap();
+            std::os::unix::fs::symlink(&umu, umu.join("pfx")).unwrap();
+            assert_eq!(
+                enclosing_wine_prefix(&umu.join("pfx/drive_c/game.exe")),
+                Some(umu.clone())
+            );
+        }
     }
 
     #[test]

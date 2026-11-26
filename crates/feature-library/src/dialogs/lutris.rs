@@ -192,7 +192,7 @@ impl LutrisDialog {
     }
 
     fn game_dir(&self, cx: &App) -> PathBuf {
-        PathBuf::from(text(&self.destination, cx))
+        irori_core::paths::expand_home(&text(&self.destination, cx))
     }
 
     // ---- Find ------------------------------------------------------------

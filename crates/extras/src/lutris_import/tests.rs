@@ -787,3 +787,57 @@ fn script_games_map_through_the_same_emulator_table() {
         None
     );
 }
+
+#[test]
+fn wine_import_falls_back_to_directory_or_enclosing_prefix_when_game_prefix_is_omitted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let data = home.join(".local/share/lutris");
+    let config = home.join(".config/lutris");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::create_dir_all(&config).unwrap();
+
+    // Case 1: Lutris `directory` is an initialized prefix and `game.prefix` is omitted.
+    let dir_prefix = home.join("Games/from-dir");
+    write(&dir_prefix.join("system.reg"), "");
+    write(&dir_prefix.join("drive_c/app/app.exe"), "");
+
+    // Case 2: `directory` is empty/uninitialized, but the exe sits inside a Proton prefix.
+    let exe_prefix = home.join("Games/proton-app");
+    write(&exe_prefix.join("pfx/system.reg"), "");
+    write(&exe_prefix.join("version"), "9.0");
+    write(&exe_prefix.join("pfx/drive_c/Game/game.exe"), "");
+
+    let conn = Connection::open(data.join("pga.db")).unwrap();
+    conn.execute_batch(SCHEMA).unwrap();
+    insert(
+        &conn,
+        row(1, "from-dir", "wine", &dir_prefix.to_string_lossy()),
+    );
+    insert(&conn, row(2, "from-exe", "wine", ""));
+    drop(conn);
+
+    write(
+        &config.join("games/from-dir.yml"),
+        "game:\n  exe: drive_c/app/app.exe\n",
+    );
+    write(
+        &config.join("games/from-exe.yml"),
+        &format!(
+            "game:\n  exe: {}\n",
+            exe_prefix.join("pfx/drive_c/Game/game.exe").display()
+        ),
+    );
+
+    let dirs = LutrisDirs::from_home(home).remove(0);
+    let plan = plan(&dirs).unwrap();
+
+    match &by_slug(&plan, "from-dir").kind {
+        ImportKind::Windows { prefix, .. } => assert_eq!(prefix.as_ref(), Some(&dir_prefix)),
+        other => panic!("expected Windows import, got {other:?}"),
+    }
+    match &by_slug(&plan, "from-exe").kind {
+        ImportKind::Windows { prefix, .. } => assert_eq!(prefix.as_ref(), Some(&exe_prefix)),
+        other => panic!("expected Windows import, got {other:?}"),
+    }
+}

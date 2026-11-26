@@ -345,7 +345,15 @@ impl SideloadDialog {
                     Some((id, game)) => WineChoice::for_game(&id, &game, window, cx),
                     None => {
                         let prefix = new_app_prefix(&existing.title, cx);
-                        WineChoice::new(&prefix, window, cx)
+                        let mut choice = WineChoice::new(&prefix, window, cx);
+                        if let Some(detected) = existing
+                            .executable
+                            .as_deref()
+                            .and_then(irori_runtime::enclosing_wine_prefix)
+                        {
+                            choice.set_prefix(&detected, window, cx);
+                        }
+                        choice
                     }
                 })
             });
@@ -966,6 +974,13 @@ impl SideloadDialog {
                     {
                         this.title
                             .update(cx, |s, cx| s.set_value(title, window, cx));
+                    }
+                    if this.editing.is_none()
+                        && let Some(wine) = &this.wine
+                        && wine.read(cx).setup(cx).prefix.is_empty()
+                        && let Some(detected) = irori_runtime::enclosing_wine_prefix(&path)
+                    {
+                        wine.update(cx, |w, cx| w.set_prefix(&detected, window, cx));
                     }
                     if matches!(
                         this.installer,

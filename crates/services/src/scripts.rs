@@ -314,6 +314,15 @@ pub fn script_game(
                 if game.arch.as_deref() == Some("win32") {
                     env.entry("WINEARCH".into()).or_insert("win32".into());
                 }
+                if let Some(umu_id) = env
+                    .get("GAMEID")
+                    .and_then(|v| irori_runtime::umu::normalize_id(v))
+                {
+                    settings.push(("iroriUmuId", Value::String(umu_id)));
+                }
+            }
+            if game.prefer_system_libs {
+                settings.push(("preferSystemLibs", Value::Bool(true)));
             }
             if !env.is_empty() {
                 settings.push(("enviromentOptions", env_value(&env)));
@@ -1372,6 +1381,7 @@ mod tests {
             wine_version: None,
             env: BTreeMap::new(),
             dll_overrides: Vec::new(),
+            prefer_system_libs: false,
             options: Map::new(),
             runner_options: Map::new(),
         };
@@ -1593,5 +1603,156 @@ mod tests {
         std::fs::write(tmp.path().join("SETUP/Install.EXE"), b"").unwrap();
         assert!(find_any_case(tmp.path(), "setup/install.exe").is_some());
         assert!(find_any_case(tmp.path(), "setup/missing.exe").is_none());
+    }
+
+    #[test]
+    fn star_citizen_script_persists_prefix_overrides_and_umu_id() {
+        crate::tests::isolate_paths();
+        let tmp = tempfile::tempdir().unwrap();
+        let game_dir = tmp.path().join("Games").join("Irori").join("Star Citizen");
+        let exe_path = game_dir
+            .join("drive_c")
+            .join("Program Files")
+            .join("Roberts Space Industries")
+            .join("RSI Launcher")
+            .join("RSI Launcher.exe");
+        std::fs::create_dir_all(exe_path.parent().unwrap()).unwrap();
+        std::fs::write(&exe_path, b"MZ").unwrap();
+
+        let script_json = json!({
+            "id": 38430,
+            "game_slug": "star-citizen",
+            "name": "Star Citizen",
+            "slug": "star-citizen-liversi480",
+            "version": "LIVE/RSI/4.8.0",
+            "runner": "wine",
+            "script": {
+                "files": [],
+                "game": {
+                    "exe": "$GAMEDIR/drive_c/Program Files/Roberts Space Industries/RSI Launcher/RSI Launcher.exe",
+                    "prefix": "$GAMEDIR"
+                },
+                "installer": [],
+                "system": {
+                    "env": {
+                        "DXVK_HUD": 0,
+                        "GAMEID": "umu-starcitizen",
+                        "MESA_SHADER_CACHE_DIR": "$GAMEDIR",
+                        "MESA_SHADER_CACHE_MAX_SIZE": "10G",
+                        "__GL_SHADER_DISK_CACHE": 1,
+                        "__GL_SHADER_DISK_CACHE_PATH": "$GAMEDIR",
+                        "__GL_SHADER_DISK_CACHE_SIZE": 10737418240_u64,
+                        "__GL_SHADER_DISK_CACHE_SKIP_CLEANUP": 1
+                    },
+                    "prefer_system_libs": true
+                },
+                "wine": {
+                    "overrides": {
+                        "libglesv2": "builtin"
+                    }
+                }
+            }
+        });
+        let script = Script::from_value(&script_json).unwrap();
+        let app = AppSettings::default();
+        let ctx = script_context(&app, &script, &game_dir);
+        let approvals = Approvals::all(&irori_scripts::consent(&script, &ctx));
+
+        struct NoopHost;
+        #[async_trait]
+        impl ScriptHost for NoopHost {
+            async fn pick_file(&self, _: &FileRequest) -> Result<Option<PathBuf>> {
+                Ok(None)
+            }
+            async fn steam_file(&self, _: &str, _: &str, _: &CancellationToken) -> Result<PathBuf> {
+                anyhow::bail!("unused")
+            }
+            async fn choose(&self, _: &MenuRequest) -> Result<Option<String>> {
+                Ok(None)
+            }
+            async fn insert_disc(&self, _: &DiscRequest) -> Result<Option<PathBuf>> {
+                Ok(None)
+            }
+            async fn wine_bin(&self) -> Result<PathBuf> {
+                Ok(PathBuf::from("/w/wine"))
+            }
+            async fn create_prefix(&self, _: &PrefixRequest, _: &CancellationToken) -> Result<()> {
+                Ok(())
+            }
+            async fn wineexec(&self, _: &WineExecRequest, _: &CancellationToken) -> Result<i32> {
+                Ok(0)
+            }
+            async fn winetricks(&self, _: &WinetricksRequest, _: &CancellationToken) -> Result<()> {
+                Ok(())
+            }
+            async fn set_regedit(&self, _: &RegistryRequest, _: &CancellationToken) -> Result<()> {
+                Ok(())
+            }
+            async fn winekill(&self, _: &WineKillRequest, _: &CancellationToken) -> Result<()> {
+                Ok(())
+            }
+            async fn dosexec(&self, _: &DosExecRequest, _: &CancellationToken) -> Result<i32> {
+                Ok(0)
+            }
+            async fn execute(&self, _: &ExecRequest, _: &CancellationToken) -> Result<i32> {
+                Ok(0)
+            }
+            async fn run_shell(&self, _: &ShellRequest, _: &CancellationToken) -> Result<i32> {
+                Ok(0)
+            }
+            async fn store_autosetup(
+                &self,
+                _: &AutosetupRequest,
+                _: &CancellationToken,
+            ) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let b = crate::Backend::start_headless(|_, _| Vec::new()).unwrap();
+        let outcome = b
+            .runtime()
+            .block_on(irori_scripts::run(
+                &script,
+                &ctx,
+                &NoopHost,
+                &approvals,
+                &CancellationToken::new(),
+                Arc::new(|_| {}),
+            ))
+            .unwrap();
+        let wine = build("Proton-CachyOS", WineKind::Proton);
+        let script_entry =
+            script_game(&outcome, &game_dir, Some(&wine), None, Default::default()).unwrap();
+
+        let id = GameId::new(Runner::Sideload, "star-citizen-test");
+        for (key, value) in script_entry.settings {
+            b.settings.set_game_value(&id, key, Some(value));
+        }
+
+        let effective = b.settings.game(&id);
+        let game_info = irori_core::GameInfo {
+            app_name: id.app_name.to_string(),
+            runner: Some(Runner::Sideload),
+            title: "Star Citizen".into(),
+            install: Some(irori_core::InstalledInfo {
+                install_path: game_dir.to_string_lossy().into_owned(),
+                platform: irori_core::InstallPlatform::Windows,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(PathBuf::from(&effective.wine_prefix), game_dir);
+        assert_eq!(effective.wine_prefix, game_dir.to_string_lossy());
+        assert_eq!(
+            irori_runtime::prefix_path(&app, &effective, &game_info),
+            game_dir
+        );
+        assert!(effective.prefer_system_libs);
+        assert_eq!(effective.umu_id, "umu-starcitizen");
+        assert_eq!(
+            effective.dll_overrides,
+            vec![irori_core::DllOverride::new("libglesv2", "b").unwrap()]
+        );
     }
 }
