@@ -737,6 +737,21 @@ mod tests {
         assert_eq!(spec.cwd.as_deref(), Some(game.as_path()));
     }
 
+    #[test]
+    fn doom_source_ports_pass_iwad_and_fullscreen_cvar() {
+        let wad = Path::new("/roms/doom/DOOM2.WAD");
+        for engine in ["uzdoom", "gzdoom"] {
+            assert_eq!(
+                args_of(engine, "doom", wad, &[]),
+                ["+fullscreen", "1", "-iwad", "/roms/doom/DOOM2.WAD"]
+            );
+            assert_eq!(
+                args_of(engine, "doom", wad, &[("fullscreen", Value::Bool(false))]),
+                ["+fullscreen", "0", "-iwad", "/roms/doom/DOOM2.WAD"]
+            );
+        }
+    }
+
     /// The arguments `engine` gets for `rom` with the options in `set`.
     fn args_of(engine: &str, system: &str, rom: &Path, set: &[(&str, Value)]) -> Vec<String> {
         let m = crate::engine(engine).unwrap();

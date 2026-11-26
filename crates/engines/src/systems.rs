@@ -487,24 +487,40 @@ mod tests {
         }
     }
 
-    /// DOOM's data files share the Wii's `.wad` but say `IWAD` or `PWAD`
-    /// first; a Wii package starts with its header's length (#207).
+    /// DOOM's standalone IWAD files detect as DOOM, PWAD mods are skipped, and
+    /// Wii channel `.wad` packages still detect as Wii (#207, #253).
     #[test]
-    fn doom_wads_are_not_wii_games() {
+    fn doom_wads_are_disambiguated_from_wii_packages() {
         let dir = tempfile::tempdir().unwrap();
         let wii = get("wii").unwrap();
-        for (name, head) in [
-            ("doom2.wad", &b"IWAD\x40\0\0\0"[..]),
-            ("mod.wad", b"PWAD\x02\0\0\0"),
-        ] {
-            let file = dir.path().join(name);
-            std::fs::write(&file, head).unwrap();
-            assert!(detect(&file, None).is_none(), "{name}");
-            assert!(detect(&file, Some(wii)).is_none(), "{name} in a Wii folder");
-        }
+        let doom = get("doom").unwrap();
+
+        let iwad = dir.path().join("doom2.wad");
+        std::fs::write(&iwad, b"IWAD\x40\0\0\0").unwrap();
+        assert_eq!(detect(&iwad, None).map(|s| s.id.as_str()), Some("doom"));
+        assert_eq!(
+            detect(&iwad, Some(doom)).map(|s| s.id.as_str()),
+            Some("doom")
+        );
+        assert!(detect(&iwad, Some(wii)).is_none(), "IWAD in a Wii folder");
+
+        let pwad = dir.path().join("mod.wad");
+        std::fs::write(&pwad, b"PWAD\x02\0\0\0").unwrap();
+        assert!(detect(&pwad, None).is_none(), "PWAD globally");
+        assert!(detect(&pwad, Some(doom)).is_none(), "PWAD in a DOOM folder");
+        assert!(detect(&pwad, Some(wii)).is_none(), "PWAD in a Wii folder");
+
         let package = dir.path().join("channel.wad");
         std::fs::write(&package, b"\0\0\0\x20Is\0\0").unwrap();
         assert_eq!(detect(&package, None).map(|s| s.id.as_str()), Some("wii"));
+        assert_eq!(
+            detect(&package, Some(wii)).map(|s| s.id.as_str()),
+            Some("wii")
+        );
+        assert!(
+            detect(&package, Some(doom)).is_none(),
+            "Wii WAD in a DOOM folder"
+        );
     }
 
     #[test]

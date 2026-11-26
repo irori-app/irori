@@ -459,4 +459,78 @@ mod tests {
             "https://www.ppsspp.org/files/1_19_3/ppsspp_win.zip"
         );
     }
+
+    #[test]
+    fn uzdoom_and_gzdoom_manifests_match_official_github_assets() {
+        let uzdoom_body = serde_json::json!([
+            {"tag_name": "5.0.3", "assets": [
+                {"name": "Linux-UZDoom-Release-x86_64.AppImage", "browser_download_url": "https://x/uz-linux"},
+                {"name": "MacOS-UZDoom-Release-ARM64.dmg", "browser_download_url": "https://x/uz-mac"},
+                {"name": "Windows-UZDoom-Release-x86_64.zip", "browser_download_url": "https://x/uz-win"}
+            ]}
+        ])
+        .to_string();
+        let uzdoom = crate::engine("uzdoom").unwrap();
+        let uz_source = uzdoom.sources.iter().find(|s| s.is_managed()).unwrap();
+        for (host, expected_file) in [
+            (
+                Host {
+                    os: crate::host::Os::Linux,
+                    arch: "x86_64",
+                },
+                "Linux-UZDoom-Release-x86_64.AppImage",
+            ),
+            (
+                Host {
+                    os: crate::host::Os::Macos,
+                    arch: "aarch64",
+                },
+                "MacOS-UZDoom-Release-ARM64.dmg",
+            ),
+            (
+                Host {
+                    os: crate::host::Os::Windows,
+                    arch: "x86_64",
+                },
+                "Windows-UZDoom-Release-x86_64.zip",
+            ),
+        ] {
+            let pattern = uz_source.asset_for(host).unwrap();
+            let list = from_github(&uzdoom_body, pattern, &[], None).unwrap();
+            assert_eq!(list.len(), 1);
+            assert_eq!(list[0].version, "5.0.3");
+            assert_eq!(list[0].file_name, expected_file);
+        }
+
+        let gzdoom_body = serde_json::json!([
+            {"tag_name": "g4.14.2", "assets": [
+                {"name": "gzdoom-4-14-2-macos.zip", "browser_download_url": "https://x/gz-mac"},
+                {"name": "gzdoom-4-14-2-windows.zip", "browser_download_url": "https://x/gz-win"}
+            ]}
+        ])
+        .to_string();
+        let gzdoom = crate::engine("gzdoom").unwrap();
+        let gz_source = gzdoom.sources.iter().find(|s| s.is_managed()).unwrap();
+        for (host, expected_file) in [
+            (
+                Host {
+                    os: crate::host::Os::Macos,
+                    arch: "aarch64",
+                },
+                "gzdoom-4-14-2-macos.zip",
+            ),
+            (
+                Host {
+                    os: crate::host::Os::Windows,
+                    arch: "x86_64",
+                },
+                "gzdoom-4-14-2-windows.zip",
+            ),
+        ] {
+            let pattern = gz_source.asset_for(host).unwrap();
+            let list = from_github(&gzdoom_body, pattern, &[], None).unwrap();
+            assert_eq!(list.len(), 1);
+            assert_eq!(list[0].file_name, expected_file);
+        }
+    }
 }
