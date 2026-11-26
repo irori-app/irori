@@ -102,7 +102,7 @@ plist = "1"
 rusqlite = { version = "0.39", features = ["bundled"] }
 serde_yaml_ng = "0.10"
 hex = "0.4"
-nix = { version = "0.31", features = ["signal", "process", "fs", "user"] }
+nix = { version = "0.32", features = ["signal", "process", "fs", "user"] }
 which = "8"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 flate2 = "1"
