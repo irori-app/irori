@@ -10,11 +10,12 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::link::Link;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
-    SharedString, Styled as _, Subscription, Window, div,
+    SharedString, Styled as _, Subscription, Window, div, rems,
 };
 use irori_core::Runner;
 use irori_emulation::retro::{self, EmulatorSignIn};
@@ -391,28 +392,47 @@ fn irori_retroachievements_api_url() -> SharedString {
 impl Render for RetroView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let account = self.render_account(cx);
-        let emulators = self.account.is_some().then(|| self.render_emulators(cx));
-        v_flex()
-            .gap_4()
+        let connected = self.account.is_some();
+        let emulators = connected.then(|| self.render_emulators(cx));
+        let account_card = card(cx)
+            .gap_3()
+            .when(connected, |c| c.flex_1().min_w(rems(24.)))
             .child(
-                card(cx)
-                    .gap_3()
-                    .child(SectionTitle::new("RetroAchievements"))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(t("manage.retro.description")),
-                    )
-                    .child(account),
+                SectionTitle::new("RetroAchievements").when(connected, |title| {
+                    title.trailing(Tag::success().xsmall().child(t("manage.retro.connected")))
+                }),
             )
-            .when_some(emulators, |col, emulators| {
-                col.child(
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(t("manage.retro.description")),
+            )
+            .child(account);
+
+        if let Some(emulators) = emulators {
+            h_flex()
+                .w_full()
+                .max_w(rems(56.))
+                .flex_wrap()
+                .items_start()
+                .gap_4()
+                .child(account_card)
+                .child(
                     card(cx)
+                        .flex_1()
+                        .min_w(rems(24.))
                         .gap_3()
                         .child(SectionTitle::new(t("manage.retro.emulators_title")))
                         .child(emulators),
                 )
-            })
+                .into_any_element()
+        } else {
+            v_flex()
+                .w_full()
+                .max_w(rems(42.))
+                .child(account_card)
+                .into_any_element()
+        }
     }
 }

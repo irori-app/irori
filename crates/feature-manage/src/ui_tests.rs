@@ -1218,3 +1218,70 @@ fn wine_manager_fills_width_and_switches_large_tabs(cx: &mut TestAppContext) {
     click(&mut vcx, "wine-tab-prefixes");
     assert!(vcx.debug_bounds("wine-header").is_some());
 }
+
+#[gpui_kit::test]
+fn emulators_page_constrains_width_and_hides_search_on_achievements(cx: &mut TestAppContext) {
+    setup(cx);
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(2400.), px(1000.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| crate::EmulatorsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    let content = vcx
+        .debug_bounds("emulators-content")
+        .expect("emulators content is rendered");
+    assert!(
+        content.size.width < px(2000.),
+        "emulators page keeps a comfortable max width on ultrawide windows"
+    );
+    assert!(vcx.debug_bounds("emulators-search").is_some());
+
+    click(&mut vcx, "emulators-tab-systems");
+    assert!(vcx.debug_bounds("emulators-search").is_some());
+
+    click(&mut vcx, "emulators-tab-achievements");
+    assert!(
+        vcx.debug_bounds("emulators-search").is_none(),
+        "search input is hidden on the Achievements tab"
+    );
+}
+
+#[gpui_kit::test]
+fn emulators_page_opens_retroarch_cores_dialog(cx: &mut TestAppContext) {
+    setup(cx);
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| crate::EmulatorsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    for _ in 0..200 {
+        vcx.run_until_parked();
+        if vcx.debug_bounds("manage-retroarch-cores").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        vcx.debug_bounds("manage-retroarch-cores").is_some(),
+        "RetroArch card renders Manage cores button"
+    );
+    click(&mut vcx, "manage-retroarch-cores");
+    assert!(
+        vcx.debug_bounds("retroarch-cores-dialog").is_some(),
+        "clicking Manage cores opens the dedicated RetroArch cores modal"
+    );
+}
