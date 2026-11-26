@@ -157,9 +157,9 @@ export const en = {
         languages: 'languages, switchable live',
       },
       versus: 'Memory with the window open',
-      irori: 'Irori 0.2.0, one process',
-      heroic: 'Heroic 2.22.4, seven processes',
-      note: 'Measured on Linux with an empty profile and the window open. A large library hasn’t been measured yet.',
+      irori: 'Irori 1.1.0, one process',
+      heroic: 'Heroic 2.22.4, seven processes (0.2.0 baseline)',
+      note: 'Measured on Linux (CachyOS, Wayland, RX 9070 XT): 122.4 MiB empty, 147.7 MiB with 1,000 seeded games, and 385.1 MiB on a 1,440-game real library. Heroic figure is from the 0.2.0 empty-profile baseline.',
       link: 'How Irori stays fast',
     },
     platforms: {
@@ -345,6 +345,24 @@ export const en = {
     partial: 'Partly',
     checked: 'Checked against each project’s documentation in November 2026. Spotted something out of date?',
     report: 'Tell us on GitHub',
+    whenOthersFit: {
+      title: 'When Heroic, Lutris, or Playnite might still fit better today',
+      intro: 'Irori focuses on a fast, unified native library, while mature launchers each have areas where they remain stronger today:',
+      items: [
+        {
+          name: 'Heroic Games Launcher',
+          body: 'Battle-tested across Linux and macOS, with established Flathub packaging and direct wrapper tooling around legendary, gogdl, and nile.',
+        },
+        {
+          name: 'Lutris',
+          body: 'Backed by a large historical catalog of community install scripts, runner presets, and legacy Windows / disc-era game workarounds.',
+        },
+        {
+          name: 'Playnite',
+          body: 'Unmatched Windows plugin and theme ecosystem with deep third-party metadata extensions for Windows-first setups.',
+        },
+      ],
+    },
   },
   docs: {
     title: 'Irori documentation',

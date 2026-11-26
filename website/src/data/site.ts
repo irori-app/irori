@@ -9,11 +9,11 @@ export const X_ACCOUNT = 'https://x.com/irorilauncher'
 /** Irori's AlternativeTo listing; the query string is the one their badge code uses. */
 export const ALTERNATIVETO = 'https://alternativeto.net/software/irori/about/?utm_source=badge&utm_medium=referral'
 
-/** Measured on Irori 0.2.0 on Linux with an empty profile and the window open (README, Performance). */
+/** Measured on Irori 1.1.0 on Linux with an empty profile and the window open (docs/BENCHMARKS.md). Heroic from 0.2.0 comparison baseline. */
 export const MEASURED = {
-  memoryMiB: 88,
+  memoryMiB: 122,
   idleCpu: 0,
-  binaryMB: 76,
+  binaryMB: 108,
   languages: 19,
   heroicMiB: 478,
   heroicProcesses: 7,
@@ -74,6 +74,17 @@ export type Platform = 'linux' | 'macos' | 'windows'
 export const INSTALL: Record<Platform, { id: 'debian' | 'fedora' | 'flatpak' | 'arch' | 'appimage' | 'homebrew' | 'dmg' | 'installer' | 'portable' | 'scoop'; commands: string[] }[]> = {
   linux: [
     {
+      id: 'flatpak',
+      commands: [
+        'flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo',
+        'flatpak install --user ./Irori-*-linux.flatpak',
+      ],
+    },
+    {
+      id: 'appimage',
+      commands: ['chmod +x Irori-*-x86_64.AppImage', './Irori-*-x86_64.AppImage'],
+    },
+    {
       id: 'debian',
       commands: [
         'sudo apt install -y curl',
@@ -98,25 +109,14 @@ export const INSTALL: Record<Platform, { id: 'debian' | 'fedora' | 'flatpak' | '
         'sudo pacman -Syu irori',
       ],
     },
-    {
-      id: 'flatpak',
-      commands: [
-        'flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo',
-        'flatpak install --user ./Irori-*-linux.flatpak',
-      ],
-    },
-    {
-      id: 'appimage',
-      commands: ['chmod +x Irori-*-x86_64.AppImage', './Irori-*-x86_64.AppImage'],
-    },
   ],
   macos: [
     { id: 'homebrew', commands: ['brew install --cask irori-app/tap/irori'] },
     { id: 'dmg', commands: [] },
   ],
   windows: [
+    { id: 'scoop', commands: ['scoop bucket add irori https://github.com/irori-app/scoop-bucket', 'scoop install irori'] },
     { id: 'installer', commands: [] },
     { id: 'portable', commands: [] },
-    { id: 'scoop', commands: ['scoop bucket add irori https://github.com/irori-app/scoop-bucket', 'scoop install irori'] },
   ],
 }

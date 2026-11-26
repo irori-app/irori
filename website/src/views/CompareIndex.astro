@@ -39,5 +39,19 @@ const crumbs = [{ name: t.nav.compare, path: '/compare/' }]
     <p class="mt-3 font-mono text-xs text-smoke">
       {t.compare.checked} <a class="link" href={`${REPO}/issues`}>{t.compare.report}</a>
     </p>
+    <div class="mt-16 rounded-2xl border border-grain bg-soot/60 p-6 sm:p-8" data-reveal>
+      <h2 class="font-display text-2xl font-bold text-paper">{t.compare.whenOthersFit.title}</h2>
+      <p class="mt-2 max-w-3xl text-[0.97rem] leading-relaxed text-smoke">{t.compare.whenOthersFit.intro}</p>
+      <ul class="mt-6 grid gap-4 md:grid-cols-3">
+        {
+          t.compare.whenOthersFit.items.map((item) => (
+            <li class="rounded-xl border border-grain/80 bg-hearth/50 p-4">
+              <h3 class="font-display text-lg font-bold text-paper">{item.name}</h3>
+              <p class="mt-1.5 text-sm leading-relaxed text-smoke">{item.body}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
   </section>
 </Base>
