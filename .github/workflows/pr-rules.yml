@@ -4,7 +4,7 @@ name: PR rules
 # re-runs the check; a misnamed branch needs a new pull request.
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize, ready_for_review]
+    types: [opened, edited, reopened, synchronize, ready_for_review, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -17,17 +17,22 @@ jobs:
   names:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Rule tests
         run: python -m unittest discover -s .github/scripts -p "test_*.py"
-      - name: Branch, title and base
+      - name: Branch, title, base, and Rust diff size
         # Passed through the environment, never interpolated into the script:
-        # titles and branch names are untrusted input.
+        # titles, branch names, and labels are untrusted input.
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_HEAD: ${{ github.event.pull_request.head.ref }}
           PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: python .github/scripts/pr_rules.py
