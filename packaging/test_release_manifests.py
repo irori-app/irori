@@ -225,6 +225,16 @@ class WorkflowTests(unittest.TestCase):
         build = (self.root / "packaging/arch/build.sh").read_text()
         self.assertIn("--aur", build)
         self.assertIn("makepkg --printsrcinfo", build)
+        self.assertIn("appstreamcli validate", release)
+        self.assertIn("flatpak-builder-lint appstream", release)
+        self.assertIn("flatpak-builder-lint manifest", release)
+
+    def test_metainfo_avoids_unmirrored_remote_icons_and_has_light_and_dark_screenshots(self):
+        metainfo = (self.root / "packaging/linux/app.irori.Irori.metainfo.xml").read_text()
+        self.assertNotIn('<icon type="remote"', metainfo)
+        self.assertIn('environment="gnome:dark"', metainfo)
+        self.assertIn("https://irori.app/screenshots/library.png", metainfo)
+        self.assertIn("https://irori.app/screenshots/light-library.webp", metainfo)
 
 
 if __name__ == "__main__":

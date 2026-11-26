@@ -316,6 +316,23 @@ jobs:
       - name: Build the source package, rebuild it and install
         run: bash packaging/copr/build.sh "${{ needs.version.outputs.version }}" dist dist-copr "$GITHUB_REPOSITORY"
 
+  flatpak-lint:
+    needs: cargo-sources
+    runs-on: ubuntu-24.04
+    container: ghcr.io/flathub/flatpak-builder-lint:latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: cargo-sources
+          path: packaging/flatpak
+      - name: Validate desktop, AppStream, and Flatpak manifest
+        run: |
+          desktop-file-validate packaging/irori.desktop
+          appstreamcli validate --pedantic --explain packaging/linux/app.irori.Irori.metainfo.xml
+          flatpak-builder-lint appstream packaging/linux/app.irori.Irori.metainfo.xml
+          flatpak-builder-lint manifest packaging/flatpak/app.irori.Irori.yml
+
   flatpak:
     needs: [version, cargo-sources]
     strategy:
