@@ -186,6 +186,7 @@ pub struct LibraryView {
     search: Entity<InputState>,
     filters: Entity<FilterModel>,
     filters_panel: Entity<FiltersPanel>,
+    pub(super) filters_open: bool,
     tile_slider: Entity<SliderState>,
     scroll: VirtualListScrollHandle,
     images: Entity<LruImageCache>,
@@ -356,6 +357,7 @@ impl LibraryView {
             search,
             filters,
             filters_panel,
+            filters_open: false,
             tile_slider,
             scroll: VirtualListScrollHandle::new(),
             images: LruImageCache::new(IMAGE_CACHE_CAPACITY, cx),
@@ -2111,14 +2113,24 @@ impl LibraryView {
         .left_0()
         .size_full();
 
-        let list = v_virtual_list(
-            cx.entity(),
-            "library-items",
-            self.frame.sizes.clone(),
-            |this, range, window, cx| this.render_items(range, window, cx),
-        )
-        .track_scroll(&self.scroll)
-        .size_full();
+        let list = div()
+            .size_full()
+            .on_scroll_wheel(cx.listener(|this, _, _, cx| {
+                if this.filters_open {
+                    this.filters_open = false;
+                    cx.notify();
+                }
+            }))
+            .child(
+                v_virtual_list(
+                    cx.entity(),
+                    "library-items",
+                    self.frame.sizes.clone(),
+                    |this, range, window, cx| this.render_items(range, window, cx),
+                )
+                .track_scroll(&self.scroll)
+                .size_full(),
+            );
 
         let layout = self.layout;
         let list_toolbar = self.frame.toolbar_in_list.then(|| {

@@ -62,6 +62,29 @@ impl LibraryView {
             t_args("library.toolbar.sort", &[("order", &order)])
         };
 
+        let anchor_bottom = panel.read(cx).anchor_bottom();
+        let panel_for_anchor = panel.clone();
+        let filters_open = self.filters_open;
+        let anchor_measure = canvas(
+            move |bounds, _, cx| {
+                let bottom = bounds.bottom();
+                let moved = anchor_bottom
+                    .get()
+                    .is_none_or(|prev| (prev - bottom).abs() > px(0.5));
+                if moved {
+                    anchor_bottom.set(Some(bottom));
+                    if filters_open {
+                        panel_for_anchor.update(cx, |_, cx| cx.notify());
+                    }
+                }
+            },
+            |_, _, _, _| {},
+        )
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full();
+
         let narrowing = h_flex()
             .flex_1()
             .min_w_0()
@@ -87,22 +110,35 @@ impl LibraryView {
             .children(store_menu)
             .children(account_switcher)
             .child(
-                Popover::new("library-filters-popover")
-                    .trigger(
-                        Button::new("library-filters")
-                            .small()
-                            .outline()
-                            .icon(IconName::ListFilter)
-                            .label(if active > 0 {
-                                t_args(
-                                    "library.toolbar.filters_active",
-                                    &[("count", &active.to_string())],
-                                )
-                            } else {
-                                t("library.toolbar.filters")
-                            }),
-                    )
-                    .content(move |_, _, _| panel.clone()),
+                div()
+                    .relative()
+                    .debug_selector(|| "library-filters-trigger".into())
+                    .child(anchor_measure)
+                    .child(
+                        Popover::new("library-filters-popover")
+                            .open(self.filters_open)
+                            .on_open_change(cx.listener(|this, open: &bool, _, cx| {
+                                if this.filters_open != *open {
+                                    this.filters_open = *open;
+                                    cx.notify();
+                                }
+                            }))
+                            .trigger(
+                                Button::new("library-filters")
+                                    .small()
+                                    .outline()
+                                    .icon(IconName::ListFilter)
+                                    .label(if active > 0 {
+                                        t_args(
+                                            "library.toolbar.filters_active",
+                                            &[("count", &active.to_string())],
+                                        )
+                                    } else {
+                                        t("library.toolbar.filters")
+                                    }),
+                            )
+                            .content(move |_, _, _| panel.clone()),
+                    ),
             )
             .child(crate::dialogs::views::views_button(filter, cx))
             .child(
