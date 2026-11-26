@@ -19,6 +19,17 @@ pub(super) fn ratings(game: &GameInfo, page: Option<&[AgeRating]>) -> Vec<AgeRat
     all
 }
 
+/// Content descriptors shown for `rating` in `ui_language`. Single-language
+/// regional boards (ClassInd, USK, CERO, GRAC, CSRR) omit their descriptors
+/// when the interface uses another language; the badge still shows.
+pub(super) fn visible_descriptors<'a>(rating: &'a AgeRating, ui_language: &str) -> &'a [String] {
+    if rating.system.descriptors_match_language(ui_language) {
+        &rating.descriptors
+    } else {
+        &[]
+    }
+}
+
 impl GamePage {
     /// The card, when any board rated the game.
     pub(super) fn render_age_rating(
@@ -52,12 +63,14 @@ impl GamePage {
                     .line_height(rems(1.4))
                     .child(first.rating.clone()),
             );
-        let descriptors = (!first.descriptors.is_empty()).then(|| {
+        let ui_language = irori_ui::i18n::language();
+        let shown_descriptors = visible_descriptors(first, &ui_language);
+        let descriptors = (!shown_descriptors.is_empty()).then(|| {
             div()
                 .text_xs()
                 .text_color(ink.text)
                 .line_clamp(4)
-                .child(first.descriptors.join(&t("game.age_rating.separator")))
+                .child(shown_descriptors.join(&t("game.age_rating.separator")))
         });
         let also = (!others.is_empty()).then(|| {
             let list: Vec<String> = others.iter().map(|r| r.title()).collect();
@@ -124,5 +137,45 @@ mod tests {
             .collect();
         assert_eq!(titles, ["PEGI 16", "ESRB T"]);
         assert_eq!(ratings(&game, None).len(), 2);
+    }
+
+    #[test]
+    fn hides_single_language_regional_descriptors_in_other_ui_languages() {
+        let class_ind = AgeRating::new(
+            RatingSystem::ClassInd,
+            "18",
+            vec![
+                "Conteúdo Sexual".into(),
+                "Drogas".into(),
+                "Violência Extrema".into(),
+            ],
+            Some(18),
+        )
+        .unwrap();
+        assert!(visible_descriptors(&class_ind, "en").is_empty());
+        assert_eq!(
+            visible_descriptors(&class_ind, "pt_BR"),
+            ["Conteúdo Sexual", "Drogas", "Violência Extrema"]
+        );
+        assert_eq!(
+            visible_descriptors(&class_ind, "pt"),
+            ["Conteúdo Sexual", "Drogas", "Violência Extrema"]
+        );
+
+        let pegi = AgeRating::new(
+            RatingSystem::Pegi,
+            "18",
+            vec!["Violence".into(), "Bad Language".into()],
+            Some(18),
+        )
+        .unwrap();
+        assert_eq!(
+            visible_descriptors(&pegi, "en"),
+            ["Violence", "Bad Language"]
+        );
+        assert_eq!(
+            visible_descriptors(&pegi, "fr"),
+            ["Violence", "Bad Language"]
+        );
     }
 }

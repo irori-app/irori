@@ -1307,7 +1307,12 @@ fn a_linked_steam_app_lends_its_screenshots() {
     let server = TestServer::start(|req| {
         if req.path.starts_with("/api/appdetails?appids=4242") {
             Resp::json(serde_json::json!({"4242": {"success": true, "data": {
-                "screenshots": [{"path_full": "https://cdn/shot.jpg"}]
+                "screenshots": [{"path_full": "https://cdn/shot.jpg"}],
+                "ratings": {
+                    "esrb": {"rating": "m", "descriptors": "Blood and Gore\r\nIntense Violence", "required_age": "17"},
+                    "pegi": {"rating": "18", "descriptors": "Violence", "required_age": "18"},
+                    "steam_germany": {"rating": "18", "required_age": "18"}
+                }
             }}}))
         } else {
             Resp::status(404)
@@ -1335,8 +1340,19 @@ fn a_linked_steam_app_lends_its_screenshots() {
     );
     let info = rt.block_on(b.extra_info(&id)).unwrap();
     assert_eq!(info.screenshots, ["https://cdn/shot.jpg"]);
+    let titles: Vec<String> = info
+        .age_ratings
+        .iter()
+        .map(irori_core::AgeRating::title)
+        .collect();
+    assert_eq!(titles, ["ESRB M", "PEGI 18"]);
+    assert_eq!(
+        info.age_ratings[0].descriptors,
+        ["Blood and Gore", "Intense Violence"]
+    );
     // Kept for the run: the page is asked once.
-    rt.block_on(b.extra_info(&id)).unwrap();
+    let cached = rt.block_on(b.extra_info(&id)).unwrap();
+    assert_eq!(cached.age_ratings, info.age_ratings);
     assert_eq!(server.requests().len(), 1);
 }
 

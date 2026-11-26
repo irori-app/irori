@@ -2,7 +2,7 @@
 //! matching a library title to a search result and filling a store page's
 //! gaps with what IGDB knows.
 
-use irori_core::{AgeRating, CriticScore, ExtraInfo, RatingSystem};
+use irori_core::{AgeRating, CriticScore, ExtraInfo, RatingSystem, age_rating};
 use serde::{Deserialize, Serialize};
 
 use crate::wiki::hltb;
@@ -371,8 +371,9 @@ pub fn fill_extra(info: &mut ExtraInfo, game: &IgdbGame) -> bool {
         info.release_date = Some(date.clone());
         filled = true;
     }
-    if info.age_ratings.is_empty() && !game.age_ratings.is_empty() {
-        info.age_ratings = game.age_ratings.clone();
+    let before = info.age_ratings.len();
+    age_rating::merge(&mut info.age_ratings, &game.age_ratings);
+    if info.age_ratings.len() > before {
         filled = true;
     }
     if info.screenshots.is_empty() && !game.screenshots.is_empty() {
@@ -464,12 +465,16 @@ mod tests {
         let edition: Vec<String> = games[1].age_ratings.iter().map(AgeRating::title).collect();
         assert_eq!(edition, ["USK 16"]);
 
-        // They fill a store page that names none, and never replace one.
+        // They fill a store page that names none and merge missing boards
+        // without replacing boards the store already named.
         let mut info = ExtraInfo::default();
         assert!(fill_extra(&mut info, &games[1]));
         assert_eq!(info.age_ratings.len(), 1);
-        assert!(!fill_extra(&mut info, &games[0]));
         assert_eq!(info.age_ratings[0].system, RatingSystem::Usk);
+        assert!(fill_extra(&mut info, &games[0]));
+        let merged: Vec<String> = info.age_ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(merged, ["USK 16", "PEGI 12", "ESRB T", "ClassInd 14"]);
+        assert!(!fill_extra(&mut info, &games[0]));
     }
 
     #[test]
