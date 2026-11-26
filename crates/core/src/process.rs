@@ -570,8 +570,7 @@ pub async fn run(spec: &CommandSpec, mut opts: RunOptions) -> Result<ExecResult>
     } else {
         Stdio::null()
     });
-    let mut child = cmd
-        .spawn()
+    let mut child = spawn_command(&mut cmd)
         .with_context(|| format!("failed to start {}", spec.program.display()))?;
 
     if let (Some(data), Some(mut stdin)) = (opts.stdin.take(), child.stdin.take()) {
@@ -670,8 +669,7 @@ async fn open_detached_within(spec: &CommandSpec, wait: std::time::Duration) -> 
     cmd.stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    let mut child = cmd
-        .spawn()
+    let mut child = spawn_command(&mut cmd)
         .with_context(|| format!("failed to start {}", spec.program.display()))?;
     match tokio::time::timeout(wait, child.wait()).await {
         Ok(status) => {
@@ -739,8 +737,7 @@ pub fn spawn(spec: &CommandSpec, log_file: Option<&Path>) -> Result<Child> {
             cmd.stdout(Stdio::null()).stderr(Stdio::null());
         }
     }
-    cmd.spawn()
-        .with_context(|| format!("failed to start {}", spec.program.display()))
+    spawn_command(&mut cmd).with_context(|| format!("failed to start {}", spec.program.display()))
 }
 
 /// Start a tool whose output Irori reads as a stream of bytes (a decoder
@@ -754,8 +751,44 @@ pub fn spawn_piped(spec: &CommandSpec) -> Result<Child> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    cmd.spawn()
-        .with_context(|| format!("failed to start {}", spec.program.display()))
+    spawn_command(&mut cmd).with_context(|| format!("failed to start {}", spec.program.display()))
+}
+
+/// Spawn a prepared `Command`, retrying brief Unix `ETXTBSY` races.
+fn spawn_command(cmd: &mut Command) -> std::io::Result<Child> {
+    #[cfg(unix)]
+    {
+        retry_on_executable_file_busy(|| cmd.spawn(), std::thread::sleep)
+    }
+    #[cfg(not(unix))]
+    {
+        cmd.spawn()
+    }
+}
+
+/// Retries `op` on transient `ErrorKind::ExecutableFileBusy` (`ETXTBSY`) errors
+/// using exponential backoff up to 62 ms total, stopping immediately on success
+/// or any other error.
+#[cfg(any(unix, test))]
+fn retry_on_executable_file_busy<T>(
+    mut op: impl FnMut() -> std::io::Result<T>,
+    mut sleep: impl FnMut(Duration),
+) -> std::io::Result<T> {
+    const RETRY_DELAYS_MS: [u64; 5] = [2, 4, 8, 16, 32];
+    let mut attempt = 0;
+    loop {
+        match op() {
+            Ok(v) => return Ok(v),
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                let Some(&ms) = RETRY_DELAYS_MS.get(attempt) else {
+                    return Err(e);
+                };
+                attempt += 1;
+                sleep(Duration::from_millis(ms));
+            }
+            Err(e) => return Err(e),
+        }
+    }
 }
 
 /// SIGTERM the child's process group, escalating to SIGKILL after 5 s.
@@ -1146,7 +1179,13 @@ mod tests {
         } else {
             "ゲーム"
         });
-        std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+        let current_exe = std::env::current_exe().unwrap();
+        #[cfg(unix)]
+        if std::fs::hard_link(&current_exe, &exe).is_err() {
+            std::fs::copy(&current_exe, &exe).unwrap();
+        }
+        #[cfg(not(unix))]
+        std::fs::copy(&current_exe, &exe).unwrap();
         let out = games.join("報告.txt");
         let log = dir.path().join("ログ").join("ゲーム.log");
         let spec = CommandSpec::new(&exe)
@@ -1532,5 +1571,54 @@ mod tests {
         open_detached_within(&foreground, Duration::from_millis(200))
             .await
             .unwrap();
+    }
+
+    #[test]
+    fn retries_spawn_on_executable_file_busy_and_stops_on_other_errors() {
+        let mut attempts = 0;
+        let mut sleeps = Vec::new();
+        let value = retry_on_executable_file_busy(
+            || {
+                attempts += 1;
+                if attempts <= 2 {
+                    Err(std::io::Error::from(std::io::ErrorKind::ExecutableFileBusy))
+                } else {
+                    Ok(42)
+                }
+            },
+            |d| sleeps.push(d.as_millis() as u64),
+        )
+        .unwrap();
+        assert_eq!(value, 42);
+        assert_eq!(attempts, 3);
+        assert_eq!(sleeps, vec![2, 4]);
+
+        let mut not_found_attempts = 0;
+        let mut not_found_sleeps = Vec::new();
+        let err = retry_on_executable_file_busy::<()>(
+            || {
+                not_found_attempts += 1;
+                Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+            },
+            |d| not_found_sleeps.push(d.as_millis() as u64),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+        assert_eq!(not_found_attempts, 1);
+        assert!(not_found_sleeps.is_empty());
+
+        let mut exhausted_attempts = 0;
+        let mut exhausted_sleeps = Vec::new();
+        let err = retry_on_executable_file_busy::<()>(
+            || {
+                exhausted_attempts += 1;
+                Err(std::io::Error::from(std::io::ErrorKind::ExecutableFileBusy))
+            },
+            |d| exhausted_sleeps.push(d.as_millis() as u64),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::ExecutableFileBusy);
+        assert_eq!(exhausted_attempts, 6);
+        assert_eq!(exhausted_sleeps, vec![2, 4, 8, 16, 32]);
     }
 }
