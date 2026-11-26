@@ -447,7 +447,7 @@ impl LaunchersStore {
                 Err(e) => tracing::warn!("writing launcher settings stopped: {e}"),
             }
             let mut cmd =
-                irori_runtime::prefix::WineCommand::new([installer.display().to_string()]);
+                irori_runtime::prefix::WineCommand::new(installer_argv(launcher, installer));
             cmd.skip_prefix_check = true;
             irori_runtime::prefix::wine_spec(
                 &app,
@@ -662,16 +662,27 @@ impl LaunchersStore {
         irori_runtime::prefix::check_layout(&wc)?;
         let mut argv = vec![program.display().to_string()];
         argv.extend(args);
+        if launcher == Launcher::BattleNet
+            && !argv[1..]
+                .iter()
+                .any(|arg| arg == BATTLENET_IN_PROCESS_GPU_FLAG)
+        {
+            argv.push(BATTLENET_IN_PROCESS_GPU_FLAG.to_string());
+        }
         let mut cmd = irori_runtime::prefix::WineCommand::new(argv);
         cmd.skip_prefix_check = true;
         cmd.cwd = program.parent().map(Path::to_path_buf);
-        Ok(irori_runtime::prefix::wine_spec(
+        let mut spec = irori_runtime::prefix::wine_spec(
             &app,
             &settings,
             &wc,
             &cmd,
             &irori_runtime::env::HostEnv::current(),
-        ))
+        );
+        if launcher == Launcher::BattleNet {
+            merge_dll_override(&mut spec, "locationapi", "d");
+        }
+        Ok(spec)
     }
 
     /// Write any managed HUD config under `paths` and apply HUD environment
@@ -944,6 +955,39 @@ fn game_settings(defaults: &GameSettings, setup: &Setup) -> GameSettings {
 
 /// The settings key of the launcher's environment variables (Heroic's).
 const VARIABLES: &str = "enviromentOptions";
+
+/// Keeps Battle.net's CEF GPU process inside the main process under Wine/Proton
+/// so hardware-accelerated UI rendering stays responsive without blank windows.
+const BATTLENET_IN_PROCESS_GPU_FLAG: &str = "--in-process-gpu";
+
+/// Forces `battlenet-setup.exe` to install where [`Launcher::exe_path`]
+/// expects `Battle.net.exe` inside the Wine prefix.
+const BATTLENET_INSTALL_PATH_FLAG: &str = r"--installpath=C:\Program Files (x86)\Battle.net";
+
+/// Arguments passed to Wine/Proton when running a launcher's Windows installer.
+fn installer_argv(launcher: Launcher, installer: &Path) -> Vec<String> {
+    let mut argv = vec![installer.display().to_string()];
+    if launcher == Launcher::BattleNet {
+        argv.push(BATTLENET_INSTALL_PATH_FLAG.to_string());
+    }
+    argv
+}
+
+/// Merge `dll=mode` into `spec.env`'s `WINEDLLOVERRIDES` entry (preserving any
+/// existing overrides and key casing without duplicating `dll`).
+fn merge_dll_override(spec: &mut CommandSpec, dll: &str, mode: &str) {
+    let key = spec
+        .env
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case("WINEDLLOVERRIDES"))
+        .cloned()
+        .unwrap_or_else(|| "WINEDLLOVERRIDES".to_string());
+    let merged = irori_runtime::env::add_dll_overrides(
+        spec.env.get(&key).map(String::as_str),
+        &[(dll, mode)],
+    );
+    spec.env.insert(key, merged);
+}
 
 /// The Wine layer a launcher's prefix runs with. Proton goes through `umu`
 /// when there is one, as games do: run directly, outside the Steam Linux
@@ -2212,5 +2256,320 @@ fi
                 .iter()
                 .any(|k| k == "MANGOHUD_CONFIG")
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn battlenet_command_adds_gpu_flag_and_locationapi_override() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(dir.path(), true);
+        let setup = Setup {
+            prefix: dir.path().join("prefixes/Battle.net"),
+            wine: fake_wine(dir.path(), false),
+            set_up_at: String::new(),
+            settings: Default::default(),
+        };
+        let exe = Launcher::BattleNet.exe_in_prefix(&windows_root(&setup));
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::write(&exe, b"").unwrap();
+
+        let spec = store
+            .command(
+                Launcher::BattleNet,
+                Some(&setup),
+                &exe,
+                vec!["--exec=launch Pro".into()],
+            )
+            .unwrap();
+        let args: Vec<String> = spec
+            .args
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            args.iter()
+                .filter(|a| a.as_str() == "--in-process-gpu")
+                .count(),
+            1,
+            "expected --in-process-gpu once: {args:?}"
+        );
+        let overrides = spec.env.get("WINEDLLOVERRIDES").expect("WINEDLLOVERRIDES");
+        assert!(
+            overrides.split(';').any(|entry| entry == "locationapi=d"),
+            "expected locationapi=d in {overrides}"
+        );
+
+        // Passing --in-process-gpu explicitly must not duplicate it.
+        let dedup_spec = store
+            .command(
+                Launcher::BattleNet,
+                Some(&setup),
+                &exe,
+                vec!["--in-process-gpu".into(), "--exec=launch Pro".into()],
+            )
+            .unwrap();
+        assert_eq!(
+            dedup_spec
+                .args
+                .iter()
+                .filter(|a| a.to_string_lossy() == "--in-process-gpu")
+                .count(),
+            1
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn battlenet_command_merges_custom_winedlloverrides() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(dir.path(), true);
+        let mut proton = fake_wine(dir.path(), false);
+        proton.kind = WineKind::Proton;
+        let mut settings = serde_json::Map::new();
+        settings.insert("disableUMU".into(), serde_json::json!(true));
+        settings.insert(
+            VARIABLES.into(),
+            serde_json::json!([
+                { "key": "WINEDLLOVERRIDES", "value": "d3d11=n,b" }
+            ]),
+        );
+        let setup = Setup {
+            prefix: dir.path().join("prefixes/Battle.net"),
+            wine: proton.clone(),
+            set_up_at: String::new(),
+            settings,
+        };
+        let exe = Launcher::BattleNet.exe_in_prefix(&windows_root(&setup));
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::write(&exe, b"").unwrap();
+
+        let spec = store
+            .command(Launcher::BattleNet, Some(&setup), &exe, Vec::new())
+            .unwrap();
+        assert_eq!(
+            spec.env.get("WINEDLLOVERRIDES").map(String::as_str),
+            Some("d3d11=n,b;locationapi=d")
+        );
+
+        // Existing locationapi=d is not duplicated.
+        let mut dup_settings = serde_json::Map::new();
+        dup_settings.insert("disableUMU".into(), serde_json::json!(true));
+        dup_settings.insert(
+            VARIABLES.into(),
+            serde_json::json!([
+                { "key": "WINEDLLOVERRIDES", "value": "d3d11=n,b;locationapi=d" }
+            ]),
+        );
+        let dup_setup = Setup {
+            prefix: dir.path().join("prefixes/Battle.net"),
+            wine: proton,
+            set_up_at: String::new(),
+            settings: dup_settings,
+        };
+        let dup_spec = store
+            .command(Launcher::BattleNet, Some(&dup_setup), &exe, Vec::new())
+            .unwrap();
+        assert_eq!(
+            dup_spec.env.get("WINEDLLOVERRIDES").map(String::as_str),
+            Some("d3d11=n,b;locationapi=d")
+        );
+
+        // Plain Wine keeps its Linux winemenubuilder.exe=d override alongside
+        // custom entries and locationapi=d (macOS Wine does not add
+        // winemenubuilder.exe=d).
+        let mut wine_settings = serde_json::Map::new();
+        wine_settings.insert(
+            VARIABLES.into(),
+            serde_json::json!([
+                { "key": "WINEDLLOVERRIDES", "value": "d3d11=n,b" }
+            ]),
+        );
+        let wine_setup = Setup {
+            prefix: dir.path().join("prefixes/Battle.net-wine"),
+            wine: fake_wine(dir.path(), false),
+            set_up_at: String::new(),
+            settings: wine_settings,
+        };
+        let wine_exe = Launcher::BattleNet.exe_in_prefix(&windows_root(&wine_setup));
+        std::fs::create_dir_all(wine_exe.parent().unwrap()).unwrap();
+        std::fs::write(&wine_exe, b"").unwrap();
+        let wine_spec = store
+            .command(
+                Launcher::BattleNet,
+                Some(&wine_setup),
+                &wine_exe,
+                Vec::new(),
+            )
+            .unwrap();
+        let expected_wine = if cfg!(target_os = "linux") {
+            "d3d11=n,b;winemenubuilder.exe=d;locationapi=d"
+        } else {
+            "d3d11=n,b;locationapi=d"
+        };
+        assert_eq!(
+            wine_spec.env.get("WINEDLLOVERRIDES").map(String::as_str),
+            Some(expected_wine)
+        );
+
+        // Lowercase variable name and `.dll` suffix are preserved/deduplicated.
+        let mut lower_settings = serde_json::Map::new();
+        lower_settings.insert("disableUMU".into(), serde_json::json!(true));
+        lower_settings.insert(
+            VARIABLES.into(),
+            serde_json::json!([
+                { "key": "winedlloverrides", "value": "d3d11=n,b;LocationAPI.dll=n" }
+            ]),
+        );
+        let lower_setup = Setup {
+            prefix: dir.path().join("prefixes/Battle.net"),
+            wine: WineInstallation {
+                kind: WineKind::Proton,
+                ..fake_wine(dir.path(), false)
+            },
+            set_up_at: String::new(),
+            settings: lower_settings,
+        };
+        let lower_spec = store
+            .command(Launcher::BattleNet, Some(&lower_setup), &exe, Vec::new())
+            .unwrap();
+        assert_eq!(
+            lower_spec.env.get("winedlloverrides").map(String::as_str),
+            Some("d3d11=n,b;locationapi=d")
+        );
+        assert!(!lower_spec.env.contains_key("WINEDLLOVERRIDES"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn other_launchers_do_not_receive_battlenet_flags_or_overrides() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(dir.path(), true);
+        let wine = fake_wine(dir.path(), false);
+        for launcher in [Launcher::Ubisoft, Launcher::EaApp, Launcher::Rockstar] {
+            let setup = Setup {
+                prefix: dir.path().join(format!("prefixes/{}", launcher.id())),
+                wine: wine.clone(),
+                set_up_at: String::new(),
+                settings: Default::default(),
+            };
+            let exe = launcher.exe_in_prefix(&windows_root(&setup));
+            std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+            std::fs::write(&exe, b"").unwrap();
+
+            let spec = store
+                .command(launcher, Some(&setup), &exe, Vec::new())
+                .unwrap();
+            assert!(
+                !spec
+                    .args
+                    .iter()
+                    .any(|a| a.to_string_lossy() == "--in-process-gpu"),
+                "{launcher:?} unexpectedly received --in-process-gpu"
+            );
+            let overrides = spec
+                .env
+                .get("WINEDLLOVERRIDES")
+                .map(String::as_str)
+                .unwrap_or_default();
+            assert!(
+                !overrides.to_ascii_lowercase().contains("locationapi"),
+                "{launcher:?} unexpectedly received locationapi override: {overrides}"
+            );
+        }
+    }
+
+    #[test]
+    fn installer_argv_sets_installpath_only_for_battlenet() {
+        let installer = Path::new("/tmp/setup.exe");
+        assert_eq!(
+            installer_argv(Launcher::BattleNet, installer),
+            vec![
+                "/tmp/setup.exe".to_string(),
+                r"--installpath=C:\Program Files (x86)\Battle.net".to_string(),
+            ]
+        );
+        for other in [Launcher::Ubisoft, Launcher::EaApp, Launcher::Rockstar] {
+            assert_eq!(
+                installer_argv(other, installer),
+                vec!["/tmp/setup.exe".to_string()]
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn battlenet_run_installer_passes_installpath_argument() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(dir.path(), true);
+        let args_log = dir.path().join("installer-args.txt");
+        let wine_path = dir.path().join("wine");
+        let wineserver_path = dir.path().join("wineserver");
+        std::fs::write(
+            &wine_path,
+            format!(
+                r#"#!/bin/sh
+if [ "$1" = wineboot ]; then
+  mkdir -p "$WINEPREFIX/drive_c/users/steamuser" "$WINEPREFIX/dosdevices"
+  touch "$WINEPREFIX/system.reg" "$WINEPREFIX/user.reg" "$WINEPREFIX/userdef.reg"
+  exit 0
+fi
+printf '%s\n' "$@" > "{}"
+mkdir -p "$WINEPREFIX/drive_c/Program Files (x86)/Battle.net"
+touch "$WINEPREFIX/drive_c/Program Files (x86)/Battle.net/Battle.net.exe"
+exit 0
+"#,
+                args_log.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&wine_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(&wineserver_path, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&wineserver_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let setup = Setup {
+            prefix: store.default_prefix(Launcher::BattleNet),
+            wine: WineInstallation {
+                bin: wine_path.display().to_string(),
+                name: "Fake Wine".into(),
+                kind: WineKind::Wine,
+                wineserver: Some(wineserver_path.display().to_string()),
+                ..Default::default()
+            },
+            set_up_at: String::new(),
+            settings: Default::default(),
+        };
+        let installer = dir.path().join("battlenet-setup.exe");
+        std::fs::write(&installer, b"").unwrap();
+
+        store
+            .run_installer(
+                Launcher::BattleNet,
+                &setup,
+                &installer,
+                &OpContext::detached(),
+            )
+            .await
+            .unwrap();
+
+        let recorded = std::fs::read_to_string(&args_log).unwrap();
+        let lines: Vec<&str> = recorded.lines().collect();
+        assert!(
+            lines.contains(&r"--installpath=C:\Program Files (x86)\Battle.net"),
+            "expected --installpath in recorded args: {lines:?}"
+        );
+
+        let config_path = setup
+            .prefix
+            .join("drive_c/users/steamuser/AppData/Roaming/Battle.net/Battle.net.config");
+        let cfg: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(cfg["Client"]["HardwareAcceleration"], "true");
+        assert_eq!(cfg["Client"]["GameLaunchWindowBehavior"], "2");
+        assert_eq!(cfg["Client"]["DefaultStartupScreen"], "1");
+        assert_eq!(cfg["Client"]["SingleInstance"], "true");
+        assert_eq!(cfg["Client"]["GameSearch"]["BackgroundSearch"], "true");
+        assert_eq!(cfg["Client"]["Install"]["CreateDesktopShortcut"], "false");
     }
 }
