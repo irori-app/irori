@@ -31,6 +31,7 @@ Platforms tried: <!-- Linux (Wayland/X11) / macOS / Windows; say which were not 
 - [ ] Checked runtime efficiency (no polling loops, no blocking I/O on the UI thread, bounded caches, no unjustified new dependencies)
 - [ ] Updated `SECURITY.md` (if new network endpoints or subprocesses were added), `THIRD-PARTY-NOTICES.md` (if third-party code or assets were added), and `website/` (if install channels, license, or benchmarks changed)
 - [ ] Docs updated where behaviour changed (`README.md`, `docs/`, `AGENTS.md`)
+- [ ] If crates, modules, or architecture changed, updated `docs/ARCHITECTURE.md` / `docs/GRAPHS.md` (`python3 .github/scripts/check_agent_docs.py`)
 - [ ] No secrets, tokens or real account data in code, fixtures or logs
 - [ ] Breaking change (settings, on-disk data, CLI) marked with `!` and described above
 
