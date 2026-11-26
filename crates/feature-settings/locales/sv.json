@@ -2,7 +2,7 @@
   "settings.about.credit_gpui": "GPUI och GPUI Kit",
   "settings.about.credit_lucide": "Lucide-ikoner",
   "settings.about.credit_themes": "Medföljande teman",
-  "settings.about.tagline": "En spelstartare för Linux. Licensierad under MIT-licensen.",
+  "settings.about.tagline": "En spelstartare för Linux. Licensierad under GPL-3.0-or-later.",
   "settings.about.third_party": "Programvara från tredje part",
   "settings.about.tour_help": "En kort rundtur i huvudfönstret: var saker finns och kortkommandot till allt.",
   "settings.about.tour": "Visa mig runt",

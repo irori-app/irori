@@ -2,7 +2,7 @@
   "settings.about.credit_gpui": "GPUI и GPUI Kit",
   "settings.about.credit_lucide": "Значки Lucide",
   "settings.about.credit_themes": "Встроенные темы",
-  "settings.about.tagline": "Лаунчер игр для Linux. Распространяется по лицензии MIT.",
+  "settings.about.tagline": "Лаунчер игр для Linux. Распространяется по лицензии GPL-3.0-or-later.",
   "settings.about.third_party": "Стороннее ПО",
   "settings.about.tour_help": "Краткий обзор главного окна: что где находится и сочетание клавиш для всего.",
   "settings.about.tour": "Показать, что где",

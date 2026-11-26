@@ -21,6 +21,7 @@ confidence-threshold = 0.8
 # Standard OSI / GPL-3.0-compatible licenses used in the dependency graph.
 # Never allow GPL-2.0-only or proprietary licenses.
 allow = [
+    "GPL-3.0-or-later",
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",

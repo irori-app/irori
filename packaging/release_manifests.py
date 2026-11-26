@@ -78,7 +78,7 @@ pkgrel=1
 pkgdesc="{summary}"
 arch=(x86_64)
 url="{homepage}"
-license=(MIT)
+license=('GPL-3.0-or-later')
 options=(!strip !debug)
 source=("{source}")
 sha256sums=('{linux_sha}')
@@ -168,7 +168,7 @@ def scoop(version: str, repo: str, windows_sha: str, arm64_sha: str) -> str:
         "version": version,
         "description": "Every game you own, around one fire: Epic Games, GOG, Amazon Games, itch.io and emulators",
         "homepage": HOMEPAGE,
-        "license": "MIT",
+        "license": "GPL-3.0-or-later",
         "architecture": {
             "64bit": {
                 "url": f"{base}/v{version}/Irori-{version}-windows.zip",
@@ -202,7 +202,7 @@ Name:           irori
 Version:        {version}
 Release:        1%{{?dist}}
 Summary:        {summary}
-License:        MIT
+License:        GPL-3.0-or-later
 URL:            {homepage}
 Source0:        https://github.com/{repo}/releases/download/v%{{version}}/Irori-%{{version}}-linux.tar.gz
 Source1:        https://github.com/{repo}/releases/download/v%{{version}}/Irori-%{{version}}-linux-arm64.tar.gz
@@ -328,7 +328,7 @@ PublisherUrl: {HOMEPAGE}
 PublisherSupportUrl: https://github.com/{repo}/issues
 PackageName: Irori
 PackageUrl: {HOMEPAGE}
-License: MIT
+License: GPL-3.0-or-later
 LicenseUrl: https://github.com/{repo}/blob/v{version}/LICENSE
 ShortDescription: {SUMMARY}
 Description: A native game launcher for Epic Games, GOG, Amazon Games, ZOOM Platform, itch.io, Steam and emulators.

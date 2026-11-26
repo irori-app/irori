@@ -2,7 +2,7 @@
   "settings.about.credit_gpui": "GPUI and GPUI Kit",
   "settings.about.credit_lucide": "Lucide icons",
   "settings.about.credit_themes": "Bundled themes",
-  "settings.about.tagline": "A game launcher for Linux. Licensed under the MIT License.",
+  "settings.about.tagline": "A game launcher for Linux. Licensed under GPL-3.0-or-later.",
   "settings.about.third_party": "Third-party software",
   "settings.about.tour_help": "A short tour of the main window: where things are and the shortcut to everything.",
   "settings.about.tour": "Show me around",

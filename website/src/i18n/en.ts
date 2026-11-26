@@ -53,7 +53,7 @@ export const en = {
     releases: 'Releases',
     issues: 'Report a problem',
     x: 'Follow on X',
-    licence: 'MIT licence',
+    licence: 'GPL-3.0 licence',
     signing: 'Code signing policy',
     faq: 'FAQ',
     alternativeTo: 'Irori on AlternativeTo',
@@ -95,7 +95,7 @@ export const en = {
       title: 'Every game you own, around one fire.',
       lede: 'A native game launcher for Linux, macOS and Windows. Your Epic Games, GOG, Amazon Games, ZOOM Platform, itch.io and Steam libraries, your emulators and the games you add yourself, in one calm library that opens instantly.',
       explore: 'Explore features',
-      ticks: ['Free and open source, MIT', 'No account needed', 'No ads, no telemetry', '19 languages'],
+      ticks: ['Free and open source, GPL-3.0', 'No account needed', 'No ads, no telemetry', '19 languages'],
       pause: 'Pause motion',
       play: 'Play motion',
     },
@@ -262,7 +262,7 @@ export const en = {
     },
     {
       q: 'What does it cost?',
-      a: 'Nothing. Irori is free software under the MIT licence, and its source is on GitHub.',
+      a: 'Nothing. Irori is free software under the GPL-3.0 licence, and its source is on GitHub.',
     },
   ],
   download: {

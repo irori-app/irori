@@ -98,5 +98,5 @@ If you want to propose a large new feature, start a conversation on [GitHub Disc
 
 ## Licence
 
-Irori is under the [MIT License](LICENSE). By contributing, you agree that your
+Irori is under the [GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0-or-later`). By contributing, you agree that your
 contribution is licensed under it too.

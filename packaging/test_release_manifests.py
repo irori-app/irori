@@ -102,7 +102,7 @@ class ReleaseManifestTests(unittest.TestCase):
                           f"  InstallerSha256: {self.sums[name].upper()}\n", installer)
         locale = out[f"{folder}/Irori.Irori.locale.en-US.yaml"]
         self.assertIn("ManifestType: defaultLocale\n", locale)
-        self.assertIn("License: MIT\n", locale)
+        self.assertIn("License: GPL-3.0-or-later\n", locale)
         self.assertIn("DefaultLocale: en-US\n", out[f"{folder}/Irori.Irori.yaml"])
 
     def test_product_code_follows_the_setups_app_id(self):

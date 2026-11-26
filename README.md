@@ -13,7 +13,7 @@
   <a href="https://github.com/irori-app/irori/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/irori-app/irori?color=ff6b2c"></a>
   <img alt="Linux, macOS and Windows" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-ff6b2c">
   <img alt="19 languages" src="https://img.shields.io/badge/languages-19-ff6b2c">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ff6b2c"></a>
+  <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-ff6b2c"></a>
 </p>
 
 <p align="center">
@@ -144,7 +144,7 @@ See [AGENTS.md](AGENTS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (onc
 
 ## License
 
-MIT, see [LICENSE](LICENSE). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled assets, vendored crates, upstream store protocol attributions, and behavioral references.
+GPL-3.0-or-later, see [LICENSE](LICENSE). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for bundled assets, vendored crates, upstream store protocol attributions, and behavioral references.
 
 ## Contributing
 
