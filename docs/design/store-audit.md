@@ -30,9 +30,8 @@ entry for a game owned in several stores, and smaller updates.
   `lutris/` package at commit 2ee6b2f. Line numbers are as of 2026-10-29; files the
   Steam rework is editing (`crates/services/src/games.rs`, `follow.rs`, the stores'
   `launch.rs`) may shift.
-- “Heroic baseline” is what Irori matches from `docs/parity/stores-epic-gog.md` and
-  `docs/parity/stores-amazon-zoom-sideload-downloads.md`. Behaviour notes on Lutris
-  are in `docs/parity/lutris.md`; this file does not repeat them.
+- “Heroic baseline” is what Irori matches from Heroic Games Launcher. Behaviour
+  notes on Lutris are not repeated here.
 - Sizes: **S** is a few days, **M** one to two weeks, **L** more, or needs research
   first.
 
@@ -49,7 +48,7 @@ These apply to several stores, so they are listed once.
    4.8), so it installs better but drops the fixes. Its only per-game fixes are
    Heroic's known fixes (`crates/extras/src/known_fixes.rs:1-6`).
 2. **Running state.** Lutris's `lutris-wrapper` becomes a child subreaper and watches
-   every descendant (`docs/parity/lutris.md` 7.2). Irori waits for the first process
+   every descendant. Irori waits for the first process
    (`crates/services/src/games.rs:257-268`), follows the install folder only for
    `Runner::Launchers` (`games.rs:257-260`, `crates/services/src/follow.rs:1-5`), and
    waits for the prefix only when the plan asks (`games.rs:279-281`). GOG never asks
@@ -60,8 +59,8 @@ These apply to several stores, so they are listed once.
    `services/gog_cloud_hooks.py:147-178`; Irori `SaveConflict`, AGENTS.md 4.1). Neither
    keeps a copy of the local saves before a download overwrites them; Irori's backups
    cover settings and library data only (`crates/services/src/backup.rs:1-6`).
-4. **Playtime.** Lutris syncs playtime with no store except reading Steam's hours
-   (`docs/parity/lutris.md` 6.7). Irori uploads and reads back Epic and GOG playtime
+4. **Playtime.** Lutris syncs playtime with no store except reading Steam's hours.
+   Irori uploads and reads back Epic and GOG playtime
    with an offline queue (`crates/store-epic/src/playtime.rs:1-4`,
    `crates/store-gog/src/playtime.rs:1-5`) and reads Steam's local totals
    (`crates/store-steam/src/lib.rs:11-13`).
@@ -258,8 +257,8 @@ Steam arguments.
   known folder and merge the libraries found, de-duplicated by app id (S).
 - **Windows Steam in a prefix** (`services/steamwindows.py:52-90`): games installed by
   Steam for Windows in Wine. Low value next to Proton; not recommended now.
-- **Stop never signals the Steam client** (`runners/steam.py`, `docs/parity/lutris.md`
-  7.3). Keep that rule in the reaper work.
+- **Stop never signals the Steam client** (`runners/steam.py`, Lutris parity).
+  Keep that rule in the reaper work.
 
 ## Third-party launchers (Battle.net, EA app, Ubisoft Connect, Rockstar)
 
@@ -338,7 +337,7 @@ as native apps that launch through the entry's `Exec` line. Never write the entr
 
 | Service | What it does in Lutris | Recommendation |
 | --- | --- | --- |
-| Humble Bundle | Cookie sign-in, undocumented order API, downloads Linux or Windows files (`services/humblebundle.py`) | **No.** Humble's terms forbid third-party clients (`docs/parity/lutris.md` 6.5). Users download from Humble and use Add game. |
+| Humble Bundle | Cookie sign-in, undocumented order API, downloads Linux or Windows files (`services/humblebundle.py`) | **No.** Humble's terms forbid third-party clients. Users download from Humble and use Add game. |
 | Flathub | Lists Flathub's game category and installs with `flatpak install` (`services/flathub.py:60`, `:86-200`) | **Not as a store.** Installed Flatpak games come in through “Games on this computer”. A Flathub catalogue is a software centre's job. |
 | GameJolt | Cookie sign-in to the site's private `site-api`, library and build downloads (`services/gamejolt.py:21`, `:73`, `:136-245`) | **No for now.** The library API is undocumented and the audience is small; revisit if Game Jolt publishes one. |
 | DLsite | Cookie sign-in, undocumented purchase and download endpoints (`services/dlsite.py:73-130`, `:184-231`) | **No.** Same undocumented-API problem, and the downloads are mostly Windows archives that Add game handles. |

@@ -7,7 +7,7 @@ so an owner-workspace mock search was skipped. Nothing is pushed or deployed.
 Start the local simulator from the repository root:
 
 ```sh
-postman simulation run postman/simulations/runtime-releases.sim.yaml --port 4900 --output ndjson
+postman simulation run tests/postman/simulations/runtime-releases.sim.yaml --port 4900 --output ndjson
 ```
 
 Wait for its `listening` event. In another terminal, use that event's bound port:

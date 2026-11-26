@@ -1,10 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
-# Vendored WebView, unused for now (store logins use the browser); see its README.
 # GPUI's Windows backend and gilrs-core are vendored only to patch them (see their
 # PATCHES.md), so they stay out of the workspace and its own lints.
-exclude = ["crates/webview", "crates/gpui-pre-windows", "crates/gilrs-core"]
+exclude = ["crates/gpui-pre-windows", "crates/gilrs-core"]
 
 [workspace.package]
 version = "1.2.0"
@@ -75,7 +74,6 @@ dirs = "6"
 notify = "8"
 url = "2"
 time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros"] }
-smallvec = "1"
 sha2 = "0.10"
 sha1 = "0.10"
 md-5 = "0.10"
@@ -111,7 +109,6 @@ open = "5"
 fuzzy-matcher = "0.3"
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
-md5 = "0.7"
 sysinfo = { version = "0.39", default-features = false, features = ["system", "disk"] }
 
 # GPUI's Windows backend with Irori's fixes; crates/gpui-pre-windows/PATCHES.md
@@ -151,3 +148,7 @@ debug = "line-tables-only"
 strip = false
 lto = "thin"
 codegen-units = 16
+
+[workspace.metadata.cargo-machete]
+# `md-5` exposes crate `md5`; `serde_ini` is upstream in vendored `crates/comet`.
+ignored = ["md-5", "serde_ini"]

@@ -36,6 +36,6 @@ dirs.workspace = true
 windows-registry = "0.6"
 
 [dev-dependencies]
-md5.workspace = true
+md-5.workspace = true
 tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }

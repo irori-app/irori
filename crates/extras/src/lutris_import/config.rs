@@ -2,7 +2,7 @@
 //! `runners/<runner>.yml`, then `games/<configpath>.yml`, each overriding the
 //! one before. Lutris merges `env` key by key and replaces every other
 //! mapping whole; this module does the same, except that Wine's DLL
-//! `overrides` merge key by key too (`[QUIRK]` in `docs/parity/lutris.md`).
+//! `overrides` merge key by key too (fixing a Lutris quirk).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

@@ -6,6 +6,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Result;
+use md5::{Digest as _, Md5};
 use serde::Deserialize;
 
 use crate::util;
@@ -38,7 +39,7 @@ pub async fn fetch() -> Result<ReleasesInfo> {
 /// Hex MD5 of a file, or `None` when it cannot be read.
 pub(crate) async fn file_md5(path: &Path) -> Option<String> {
     let bytes = tokio::fs::read(path).await.ok()?;
-    let digest = tokio::task::spawn_blocking(move || md5::compute(&bytes))
+    let digest = tokio::task::spawn_blocking(move || Md5::digest(&bytes))
         .await
         .ok()?;
     Some(format!("{digest:x}"))

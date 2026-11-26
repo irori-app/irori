@@ -4,6 +4,7 @@ use super::LauncherCommand;
 use anyhow::{Context as _, Result, ensure};
 use irori_core::process::{CommandSpec, RunOptions};
 use irori_core::{GameInfo, Paths};
+use md5::{Digest as _, Md5};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -53,7 +54,7 @@ fn file_name(game: &GameInfo) -> String {
         .chars()
         .take(80)
         .collect();
-    let hash = md5::compute(game.id().key());
+    let hash = Md5::digest(game.id().key());
     format!(
         "Irori - {title} - {hash:x}.{}",
         if cfg!(windows) { "lnk" } else { "app" }
@@ -200,7 +201,7 @@ async fn write_shortcut(
             ("CFBundlePackageType", "APPL".into()),
             (
                 "CFBundleIdentifier",
-                format!("app.irori.game.{:x}", md5::compute(game.id().key())),
+                format!("app.irori.game.{:x}", Md5::digest(game.id().key())),
             ),
             ("IroriGame", game.id().key()),
         ] {

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, bail};
+use md5::{Digest as _, Md5};
 use serde::Deserialize;
 
 const USER_AGENT: &str = "GOGGalaxyCommunicationService/2.0.13.27 (Windows_32bit) dont_sync_marker/true installation_source/gog";
@@ -283,7 +284,7 @@ impl Storage {
             Ok(gz.finish()?)
         })
         .await??;
-        let etag = format!("{:x}", md5::compute(&body));
+        let etag = format!("{:x}", Md5::digest(&body));
         self.http
             .put(self.file_url(&f.path))
             .bearer_auth(&self.token)
