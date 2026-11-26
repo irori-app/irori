@@ -5,6 +5,7 @@
 //! installing with a Lutris script, and saving and managing library views.
 
 pub mod categories;
+pub mod collection;
 pub mod duplicates;
 pub mod edit_game;
 pub mod fields;

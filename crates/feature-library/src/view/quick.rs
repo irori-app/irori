@@ -1,211 +1,339 @@
-//! The library header's quick controls: All / Installed / Not installed and
-//! favourites only, one click each. They sit between the title and the
-//! header's buttons and join, in that order, while the measured room allows
-//! (`crate::quick`). They change the same criteria as the Filters popover,
-//! which stays; `iroriUi.libraryQuickControls` turns them off. The Sort menu
-//! shared with the toolbar lives here too.
+//! The library's unified tab strip: built-in presets (`All`, `Installed`,
+//! `Favorites`, `Recently added`), dynamic tag collections (smart categories),
+//! a 1-click `+ New collection` button, and the right-aligned `Edit tabs`
+//! popover.
+//!
+//! Each tab automatically remembers its own layout, cover shape, size, sort,
+//! and grouping in [`crate::views::TabViewPrefs`]. Turning
+//! `iroriUi.libraryQuickControls` off hides the tab strip.
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonGroup};
-use gpui_kit::component::menu::{PopupMenu, PopupMenuItem};
-use gpui_kit::component::{Selectable as _, Sizable as _, h_flex};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu, PopupMenuItem};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    Styled as _, WeakEntity, Window, canvas, div,
+    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, px, rems, transparent_black,
 };
-use irori_services::LibrarySort;
 use irori_ui::i18n::t;
+use irori_ui::models;
+use irori_ui::style::KeyboardFocusable as _;
 
 use super::LibraryView;
-use crate::filter::{InstallFilter, ViewFilter};
-use crate::filters_panel::FilterModel;
-use crate::quick::QuickControl;
+use crate::chips::{self, PresetChip};
+use crate::dialogs::collection::{
+    delete_collection_with_undo, is_simple_tag_collection, open_collection_dialog,
+};
+use crate::filter::ViewFilter;
+use crate::views::{self, TabKey};
 
-/// The install choices, in the order the Filters popover lists them.
-const INSTALLS: [(InstallFilter, &str, &str); 3] = [
-    (
-        InstallFilter::Any,
-        "quick-install-all",
-        "library.filters.install.all",
-    ),
-    (
-        InstallFilter::Installed,
-        "quick-install-installed",
-        "library.filters.install.installed",
-    ),
-    (
-        InstallFilter::NotInstalled,
-        "quick-install-not-installed",
-        "library.filters.install.not_installed",
-    ),
-];
-
-/// The sort fields, then "Reverse order", for the toolbar's Sort menu.
-pub(super) fn sort_menu(
+/// Context and "⋯" menu for a dynamic collection tab.
+fn collection_tab_menu(
     mut menu: PopupMenu,
-    model: &Entity<FilterModel>,
-    sort: LibrarySort,
-    descending: bool,
+    id: String,
+    is_simple: bool,
+    smart_ids: Vec<String>,
 ) -> PopupMenu {
-    for option in LibrarySort::ALL {
-        let model = model.clone();
+    let tab_key = TabKey::Collection(id.clone());
+    let edit_id = id.clone();
+    let rules_id = id.clone();
+    let del_id = id;
+    let left_key = tab_key.clone();
+    let left_smart = smart_ids.clone();
+    let right_key = tab_key.clone();
+    let right_smart = smart_ids;
+    let hide_key = tab_key;
+
+    if is_simple {
         menu = menu.item(
-            PopupMenuItem::new(crate::i18n::sort_label(option))
-                .checked(option == sort)
-                .on_click(move |_, _, cx| {
-                    model.update(cx, |m, cx| m.update(|f| f.sort = option, cx))
+            PopupMenuItem::new(t("library.collection.edit"))
+                .icon(Icon::new(IconName::Pencil))
+                .on_click(move |_, window, cx| {
+                    open_collection_dialog(Some(edit_id.clone()), window, cx)
                 }),
         );
     }
-    let model = model.clone();
-    menu.separator().item(
-        PopupMenuItem::new(t("library.toolbar.reverse"))
-            .checked(descending)
-            .on_click(move |_, _, cx| reverse(&model, cx)),
+    menu.item(
+        PopupMenuItem::new(t("library.categories.edit_rules"))
+            .icon(Icon::new(IconName::Settings2))
+            .on_click(move |_, window, cx| {
+                crate::dialogs::smart::open_smart_category_editor(
+                    Some(rules_id.clone()),
+                    None,
+                    window,
+                    cx,
+                )
+            }),
+    )
+    .separator()
+    .item(
+        PopupMenuItem::new(t("library.views.move_left"))
+            .icon(Icon::new(IconName::ChevronLeft))
+            .on_click(move |_, _, cx| {
+                views::saved_views(cx).update(cx, |m, cx| {
+                    m.update(|v| v.shift_visible_tab(&left_key, -1, &left_smart), cx)
+                });
+            }),
+    )
+    .item(
+        PopupMenuItem::new(t("library.views.move_right"))
+            .icon(Icon::new(IconName::ChevronRight))
+            .on_click(move |_, _, cx| {
+                views::saved_views(cx).update(cx, |m, cx| {
+                    m.update(|v| v.shift_visible_tab(&right_key, 1, &right_smart), cx)
+                });
+            }),
+    )
+    .item(
+        PopupMenuItem::new(t("library.tabs.hide"))
+            .icon(Icon::new(IconName::EyeOff))
+            .on_click(move |_, _, cx| {
+                views::saved_views(cx).update(cx, |m, cx| {
+                    m.update(|v| v.set_tab_hidden(&hide_key, true), cx)
+                });
+            }),
+    )
+    .separator()
+    .item(
+        PopupMenuItem::new(t("library.views.delete"))
+            .icon(Icon::new(IconName::Trash))
+            .on_click(move |_, window, cx| delete_collection_with_undo(del_id.clone(), window, cx)),
     )
 }
 
-fn reverse(model: &Entity<FilterModel>, cx: &mut App) {
-    model.update(cx, |m, cx| m.update(|f| f.descending = !f.descending, cx))
-}
-
 impl LibraryView {
-    /// The quick controls that fit, in a strip that takes the header's free
-    /// room; `None` while the setting is off.
-    pub(super) fn render_quick_controls(
+    /// Apply a dynamic collection tab, keeping the current search text and
+    /// restoring that collection's saved visualization settings.
+    pub(crate) fn apply_collection_tab(&mut self, id: String, cx: &mut Context<Self>) {
+        self.apply_tab(TabKey::Collection(id), None, cx);
+    }
+
+    /// The horizontal strip of underlined tabs (presets, dynamic collections,
+    /// `+ New collection` button, and right-aligned `Edit tabs` button).
+    /// Returns `None` while `libraryQuickControls` is off.
+    pub(super) fn render_view_tabs(
         &mut self,
         filter: &ViewFilter,
-        window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         if !self.ui_prefs.library_quick_controls {
-            self.quick_shown = &[];
             return None;
         }
-        self.quick.follow_language(&irori_ui::i18n::language());
-        let rem = f32::from(window.rem_size());
-        // `gap_2` between the controls, and `p_1` around them so the strip,
-        // which clips, leaves the focus rings room.
-        let gap = rem * 0.5;
-        let inset = rem * 0.25;
-        let shown = self.quick.shown(gap);
-        self.quick_shown = shown;
+        let saved = views::saved_views(cx).read(cx).views().clone();
+        let user = models(cx).library.read(cx).user.clone();
+        let smart_ids = views::smart_collection_ids(&user);
+        let visible = saved.visible_tabs(&smart_ids);
+        let active = chips::active_tab_for(filter, self.active_tab.as_ref(), &smart_ids);
+        let counts = self.frame.chip_counts.clone();
+        let theme = cx.theme();
+        let fg = theme.foreground;
+        let muted = theme.muted_foreground;
+        let primary = theme.primary;
+        let border = theme.border;
 
-        let view = cx.entity().downgrade();
-        let room = {
-            let view = view.clone();
-            canvas(
-                move |bounds, _, cx| {
-                    let room = (f32::from(bounds.size.width) - 2.0 * inset).max(0.0);
-                    view.update(cx, |this, cx| {
-                        if this.quick.set_room(room) {
-                            cx.notify();
-                        }
-                    })
-                    .ok();
-                },
-                |_, _, _, _| {},
-            )
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full()
-        };
-        let controls: Vec<AnyElement> = shown
-            .iter()
-            .map(|&control| {
-                let element = match control {
-                    QuickControl::Install => self.quick_install(filter, cx),
-                    QuickControl::Favourites => self.quick_favourites(filter, cx),
-                };
-                measured(control, element, view.clone())
-            })
-            .collect();
+        let tabs: Vec<AnyElement> =
+            visible
+                .into_iter()
+                .filter_map(|tab_key| match tab_key {
+                    TabKey::All | TabKey::Installed | TabKey::Favorites | TabKey::RecentlyAdded => {
+                        let preset = match tab_key {
+                            TabKey::All => PresetChip::All,
+                            TabKey::Installed => PresetChip::Installed,
+                            TabKey::Favorites => PresetChip::Favourites,
+                            TabKey::RecentlyAdded => PresetChip::RecentlyAdded,
+                            _ => return None,
+                        };
+                        let selected = active.as_ref() == Some(&tab_key);
+                        let count = counts.preset(preset);
+                        let hideable = !tab_key.is_locked();
+                        let click_key = tab_key.clone();
+                        let hide_key = tab_key;
+                        let tab = h_flex()
+                            .id(preset.id())
+                            .debug_selector(move || preset.id().to_string())
+                            .keyboard_focusable(cx)
+                            .flex_shrink_0()
+                            .h(rems(2.35))
+                            .px_0p5()
+                            .gap_1p5()
+                            .items_center()
+                            .cursor_pointer()
+                            .text_sm()
+                            .border_b_2()
+                            .border_color(if selected {
+                                primary
+                            } else {
+                                transparent_black()
+                            })
+                            .text_color(if selected { fg } else { muted })
+                            .when(selected, |el| el.font_semibold())
+                            .when(!selected, |el| {
+                                el.font_medium().hover(move |s| s.text_color(fg))
+                            })
+                            .child(Icon::new(preset.icon()).xsmall())
+                            .child(preset.label())
+                            .when_some(count, |el, n| {
+                                el.child(div().text_xs().text_color(muted).child(n.to_string()))
+                            })
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.apply_tab(click_key.clone(), Some(window), cx)
+                            }));
+                        Some(if hideable {
+                            tab.context_menu(move |menu, _, _| {
+                                let key = hide_key.clone();
+                                menu.item(
+                                    PopupMenuItem::new(t("library.tabs.hide"))
+                                        .icon(Icon::new(IconName::EyeOff))
+                                        .on_click(move |_, _, cx| {
+                                            views::saved_views(cx).update(cx, |m, cx| {
+                                                m.update(|v| v.set_tab_hidden(&key, true), cx)
+                                            });
+                                        }),
+                                )
+                            })
+                            .into_any_element()
+                        } else {
+                            tab.into_any_element()
+                        })
+                    }
+                    TabKey::Collection(id) => {
+                        let cat = user.smart_categories.get(&id)?;
+                        let is_simple = is_simple_tag_collection(cat);
+                        let label: SharedString = cat.name.clone().into();
+                        let tint = irori_ui::categories::colour(cat.look.colour.as_deref(), cx);
+                        let icon = irori_ui::categories::icon_for(
+                            &irori_services::CategoryRef::Smart(id.clone()),
+                            cat.look.icon.as_deref(),
+                        );
+                        let selected = active == Some(TabKey::Collection(id.clone()));
+                        let count = counts.collection(&id);
+                        let group = SharedString::from(format!("collection-tab-group:{id}"));
+                        let click_key = TabKey::Collection(id.clone());
+                        let menu_id = id.clone();
+                        let ctx_id = id.clone();
+                        let menu_smart = smart_ids.clone();
+                        let ctx_smart = smart_ids.clone();
+                        Some(
+                            h_flex()
+                                .id(SharedString::from(format!("collection-tab:{id}")))
+                                .debug_selector({
+                                    let id = id.clone();
+                                    move || format!("collection-tab:{id}")
+                                })
+                                .group(group.clone())
+                                .relative()
+                                .keyboard_focusable(cx)
+                                .flex_shrink_0()
+                                .h(rems(2.35))
+                                .px_0p5()
+                                .gap_1p5()
+                                .items_center()
+                                .cursor_pointer()
+                                .text_sm()
+                                .border_b_2()
+                                .border_color(if selected {
+                                    tint.unwrap_or(primary)
+                                } else {
+                                    transparent_black()
+                                })
+                                .text_color(if selected { fg } else { muted })
+                                .when(selected, |el| el.font_semibold())
+                                .when(!selected, |el| {
+                                    el.font_medium().hover(move |s| s.text_color(fg))
+                                })
+                                .child(
+                                    Icon::new(icon)
+                                        .xsmall()
+                                        .when_some(tint, |el, colour| el.text_color(colour)),
+                                )
+                                .child(label)
+                                .child(div().text_xs().text_color(muted).child(count.to_string()))
+                                .child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "collection-tab-more-wrap:{id}"
+                                        )))
+                                        .flex_shrink_0()
+                                        .on_click(|_, _, cx| cx.stop_propagation())
+                                        .when(!selected, |el| {
+                                            el.opacity(0.).group_hover(group, |s| s.opacity(1.))
+                                        })
+                                        .child(
+                                            Button::new(SharedString::from(format!(
+                                                "collection-tab-more:{id}"
+                                            )))
+                                            .xsmall()
+                                            .ghost()
+                                            .icon(IconName::Ellipsis)
+                                            .tooltip(t("library.views.tab_menu"))
+                                            .dropdown_menu(move |menu, _, _| {
+                                                collection_tab_menu(
+                                                    menu,
+                                                    menu_id.clone(),
+                                                    is_simple,
+                                                    menu_smart.clone(),
+                                                )
+                                            }),
+                                        ),
+                                )
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.apply_tab(click_key.clone(), Some(window), cx)
+                                }))
+                                .context_menu(move |menu, _, _| {
+                                    collection_tab_menu(
+                                        menu,
+                                        ctx_id.clone(),
+                                        is_simple,
+                                        ctx_smart.clone(),
+                                    )
+                                })
+                                .into_any_element(),
+                        )
+                    }
+                    TabKey::View(_) => None,
+                })
+                .collect();
+
+        let add_button = Button::new("library-new-collection-tab")
+            .debug_selector(|| "library-new-collection-tab".into())
+            .xsmall()
+            .ghost()
+            .icon(IconName::Plus)
+            .label(t("library.collection.new_button"))
+            .text_color(muted)
+            .on_click(|_, window, cx| open_collection_dialog(None, window, cx));
+
+        let edit_tabs = self.render_tabs_manager_popover(cx);
+        let divider = div()
+            .w(px(1.))
+            .h(rems(1.))
+            .bg(border)
+            .flex_shrink_0()
+            .into_any_element();
 
         Some(
-            div()
-                .id("library-quick-controls")
-                .relative()
-                .flex_1()
-                .min_w_0()
-                .overflow_hidden()
-                .child(room)
+            h_flex()
+                .w_full()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .border_b_1()
+                .border_color(border)
                 .child(
                     h_flex()
-                        .w_full()
-                        .p_1()
-                        .gap_2()
-                        .justify_end()
-                        .children(controls),
+                        .id("library-view-tabs")
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_x_scroll()
+                        .items_center()
+                        .gap_4()
+                        .children(tabs)
+                        .child(divider)
+                        .child(div().flex_shrink_0().pb_0p5().child(add_button)),
                 )
+                .child(div().relative().flex_shrink_0().pb_0p5().child(edit_tabs))
                 .into_any_element(),
         )
     }
-
-    fn quick_install(&self, filter: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
-        let current = filter.install;
-        ButtonGroup::new("library-quick-install")
-            .small()
-            .outline()
-            .children(INSTALLS.iter().map(|(value, id, label)| {
-                Button::new(*id).label(t(label)).selected(*value == current)
-            }))
-            .on_click(cx.listener(|this, clicked: &Vec<usize>, _, cx| {
-                if let Some((value, _, _)) = clicked.first().and_then(|ix| INSTALLS.get(*ix)) {
-                    let value = *value;
-                    this.update_filter(|f| f.install = value, cx);
-                }
-            }))
-            .into_any_element()
-    }
-
-    fn quick_favourites(&self, filter: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
-        let on = filter.favourites_only;
-        Button::new("library-quick-favourites")
-            .small()
-            .outline()
-            .icon(if on {
-                IconName::StarFill
-            } else {
-                IconName::Star
-            })
-            .label(t("library.filters.favourites"))
-            .tooltip(t("library.quick.favourites_tooltip"))
-            .selected(on)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.update_filter(|f| f.favourites_only = !on, cx)
-            }))
-            .into_any_element()
-    }
-}
-
-/// `element` at its own width, reporting that width to the view.
-fn measured(
-    control: QuickControl,
-    element: AnyElement,
-    view: WeakEntity<LibraryView>,
-) -> AnyElement {
-    div()
-        .relative()
-        .flex_shrink_0()
-        .child(element)
-        .child(
-            canvas(
-                move |bounds, _, cx| {
-                    let width = f32::from(bounds.size.width);
-                    view.update(cx, |this, cx| {
-                        if this.quick.set_width(control, width) {
-                            cx.notify();
-                        }
-                    })
-                    .ok();
-                },
-                |_, _, _, _| {},
-            )
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full(),
-        )
-        .into_any_element()
 }

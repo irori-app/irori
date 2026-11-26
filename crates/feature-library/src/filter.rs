@@ -281,7 +281,7 @@ pub fn present_genres(library: &LibrarySnapshot) -> Vec<(String, String)> {
 /// Store tags the Filters popover offers: the most common ones in the
 /// library (Steam has hundreds), as (key, name) by name. Picked tags stay
 /// offered even when they have become rarer.
-pub const SHOWN_TAGS: usize = 30;
+pub const SHOWN_TAGS: usize = 60;
 
 /// The [`SHOWN_TAGS`] commonest store tags among the library's games, as
 /// (key, the name it is shown with), by name.
@@ -659,10 +659,12 @@ where
 }
 
 impl ViewFilter {
-    /// Number of criteria set in the Filters popover (store and search have
-    /// their own visible controls and are not counted).
+    /// Number of criteria set in the Filters popover (search has its own
+    /// visible field and is not counted).
     pub fn active_count(&self) -> usize {
         [
+            self.store != StoreFilter::All,
+            self.account.is_some(),
             self.platform.is_some(),
             self.install != InstallFilter::Any,
             self.favourites_only,
@@ -689,13 +691,11 @@ impl ViewFilter {
         .count()
     }
 
-    /// Reset the Filters popover criteria to their defaults. Sorting, store and
-    /// search are kept.
+    /// Reset the Filters popover criteria to their defaults. Sorting,
+    /// grouping and search are kept.
     pub fn reset_filters(&mut self) {
         *self = ViewFilter {
             query: std::mem::take(&mut self.query),
-            store: self.store,
-            account: self.account.take(),
             sort: self.sort,
             descending: self.descending,
             group: self.group,
@@ -1459,13 +1459,14 @@ pub(crate) mod tests {
             hide_unavailable: true,
             ..Default::default()
         };
-        assert_eq!(f.active_count(), 6);
+        assert_eq!(f.active_count(), 7);
         assert!(f.is_narrowed());
         f.reset_filters();
         assert_eq!(f.active_count(), 0);
-        // Reset keeps search, store and sorting, and never turns hidden games on.
+        // Reset keeps search and sorting, clears store/account, and never turns hidden games on.
         assert_eq!(f.query, "hades");
-        assert_eq!(f.store, StoreFilter::Store(Runner::Gog));
+        assert_eq!(f.store, StoreFilter::All);
+        assert_eq!(f.account, None);
         assert_eq!(f.sort, LibrarySort::Playtime);
         assert!(f.descending);
         assert_eq!(f.hidden, HiddenMode::Hide);

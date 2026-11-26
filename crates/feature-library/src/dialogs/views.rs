@@ -1,17 +1,17 @@
-//! The toolbar's Views menu, the "Save view" dialog and the view manager
-//! (rename, reorder, delete with an undo).
+//! The "Save view" dialog and the view manager (rename, reorder, delete with
+//! an undo).
 
 use std::cell::Cell;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::dialog::DialogFooter;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _,
-    WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -19,112 +19,54 @@ use gpui_kit::{
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
     Subscription, Window, div,
 };
+use irori_core::settings::LibraryLayout;
 use irori_ui::i18n::{t, t_args};
 
 use super::{dialog_width, text};
-use crate::filter::ViewFilter;
 use crate::filters_panel::active_filters;
 use crate::views::{self, ViewsModel};
 
-/// The toolbar button: the active view's name (or "Views"), opening a menu
-/// of every view plus saving and managing them, then every category of
-/// both kinds (smart ones marked, each with its count) to show or hide.
-pub fn views_button(filter: &ViewFilter, cx: &mut App) -> impl IntoElement + use<> {
+/// Delete saved view `id` and push an undo notification that restores it at
+/// its previous position.
+pub(crate) fn delete_view_with_undo(id: u64, window: &mut Window, cx: &mut App) {
     let model = views::saved_views(cx);
-    let list: Vec<(u64, SharedString)> = views::list(cx);
-    let categories = {
-        let lib = irori_ui::models(cx).library.read(cx);
-        irori_ui::categories::entries(&lib.user, &lib.categories)
+    let Some((at, removed)) = model.update(cx, |m, cx| m.update(|v| v.remove(id), cx)) else {
+        return;
     };
-    let picked: Vec<bool> = categories
-        .iter()
-        .map(|c| filter.shows_category(&c.category))
-        .collect();
-    let active = model
-        .read(cx)
-        .views()
-        .active(filter)
-        .map(|v| (v.id, v.label()));
-    Button::new("library-views")
-        .small()
-        .outline()
-        .icon(IconName::Bookmark)
-        .label(
-            active
-                .as_ref()
-                .map_or_else(|| t("library.views.button"), |(_, name)| name.clone()),
-        )
-        .selected(active.is_some())
-        .tooltip(t("library.views.tooltip"))
-        .dropdown_caret(true)
-        .dropdown_menu(move |menu, _, _| {
-            let mut menu = menu;
-            for (id, name) in &list {
-                let id = *id;
-                menu = menu.item(
-                    PopupMenuItem::new(name.clone())
-                        .checked(active.as_ref().is_some_and(|(a, _)| *a == id))
-                        .on_click(move |_, _, cx| views::apply_view(id, cx)),
-                );
-            }
-            if !list.is_empty() {
-                menu = menu.separator();
-            }
-            menu.item(
-                PopupMenuItem::new(t("library.views.save"))
-                    .icon(gpui_kit::component::Icon::new(IconName::BookmarkPlus))
-                    .on_click(|_, window, cx| open_save_view_dialog(window, cx)),
-            )
-            .item(
-                PopupMenuItem::new(t("library.views.manage"))
-                    .icon(gpui_kit::component::Icon::new(IconName::Settings2))
-                    .on_click(|_, window, cx| open_manage_views_dialog(window, cx)),
-            )
-            .separator()
-            .label(t("library.views.categories"))
-            .map(|menu| category_items(menu, &categories, &picked))
-            .item(
-                PopupMenuItem::new(t("library.categories.manage"))
-                    .icon(gpui_kit::component::Icon::new(IconName::Tags))
-                    .on_click(|_, window, cx| {
-                        crate::dialogs::categories::open_categories_dialog(None, window, cx)
-                    }),
-            )
-        })
+    let name = removed.label();
+    let model = model.downgrade();
+    window.push_notification(
+        Notification::info(t_args("library.views.deleted", &[("name", &name)]))
+            .action(move |_, _, cx| {
+                let note = cx.entity().downgrade();
+                let (model, removed) = (model.clone(), removed.clone());
+                Button::new("undo-delete-view")
+                    .label(t("library.bulk.undo"))
+                    .small()
+                    .on_click(move |_, window, cx| {
+                        let removed = removed.clone();
+                        let _ = model.update(cx, |m, cx| m.update(|v| v.restore(at, removed), cx));
+                        let _ = note.update(cx, |n, cx| n.dismiss(window, cx));
+                    })
+            })
+            .autohide(true),
+        cx,
+    );
 }
 
-/// A row per category: ticked while the library shows it, a tick toggling
-/// it, smart ones marked with their icon; each named with its count.
-fn category_items(
-    mut menu: gpui_kit::component::menu::PopupMenu,
-    categories: &[irori_ui::categories::CategoryEntry],
-    picked: &[bool],
-) -> gpui_kit::component::menu::PopupMenu {
-    for (entry, on) in categories.iter().zip(picked) {
-        let category = entry.category.clone();
-        let label = t_args(
-            "library.views.category_count",
-            &[("name", &entry.name), ("count", &entry.count.to_string())],
-        );
-        let mut item = PopupMenuItem::new(label)
-            .checked(*on)
-            .on_click(move |_, _, cx| {
-                let category = category.clone();
-                crate::filters_panel::change_filters(move |f| f.toggle(&category), cx);
-            });
-        if entry.is_smart() {
-            item = item.icon(gpui_kit::component::Icon::new(irori_ui::categories::icon(
-                &entry.category,
-            )));
-        }
-        menu = menu.item(item);
+fn layout_label(layout: LibraryLayout) -> SharedString {
+    match layout {
+        LibraryLayout::Grid => t("library.toolbar.grid"),
+        LibraryLayout::List => t("library.toolbar.list"),
+        LibraryLayout::Focus => t("library.toolbar.focus"),
     }
-    menu
 }
 
-/// "Save view": name the library's current filters, grouping and sort.
+/// "Save view": name the library's current filters, grouping, sort and layout.
 pub struct SaveViewDialog {
     name: Entity<InputState>,
+    layout: LibraryLayout,
+    save_layout: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -132,6 +74,9 @@ impl SaveViewDialog {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let name = cx
             .new(|cx| InputState::new(window, cx).placeholder(t("library.views.name_placeholder")));
+        let layout = crate::view::remove::active_library(cx)
+            .map(|v| v.read(cx).current_layout())
+            .unwrap_or_else(|| crate::library_layout(cx));
         let subscriptions = vec![
             cx.subscribe_in(&name, window, |this, _, event, window, cx| match event {
                 InputEvent::Change => cx.notify(),
@@ -141,6 +86,8 @@ impl SaveViewDialog {
         ];
         Self {
             name,
+            layout,
+            save_layout: true,
             _subscriptions: subscriptions,
         }
     }
@@ -157,8 +104,11 @@ impl SaveViewDialog {
         let Ok(name) = self.result(cx) else { return };
         let filter = active_filters(cx).map(|f| f.read(cx).filter().clone());
         let Some(filter) = filter else { return };
+        let pinned_layout = self.save_layout.then_some(self.layout);
         let model = views::saved_views(cx);
-        let saved = model.update(cx, |m, cx| m.update(|v| v.add(&name, &filter), cx));
+        let saved = model.update(cx, |m, cx| {
+            m.update(|v| v.add(&name, &filter, pinned_layout), cx)
+        });
         window.close_dialog(cx);
         if saved.is_ok() {
             window.push_notification(
@@ -176,13 +126,19 @@ impl Render for SaveViewDialog {
             Err(views::NameError::Exists) => Some(views::NameError::Exists.message()),
             _ => None,
         };
-        let summary = active_filters(cx)
+        let mut summary = active_filters(cx)
             .map(|f| {
                 f.read(cx)
                     .filter()
                     .describe(&irori_ui::models(cx).library.read(cx).user)
             })
             .unwrap_or_default();
+        let layout_name = layout_label(self.layout);
+        if self.save_layout {
+            summary.push(
+                t_args("library.views.summary_layout", &[("layout", &layout_name)]).to_string(),
+            );
+        }
         let muted = cx.theme().muted_foreground;
         v_flex()
             .gap_3()
@@ -196,6 +152,18 @@ impl Render for SaveViewDialog {
             .when_some(error, |d, e| {
                 d.child(div().text_xs().text_color(cx.theme().danger).child(e))
             })
+            .child(
+                Checkbox::new("save-view-layout")
+                    .label(t_args(
+                        "library.views.save_layout",
+                        &[("layout", &layout_name)],
+                    ))
+                    .checked(self.save_layout)
+                    .on_change(cx.listener(|this, checked: &bool, _, cx| {
+                        this.save_layout = *checked;
+                        cx.notify();
+                    })),
+            )
             .when(!summary.is_empty(), |d| {
                 d.child(
                     div()
@@ -304,32 +272,7 @@ impl ManageViewsDialog {
     /// Delete a view, with an undo in the notification instead of a
     /// confirmation.
     fn delete(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((at, removed)) = self
-            .model
-            .update(cx, |m, cx| m.update(|v| v.remove(id), cx))
-        else {
-            return;
-        };
-        let name = removed.label();
-        let model = self.model.downgrade();
-        window.push_notification(
-            Notification::info(t_args("library.views.deleted", &[("name", &name)]))
-                .action(move |_, _, cx| {
-                    let note = cx.entity().downgrade();
-                    let (model, removed) = (model.clone(), removed.clone());
-                    Button::new("undo-delete-view")
-                        .label(t("library.bulk.undo"))
-                        .small()
-                        .on_click(move |_, window, cx| {
-                            let removed = removed.clone();
-                            let _ =
-                                model.update(cx, |m, cx| m.update(|v| v.restore(at, removed), cx));
-                            let _ = note.update(cx, |n, cx| n.dismiss(window, cx));
-                        })
-                })
-                .autohide(true),
-            cx,
-        );
+        delete_view_with_undo(id, window, cx);
     }
 
     /// Open the smart category editor with the rules of view `id`, and say

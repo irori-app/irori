@@ -134,20 +134,42 @@ impl Store for MemoryStore {
     }
 }
 
+/// Serialises UI tests that share the process-wide `Paths` root so concurrent
+/// `persist_ui` / `SettingsService` writes cannot race on `settings.json`.
+static UI_TEST_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+/// Holds the [`Backend`] together with [`UI_TEST_LOCK`] for the lifetime of a
+/// UI test so the shared temp directory stays isolated until the test exits.
+struct TestBackend {
+    backend: Backend,
+    _guard: parking_lot::MutexGuard<'static, ()>,
+}
+
+impl std::ops::Deref for TestBackend {
+    type Target = Backend;
+
+    fn deref(&self) -> &Self::Target {
+        &self.backend
+    }
+}
+
 /// Keep every file the backend writes in a private temporary directory.
-fn isolate_paths() {
+fn isolate_paths() -> std::path::PathBuf {
+    let root = std::env::temp_dir().join(format!("irori-library-ui-{}", std::process::id()));
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        let root = std::env::temp_dir().join(format!("irori-library-ui-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         Paths::init(Paths::under(&root));
     });
+    root
 }
 
 /// Start a backend over the in-memory store, install the UI layer and wait
 /// until the library model holds the store's games.
-fn start(cx: &mut TestAppContext) -> Backend {
-    isolate_paths();
+fn start(cx: &mut TestAppContext) -> TestBackend {
+    let guard = UI_TEST_LOCK.lock();
+    let root = isolate_paths();
+    let _ = std::fs::remove_dir_all(&root);
     cx.executor().allow_parking();
     let store: DynStore = MemoryStore::new();
     let backend = Backend::start_for_tests(move |_, _| vec![store]).expect("backend starts");
@@ -168,7 +190,10 @@ fn start(cx: &mut TestAppContext) -> Backend {
         );
         std::thread::sleep(Duration::from_millis(10));
     }
-    backend
+    TestBackend {
+        backend,
+        _guard: guard,
+    }
 }
 
 #[gpui_kit::test]
@@ -743,7 +768,9 @@ impl Store for RemovableStore {
 #[test]
 fn removing_several_games_reports_the_ones_that_failed() {
     use crate::view::remove::{plan_removal, remove_games};
-    isolate_paths();
+    let _guard = UI_TEST_LOCK.lock();
+    let root = isolate_paths();
+    let _ = std::fs::remove_dir_all(&root);
     let added = RemovableStore::new(Runner::Sideload, &["notes", "tool"], "");
     let roms = RemovableStore::new(Runner::Emulation, &["zelda", "mario"], "mario");
     let stores: Vec<DynStore> = vec![MemoryStore::new(), added.clone(), roms.clone()];
@@ -1169,8 +1196,9 @@ fn installer_detection_fills_single_executable_and_asks_for_multiple(cx: &mut Te
 }
 
 #[gpui_kit::test]
-fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
-    use crate::quick::QuickControl;
+fn view_tabs_apply_presets_and_follow_quick_controls_setting(cx: &mut TestAppContext) {
+    use crate::chips::PresetChip;
+    use crate::filter::InstallFilter;
 
     let _backend = start(cx);
     let (window, view) = cx
@@ -1179,7 +1207,7 @@ fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(Bounds::new(
                         Default::default(),
-                        size(px(2400.), px(800.)),
+                        size(px(1400.), px(800.)),
                     ))),
                     ..Default::default()
                 },
@@ -1188,9 +1216,8 @@ fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
             )
         })
         .expect("window opens");
-    // Measuring takes a frame or two: the room first, then the controls.
     let settle = |cx: &mut TestAppContext| {
-        for _ in 0..4 {
+        for _ in 0..3 {
             cx.update_window(window, |_, window, cx| {
                 window.refresh();
                 let _ = window.draw(cx);
@@ -1199,40 +1226,64 @@ fn quick_controls_follow_the_measured_width(cx: &mut TestAppContext) {
             cx.run_until_parked();
         }
     };
-    let resize = |cx: &mut TestAppContext, width: f32| {
-        cx.simulate_window_resize(window, size(px(width), px(800.)));
-    };
-    let shown = |cx: &mut TestAppContext| cx.read(|cx| view.read(cx).quick_controls_shown());
     settle(cx);
-    assert_eq!(shown(cx), &QuickControl::ORDER, "a wide window has room");
 
-    // Narrower windows drop controls from the end, never the title.
-    resize(cx, 760.);
-    settle(cx);
-    let narrow = shown(cx);
-    assert!(narrow.len() < QuickControl::ORDER.len(), "{narrow:?}");
-    assert_eq!(narrow, &QuickControl::ORDER[..narrow.len()]);
-    resize(cx, 500.);
-    settle(cx);
-    assert!(shown(cx).len() <= narrow.len());
+    // Preset counts match the in-memory store (5 games, 3 installed, 0 favourites).
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert!(v.view_tabs_shown());
+        let counts = v.chip_counts();
+        assert_eq!(counts.preset(PresetChip::All), Some(5));
+        assert_eq!(counts.preset(PresetChip::Installed), Some(3));
+        assert_eq!(counts.preset(PresetChip::Favourites), Some(0));
+        assert_eq!(counts.preset(PresetChip::RecentlyAdded), None);
+    });
 
-    resize(cx, 2400.);
+    // Clicking the Installed tab narrows the filter and visible games.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let bounds = vcx
+            .debug_bounds("chip-installed")
+            .expect("Installed tab is rendered");
+        vcx.simulate_click(bounds.center(), Default::default());
+    }
     settle(cx);
-    assert_eq!(shown(cx), &QuickControl::ORDER, "they come back with room");
+    cx.read(|cx| {
+        assert_eq!(view.read(cx).filter(cx).install, InstallFilter::Installed);
+        assert_eq!(view.read(cx).visible_games().len(), 3);
+    });
 
-    // The settings Irori loaded at start can still reach the view and put
-    // the saved value back; turn the controls off until the view keeps it.
+    // Clicking the All tab restores all games.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let bounds = vcx.debug_bounds("chip-all").expect("All tab is rendered");
+        vcx.simulate_click(bounds.center(), Default::default());
+    }
+    settle(cx);
+    cx.read(|cx| {
+        assert_eq!(view.read(cx).filter(cx).install, InstallFilter::Any);
+        assert_eq!(view.read(cx).visible_games().len(), 5);
+    });
+
+    // Turning `libraryQuickControls` off hides the view tabs strip.
     let mut off = false;
     for _ in 0..50 {
         cx.update(|cx| view.update(cx, |v, cx| v.set_quick_controls_for_test(false, cx)));
         settle(cx);
-        if shown(cx).is_empty() {
+        if !cx.read(|cx| view.read(cx).view_tabs_shown()) {
             off = true;
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    assert!(off, "the setting turns them off");
+    assert!(off, "the setting turns the view tabs off");
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("chip-all").is_none(),
+            "tabs disappear when quick controls are off"
+        );
+    }
 }
 
 #[gpui_kit::test]
@@ -1341,22 +1392,39 @@ fn the_art_picker_offers_igdb_only_while_it_is_on(cx: &mut TestAppContext) {
         cx.read(|cx| picker.read(cx).source())
     };
 
-    // Off: SteamGridDB only, asking for its key.
+    // Off: covers default to keyless Steam (no key needed), while switching to
+    // SteamGridDB (or "All" with only one keyless source) still asks for its key.
     let picker = open(false, cx);
     cx.run_until_parked();
-    assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
-
-    // On without a SteamGridDB key: IGDB first; SteamGridDB still asks.
-    let picker = open(true, cx);
-    cx.run_until_parked();
-    assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
+    assert_eq!(source(&picker, cx), (ArtSource::Steam, false));
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
-    // Both at once needs SteamGridDB's key too.
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::All, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::All, true));
 
-    // On with a key: both sources together from the start.
+    // Logos are not provided by Steam, so without a key they still open on SteamGridDB.
+    let logo_picker = cx
+        .update(|cx| {
+            gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+                cx.new(|cx| ArtPicker::with_sources(ArtKind::Logo, "", None, false, window, cx))
+            })
+        })
+        .expect("window opens")
+        .1;
+    cx.run_until_parked();
+    assert_eq!(source(&logo_picker, cx), (ArtSource::SteamGridDb, true));
+
+    // On without a SteamGridDB key: keyless Steam + IGDB search together via All;
+    // picking IGDB alone works without a key and SteamGridDB still asks.
+    let picker = open(true, cx);
+    cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::All, false));
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::Igdb, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::SteamGridDb, cx)));
+    assert_eq!(source(&picker, cx), (ArtSource::SteamGridDb, true));
+
+    // On with a key: all ready sources together from the start.
     let both = cx
         .update(|cx| {
             gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
@@ -1759,9 +1827,12 @@ fn the_art_picker_offers_vndb_while_it_is_on(cx: &mut TestAppContext) {
     let picker = open(false, true, cx);
     cx.run_until_parked();
     assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
-    // With IGDB on too: IGDB first; VNDB stays a source of its own.
+    // With IGDB on too: Steam + IGDB search together via All, and both IGDB
+    // and VNDB remain selectable as sources of their own without a key.
     let picker = open(true, true, cx);
     cx.run_until_parked();
+    assert_eq!(source(&picker, cx), (ArtSource::All, false));
+    cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::Igdb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::Igdb, false));
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::Vndb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
@@ -1899,4 +1970,1111 @@ fn the_filters_popover_opens_below_trigger_and_closes_on_list_scroll(cx: &mut Te
         );
     }
     let _ = view;
+}
+
+#[gpui_kit::test]
+fn slim_toolbar_look_popover_and_background_fits_unclipped(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    // Clicking Look opens the layout-aware popover tailored to Grid, and the
+    // entire Grid Look body—including Background—fits unclipped inside 1400×900.
+    let look_trigger = {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let b = vcx
+            .debug_bounds("library-look-trigger")
+            .expect("Look trigger is rendered");
+        vcx.simulate_click(b.center(), Default::default());
+        b
+    };
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let panel = vcx
+            .debug_bounds("library-look-panel")
+            .expect("Look panel rendered");
+        let body = vcx
+            .debug_bounds("library-look-body")
+            .expect("Look body rendered");
+        let bg = vcx
+            .debug_bounds("look-section-background")
+            .expect("Background section rendered in Grid Look");
+        assert!(vcx.debug_bounds("look-section-tile-size").is_some());
+        assert!(vcx.debug_bounds("look-section-focus-size").is_none());
+        assert!(vcx.debug_bounds("look-section-columns").is_none());
+        assert!(
+            bg.bottom() <= body.bottom() + px(1.),
+            "Background section must not clip past Look body: bg={bg:?} body={body:?}"
+        );
+        assert!(
+            panel.bottom() <= px(900.),
+            "Grid Look popover must fit within 1400×900 window: panel={panel:?}"
+        );
+    }
+
+    // Switching to Focus adapts the Look popover to Focus controls.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Focus, cx)));
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("look-section-focus-size").is_some());
+        assert!(vcx.debug_bounds("look-section-tile-size").is_none());
+        assert!(vcx.debug_bounds("look-section-columns").is_none());
+    }
+
+    // Switching to List adapts the Look popover to List columns.
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::List, cx)));
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("look-section-columns").is_some());
+        assert!(vcx.debug_bounds("look-section-tile-size").is_none());
+        assert!(vcx.debug_bounds("look-section-focus-size").is_none());
+    }
+
+    // Close Look popover and return to Grid.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.simulate_click(look_trigger.center(), Default::default());
+    }
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Grid, cx)));
+    settle(cx);
+}
+
+#[gpui_kit::test]
+fn saved_views_stay_in_palette_and_tabs_auto_save_visualization_per_tab(cx: &mut TestAppContext) {
+    use crate::filter::Grouping;
+    use crate::views::TabKey;
+    use irori_core::settings::{CoverShape, LibraryLayout, ListRowSize};
+    use irori_services::{LibrarySort, Match, Rule, SmartCategory};
+
+    let backend = start(cx);
+    let col_id = backend.userdata.save_smart_category(
+        Some("s-souls"),
+        SmartCategory::new(
+            "Souls-like",
+            Match::Any,
+            vec![Rule::Tags {
+                tags: vec!["Souls-like".into()],
+            }],
+            vec![],
+        ),
+    );
+    assert_eq!(col_id, "s-souls");
+    cx.run_until_parked();
+
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    // Legacy saved views do NOT appear in the top tab strip (only presets +
+    // collections + direct "+ New collection" button), yet apply_view still
+    // works from the command palette.
+    let (grid_id, list_id) = cx.update(|cx| {
+        let model = crate::views::saved_views(cx);
+        model.update(cx, |m, cx| {
+            m.update(
+                |v| {
+                    let g = v
+                        .add("All Grid", &Default::default(), Some(LibraryLayout::Grid))
+                        .unwrap();
+                    let l = v
+                        .add("All List", &Default::default(), Some(LibraryLayout::List))
+                        .unwrap();
+                    (g, l)
+                },
+                cx,
+            )
+        })
+    });
+    assert_eq!((grid_id, list_id), (2, 3));
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("library-new-collection-tab").is_some());
+        assert!(vcx.debug_bounds("chip-recently-added").is_some());
+        assert!(vcx.debug_bounds("view-tab:2").is_none());
+        assert!(vcx.debug_bounds("view-tab:3").is_none());
+    }
+
+    // Command palette apply_view still switches layouts cleanly.
+    cx.update(|cx| crate::views::apply_view(list_id, cx));
+    settle(cx);
+    assert_eq!(
+        cx.update_window(window, |_, window, cx| view.read(cx).view_state(window).0)
+            .unwrap(),
+        LibraryLayout::List
+    );
+    cx.update(|cx| crate::views::apply_view(grid_id, cx));
+    settle(cx);
+    assert_eq!(
+        cx.update_window(window, |_, window, cx| view.read(cx).view_state(window).0)
+            .unwrap(),
+        LibraryLayout::Grid
+    );
+
+    // 1. Click the dynamic collection tab and customize it: Grid + Banner + 13.5rem + Score.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let tab = vcx
+            .debug_bounds("collection-tab:s-souls")
+            .expect("collection tab rendered");
+        vcx.simulate_click(tab.center(), Default::default());
+    }
+    settle(cx);
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.set_layout(LibraryLayout::Grid, cx);
+            v.set_cover_shape(CoverShape::Banner, cx);
+            v.set_tile_size(13.5, cx);
+            v.update_filter(|f| f.sort = LibrarySort::Score, cx);
+        });
+    });
+    settle(cx);
+
+    // 2. Switch to Installed and customize it independently: List + Large + LastPlayed + Status group.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let tab = vcx
+            .debug_bounds("chip-installed")
+            .expect("Installed tab rendered");
+        vcx.simulate_click(tab.center(), Default::default());
+    }
+    settle(cx);
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.set_layout(LibraryLayout::List, cx);
+            v.set_list_row_size(ListRowSize::Large, cx);
+            v.update_filter(
+                |f| {
+                    f.sort = LibrarySort::LastPlayed;
+                    f.group = Grouping::Status;
+                },
+                cx,
+            );
+        });
+    });
+    settle(cx);
+
+    // 3. Return to the collection: exact Grid + Banner + 13.5rem + Score restored!
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let tab = vcx
+            .debug_bounds("collection-tab:s-souls")
+            .expect("collection tab rendered");
+        vcx.simulate_click(tab.center(), Default::default());
+    }
+    settle(cx);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        let f = v.filter(cx);
+        assert_eq!(v.current_layout(), LibraryLayout::Grid);
+        assert_eq!(v.current_cover_shape(), CoverShape::Banner);
+        assert!((v.current_tile_rem() - 13.5).abs() < 1e-4);
+        assert_eq!(f.sort, LibrarySort::Score);
+        assert_eq!(f.group, Grouping::None);
+    });
+
+    // 4. Return to Installed: exact List + Large + LastPlayed + Status restored!
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let tab = vcx
+            .debug_bounds("chip-installed")
+            .expect("Installed tab rendered");
+        vcx.simulate_click(tab.center(), Default::default());
+    }
+    settle(cx);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        let f = v.filter(cx);
+        assert_eq!(v.current_layout(), LibraryLayout::List);
+        assert_eq!(v.current_list_row_size(), ListRowSize::Large);
+        assert_eq!(f.sort, LibrarySort::LastPlayed);
+        assert_eq!(f.group, Grouping::Status);
+    });
+
+    // 5. Switch to Favorites (untouched): inherits clean global defaults, zero cross-tab leak!
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let tab = vcx
+            .debug_bounds("chip-favourites")
+            .expect("Favorites tab rendered");
+        vcx.simulate_click(tab.center(), Default::default());
+    }
+    settle(cx);
+    cx.read(|cx| {
+        let v = view.read(cx);
+        let f = v.filter(cx);
+        assert_eq!(v.current_layout(), LibraryLayout::Grid);
+        assert_eq!(v.current_cover_shape(), CoverShape::Portrait);
+        assert_eq!(f.sort, LibrarySort::Title);
+        assert_eq!(f.group, Grouping::None);
+    });
+    assert!(cx.update(|cx| {
+        crate::views::saved_views(cx)
+            .read(cx)
+            .views()
+            .prefs_for(&TabKey::Collection(col_id))
+            .is_some()
+    }));
+}
+
+#[gpui_kit::test]
+fn filters_more_section_collapses_by_default_and_auto_expands_when_active(cx: &mut TestAppContext) {
+    use crate::filters_panel::{FilterModel, FiltersPanel};
+
+    let _backend = start(cx);
+    let model = cx.update(|cx| cx.new(|_| FilterModel::new(crate::filter::ViewFilter::default())));
+    let (window, panel) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(800.), px(1200.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |_, cx| {
+                    cx.new(|cx| {
+                        let panel = FiltersPanel::new(model.clone(), cx);
+                        panel.anchor_bottom().set(Some(px(40.)));
+                        panel
+                    })
+                },
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+
+    // Collapsed by default when no secondary filters are active.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("library-filters-more-toggle").is_some());
+        assert!(vcx.debug_bounds("library-filters-more-body").is_none());
+    }
+
+    // Setting a secondary filter with a very long Developer name auto-expands
+    // More filters and truncates the chip cleanly inside the popover width.
+    const LONG_DEV: &str =
+        "Super Extremely Long Independent Game Development Studio International Entertainment Corp";
+    const LONG_DEV_SELECTOR: &str = "developer-super extremely long independent game development studio international entertainment corp";
+    cx.update(|cx| {
+        model.update(cx, |m, cx| {
+            m.update(
+                |f| {
+                    f.developers.insert(LONG_DEV.into());
+                },
+                cx,
+            );
+        });
+    });
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let panel_bounds = vcx
+            .debug_bounds("library-filters-panel")
+            .expect("filters panel rendered");
+        assert!(
+            vcx.debug_bounds("library-filters-more-body").is_some(),
+            "active secondary filter must auto-expand More filters"
+        );
+        let chip_bounds = vcx
+            .debug_bounds(LONG_DEV_SELECTOR)
+            .expect("long developer chip rendered");
+        assert!(
+            chip_bounds.right() <= panel_bounds.right(),
+            "long developer chip must not overflow popover: chip={chip_bounds:?} panel={panel_bounds:?}"
+        );
+    }
+
+    // Unchecking the last secondary filter keeps More filters open so it does
+    // not slam shut under the user's cursor while editing.
+    cx.update(|cx| {
+        model.update(cx, |m, cx| {
+            m.update(|f| f.developers.clear(), cx);
+        });
+    });
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-filters-more-body").is_some(),
+            "More filters must stay open while the user edits secondary filters"
+        );
+        let toggle = vcx
+            .debug_bounds("library-filters-more-toggle")
+            .expect("More filters toggle rendered");
+        vcx.simulate_click(toggle.center(), Default::default());
+    }
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-filters-more-body").is_none(),
+            "clicking More filters toggle collapses it"
+        );
+    }
+
+    // Tags is a primary filter now, so activating it must NOT expand More filters.
+    cx.update(|cx| {
+        model.update(cx, |m, cx| {
+            m.update(
+                |f| {
+                    f.tags.insert("Roguelike".into());
+                },
+                cx,
+            );
+        });
+    });
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-filters-more-body").is_none(),
+            "primary Tags filter must leave More filters collapsed"
+        );
+    }
+
+    // Activating a new secondary filter (Show only: Offline) auto-expands
+    // More filters again even after a manual collapse.
+    cx.update(|cx| {
+        model.update(cx, |m, cx| {
+            m.update(
+                |f| {
+                    f.offline_only = true;
+                },
+                cx,
+            );
+        });
+    });
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-filters-more-body").is_some(),
+            "newly activated secondary filter must re-expand More filters"
+        );
+    }
+
+    // Resetting state after clearing returns More filters to collapsed.
+    cx.update(|cx| {
+        panel.update(cx, |p, _| p.reset_more_open());
+        model.update(cx, |m, cx| {
+            m.update(crate::filter::ViewFilter::reset_filters, cx)
+        });
+    });
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-filters-more-body").is_none(),
+            "clearing and resetting collapses More filters"
+        );
+    }
+}
+
+#[gpui_kit::test]
+fn look_popover_slider_clearance_and_single_line_segments(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let (window, _view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let trigger = vcx
+            .debug_bounds("library-look-trigger")
+            .expect("Look trigger rendered");
+        vcx.simulate_click(trigger.center(), Default::default());
+    }
+    settle(cx);
+
+    let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+    let panel = vcx
+        .debug_bounds("library-look-panel")
+        .expect("Look panel rendered");
+    let body = vcx
+        .debug_bounds("library-look-body")
+        .expect("Look body rendered");
+    let slider_wrap = vcx
+        .debug_bounds("look-tile-slider-wrap")
+        .expect("Tile size slider wrap rendered");
+    assert!(
+        slider_wrap.left() - body.left() >= px(12.),
+        "slider must leave clearance for left thumb + hover ring: wrap={slider_wrap:?} body={body:?}"
+    );
+    assert!(
+        body.right() - slider_wrap.right() >= px(12.),
+        "slider must leave clearance on right edge too: wrap={slider_wrap:?} body={body:?}"
+    );
+
+    // Top of page (4 segments) stays on one horizontal line and uses proportional
+    // width so longer labels ("Favourites") get more room than short ones ("Off").
+    let top_ids = [
+        "look-top-recent",
+        "look-top-installed",
+        "look-top-favourites",
+        "look-top-none",
+    ];
+    let top_bounds: Vec<_> = top_ids
+        .iter()
+        .map(|id| vcx.debug_bounds(id).expect(id))
+        .collect();
+    for pair in top_bounds.windows(2) {
+        assert!(
+            (pair[0].origin.y - pair[1].origin.y).abs() <= px(1.),
+            "Top of page segments must share one line: {top_bounds:?}"
+        );
+        assert!(
+            pair[1].left() >= pair[0].right(),
+            "Top of page segments must not overlap: {top_bounds:?}"
+        );
+    }
+    assert!(
+        top_bounds.last().unwrap().right() <= panel.right(),
+        "Top of page segments must stay within Look panel"
+    );
+    assert!(
+        top_bounds[2].size.width > top_bounds[3].size.width,
+        "Favourites should receive more width than Off with flex_auto: {top_bounds:?}"
+    );
+}
+
+#[gpui_kit::test]
+fn sideload_dialog_renders_quick_bar_and_two_detail_tabs(cx: &mut TestAppContext) {
+    use crate::dialogs::sideload::DetailsTab;
+
+    let _backend = start(cx);
+    let (window, dialog) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(900.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| SideloadDialog::with_app(None, None, window, cx)),
+            )
+        })
+        .expect("window opens");
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("sideload-quick-bar").is_some());
+        assert!(vcx.debug_bounds("sideload-panel-artwork").is_none());
+        assert!(vcx.debug_bounds("sideload-panel-details").is_none());
+    }
+
+    // Expanding More details defaults to the Artwork tab.
+    cx.update(|cx| dialog.update(cx, |d, cx| d.toggle_more_for_test(true, cx)));
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("sideload-panel-artwork").is_some());
+        assert!(vcx.debug_bounds("sideload-panel-details").is_none());
+    }
+
+    // Switching to Details & Launch swaps cleanly to the details form.
+    cx.update(|cx| {
+        dialog.update(cx, |d, cx| {
+            d.set_details_tab_for_test(DetailsTab::Details, cx)
+        })
+    });
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("sideload-panel-artwork").is_none());
+        assert!(vcx.debug_bounds("sideload-panel-details").is_some());
+        assert!(
+            vcx.debug_bounds("sideload-fetch-art").is_some(),
+            "Add game dialog must expose the explicit Fetch art button"
+        );
+    }
+}
+
+#[gpui_kit::test]
+fn sort_popover_collapses_more_and_auto_expands_for_secondary(cx: &mut TestAppContext) {
+    use irori_services::LibrarySort;
+
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    // Click Sort & Group trigger; More options starts collapsed.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let trigger = vcx
+            .debug_bounds("library-sort-trigger")
+            .expect("Sort trigger rendered");
+        vcx.simulate_click(trigger.center(), Default::default());
+    }
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("library-sort-panel").is_some());
+        assert!(vcx.debug_bounds("library-sort-more-toggle").is_some());
+        assert!(vcx.debug_bounds("library-sort-more-body").is_none());
+        let toggle = vcx
+            .debug_bounds("library-sort-more-toggle")
+            .expect("More options toggle");
+        vcx.simulate_click(toggle.center(), Default::default());
+    }
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-sort-more-body").is_some(),
+            "clicking More options expands secondary sorts and groupings"
+        );
+    }
+
+    // Selecting a secondary sort and reopening the popover auto-expands More options.
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.set_sort_for_test(LibrarySort::Rating, cx);
+            v.close_sort_popover_for_test(cx);
+        });
+    });
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let trigger = vcx
+            .debug_bounds("library-sort-trigger")
+            .expect("Sort trigger rendered");
+        vcx.simulate_click(trigger.center(), Default::default());
+    }
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-sort-more-body").is_some(),
+            "secondary sort must auto-expand More options when reopening popover"
+        );
+        // Switching to Playtime (naturally descending) resets descending=false
+        // so Desc is active; clicking Asc flips descending=true (lowest first).
+        let playtime = vcx
+            .debug_bounds("sort-opt-Playtime")
+            .expect("Playtime sort pill");
+        vcx.simulate_click(playtime.center(), Default::default());
+    }
+    settle(cx);
+    assert_eq!(
+        cx.read(|cx| {
+            let f = view.read(cx).filter(cx);
+            (f.sort, f.descending)
+        }),
+        (LibrarySort::Playtime, false)
+    );
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let asc = vcx.debug_bounds("sort-dir-asc").expect("Asc button");
+        vcx.simulate_click(asc.center(), Default::default());
+    }
+    settle(cx);
+    assert_eq!(
+        cx.read(|cx| {
+            let f = view.read(cx).filter(cx);
+            (f.sort, f.descending)
+        }),
+        (LibrarySort::Playtime, true)
+    );
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let title = vcx.debug_bounds("sort-opt-Title").expect("Title sort pill");
+        vcx.simulate_click(title.center(), Default::default());
+    }
+    settle(cx);
+    assert_eq!(
+        cx.read(|cx| {
+            let f = view.read(cx).filter(cx);
+            (f.sort, f.descending)
+        }),
+        (LibrarySort::Title, false)
+    );
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let desc = vcx.debug_bounds("sort-dir-desc").expect("Desc button");
+        vcx.simulate_click(desc.center(), Default::default());
+    }
+    settle(cx);
+    assert_eq!(
+        cx.read(|cx| {
+            let f = view.read(cx).filter(cx);
+            (f.sort, f.descending)
+        }),
+        (LibrarySort::Title, true)
+    );
+}
+
+#[gpui_kit::test]
+fn edit_tabs_popover_reorders_hides_and_protects_locked_tabs(cx: &mut TestAppContext) {
+    use crate::views::{TabKey, saved_views};
+
+    let _backend = start(cx);
+    let (window, _view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let trigger = vcx
+            .debug_bounds("library-edit-tabs-trigger")
+            .expect("Edit tabs trigger rendered");
+        vcx.simulate_click(trigger.center(), Default::default());
+    }
+    settle(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("library-edit-tabs-panel").is_some());
+        assert!(vcx.debug_bounds("tab-mgr-row-all").is_some());
+        assert!(vcx.debug_bounds("tab-mgr-row-installed").is_some());
+        assert!(vcx.debug_bounds("tab-mgr-row-favorites").is_some());
+        assert!(vcx.debug_bounds("tab-mgr-row-recently-added").is_some());
+    }
+
+    // All and Installed stay locked; Favorites and Recently added can be hidden.
+    cx.update(|cx| {
+        saved_views(cx).update(cx, |m, cx| {
+            m.update(
+                |v| {
+                    v.set_tab_hidden(&TabKey::All, true);
+                    v.set_tab_hidden(&TabKey::Installed, true);
+                    v.set_tab_hidden(&TabKey::Favorites, true);
+                    v.set_tab_hidden(&TabKey::RecentlyAdded, true);
+                    v.move_tab(&TabKey::Installed, &TabKey::All, &[]);
+                },
+                cx,
+            );
+        });
+    });
+    settle(cx);
+    let visible = cx.update(|cx| saved_views(cx).read(cx).views().visible_tabs(&[]));
+    assert_eq!(visible, vec![TabKey::Installed, TabKey::All]);
+}
+
+#[gpui_kit::test]
+fn list_look_popover_switches_row_size(cx: &mut TestAppContext) {
+    use crate::views::{TabKey, saved_views};
+    use irori_core::{LibraryLayout, ListRowSize};
+
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    cx.update(|cx| {
+        view.update(cx, |v, cx| v.set_layout_for_test(LibraryLayout::List, cx));
+    });
+    settle(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let trigger = vcx
+            .debug_bounds("library-look-trigger")
+            .expect("Look trigger rendered");
+        vcx.simulate_click(trigger.center(), Default::default());
+    }
+    settle(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("look-section-row-size").is_some());
+        let large = vcx
+            .debug_bounds("look-row-large")
+            .expect("Large row size segment");
+        vcx.simulate_click(large.center(), Default::default());
+    }
+    settle(cx);
+
+    assert_eq!(
+        cx.read(|cx| view.read(cx).current_list_row_size()),
+        ListRowSize::Large
+    );
+    assert_eq!(
+        cx.update(|cx| {
+            saved_views(cx)
+                .read(cx)
+                .views()
+                .prefs_for(&TabKey::All)
+                .and_then(|p| p.list_row_size)
+        }),
+        Some(ListRowSize::Large)
+    );
+}
+
+#[gpui_kit::test]
+fn deleting_active_collection_clears_filter_and_routes_advanced_rules(cx: &mut TestAppContext) {
+    use crate::dialogs::collection::{delete_collection_with_undo, open_collection_dialog};
+    use crate::views::{TabKey, saved_views};
+    use gpui_kit::component::WindowExt as _;
+    use irori_core::settings::CoverShape;
+    use irori_services::{Match, Rule, SmartCategory};
+
+    let backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    // 1. Create, activate and customize a dynamic collection, then delete it:
+    // active filters and per-tab prefs must drop the deleted smart ID.
+    let col_id = backend.userdata.save_smart_category(
+        None,
+        SmartCategory::new(
+            "Souls-like",
+            Match::Any,
+            vec![Rule::Tags {
+                tags: vec!["Souls-like".into()],
+            }],
+            vec![],
+        ),
+    );
+    cx.run_until_parked();
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.apply_collection_tab(col_id.clone(), cx);
+            v.set_cover_shape(CoverShape::Banner, cx);
+        });
+    });
+    settle(cx);
+    assert!(cx.read(|cx| view.read(cx).filter(cx).smart_categories.contains(&col_id)));
+
+    cx.update_window(window, |_, window, cx| {
+        delete_collection_with_undo(col_id.clone(), window, cx);
+    })
+    .unwrap();
+    settle(cx);
+    let after = cx.read(|cx| view.read(cx).filter(cx));
+    assert!(
+        !after.smart_categories.contains(&col_id),
+        "deleting active collection must clear its ID from ViewFilter"
+    );
+    assert_eq!(after.active_count(), 0);
+    assert!(cx.update(|cx| {
+        saved_views(cx)
+            .read(cx)
+            .views()
+            .prefs_for(&TabKey::Collection(col_id.clone()))
+            .is_none()
+    }));
+
+    // 2. Editing a rule-based (non-tag) smart category via open_collection_dialog
+    // must route to the full SmartEditor rather than CollectionDialog so rules
+    // are never silently stripped.
+    let adv_id = backend.userdata.save_smart_category(
+        None,
+        SmartCategory::new(
+            "Installed Only",
+            Match::All,
+            vec![Rule::Installed { installed: true }],
+            vec![],
+        ),
+    );
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        open_collection_dialog(Some(adv_id.clone()), window, cx);
+    })
+    .unwrap();
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("collection-dialog").is_none(),
+            "advanced smart categories must not open in tag-only CollectionDialog"
+        );
+    }
+    cx.update_window(window, |_, window, cx| window.close_dialog(cx))
+        .unwrap();
+    settle(cx);
+}
+
+#[gpui_kit::test]
+fn collection_dialog_scrolls_all_tags_and_supports_icon_and_manual_games(cx: &mut TestAppContext) {
+    use crate::dialogs::collection::open_collection_dialog_with_games;
+    use gpui_kit::component::WindowExt as _;
+    use gpui_kit::{ScrollDelta, ScrollWheelEvent, point};
+
+    let _backend = start(cx);
+    let (window, _view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    cx.update_window(window, |_, window, cx| {
+        open_collection_dialog_with_games(None, vec!["steam:10".into()], window, cx);
+    })
+    .unwrap();
+    settle(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let dialog_bounds = vcx
+            .debug_bounds("collection-dialog")
+            .expect("collection dialog must render");
+        assert!(dialog_bounds.size.width > px(500.));
+        assert!(
+            vcx.debug_bounds("collection-icon-picker").is_some(),
+            "icon picker must render"
+        );
+        assert!(
+            vcx.debug_bounds("collection-icon-flame").is_some(),
+            "curated flame icon must render"
+        );
+        assert!(
+            vcx.debug_bounds("collection-games-picker").is_some(),
+            "manual games column must render"
+        );
+
+        let viewport_bounds = vcx
+            .debug_bounds("collection-tag-viewport")
+            .expect("tag viewport must render");
+        assert!(
+            viewport_bounds.size.height <= px(280.),
+            "tag viewport must be bounded (~15.5rem), got {:?}",
+            viewport_bounds.size.height
+        );
+        let last_tag_before = vcx
+            .debug_bounds("collection-tag-vr")
+            .expect("late alphabetical tag 'VR' must be laid out in picker")
+            .origin
+            .y;
+        assert!(
+            last_tag_before > viewport_bounds.bottom(),
+            "80+ tags must overflow the 15.5rem viewport before scrolling"
+        );
+
+        // Scroll downward inside the visible tag viewport and confirm the late tag moves up.
+        vcx.simulate_event(ScrollWheelEvent {
+            position: viewport_bounds.center(),
+            delta: ScrollDelta::Pixels(point(px(0.), px(-240.))),
+            ..Default::default()
+        });
+        vcx.run_until_parked();
+        vcx.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+        let last_tag_after = vcx
+            .debug_bounds("collection-tag-vr")
+            .expect("tag 'VR' still present after scrolling")
+            .origin
+            .y;
+        assert!(
+            last_tag_after < last_tag_before,
+            "collection-tag-picker must actually scroll (before={last_tag_before:?}, after={last_tag_after:?})"
+        );
+    }
+
+    cx.update_window(window, |_, window, cx| window.close_dialog(cx))
+        .unwrap();
+    settle(cx);
 }

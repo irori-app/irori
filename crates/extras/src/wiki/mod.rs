@@ -309,12 +309,105 @@ pub async fn steam_app_id(game: &GameInfo) -> Option<String> {
     info.steam_app_id().map(str::to_string)
 }
 
+/// Public Steam CDN base for official app artwork (no API key required).
+const STEAM_CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
+/// Upper bound on Steam storesearch response bodies.
+const MAX_STEAM_SEARCH_BYTES: usize = 1024 * 1024;
+/// Explicit timeout for keyless Steam artwork search requests.
+const STEAM_SEARCH_TIMEOUT: Duration = Duration::from_secs(6);
+/// Maximum matches returned by [`search_steam_artwork`].
+const MAX_STEAM_ART_MATCHES: usize = 20;
+
+/// One Steam Store search match with official public CDN artwork URLs (no API key).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SteamArtMatch {
+    pub app_id: u64,
+    pub name: String,
+    pub cover_url: String,
+    pub hero_url: String,
+    pub header_url: String,
+}
+
+impl SteamArtMatch {
+    /// Construct public Steam CDN URLs for a known Steam `app_id` and `name`.
+    pub fn from_app(app_id: u64, name: String) -> Self {
+        Self {
+            app_id,
+            name,
+            cover_url: format!("{STEAM_CDN}/{app_id}/library_600x900_2x.jpg"),
+            hero_url: format!("{STEAM_CDN}/{app_id}/library_hero.jpg"),
+            header_url: format!("{STEAM_CDN}/{app_id}/header.jpg"),
+        }
+    }
+}
+
+/// Parse a Steam `/api/storesearch` JSON payload into [`SteamArtMatch`] entries.
+pub fn parse_steam_storesearch(json: &serde_json::Value) -> Vec<SteamArtMatch> {
+    let Some(items) = json.get("items").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for item in items {
+        let Some(id) = item.get("id").and_then(|v| v.as_u64()) else {
+            continue;
+        };
+        let Some(name) = item
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        else {
+            continue;
+        };
+        if seen.insert(id) {
+            out.push(SteamArtMatch::from_app(id, name.to_owned()));
+            if out.len() >= MAX_STEAM_ART_MATCHES {
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// Search Steam's public `/api/storesearch` endpoint (no API key) for matching
+/// games and their official Steam CDN cover/hero/header artwork URLs.
+pub async fn search_steam_artwork(query: &str) -> Result<Vec<SteamArtMatch>> {
+    let cleaned = steam_search_query(query);
+    if cleaned.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut items = steam_storesearch_items(&cleaned).await?;
+    if items.is_empty()
+        && let Some((prefix, _)) = query.split_once(" - ").or_else(|| query.split_once(": "))
+    {
+        let prefix_query = steam_search_query(prefix);
+        if !prefix_query.is_empty() && prefix_query != cleaned {
+            items = steam_storesearch_items(&prefix_query).await?;
+        }
+    }
+    Ok(parse_steam_storesearch(
+        &serde_json::json!({ "items": items }),
+    ))
+}
+
+/// Resolve the best cover and hero artwork URLs for a Steam `app_id`, preferring
+/// hashed `IStoreBrowseService` asset URLs for newer games and falling back to
+/// the standard public Steam CDN paths.
+pub async fn resolve_steam_artwork(app_id: u64) -> (String, String) {
+    let id = app_id.to_string();
+    if let Some(hashed) = steam_store_hashed_art(&id).await {
+        return hashed;
+    }
+    let m = SteamArtMatch::from_app(app_id, String::new());
+    (m.cover_url, m.hero_url)
+}
+
 /// Steam's cover and hero art for a game known only by its title (one
 /// added manually or from a folder), through PCGamingWiki or Steam's store
 /// search and `IStoreBrowseService/GetItems/v1/` (so newer games with
 /// hashed asset URLs also resolve).
 pub async fn steam_art_for_title(title: &str) -> Option<(String, String)> {
-    const STEAM_CDN: &str = "https://cdn.cloudflare.steamstatic.com/steam/apps";
     let game = GameInfo {
         title: title.to_string(),
         runner: Some(Runner::Sideload),
@@ -362,7 +455,7 @@ async fn steam_storesearch_items(query: &str) -> Result<Vec<serde_json::Value>> 
         .append_pair("l", "english")
         .append_pair("cc", "US");
     let json: serde_json::Value =
-        util::get_json(url.as_str(), std::time::Duration::from_secs(6)).await?;
+        util::get_json_bounded(url.as_str(), STEAM_SEARCH_TIMEOUT, MAX_STEAM_SEARCH_BYTES).await?;
     Ok(json
         .get("items")
         .and_then(|v| v.as_array())
@@ -865,5 +958,38 @@ mod tests {
             "The Wardrobe"
         );
         assert_eq!(strip_edition_suffix("Fallout Franchise Bundle"), "Fallout");
+    }
+
+    #[test]
+    fn parses_steam_storesearch_and_builds_public_cdn_artwork_urls() {
+        let payload = serde_json::json!({
+            "total": 3,
+            "items": [
+                {"id": 570, "name": "Dota 2"},
+                {"id": 570, "name": "Dota 2"},
+                {"id": 1245620, "name": "  ELDEN RING  "},
+                {"id": 999, "name": "   "},
+                {"name": "Missing id"}
+            ]
+        });
+        let matches = parse_steam_storesearch(&payload);
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].app_id, 570);
+        assert_eq!(matches[0].name, "Dota 2");
+        assert_eq!(
+            matches[0].cover_url,
+            "https://cdn.cloudflare.steamstatic.com/steam/apps/570/library_600x900_2x.jpg"
+        );
+        assert_eq!(
+            matches[0].hero_url,
+            "https://cdn.cloudflare.steamstatic.com/steam/apps/570/library_hero.jpg"
+        );
+        assert_eq!(
+            matches[0].header_url,
+            "https://cdn.cloudflare.steamstatic.com/steam/apps/570/header.jpg"
+        );
+        assert_eq!(matches[1].app_id, 1245620);
+        assert_eq!(matches[1].name, "ELDEN RING");
+        assert!(parse_steam_storesearch(&serde_json::json!({})).is_empty());
     }
 }

@@ -24,6 +24,8 @@ pub struct CategoryEntry {
     pub pinned: bool,
     /// The stored colour name ([`irori_services::smart_categories::COLOURS`]).
     pub colour: Option<String>,
+    /// The stored icon slug ([`irori_services::smart_categories::ICONS`]).
+    pub icon: Option<String>,
     /// For a smart category: whether this version reads all of it.
     pub readable: bool,
 }
@@ -48,6 +50,7 @@ pub fn entries(user: &UserData, index: &CategoryIndex) -> Vec<CategoryEntry> {
                 count: index.count(&category),
                 pinned: look.pinned,
                 colour: look.colour,
+                icon: look.icon,
                 readable,
                 category,
                 name,
@@ -155,6 +158,89 @@ pub fn icon(category: &CategoryRef) -> IconName {
     }
 }
 
+/// Resolve a stored collection icon slug ([`irori_services::smart_categories::ICONS`])
+/// into its Lucide [`IconName`], falling back to `fallback` when unset or unknown.
+pub fn icon_by_name(name: Option<&str>, fallback: IconName) -> IconName {
+    match name {
+        Some("sparkles") => IconName::Sparkles,
+        Some("flame") => IconName::Flame,
+        Some("swords") => IconName::Swords,
+        Some("skull") => IconName::Skull,
+        Some("ghost") => IconName::Ghost,
+        Some("wand-sparkles") => IconName::WandSparkles,
+        Some("moon-star") => IconName::MoonStar,
+        Some("crosshair") => IconName::Crosshair,
+        Some("rocket") => IconName::Rocket,
+        Some("castle") => IconName::Castle,
+        Some("chess-pawn") => IconName::ChessPawn,
+        Some("dices") => IconName::Dices,
+        Some("puzzle") => IconName::Puzzle,
+        Some("compass") => IconName::Compass,
+        Some("pickaxe") => IconName::Pickaxe,
+        Some("coffee") => IconName::Coffee,
+        Some("book-open") => IconName::BookOpen,
+        Some("car") => IconName::Car,
+        Some("trophy") => IconName::Trophy,
+        Some("users") => IconName::Users,
+        Some("music") => IconName::Music,
+        Some("gamepad-2") => IconName::Gamepad2,
+        Some("gem") => IconName::Gem,
+        Some("crown") => IconName::Crown,
+        _ => fallback,
+    }
+}
+
+/// The icon for a category, honoring any custom icon stored in its look.
+pub fn icon_for(category: &CategoryRef, icon_name: Option<&str>) -> IconName {
+    icon_by_name(icon_name, icon(category))
+}
+
+/// Suggest a curated collection icon slug from the first matching tag/genre
+/// term in `terms`. Returns `None` when no curated tag matches.
+pub fn suggest_icon_for_terms(terms: &[String]) -> Option<&'static str> {
+    for raw in terms {
+        let key = irori_services::search::tag_key(raw);
+        let suggested = match key.as_str() {
+            "soulslike" | "souls" | "bonfire" | "bullethell" => Some("flame"),
+            "darkfantasy" | "hardcore" | "postapocalyptic" | "gore" => Some("skull"),
+            "horror" | "survivalhorror" | "psychologicalhorror" => Some("ghost"),
+            "anime" | "jrpg" | "atmospheric" => Some("moon-star"),
+            "fantasy" | "magic" => Some("wand-sparkles"),
+            "fps" | "shooter" | "thirdpersonshooter" | "lootershooter" | "stealth" | "tactical" => {
+                Some("crosshair")
+            }
+            "scifi" | "cyberpunk" | "space" | "mecha" | "vr" => Some("rocket"),
+            "metroidvania" | "medieval" | "citybuilder" | "towerdefense" | "grandstrategy" => {
+                Some("castle")
+            }
+            "strategy" | "rts" | "4x" | "turnbased" | "management" => Some("chess-pawn"),
+            "roguelike" | "roguelite" | "deckbuilder" | "cardgame" => Some("dices"),
+            "puzzle" | "mystery" | "detective" | "pointclick" => Some("puzzle"),
+            "adventure" | "openworld" | "exploration" => Some("compass"),
+            "survival" | "crafting" | "basebuilding" | "sandbox" => Some("pickaxe"),
+            "cozy" | "relaxing" | "farmingsim" | "lifesim" | "casual" => Some("coffee"),
+            "visualnovel" | "narrative" | "storyrich" | "choicesmatter" => Some("book-open"),
+            "racing" | "driving" | "simulation" => Some("car"),
+            "sports" | "pvp" | "competitive" | "esports" => Some("trophy"),
+            "coop" | "localcoop" | "onlinecoop" | "multiplayer" | "mmo" => Some("users"),
+            "rhythm" | "music" | "soundtrack" => Some("music"),
+            "action" | "rpg" | "crpg" | "arpg" | "hackandslash" | "beatemup" | "fighting" => {
+                Some("swords")
+            }
+            "indie" => Some("gem"),
+            "platformer" | "2dplatformer" | "3dplatformer" | "retro" | "pixelgraphics"
+            | "arcade" | "isometric" | "topdown" | "singleplayer" | "freetoplay" => {
+                Some("gamepad-2")
+            }
+            _ => None,
+        };
+        if suggested.is_some() {
+            return suggested;
+        }
+    }
+    None
+}
+
 /// The index to show for `library` and `user`: `current` while it was
 /// built from them, `inputs` (`Backend::category_inputs`) and today, else a
 /// new one.
@@ -249,5 +335,34 @@ mod tests {
             &first,
             &index_for(Some(&first), &library, &other_user, &inputs)
         ));
+    }
+
+    #[test]
+    fn curated_collection_icons_and_tag_suggestions_cover_all_slugs() {
+        for slug in irori_services::smart_categories::ICONS {
+            let resolved = icon_by_name(Some(slug), IconName::Tag);
+            assert_ne!(
+                resolved,
+                IconName::Tag,
+                "slug {slug} must map to a known Lucide IconName"
+            );
+        }
+        assert_eq!(
+            icon_by_name(Some("future-icon"), IconName::Sparkles),
+            IconName::Sparkles
+        );
+        assert_eq!(
+            icon_for(&CategoryRef::Smart("s".into()), Some("flame")),
+            IconName::Flame
+        );
+        assert_eq!(
+            suggest_icon_for_terms(&["Souls-like".into()]),
+            Some("flame")
+        );
+        assert_eq!(suggest_icon_for_terms(&["Horror".into()]), Some("ghost"));
+        assert_eq!(suggest_icon_for_terms(&["Anime".into()]), Some("moon-star"));
+        assert_eq!(suggest_icon_for_terms(&["Sci-Fi".into()]), Some("rocket"));
+        assert_eq!(suggest_icon_for_terms(&["Cozy".into()]), Some("coffee"));
+        assert_eq!(suggest_icon_for_terms(&["Unknown Tag".into()]), None);
     }
 }

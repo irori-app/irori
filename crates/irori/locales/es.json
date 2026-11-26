@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Se ejecuta en pantalla completa exclusiva. Cambia el juego a ventana sin bordes o a modo ventana para usar la superposición.",
   "shell.palette.year_in_review": "Abrir el Resumen del año",
   "shell.palette.year_in_review_keywords": "resumen recap anual",
-  "shell.nav.views": "Vistas",
   "shell.palette.show_view": "Mostrar vista: {name}",
   "shell.palette.show_category": "Mostrar categoría: {name}",
   "shell.palette.new_smart_category": "Nueva categoría inteligente…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Revisar e informar",
   "shell.palette.latest_crash_report": "Ver último informe de fallo",
   "shell.palette.latest_crash_report_keywords": "crash fallo informe log panic error bug",
-  "shell.notice.manage_rollback": "Gestionar / Revertir"
+  "shell.notice.manage_rollback": "Gestionar / Revertir",
+  "shell.nav.pinned": "Fijados"
 }

@@ -359,6 +359,47 @@ pub struct UiPrefs {
     /// Kinds of rows the game page's Details leave out (`hiddenDetailRows`,
     /// ids such as `publisher`); ids a later Irori adds stay as written.
     pub hidden_detail_rows: Vec<String>,
+    /// Data columns shown in the library's List view (`libraryListColumns`).
+    pub library_list_columns: ListColumns,
+    /// Row height in the library's List view (`libraryListRowSize`).
+    pub library_list_row_size: ListRowSize,
+}
+
+/// Row height in the library's List view (`libraryListRowSize`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ListRowSize {
+    Compact,
+    Large,
+    /// Last, so a size a newer Irori writes reads as this one.
+    #[default]
+    #[serde(other)]
+    Medium,
+}
+
+/// Which data columns the library's List view shows (`libraryListColumns`).
+/// Title and actions always stay; narrow windows still drop columns from the
+/// chosen set so the title stays readable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ListColumns {
+    pub store: bool,
+    pub size: bool,
+    pub playtime: bool,
+    pub last_played: bool,
+    pub status: bool,
+}
+
+impl Default for ListColumns {
+    fn default() -> Self {
+        Self {
+            store: true,
+            size: false,
+            playtime: true,
+            last_played: true,
+            status: true,
+        }
+    }
 }
 
 /// Shader cache room games get unless the user changes it, in GiB.
@@ -450,6 +491,8 @@ impl Default for UiPrefs {
             show_age_ratings: true,
             age_rating_board: String::new(),
             hidden_detail_rows: Vec::new(),
+            library_list_columns: ListColumns::default(),
+            library_list_row_size: ListRowSize::Medium,
         }
     }
 }

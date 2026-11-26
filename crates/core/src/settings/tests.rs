@@ -557,3 +557,44 @@ fn heroic_global_config_parses() {
     assert_eq!(back["steamRuntime"], Value::Bool(false));
     assert_eq!(back["enviromentOptions"][0]["value"], "1");
 }
+
+#[test]
+fn list_columns_defaults_and_round_trip() {
+    let cols = ListColumns::default();
+    assert!(cols.store);
+    assert!(!cols.size);
+    assert!(cols.playtime);
+    assert!(cols.last_played);
+    assert!(cols.status);
+    let ui: UiPrefs = serde_json::from_str("{}").unwrap();
+    assert_eq!(ui.library_list_columns, cols);
+    let custom = UiPrefs {
+        library_list_columns: ListColumns {
+            store: false,
+            size: true,
+            playtime: false,
+            last_played: true,
+            status: false,
+        },
+        ..UiPrefs::default()
+    };
+    let value = serde_json::to_value(&custom).unwrap();
+    assert_eq!(value["libraryListColumns"]["size"], Value::Bool(true));
+    assert_eq!(value["libraryListColumns"]["store"], Value::Bool(false));
+    let back: UiPrefs = serde_json::from_value(value).unwrap();
+    assert_eq!(back.library_list_columns, custom.library_list_columns);
+}
+
+#[test]
+fn list_row_size_defaults_round_trips_and_falls_back_on_unknown() {
+    let ui: UiPrefs = serde_json::from_str("{}").unwrap();
+    assert_eq!(ui.library_list_row_size, ListRowSize::Medium);
+    let ui: UiPrefs = serde_json::from_str(r#"{"libraryListRowSize":"compact"}"#).unwrap();
+    assert_eq!(ui.library_list_row_size, ListRowSize::Compact);
+    let ui: UiPrefs = serde_json::from_str(r#"{"libraryListRowSize":"large"}"#).unwrap();
+    assert_eq!(ui.library_list_row_size, ListRowSize::Large);
+    let value = serde_json::to_value(&ui).unwrap();
+    assert_eq!(value["libraryListRowSize"], Value::String("large".into()));
+    let unknown: UiPrefs = serde_json::from_str(r#"{"libraryListRowSize":"giant"}"#).unwrap();
+    assert_eq!(unknown.library_list_row_size, ListRowSize::Medium);
+}

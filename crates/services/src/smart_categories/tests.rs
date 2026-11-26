@@ -203,18 +203,20 @@ fn unknown_keys_stay_on_the_category_and_on_every_condition() {
         "pinned": true,
         "colour": "teal",
         "icon": "sun",
+        "badgeStyle": "pill",
     });
     let read: SmartCategory = serde_json::from_value(written.clone()).unwrap();
     assert_eq!(read.name, "Weekend");
     assert!(read.look.pinned);
     assert_eq!(read.look.colour.as_deref(), Some("teal"));
+    assert_eq!(read.look.icon.as_deref(), Some("sun"));
     assert_eq!(
         read.rules[0].rule,
         Some(Rule::Installed { installed: true })
     );
     assert_eq!(read.rules[0].extra["weight"], 2);
     assert!(read.rules[1].rule.is_none());
-    assert_eq!(read.extra["icon"], "sun");
+    assert_eq!(read.extra["badgeStyle"], "pill");
     assert_eq!(serde_json::to_value(&read).unwrap(), written);
 
     // Editing a row keeps what a newer Irori added to it.
@@ -225,6 +227,7 @@ fn unknown_keys_stay_on_the_category_and_on_every_condition() {
     assert_eq!(value["rules"][0]["weight"], 2);
     assert_eq!(value["rules"][0]["installed"], false);
     assert_eq!(value["icon"], "sun");
+    assert_eq!(value["badgeStyle"], "pill");
 }
 
 #[test]
@@ -868,4 +871,144 @@ fn renaming_a_manual_category_follows_it_in_rules() {
         })
     );
     assert!(!smart.rename_category("RPG", "Again"));
+}
+
+#[test]
+fn excluded_games_round_trip_and_skip_matching_entries() {
+    let mut g1 = game(Runner::Steam, "10", "Dark Souls");
+    g1.store_tags = vec!["Souls-like".into()];
+    let mut g2 = game(Runner::Gog, "20", "Hollow Knight");
+    g2.store_tags = vec!["Souls-like".into()];
+    let mut g3 = game(Runner::Legendary, "30", "Celeste");
+    g3.store_tags = vec!["Platformer".into()];
+
+    let user = UserData::default();
+    let lib = library(vec![g1, g2, g3], &user);
+    let mut smart = category(
+        Match::Any,
+        vec![Rule::Tags {
+            tags: vec!["Souls-like".into()],
+        }],
+        vec![],
+    );
+
+    // Empty excluded_games is omitted from JSON and matches both Souls-like games.
+    let raw_empty = serde_json::to_value(&smart).unwrap();
+    assert!(raw_empty.get("excludedGames").is_none());
+    assert_eq!(members(smart.clone(), &lib, &user), ["gog:20", "steam:10"]);
+
+    // Legacy JSON without `excludedGames` reads with an empty set.
+    let legacy: SmartCategory = serde_json::from_value(raw_empty).unwrap();
+    assert!(legacy.excluded_games.is_empty());
+
+    // Excluding a game skips it in evaluation and round-trips through JSON.
+    smart.excluded_games.insert("steam:10".into());
+    let raw = serde_json::to_value(&smart).unwrap();
+    assert_eq!(raw["excludedGames"], json!(["steam:10"]));
+    let back: SmartCategory = serde_json::from_value(raw).unwrap();
+    assert_eq!(back, smart);
+    assert_eq!(members(back.clone(), &lib, &user), ["gog:20"]);
+
+    // Restoring puts the game back in the category.
+    let mut restored = back;
+    assert!(restored.excluded_games.remove("steam:10"));
+    assert_eq!(members(restored, &lib, &user), ["gog:20", "steam:10"]);
+
+    // Excluding one copy of a combined multi-store entry excludes every copy of it.
+    let mut copy_a = game(Runner::Steam, "100", "Hades");
+    copy_a.store_tags = vec!["Roguelike".into()];
+    let mut copy_b = game(Runner::Legendary, "200", "Hades");
+    copy_b.store_tags = vec!["Roguelike".into()];
+    let combined_lib = library(vec![copy_a, copy_b], &user);
+    let mut multi = category(
+        Match::Any,
+        vec![Rule::Tags {
+            tags: vec!["Roguelike".into()],
+        }],
+        vec![],
+    );
+    assert_eq!(
+        members(multi.clone(), &combined_lib, &user),
+        ["legendary:200", "steam:100"]
+    );
+    multi.excluded_games.insert("steam:100".into());
+    assert!(members(multi, &combined_lib, &user).is_empty());
+}
+
+#[test]
+fn hybrid_and_manual_only_collections_round_trip_and_evaluate_cleanly() {
+    let mut g1 = game(Runner::Steam, "10", "Dark Souls");
+    g1.store_tags = vec!["Souls-like".into()];
+    let mut g2 = game(Runner::Gog, "20", "Hades");
+    g2.store_tags = vec!["Roguelike".into()];
+    let mut g3 = game(Runner::Legendary, "30", "Celeste");
+    g3.store_tags = vec!["Platformer".into()];
+
+    let user = UserData::default();
+    let lib = library(vec![g1, g2, g3], &user);
+
+    // 1. Empty manual-only collection matches zero games (unlike legacy empty-rules).
+    let mut manual = category(Match::Any, vec![], vec![]);
+    manual.manual_only = true;
+    manual.look.icon = Some("flame".into());
+    assert!(members(manual.clone(), &lib, &user).is_empty());
+
+    // 2. Adding a game manually includes only that game and round-trips through JSON.
+    manual.included_games.insert("gog:20".into());
+    let raw = serde_json::to_value(&manual).unwrap();
+    assert_eq!(raw["manualOnly"], json!(true));
+    assert_eq!(raw["includedGames"], json!(["gog:20"]));
+    assert_eq!(raw["icon"], json!("flame"));
+    let back: SmartCategory = serde_json::from_value(raw).unwrap();
+    assert_eq!(back, manual);
+    assert_eq!(members(back, &lib, &user), ["gog:20"]);
+
+    // 3. Hybrid collection: dynamic tag match + manual inclusion - manual exclusion.
+    let mut hybrid = category(
+        Match::Any,
+        vec![Rule::Tags {
+            tags: vec!["Souls-like".into()],
+        }],
+        vec![],
+    );
+    hybrid.included_games.insert("gog:20".into());
+    assert_eq!(members(hybrid.clone(), &lib, &user), ["gog:20", "steam:10"]);
+    // Exclusion overrides both rules and manual inclusions.
+    hybrid.excluded_games.insert("steam:10".into());
+    assert_eq!(members(hybrid.clone(), &lib, &user), ["gog:20"]);
+
+    // 4. `matches_rules_only` distinguishes tag matches from manually pinned games.
+    let inputs = Inputs::default();
+    let tz = FixedOffset::east_opt(0).unwrap();
+    let today = day(2026, 11, 10);
+    assert!(matches_rules_only(
+        &hybrid,
+        &lib,
+        &user,
+        &inputs,
+        &GameId::new(Runner::Steam, "10"),
+        today,
+        &tz,
+    ));
+    assert!(!matches_rules_only(
+        &hybrid,
+        &lib,
+        &user,
+        &inputs,
+        &GameId::new(Runner::Gog, "20"),
+        today,
+        &tz,
+    ));
+
+    // 5. Multi-store combined entry: manually including one copy includes every copy.
+    let copy_a = game(Runner::Steam, "100", "Hades");
+    let copy_b = game(Runner::Legendary, "200", "Hades");
+    let combined_lib = library(vec![copy_a, copy_b], &user);
+    let mut manual_multi = category(Match::Any, vec![], vec![]);
+    manual_multi.manual_only = true;
+    manual_multi.included_games.insert("steam:100".into());
+    assert_eq!(
+        members(manual_multi, &combined_lib, &user),
+        ["legendary:200", "steam:100"]
+    );
 }

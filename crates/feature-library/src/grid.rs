@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use irori_core::settings::{CoverCaption, CoverShape, Density};
+use irori_core::settings::{CoverCaption, CoverShape, Density, ListColumns, ListRowSize};
 
 /// Gap between tiles, in rem.
 pub const GAP_REM: f32 = 1.25;
@@ -46,9 +46,40 @@ const LIST_TITLE_MIN_REM: f32 = 12.0;
 /// last played. Status and the actions always stay.
 const LIST_DROP_ORDER: [usize; 4] = [1, 0, 2, 3];
 
+/// Height of one list-layout row for `size` and `density`, in rem.
+pub fn list_row_rem(size: ListRowSize, density: Density) -> f32 {
+    let base = match size {
+        ListRowSize::Compact => LIST_ROW_REM,
+        ListRowSize::Medium => 5.0,
+        ListRowSize::Large => 6.5,
+    };
+    base * density.row_scale()
+}
+
+/// Width of a list row's thumbnail for `size`, in rem.
+pub fn list_thumb_rem(size: ListRowSize) -> f32 {
+    match size {
+        ListRowSize::Compact => LIST_THUMB_REM,
+        ListRowSize::Medium => 3.0,
+        ListRowSize::Large => 3.9,
+    }
+}
+
+/// Width of a list row's thumbnail for `size` and `density`, in rem. Scales
+/// down alongside compact row heights so a 2:3 cover never overflows its row.
+pub fn list_thumb_rem_at(size: ListRowSize, density: Density) -> f32 {
+    list_thumb_rem(size) * density.row_scale().min(1.0)
+}
+
 /// Which of [`LIST_COLUMNS`] fit in `available_rem` beside the thumbnail and a
-/// readable title.
-pub fn list_columns(available_rem: f32) -> [bool; 6] {
+/// readable title, keeping only columns enabled in `chosen`, sized for a list
+/// row thumbnail of `row_size`.
+pub fn list_columns_for(
+    available_rem: f32,
+    chosen: ListColumns,
+    row_size: ListRowSize,
+) -> [bool; 6] {
+    let thumb = list_thumb_rem(row_size);
     let needed = |shown: &[bool; 6]| {
         let columns: f32 = LIST_COLUMNS
             .iter()
@@ -56,9 +87,16 @@ pub fn list_columns(available_rem: f32) -> [bool; 6] {
             .filter(|(_, shown)| **shown)
             .map(|(w, _)| w + LIST_GAP_REM)
             .sum();
-        LIST_THUMB_REM + LIST_GAP_REM + LIST_TITLE_MIN_REM + columns
+        thumb + LIST_GAP_REM + LIST_TITLE_MIN_REM + columns
     };
-    let mut shown = [true; 6];
+    let mut shown = [
+        chosen.store,
+        chosen.size,
+        chosen.playtime,
+        chosen.last_played,
+        chosen.status,
+        true,
+    ];
     for column in LIST_DROP_ORDER {
         if needed(&shown) <= available_rem {
             break;
@@ -509,10 +547,65 @@ mod tests {
 
     #[test]
     fn narrow_lists_drop_columns_in_order() {
-        assert_eq!(list_columns(80.0), [true; 6]);
-        assert_eq!(list_columns(60.0), [true, false, true, true, true, true]);
-        assert_eq!(list_columns(51.0), [false, false, true, true, true, true]);
-        assert_eq!(list_columns(50.0), [false, false, false, true, true, true]);
-        assert_eq!(list_columns(20.0), [false, false, false, false, true, true]);
+        let cols = |w, chosen| list_columns_for(w, chosen, ListRowSize::Medium);
+        let all = ListColumns {
+            store: true,
+            size: true,
+            playtime: true,
+            last_played: true,
+            status: true,
+        };
+        assert_eq!(cols(80.0, all), [true; 6]);
+        assert_eq!(cols(60.0, all), [true, false, true, true, true, true]);
+        assert_eq!(cols(52.0, all), [false, false, true, true, true, true]);
+        assert_eq!(cols(50.0, all), [false, false, false, true, true, true]);
+        assert_eq!(cols(20.0, all), [false, false, false, false, true, true]);
+        // Respects disabled columns even on wide windows, including status.
+        let default = ListColumns::default();
+        assert_eq!(cols(80.0, default), [true, false, true, true, true, true]);
+        let minimal = ListColumns {
+            store: false,
+            size: true,
+            playtime: false,
+            last_played: false,
+            status: false,
+        };
+        assert_eq!(
+            cols(80.0, minimal),
+            [false, true, false, false, false, true]
+        );
+    }
+
+    #[test]
+    fn list_row_size_scales_row_height_and_thumbnail() {
+        let compact_row = list_row_rem(ListRowSize::Compact, Density::Comfortable);
+        let medium_row = list_row_rem(ListRowSize::Medium, Density::Comfortable);
+        let large_row = list_row_rem(ListRowSize::Large, Density::Comfortable);
+        assert!((compact_row - 3.75).abs() < 1e-4);
+        assert!((medium_row - 5.0).abs() < 1e-4);
+        assert!((large_row - 6.5).abs() < 1e-4);
+        assert!(
+            list_row_rem(ListRowSize::Large, Density::Compact)
+                < list_row_rem(ListRowSize::Large, Density::Comfortable)
+        );
+        assert!((list_thumb_rem(ListRowSize::Compact) - 2.25).abs() < 1e-4);
+        assert!((list_thumb_rem(ListRowSize::Medium) - 3.0).abs() < 1e-4);
+        assert!((list_thumb_rem(ListRowSize::Large) - 3.9).abs() < 1e-4);
+        // Every (ListRowSize, Density) combination leaves vertical room for
+        // the 2:3 thumbnail so covers never clip outside their row.
+        for size in [
+            ListRowSize::Compact,
+            ListRowSize::Medium,
+            ListRowSize::Large,
+        ] {
+            for density in [Density::Compact, Density::Comfortable, Density::Spacious] {
+                let row = list_row_rem(size, density);
+                let thumb_h = list_thumb_rem_at(size, density) * COVER_RATIO;
+                assert!(
+                    thumb_h + 0.25 <= row,
+                    "thumb height {thumb_h} overflows row height {row} for ({size:?}, {density:?})"
+                );
+            }
+        }
     }
 }

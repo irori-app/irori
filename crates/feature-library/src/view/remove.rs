@@ -102,7 +102,7 @@ struct ActiveLibrary(WeakEntity<LibraryView>);
 impl Global for ActiveLibrary {}
 
 /// The library view the palette's library commands act on, while it exists.
-pub(super) fn active_library(cx: &App) -> Option<gpui_kit::Entity<LibraryView>> {
+pub(crate) fn active_library(cx: &App) -> Option<gpui_kit::Entity<LibraryView>> {
     cx.try_global::<ActiveLibrary>()?.0.upgrade()
 }
 

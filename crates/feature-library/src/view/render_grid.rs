@@ -23,8 +23,8 @@ use irori_core::GameInfo;
 use irori_core::StatusKind;
 use irori_core::settings::{CoverCaption, CoverFit, CoverHover, CoverShape, LibraryLayout};
 use irori_ui::components::{
-    ArtImage, GameCover, MAX_BADGES, SectionTitle, StoreBadge, art_image, art_img, art_loading,
-    art_missing, badge_row, physical_width,
+    ArtImage, BadgeMark, GameCover, MAX_BADGES, SectionTitle, StoreBadge, StoreLogo, art_image,
+    art_img, art_loading, art_missing, badge_row, physical_width,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
@@ -72,7 +72,7 @@ impl LibraryView {
         // Focus keeps its column of boxes; the grid takes the chosen shape,
         // and only boxes can be drawn whole in their cells.
         let cover = match self.layout {
-            LibraryLayout::Grid => self.ui_prefs.cover_shape,
+            LibraryLayout::Grid => self.cover_shape,
             _ => CoverShape::Portrait,
         };
         let shapes = (cover == CoverShape::Portrait)
@@ -174,7 +174,8 @@ impl LibraryView {
             s.kind.is_busy() && !matches!(s.kind, StatusKind::Playing | StatusKind::Queued)
         });
         let theme = cx.theme();
-        let scrim = theme.background.opacity(0.88);
+        let bg = theme.background;
+        let scrim = bg.opacity(0.88);
         let muted = theme.muted_foreground;
         let radius = irori_ui::components::cover_radius(corners, cx);
 
@@ -284,13 +285,21 @@ impl LibraryView {
 
         let selecting = self.selection.is_active();
         let picked = self.selection.contains(&id);
+        let actions_scrim = linear_gradient(
+            180.,
+            linear_color_stop(bg.opacity(0.), 0.),
+            linear_color_stop(bg.opacity(0.78), 1.),
+        );
         // Focus covers are small, and the page beside them has the actions.
         let actions = (active && busy.is_none() && !selecting && !focus_view).then(|| {
             let primary = commands::primary(&state).map(|command| {
                 let label = command.label(&state);
                 let id = id.clone();
                 let button = Button::new(ElementId::Name(format!("tile-primary:{key}").into()))
-                    .small()
+                    .w_full()
+                    .rounded_full()
+                    .px_4()
+                    .shadow_md()
                     .icon(command.icon(&state))
                     .label(label)
                     .loading(state.launching)
@@ -304,15 +313,31 @@ impl LibraryView {
                     button.primary()
                 }
             });
-            h_flex()
+            div()
                 .absolute()
-                .bottom_2()
-                .left_2()
-                .right_2()
-                .gap_2()
-                .justify_end()
-                .children(primary.map(|b| div().flex_1().min_w_0().child(b.w_full())))
-                .child(self.more_button(game, in_recent, cx))
+                .bottom_0()
+                .left_0()
+                .right_0()
+                .h(rems(4.75))
+                .rounded_b(radius)
+                .bg(actions_scrim)
+                .flex()
+                .items_end()
+                .justify_center()
+                .p_2p5()
+                .child(
+                    h_flex()
+                        .w_full()
+                        .max_w(rems(13.25))
+                        .min_w_0()
+                        .gap_2()
+                        .items_center()
+                        .justify_center()
+                        .children(
+                            primary.map(|b| div().flex_1().max_w(rems(10.5)).min_w_0().child(b)),
+                        )
+                        .child(self.cover_more_button(game, in_recent, cx)),
+                )
         });
 
         // Uninstalled games are dimmed until pointed at, so installed ones stand out.
@@ -350,22 +375,23 @@ impl LibraryView {
                     // An entry of several stores' copies names every store,
                     // the first few and a count of the rest.
                     let row = badge_row(irori_ui::copies::badge_marks(game, cx), MAX_BADGES);
-                    let badge = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
+                    let pill = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
                     el.child(
                         h_flex()
                             .absolute()
                             .top_2()
                             .left_2()
                             .right_2()
-                            .gap_1()
+                            .gap_1p5()
+                            .items_center()
                             .flex_wrap()
                             .children(
                                 row.shown
                                     .into_iter()
-                                    .map(|mark| badge(StoreBadge::mark(mark))),
+                                    .map(|mark| cover_store_mark(mark, scrim)),
                             )
                             .when(row.more > 0, |el| {
-                                el.child(badge(StoreBadge::more(row.more)))
+                                el.child(pill(StoreBadge::more(row.more)))
                             }),
                     )
                 },
@@ -788,5 +814,48 @@ fn category_chips(
                     .child(format!("+{more}")),
             )
         })
+        .into_any_element()
+}
+
+/// Render a store or launcher mark over cover art: SVG marks draw directly at
+/// 20 px (`1.25 rem`) in white on a transparent background with a subtle
+/// silhouette drop shadow for legibility over light or dark art; text-only
+/// marks (`Amazon`, `ZOOM`, emulators) keep a compact pill.
+fn cover_store_mark(mark: BadgeMark, scrim: gpui_kit::Hsla) -> AnyElement {
+    let logo = match &mark {
+        BadgeMark::Store(runner) => StoreLogo::of_runner(*runner),
+        BadgeMark::Launcher(id) => StoreLogo::of_launcher(id),
+        BadgeMark::Emulator { .. } => None,
+    };
+    let Some(logo) = logo else {
+        return div()
+            .rounded_md()
+            .bg(scrim)
+            .child(StoreBadge::mark(mark))
+            .into_any_element();
+    };
+    let size = rems(1.25);
+    let halo = |dx: f32, dy: f32, alpha: f32| {
+        div().absolute().top(px(dy)).left(px(dx)).child(
+            logo.icon()
+                .size(size)
+                .text_color(gpui_kit::black().opacity(alpha)),
+        )
+    };
+    div()
+        .relative()
+        .size(size)
+        .flex_shrink_0()
+        .child(halo(0., 1.25, 0.65))
+        .child(halo(-0.75, 0., 0.35))
+        .child(halo(0.75, 0., 0.35))
+        .child(halo(0., -0.75, 0.35))
+        .child(
+            div()
+                .absolute()
+                .top(px(0.))
+                .left(px(0.))
+                .child(logo.icon().size(size).text_color(gpui_kit::white())),
+        )
         .into_any_element()
 }

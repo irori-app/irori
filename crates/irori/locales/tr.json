@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Oyun özel tam ekranda çalışıyor. Kaplamayı kullanmak için oyunu kenarlıksız ya da pencere moduna alın.",
   "shell.palette.year_in_review": "Yılın özetini aç",
   "shell.palette.year_in_review_keywords": "özet yıl recap",
-  "shell.nav.views": "Görünümler",
   "shell.palette.show_view": "Görünümü göster: {name}",
   "shell.palette.show_category": "Kategoriyi göster: {name}",
   "shell.palette.new_smart_category": "Yeni akıllı kategori…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "İncele ve bildir",
   "shell.palette.latest_crash_report": "Son çökme raporunu görüntüle",
   "shell.palette.latest_crash_report_keywords": "crash çökme rapor günlük hata bug",
-  "shell.notice.manage_rollback": "Yönet / Geri al"
+  "shell.notice.manage_rollback": "Yönet / Geri al",
+  "shell.nav.pinned": "Sabitlenenler"
 }

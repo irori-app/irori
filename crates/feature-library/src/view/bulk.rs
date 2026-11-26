@@ -23,16 +23,27 @@ use gpui_kit::{
 };
 use irori_core::settings::LibraryLayout;
 use irori_core::{GameId, GameInfo, RemoveArgs, StatusKind};
-use irori_services::{PlayStatus, UserDataService};
+use irori_services::smart_categories::matches_rules_only;
+use irori_services::{CategoryRef, PlayStatus, UserDataService};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use super::LibraryView;
 use crate::commands::GameState;
+use crate::dialogs::collection::open_collection_dialog_with_games;
 use crate::layouts::{self, Click};
 
 /// Titles listed in the uninstall confirmation before "and N more".
 pub(super) const LISTED: usize = 8;
+
+/// Summary of one hybrid/smart collection for the bulk bar's Collections menu.
+#[derive(Clone)]
+struct BulkCollection {
+    id: String,
+    name: String,
+    icon: Option<String>,
+    inside: usize,
+}
 
 /// What the bulk bar offers for the picked games.
 #[derive(Clone, Default)]
@@ -46,7 +57,9 @@ pub(super) struct BulkSummary {
     ids: Rc<Vec<GameId>>,
     all_favourite: bool,
     all_hidden: bool,
-    /// Each category, and how many of the picked games are in it.
+    /// Each hybrid/smart collection and how many of the picked games are in it.
+    collections: Rc<Vec<BulkCollection>>,
+    /// Each manual category, and how many of the picked games are in it.
     categories: Rc<Vec<(String, usize)>>,
 }
 
@@ -102,6 +115,7 @@ struct BulkKey {
     picks: u64,
     games: usize,
     user: usize,
+    categories_index: usize,
     statuses: Vec<(GameId, StatusKind)>,
     launching: Vec<GameId>,
 }
@@ -229,7 +243,10 @@ impl LibraryView {
     /// What the bulk bar offers, worked out again only when the picks, the
     /// shown games, the library data or a game's state changed.
     fn bulk_summary(&mut self, cx: &App) -> Rc<BulkSummary> {
-        let user = models(cx).library.read(cx).user.clone();
+        let (user, cat_index) = {
+            let lib = models(cx).library.read(cx);
+            (lib.user.clone(), lib.categories.clone())
+        };
         let mut statuses: Vec<_> = models(cx)
             .statuses
             .read(cx)
@@ -243,6 +260,7 @@ impl LibraryView {
             picks: self.selection.revision(),
             games: Arc::as_ptr(&self.frame.games) as *const () as usize,
             user: Arc::as_ptr(&user) as usize,
+            categories_index: Arc::as_ptr(&cat_index) as usize,
             statuses,
             launching,
         };
@@ -287,6 +305,29 @@ impl LibraryView {
         let keys: Vec<String> = ids.iter().map(GameId::key).collect();
         let all_favourite = !keys.is_empty() && keys.iter().all(|k| user.favourites.contains(k));
         let all_hidden = !keys.is_empty() && keys.iter().all(|k| user.hidden.contains(k));
+        let collections = user
+            .categories_in_order()
+            .into_iter()
+            .filter_map(|(cat_ref, name)| {
+                let CategoryRef::Smart(sid) = &cat_ref else {
+                    return None;
+                };
+                let cat = user.smart_categories.get(sid)?;
+                if cat.is_unreadable() {
+                    return None;
+                }
+                let inside = ids
+                    .iter()
+                    .filter(|id| irori_ui::categories::contains(&cat_ref, id, &user, &cat_index))
+                    .count();
+                Some(BulkCollection {
+                    id: sid.clone(),
+                    name,
+                    icon: cat.look.icon.clone(),
+                    inside,
+                })
+            })
+            .collect();
         let categories = user
             .categories
             .iter()
@@ -306,6 +347,7 @@ impl LibraryView {
             ids: Rc::new(ids),
             all_favourite,
             all_hidden,
+            collections: Rc::new(collections),
             categories: Rc::new(categories),
         });
         self.bulk.key = Some(key);
@@ -572,6 +614,7 @@ impl LibraryView {
             ids,
             all_favourite,
             all_hidden,
+            collections,
             categories,
         } = (*summary).clone();
         let details = self.details_button(ids.clone(), cx);
@@ -714,13 +757,18 @@ impl LibraryView {
         let categories_button = Button::new("bulk-categories")
             .small()
             .outline()
-            .icon(IconName::Tags)
-            .label(t("library.bulk.categories"))
+            .icon(IconName::Layers)
+            .label(t("library.bulk.collections"))
             .disabled(nothing)
             .dropdown_menu(move |mut menu, _, _| {
-                for (name, inside) in categories.iter() {
-                    let membership = Membership::of(*inside, category_ids.len());
-                    let (ids, name, add) = (category_ids.clone(), name.clone(), membership.adds());
+                for col in collections.iter() {
+                    let membership = Membership::of(col.inside, category_ids.len());
+                    let (ids, sid, name, add) = (
+                        category_ids.clone(),
+                        col.id.clone(),
+                        col.name.clone(),
+                        membership.adds(),
+                    );
                     let mut row = PopupMenuItem::new(category_row_label(
                         &name,
                         membership,
@@ -728,10 +776,40 @@ impl LibraryView {
                     ))
                     .checked(membership == Membership::All);
                     if let Membership::Some(_) = membership {
-                        // A mixed tick: some of the picked games are in it.
                         row = row.icon(IconName::Minus);
+                    } else if membership == Membership::None {
+                        let glyph = irori_ui::categories::icon_for(
+                            &CategoryRef::Smart(sid.clone()),
+                            col.icon.as_deref(),
+                        );
+                        row = row.icon(glyph);
                     }
                     menu = menu.item(row.on_click(move |_, window, cx| {
+                        let b = backend(cx);
+                        let lib = models(cx).library.read(cx);
+                        let inputs = b.category_inputs();
+                        let today = chrono::Local::now().date_naive();
+                        let rule_flags: std::collections::HashMap<GameId, bool> = lib
+                            .user
+                            .smart_categories
+                            .get(&sid)
+                            .map(|cat| {
+                                ids.iter()
+                                    .map(|gid| {
+                                        let m = matches_rules_only(
+                                            cat,
+                                            &lib.snapshot,
+                                            &lib.user,
+                                            &inputs,
+                                            gid,
+                                            today,
+                                            &chrono::Local,
+                                        );
+                                        (gid.clone(), m)
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
                         let message = counted(
                             if add {
                                 (
@@ -747,19 +825,80 @@ impl LibraryView {
                             ids.len(),
                             &[("category", &name)],
                         );
-                        let name = name.clone();
+                        let sid = sid.clone();
                         edit_with_undo(
                             ids.to_vec(),
                             message,
-                            move |u, ids| u.set_category_many(ids, &name, add),
+                            move |u, ids| {
+                                if add {
+                                    u.add_to_smart_category_many(&sid, ids, |gid| {
+                                        !rule_flags.get(gid).copied().unwrap_or(false)
+                                    });
+                                } else {
+                                    u.remove_from_smart_category_many(&sid, ids, |gid| {
+                                        rule_flags.get(gid).copied().unwrap_or(false)
+                                    });
+                                }
+                            },
                             window,
                             cx,
                         )
                     }));
                 }
-                if !categories.is_empty() {
+                if !collections.is_empty() {
                     menu = menu.separator();
                 }
+                let new_keys: Vec<String> = category_ids.iter().map(GameId::key).collect();
+                menu = menu.item(
+                    PopupMenuItem::new(t("library.collection.new_menu"))
+                        .icon(IconName::Plus)
+                        .on_click(move |_, window, cx| {
+                            open_collection_dialog_with_games(None, new_keys.clone(), window, cx);
+                        }),
+                );
+                if !categories.is_empty() {
+                    menu = menu.separator().label(t("library.menu.manual_categories"));
+                    for (name, inside) in categories.iter() {
+                        let membership = Membership::of(*inside, category_ids.len());
+                        let (ids, name, add) =
+                            (category_ids.clone(), name.clone(), membership.adds());
+                        let mut row = PopupMenuItem::new(category_row_label(
+                            &name,
+                            membership,
+                            category_ids.len(),
+                        ))
+                        .checked(membership == Membership::All);
+                        if let Membership::Some(_) = membership {
+                            row = row.icon(IconName::Minus);
+                        }
+                        menu = menu.item(row.on_click(move |_, window, cx| {
+                            let message = counted(
+                                if add {
+                                    (
+                                        "library.bulk.done.categorized_one",
+                                        "library.bulk.done.categorized_other",
+                                    )
+                                } else {
+                                    (
+                                        "library.bulk.done.uncategorized_one",
+                                        "library.bulk.done.uncategorized_other",
+                                    )
+                                },
+                                ids.len(),
+                                &[("category", &name)],
+                            );
+                            let name = name.clone();
+                            edit_with_undo(
+                                ids.to_vec(),
+                                message,
+                                move |u, ids| u.set_category_many(ids, &name, add),
+                                window,
+                                cx,
+                            )
+                        }));
+                    }
+                }
+                menu = menu.separator();
                 let view = view.clone();
                 menu.item(
                     PopupMenuItem::new(t("library.bulk.manage_categories")).on_click(
