@@ -131,7 +131,7 @@
             meta = {
               description = "A native game launcher that gathers your game libraries";
               homepage = "https://irori.app";
-              license = pkgs.lib.licenses.mit;
+              license = pkgs.lib.licenses.gpl3Plus;
               sourceProvenance = [ pkgs.lib.sourceTypes.binaryNativeCode ];
               platforms = systems;
               mainProgram = "irori";
