@@ -908,3 +908,21 @@ async fn the_game_plays_in_the_prefix_the_script_created() {
     let game = out.game.unwrap();
     assert_eq!(game.prefix, Some(ctx.game_dir.join("pfx")));
 }
+
+#[tokio::test]
+async fn blank_game_prefix_falls_back_to_created_prefix() {
+    // A blank `game.prefix` is treated like an omitted one and falls back to
+    // the prefix created during install (#169).
+    let script = Script::parse(&steps_script(
+        "wine",
+        "[]",
+        "  - task: {name: create_prefix, prefix: $GAMEDIR/pfx}\n  - write_file: {file: $GAMEDIR/pfx/drive_c/game.exe, content: MZ}",
+        "    exe: $GAMEDIR/pfx/drive_c/game.exe\n    prefix: \"   \"",
+    ))
+    .unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let ctx = ctx(tmp.path());
+    let out = install(&script, &ctx, &Host::default()).await.unwrap();
+    let game = out.game.unwrap();
+    assert_eq!(game.prefix, Some(ctx.game_dir.join("pfx")));
+}

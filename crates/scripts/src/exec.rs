@@ -144,17 +144,32 @@ impl Runner<'_> {
         Ok(self.vars.substitute(raw, Mode::Strict, loc)?)
     }
 
+    fn resolve_path(&self, s: &str) -> PathBuf {
+        let s = s.trim_end_matches(['/', '\\']);
+        let p = PathBuf::from(if s.is_empty() { "/" } else { s });
+        lexical(&if p.is_absolute() {
+            p
+        } else {
+            self.ctx.game_dir.join(p)
+        })
+    }
+
     /// A path parameter: a file id or substituted text, relative paths
     /// taken from the game folder.
     fn path(&self, raw: &str, loc: &str) -> Result<PathBuf> {
         let s = self.vars.substitute_ref(raw, loc)?;
-        let s = s.trim_end_matches(['/', '\\']);
-        let p = PathBuf::from(if s.is_empty() { "/" } else { s });
-        Ok(lexical(&if p.is_absolute() {
-            p
-        } else {
-            self.ctx.game_dir.join(p)
-        }))
+        Ok(self.resolve_path(&s))
+    }
+
+    fn non_blank_path(&self, raw: Option<&str>, loc: &str) -> Result<Option<PathBuf>> {
+        let Some(raw) = raw.filter(|r| !r.trim().is_empty()) else {
+            return Ok(None);
+        };
+        let s = self.vars.substitute_ref(raw, loc)?;
+        if s.trim().is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(self.resolve_path(&s)))
     }
 
     fn opt_path(&self, raw: Option<&str>, loc: &str) -> Result<Option<PathBuf>> {
@@ -197,11 +212,14 @@ impl Runner<'_> {
     /// The prefix a Wine task uses: its own, else Irori's, else the game
     /// section's, else the game folder. Checked as a write target.
     async fn prefix(&self, own: Option<&str>, loc: &str) -> Result<PathBuf> {
-        let p = match (own, &self.ctx.prefix, &self.script.game.prefix) {
-            (Some(raw), _, _) => self.path(raw, loc)?,
-            (None, Some(p), _) => lexical(p),
-            (None, None, Some(raw)) => self.path(raw, loc)?,
-            (None, None, None) => lexical(&self.ctx.game_dir),
+        let p = if let Some(p) = self.non_blank_path(own, loc)? {
+            p
+        } else if let Some(p) = &self.ctx.prefix {
+            lexical(p)
+        } else if let Some(p) = self.non_blank_path(self.script.game.prefix.as_deref(), loc)? {
+            p
+        } else {
+            lexical(&self.ctx.game_dir)
         };
         let loc = loc.to_string();
         self.with_fs(move |fs| Ok(fs.sandbox.check(&p, &loc)?))
@@ -926,15 +944,16 @@ impl Runner<'_> {
             args: g.args.as_deref().map(|a| self.text(a, loc)).transpose()?,
             working_dir: self.opt_path(g.working_dir.as_deref(), loc)?,
             prefix: if is_wine {
-                Some(match (&self.ctx.prefix, &g.prefix) {
-                    (Some(p), _) => p.clone(),
-                    (None, Some(raw)) => self.path(raw, loc)?,
+                Some(if let Some(p) = &self.ctx.prefix {
+                    p.clone()
+                } else if let Some(p) = self.non_blank_path(g.prefix.as_deref(), loc)? {
+                    p
+                } else {
                     // Where the script put the prefix, so the game doesn't
                     // start in another one.
-                    (None, None) => self
-                        .prefix_used
+                    self.prefix_used
                         .clone()
-                        .unwrap_or_else(|| self.ctx.game_dir.clone()),
+                        .unwrap_or_else(|| self.ctx.game_dir.clone())
                 })
             } else {
                 None
