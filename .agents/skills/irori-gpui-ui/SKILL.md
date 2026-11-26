@@ -19,7 +19,7 @@ Use this skill whenever changing views, sheets, dialogs, themes, layouts, contro
 - Put `min_w_0()` and `truncate()` on every flex child carrying variable-length or translated text, and leave 30% to 40% horizontal room for longer locales.
 - Preserve full keyboard and controller reachability: never bind `F24` (used by `crates/feature-bigpicture/src/gamepad/pointer.rs`), and call `cx.propagate()` when arrow handlers reach the edge of a grid or list so gamepad focus never gets trapped.
 - For UI tests (`#[gpui_kit::test]`, see `crates/feature-library/src/ui_tests.rs`), never enable `gpui-kit/test-support`; add `gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }` under `[dev-dependencies]` and run headless Linux tests under `xvfb-run -a`.
-- For visual changes, inspect both Irori Night (dark) and Irori Day (light) using an isolated `IRORI_HOME`, or state plainly in the pull request that the screen was not visually rendered.
+- For visual changes, inspect both Irori Night (dark) and Irori Day (light) using an isolated `IRORI_HOME` (on headless Linux you can capture both themes in one command with `website/scripts/screenshots/pr_shot.sh target/quick/irori irori://library /tmp/pr-shots`), or state plainly in the pull request that the screen was not visually rendered.
 
 ## Few-shot examples
 
