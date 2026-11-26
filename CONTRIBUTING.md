@@ -84,10 +84,12 @@ If you want to propose a large new feature, start a conversation on [GitHub Disc
 - Title the pull request `<type>(<scope>): <summary>`, with the same type as the
   branch, for example `fix(epic): treat Mac ports released separately as native`.
   The types are `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `i18n`, `build`,
-  `ci`, `chore` and `revert`. A CI check enforces the naming; you can run it locally:
+  `ci`, `chore` and `revert`. A CI check enforces naming, the 1,500-line Rust diff
+  limit, and the PR body structure (`## Plain-language summary` before
+  `## Technical details`); you can run it locally:
 
   ```bash
-  python3 .github/scripts/pr_rules.py --title "fix(epic): …" --head fix/epic-login
+  python3 .github/scripts/pr_rules.py --title "fix(epic): ..." --head fix/epic-login --body-file pr_body.md
   ```
 
 - Fill in the pull request template: start with a short plain-language summary of

@@ -21,7 +21,7 @@ Run all commands from the repository root:
 | Dependency & license policy | `cargo deny check` (`deny.toml`) |
 | PR & doc rule tests | `python3 -m unittest discover -s .github/scripts -p "test_*.py"` |
 | Agent docs & graph sync | `python3 .github/scripts/check_agent_docs.py` |
-| PR naming & size check | `python3 .github/scripts/pr_rules.py --title "<type>(<scope>): <summary>" --head <type>/<kebab-name> --base-sha origin/main --head-sha HEAD` |
+| PR naming, body & size check | `python3 .github/scripts/pr_rules.py --title "<type>(<scope>): <summary>" --head <type>/<kebab-name> --base-sha origin/main --head-sha HEAD --body-file <file>` |
 
 ## Core architectural invariants
 
@@ -71,13 +71,15 @@ Load only the document or skill that matches your task:
 | [.agents/skills/irori-gpui-ui/SKILL.md](.agents/skills/irori-gpui-ui/SKILL.md) | Building or modifying GPUI views, dialogs, layouts, controller focus, or UI tests |
 | [.agents/skills/irori-i18n/SKILL.md](.agents/skills/irori-i18n/SKILL.md) | Adding or updating `en.json` translation keys, `{placeholder}` arguments, or plural forms |
 | [.agents/skills/irori-store-protocol/SKILL.md](.agents/skills/irori-store-protocol/SKILL.md) | Modifying `crates/store-*`, protocol crates, `irori-secrets`, `irori-depot`, or offline `TestServer` suites |
-| [.agents/skills/irori-pr-checks/SKILL.md](.agents/skills/irori-pr-checks/SKILL.md) | Running pre-PR lints, `pr_rules.py`, `check_agent_docs.py`, cross-OS `#[cfg]` audits, and PR summaries |
+| [.agents/skills/irori-runtime-launch/SKILL.md](.agents/skills/irori-runtime-launch/SKILL.md) | Modifying Wine/Proton/umu launch env, bubblewrap sandboxing, emulators, or Lutris scripts in `crates/runtime`, `crates/engines`, or `crates/scripts` |
+| [.agents/skills/irori-pr-checks/SKILL.md](.agents/skills/irori-pr-checks/SKILL.md) | Running pre-PR lints, `pr_rules.py`, `check_agent_docs.py`, cross-OS `#[cfg]` audits, opening Issues, and writing PR summaries |
 
 ## Branches, commits, and pull requests
 
 Enforced by `.github/workflows/pr-rules.yml` and `.github/scripts/pr_rules.py`:
 
 - Name branches `<type>/<short-kebab-description>` matching the PR title `<type>(<scope>): <summary>` or `<type>: <summary>` (max 72 chars, imperative lower-case summary, no trailing period, matching type). Valid types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `i18n`, `build`, `ci`, `chore`, `revert`.
-- Target `main` (or another convention-named branch for stacked work), never commit to `main` directly, and split large Rust changes into stacked PRs under the 1,500-line `*.rs` addition limit (`large-pr-approved` label required above 1,500 lines).
-- Start every PR body with a plain-language summary for end users, followed by technical details, verification commands run, and any platforms or screens not verified directly.
-- Never claim to have visually checked a UI screen you did not render. Use `IRORI_HOME=<scratch>` when running manual experiments.
+- Target `main` (or another convention-named branch for stacked work), never commit to `main` directly, and split large Rust changes into stacked PRs under the 1,500-line `*.rs` addition limit (`large-pr-approved` label required above 1,500 lines; touched `.rs` files over 800 lines trigger a non-blocking split advisory).
+- Every non-bot PR body is validated by CI: it must open with `## Plain-language summary` (plain prose for end users with no fenced code blocks, optional leading Draft blockquote allowed) followed by `## Technical details`, verification commands run, and any platforms or screens not verified directly.
+- When opening GitHub Issues (manually or via `gh issue create`), follow `.github/ISSUE_TEMPLATE/bug_report.yml` or `.github/ISSUE_TEMPLATE/feature_request.yml`: lead with plain-language impact before logs or technical details, and never include tokens, cookies, or secrets.
+- Never claim to have visually checked a UI screen you did not render. Use `IRORI_HOME=<scratch>` (or `website/scripts/screenshots/pr_shot.sh` on Linux) when verifying UI changes.

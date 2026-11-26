@@ -17,7 +17,8 @@ Follow [AGENTS.md](../AGENTS.md) as the authoritative engineering contract for I
    - [irori-gpui-ui](../.agents/skills/irori-gpui-ui/SKILL.md) for GPUI views, dialogs, controller focus, and UI tests.
    - [irori-i18n](../.agents/skills/irori-i18n/SKILL.md) for `en.json` keys and `{placeholder}` checks.
    - [irori-store-protocol](../.agents/skills/irori-store-protocol/SKILL.md) for `crates/store-*`, protocol crates, `irori-secrets`, and `TestServer` suites.
-   - [irori-pr-checks](../.agents/skills/irori-pr-checks/SKILL.md) for pre-PR checks and PR summaries.
+   - [irori-runtime-launch](../.agents/skills/irori-runtime-launch/SKILL.md) for Wine/Proton/umu launch env, bubblewrap sandboxing, emulators, and Lutris scripts.
+   - [irori-pr-checks](../.agents/skills/irori-pr-checks/SKILL.md) for pre-PR checks, Issues, and plain-language-first PR summaries.
 
 ## Non-negotiable checks before finishing
 
@@ -25,5 +26,5 @@ Follow [AGENTS.md](../AGENTS.md) as the authoritative engineering contract for I
 - Run `cargo clippy --locked --workspace --all-targets --profile ci -- -D warnings`.
 - Run `cargo test --locked --workspace --no-fail-fast --profile ci` (with `xvfb-run -a` on headless Linux).
 - Run `python3 -m unittest discover -s .github/scripts -p "test_*.py"` and `python3 .github/scripts/check_agent_docs.py`.
-- Validate PR naming and Rust diff size with `python3 .github/scripts/pr_rules.py --title "..." --head "..." --base-sha origin/main --head-sha HEAD`.
+- Validate PR naming, body (`## Plain-language summary` before `## Technical details`), and Rust diff size with `python3 .github/scripts/pr_rules.py --title "..." --head "..." --base-sha origin/main --head-sha HEAD --body-file <file>`.
 - Keep changes offline-tested, panic-free in production paths, and compatible with Linux, macOS, and Windows.

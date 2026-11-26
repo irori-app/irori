@@ -31,7 +31,7 @@ Match model depth to task risk:
 | --- | --- | --- |
 | Localized mechanical edits | Fast coding model | Adding `en.json` keys, straightforward GPUI spacing tweaks, splitting a module into `<module>.rs` + `<module>/*.rs` submodules (`irori-submodule-refactor`), writing repetitive test fixtures |
 | Stateful UI or multi-crate features | Flagship coding model | New `crates/feature-*` sheets, `irori_ui::hooks` wiring, `SearchIndex` filters, store adapter methods with `TestServer` tests |
-| Subtle concurrency, crypto, containment, or cross-OS bugs | Reasoning ("thinking") model or multi-model council | `irori-io` Tokio vs GPUI window lifecycle races, `parking_lot` lock ordering, `crates/runtime` Wine/Proton/umu/bubblewrap launch composition, `crates/msixvc` XVD/AES-XTS math, `crates/scripts` confinement, `crates/core/src/fs_guard.rs`, Linux/macOS/Windows `#[cfg]` parity |
+| Subtle concurrency, crypto, containment, or cross-OS bugs | Reasoning ("thinking") model or multi-model council | `irori-io` Tokio vs GPUI window lifecycle races, `parking_lot` lock ordering, `crates/runtime` Wine/Proton/umu/bubblewrap launch composition (load `.agents/skills/irori-runtime-launch/SKILL.md`), `crates/msixvc` XVD/AES-XTS math, `crates/scripts` confinement, `crates/core/src/fs_guard.rs`, Linux/macOS/Windows `#[cfg]` parity |
 
 When stuck on a subtle bug or reviewing a high-risk security or concurrency change, run an independent second-model ("council") review: hand the exact diff and constraints to a second reasoning model in a clean session with zero prior bias and ask it to find failure modes.
 
@@ -152,10 +152,12 @@ Run `python3 -m unittest discover -s .github/scripts -p "test_*.py"`, `python3 .
 
 Automated tests verify widget trees without proving visual balance, contrast, or overflow. Whenever a desktop display is available and you touch UI layout or styling:
 
-1. Build and launch against a scratch profile so your personal library and credentials stay untouched:
+1. Build and launch against a scratch profile so your personal library and credentials stay untouched (or capture both themes in one headless Linux step with `website/scripts/screenshots/pr_shot.sh`):
    ```bash
    cargo build --locked --profile quick -p irori -p irori-sign-in
    IRORI_HOME="$(mktemp -d)" target/quick/irori
+   # Headless Linux one-shot dark + light capture seeded with demo games:
+   website/scripts/screenshots/pr_shot.sh target/quick/irori irori://library /tmp/pr-shots
    ```
 2. Capture screenshots of the modified view in both Irori Night (dark) and Irori Day (light), plus narrow window widths for German or Russian text expansion.
 3. Inspect screenshots with a multimodal model in two explicit steps:
