@@ -63,14 +63,14 @@ pub fn build(bus: EventBus, settings: SettingsFn) -> Vec<DynStore> {
             irori_amazon::AmazonStore::for_account,
         ),
     ];
-    if settings().zoom_platform {
-        stores.push(with_accounts(
-            irori_zoom::ZoomStore::new(bus.clone(), settings.clone()),
-            &bus,
-            &settings,
-            irori_zoom::ZoomStore::for_account,
-        ));
-    }
+    // Always present so it can be turned on from its account card; it
+    // shows nothing while `zoom_platform` is off.
+    stores.push(with_accounts(
+        irori_zoom::ZoomStore::new(bus.clone(), settings.clone()),
+        &bus,
+        &settings,
+        irori_zoom::ZoomStore::for_account,
+    ));
     // Always present so it can be turned on from its account card; it
     // shows nothing while `itch_io` is off.
     stores.push(with_accounts(

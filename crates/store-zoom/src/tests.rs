@@ -483,3 +483,62 @@ async fn reads_every_page_of_a_library_counted_from_zero() {
     titles.sort();
     assert_eq!(titles, ["Alien Trilogy", "Hatred"]);
 }
+
+#[tokio::test]
+async fn hides_user_and_games_while_disabled_and_shows_them_when_enabled() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = TestServer::start(move |req: &Req| match req.path.as_str() {
+        "/li/loggedin" => Resp::json(json!({"name": "player"})),
+        "/li/games" => Resp::json(json!({
+            "current_page": 0,
+            "total_pages": 1,
+            "games": [{"id": 1, "slug": "test-game", "name": "Test Game", "operating_systems": ["windows"]}]
+        })),
+        _ => Resp::status(404),
+    });
+    let enabled = Arc::new(AtomicBool::new(false));
+    let enabled_ref = enabled.clone();
+    let install_path = dir.path().join("Games").to_string_lossy().into_owned();
+    let settings: SettingsFn = Arc::new(move || {
+        Arc::new(AppSettings {
+            default_install_path: install_path.clone(),
+            zoom_platform: enabled_ref.load(Ordering::SeqCst),
+            ..Default::default()
+        })
+    });
+    let opts = ZoomOptions {
+        api_base: server.base(),
+        layout: Layout {
+            config_dir: dir.path().join("config"),
+            cache_dir: dir.path().join("cache"),
+        },
+        page_delay: Duration::from_millis(1),
+    };
+    let store = ZoomStore::with_options(EventBus::new(), settings, opts);
+    store.init().await.unwrap();
+
+    // Turning ZOOM on live without recreating the store lets the user log in
+    // and load their library immediately.
+    assert!(store.login("li_token=good-token-123456").await.is_err());
+    enabled.store(true, Ordering::SeqCst);
+    store.login("li_token=good-token-123456").await.unwrap();
+    store.refresh(false).await.unwrap();
+    assert!(store.user().is_some());
+    assert_eq!(store.games().len(), 1);
+    assert!(store.game("1").is_some());
+
+    // Turning ZOOM back off hides the account and games again.
+    enabled.store(false, Ordering::SeqCst);
+    assert!(store.user().is_none());
+    assert!(store.games().is_empty());
+    assert!(store.game("1").is_none());
+
+    // Re-enabling restores them without restarting or re-logging in.
+    enabled.store(true, Ordering::SeqCst);
+    assert_eq!(
+        store.user().map(|u| u.display_name),
+        Some("player".to_string())
+    );
+    assert_eq!(store.games().len(), 1);
+    assert!(store.game("1").is_some());
+}
