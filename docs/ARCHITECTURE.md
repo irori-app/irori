@@ -59,8 +59,9 @@ Never add a dependency pointing upward:
 
 ```text
 irori-secrets                     (zero internal deps; usable by protocol crates)
+comet, irori-launchers-data       (zero internal deps; irori-gog-galaxy wraps comet)
 irori-core                        (zero internal deps)
-  |- irori-runtime, irori-depot, irori-extras
+  |- irori-depot, irori-runtime, irori-extras
   |- irori-engines   (core, runtime, depot)
   |- irori-scripts   (core, runtime, depot; no store or UI knowledge)
   |- irori-mods      (core, depot; no store or UI knowledge)
@@ -68,11 +69,11 @@ irori-core                        (zero internal deps)
   |- protocol crates: irori-epic-api, irori-gog-api, irori-amazon-api, irori-itch-api,
   |                   irori-steam-api, irori-retroachievements-api, irori-xbox-api,
   |                   irori-msstore-api, irori-msixvc
-  |                   (depot and secrets only; never irori-core)
+  |                   (never depend directly on irori-core; epic/gog/amazon use depot, gog uses secrets)
   |- store crates:    irori-epic, irori-gog, irori-amazon, irori-zoom, irori-itch,
   |                   irori-steam, irori-sideload, irori-xbox, irori-emulation,
   |                   irori-launchers
-  `- irori-services   (core, depot, runtime, extras, engines, scripts, mods, reshade,
+  `- irori-services   (core, secrets, depot, runtime, extras, engines, scripts, mods, reshade,
                        irori-steam-api for public achievement schemas; drives stores via DynStore)
 irori-ui          (services, core, runtime, engines)
 feature crates    (ui, services, core; concrete stores only where a screen needs store-specific API)
@@ -80,9 +81,9 @@ irori (binary)    (everything; the only crate naming all stores)
 irori-sign-in     (standalone; linked by irori on macOS/Windows only)
 ```
 
-- Protocol crates have zero knowledge of Irori: no `Paths`, no settings, no events.
+- Protocol crates have zero knowledge of Irori's app state: no direct `irori-core` dependency, no `Paths`, no settings, no events.
 - Store crates adapt protocols into `Store`. Services drive stores strictly through `DynStore = Arc<dyn Store>`.
-- Feature crates never depend on each other; the shell routes events (`LibraryEvent`, `GamePageEvent`) and installs cross-feature hooks (`irori_ui::hooks`, `irori_game::install_hooks`).
+- Feature crates stay decoupled from each other (the sole direct link is `irori-settings` reading `irori_bigpicture::gamepad` and `irori_bigpicture::overlay::support` for controller mapping and overlay support tables); the shell routes events (`LibraryEvent`, `GamePageEvent`) and installs cross-feature hooks (`irori_ui::hooks`, `irori_game::install_hooks`).
 
 ## 2. Store protocol boundaries and sustainability policy
 
@@ -115,13 +116,13 @@ Read `crates/core/src/{store,events,paths,settings,process,launch}.rs` before mo
 ### Events, paths, persistence, and secrets
 
 - `EventBus` (`events.rs`): Tokio broadcast channel (capacity 1024). Events carry identities, never full payloads. Stores emit `LibraryChanged(Runner)` and `AccountChanged(Runner)`; UI listens for `LibraryUpdated(rev)` after snapshot rebuilds. Startup notices must use `EventBus::startup_notice` because the UI subscribes after backend start.
-- `Paths` (`paths.rs`): global singleton initialized once per process (`Paths::init(Paths::under(tmp))` in tests). Relocated by `IRORI_HOME` or a sibling `portable` file next to `irori.exe` on Windows (`paths::is_portable` skips URL handler and Start menu registration). Store configs live under `store_config_dir(runner)`, caches under `store_cache_dir(runner)`, state (`library.json`, `downloads.json`, `sessions.jsonl`, `running.json`) under `state_dir()`, per-game settings at `config/games/<runner>/<app>.json`, and logs/crash dumps (`crash-<time>.txt`) under `logs_dir()`.
-- Atomic JSON persistence (`json_store.rs`): always write via `json_store::write`/`write_bytes` (`.tmp` sibling + atomic rename). `read` returns `Ok(None)` when missing; `read_or_default` logs and falls back on corruption. `home_rename.rs` remaps renamed macOS `/Users/<old>` paths only when enabled in `main.rs`.
-- Secrets (`irori-secrets`): all logins, tokens, cookies, API keys, and passwords use `irori_secrets::read_json`/`load`/`write_json`, never `json_store`. Files are AES-256-GCM sealed with a single random key stored in the OS keyring (keeping credentials out of Windows' ~2.5 KB keyring entry limit), falling back to mode `0600` plain JSON when no keyring exists and upgrading automatically once available. Only `main.rs` enables `use_os_keyring`, keeping tests isolated from real keyrings. Never read secrets on the UI thread; locked vaults raise `shell.notice.logins_locked`.
+- `Paths` (`paths.rs`): global singleton initialized once per process (`Paths::init(Paths::under(tmp))` in tests). Relocated by `IRORI_HOME` or a sibling `portable` file next to `irori.exe` on Windows (`paths::is_portable` skips URL handler and Start menu registration). Store configs live under `store_config_dir(runner)`, caches under `store_cache_dir(runner)`, state (`library.json`, `downloads.json`, `sessions.jsonl`, `running.json`) under `state_dir()`, per-game settings at `config/games/<runner>/<app>.json`, and logs/crash dumps (`crash-<time>.txt`, parsed and listed via `crates/core/src/crash.rs`) under `logs_dir()`.
+- Atomic JSON persistence (`json_store.rs`): always write via `json_store::write`/`write_bytes` (`.tmp` sibling + atomic rename). `read` returns `Ok(None)` when missing; `read_or_default` logs and falls back on corruption. `home_rename.rs` remaps renamed macOS `/Users/<old>` paths only when enabled in `crates/irori/src/main.rs`.
+- Secrets (`irori-secrets`): all logins, tokens, cookies, API keys, and passwords use `irori_secrets::read_json`/`load`/`write_json`, never `json_store`. Files are AES-256-GCM sealed with a single random key stored in the OS keyring (keeping credentials out of Windows' ~2.5 KB keyring entry limit), falling back to mode `0600` plain JSON when no keyring exists and upgrading automatically once available. Only `crates/irori/src/main.rs` enables `use_os_keyring`, keeping tests isolated from real keyrings. Never read secrets on the UI thread; locked vaults raise `shell.notice.logins_locked`.
 
 ### Settings, processes, HTTP, host helpers, and deletion safety
 
-- Settings (`settings.rs`): camelCase keys match Heroic (including `enviromentOptions`); never rename keys, and mark new fields `#[serde(default)]`. `AppSettings` flattens global `GameSettings`; per-game `GameSettingsOverrides` is a sparse JSON map. `merged_lists.rs` merges `enviromentOptions` (by `key`), `wrapperOptions` (by `exe`), and `iroriLaunchPrograms` (by `path`) over defaults using `iroriRemoved: true` tombstones via `GameSettingsOverrides::override_value` (migrated once by `settings_migration.rs`). Launch presets (`launch_extras.rs`) apply only `PRESET_KEYS`.
+- Settings (`crates/core/src/settings.rs` and `crates/core/src/settings/`): camelCase keys match Heroic (including `enviromentOptions`); never rename keys, and mark new fields `#[serde(default)]`. `AppSettings` flattens global `GameSettings`; per-game `GameSettingsOverrides` is a sparse JSON map. `merged_lists.rs` merges `enviromentOptions` (by `key`), `wrapperOptions` (by `exe`), and `iroriLaunchPrograms` (by `path`) over defaults using `iroriRemoved: true` tombstones via `GameSettingsOverrides::override_value` (migrated once by `crates/services/src/settings_migration.rs`). Launch presets (`launch_extras.rs`) apply only `PRESET_KEYS`.
 - Processes (`process.rs`): spawn games and tools through `CommandSpec` + `process::run`/`spawn`, handling line callbacks (`\n`/`\r`), capped logs, cancellation, process-group termination (SIGTERM then SIGKILL on Unix; `taskkill /T /F` on Windows), and Windows `CREATE_NO_WINDOW` (`run` hides consoles, `spawn` preserves them for console games, standalone helpers call `process::hide_console`). Split arguments with `split_program_args(windows, ..)` for game executables (preserving Windows quoting under Wine) and `split_args` for host wrappers.
 - HTTP (`http.rs`, `net.rs`): use `irori_core::http::client()` (shared rustls client, `Irori/<version>` UA, 10 s connect / 60 s total timeout) or `download_client()` (no total timeout) inside Tokio. Both obey `iroriNetworkMode` and `iroriNetworkTimeout` via `net::OfflineAwareResolver` (refusing non-loopback hosts with `net::WorkingOffline`). Custom clients must wire `.dns_resolver(net::resolver())` and `net::request_timeout()`; protocol crates gate calls through `Backend::working_offline` / `net::working_offline()`.
 - Flatpak host bridge (`host.rs`): inside Irori's Flatpak, discover and execute host tools (Steam, Ludusavi, rclone, compositor tools) via `host::find_program`, `has_flatpak_app`, `host::command`, `tied_command`, `host::processes`, and `host::signal`.
@@ -137,7 +138,7 @@ Read `crates/core/src/{store,events,paths,settings,process,launch}.rs` before mo
 - Search and categories (`search.rs`, `smart_categories/`): lazy `SearchIndex` with folded text (`irori_core::text`), ranked exact/prefix/word/fuzzy matching, plus `mode:`, `tag:`, `category:`, and `smart:` terms. Manual categories (`UserData::categories`), smart categories (`UserData::smart_categories` with three-valued evaluation and forward-compatible `extra` retention), and saved views (`ViewFilter::unknown` retention) feed `CategoryIndex`. Categories import/export via `category_file.rs`.
 - Hidden games PIN (`hidden_lock.rs`): while `LibrarySnapshot::hidden_locked` is true, every screen, search, Big Picture shelf, palette, stats view (`visible_sessions`), CLI, and Discord RPC (`Backend::concealed`) must exclude hidden games.
 - Downloads and updates (`downloads`, `updates.rs`, `screen.rs`, `download_power.rs`): single-worker persisted queue (`state/downloads.json`) with per-disk space accounting (`download_space.rs`), speed-based ETA, display power-off (`kscreen-doctor`/GNOME/DPMS/`pmset`/`SC_MONITORPOWER`, never sudo), and 60 s idle power-down countdown (`download_power.rs`, never interrupting running games). Component updates check Wine, DXVK, VKD3D-Proton, DXVK-NVAPI, umu, anticheat runtimes, emulators, and RetroArch cores using `releases.atom` and GitHub rate-limit budgets (`state/wine-release-checks.json`), keeping replaced Wine builds in `<base>/.rollback/`.
-- Metadata and enrichment: `Backend::extra_info` and `Backend::wiki_info` layer store pages, Steam links (`steam_link.rs`, `<cache>/steam-links.json`), Steam tags (`steam_tags.rs`, `iroriSteamTagLimit` 5 to 20), Steam reception (`steam_reception.rs`), PCGamingWiki bare facts (`pc_facts`), HowLongToBeat (`hltb`), opt-in IGDB (`igdb.rs`), opt-in VNDB (`vndb.rs`, filtered by content rating and `https://*.vndb.org`), age ratings (`store_facts.rs`), controller support, game modes (`game_mode::lenient`), user metadata overrides (`GameOverrides`), and global field rules (`field_rules.rs`).
+- Metadata, enrichment, and deals: `Backend::extra_info` and `Backend::wiki_info` layer store pages, Steam links (`steam_link.rs`, `<cache>/steam-links.json`), Steam tags (`steam_tags.rs`, `iroriSteamTagLimit` 5 to 20), Steam reception (`steam_reception.rs`), PCGamingWiki bare facts (`pc_facts`), HowLongToBeat (`hltb`), opt-in IGDB (`igdb.rs`), opt-in VNDB (`vndb.rs`, filtered by content rating and `https://*.vndb.org`), age ratings (`store_facts.rs`), controller support, game modes (`game_mode::lenient`), user metadata overrides (`GameOverrides`), and global field rules (`field_rules.rs`). Store deals and giveaways live in `crates/extras/src/discounts/` (`free.rs`, `ggdeals.rs`, `regions.rs`, `search.rs`) and `crates/services/src/ggdeals.rs`.
 - Achievements (`achievements.rs`, `file_achievements/`): always read through `Backend::achievements` so totals and monotonic unlock history persist in `state/achievements.json`. Live session watching (`watch_achievements_while_playing`) follows GOG comet events (`Event::AchievementSignal`) or Steam `UserGameStats_*.bin` via `notify`, falling back to periodic polling only when no signal exists. Steam Achievement Sets carry `group`, `achievable`, and `completed_at`. Opt-in `iroriFileAchievements` reads DRM-free Steam-emulator saves (Goldberg, gbe_fork, CODEX, RUNE) using Steam's public schema.
 - Saves, snapshots, backups, and sync:
   - Ludusavi (`ludusavi.rs`, `ludusavi/restore.rs`, `ludusavi/undo.rs`): external `--api` CLI (never bundled), per-prefix redirects via temporary config copies without modifying user Ludusavi config, undo snapshots in `<data>/save-restore-undo/<game>/`, optional in-session interval backups (`iroriLudusaviInterval`).
@@ -164,8 +165,8 @@ Read `crates/core/src/{store,events,paths,settings,process,launch}.rs` before mo
 
 - Every store crate exposes `pub struct <Name>Store`, `new(bus, settings) -> Arc<Self>`, `import_from_heroic(&Path) -> Result<()>`, and path/endpoint test constructors (`with_paths`, `with_endpoints`, `with_layout`).
 - Multi-account support lives outside individual store crates: the shell wraps Epic, GOG, Amazon, ZOOM, and itch.io in `irori_services::MultiAccountStore` (main slot uses default paths; extra slots use `for_account` with `Paths::account_config_dir`/`account_cache_dir`).
-- Registration order in `crates/irori/src/stores.rs`: Epic, GOG, Amazon, ZOOM (when enabled), itch.io, Xbox (Linux only), Steam, Launchers, Emulation, Sideload.
-- On Windows, `irori-gog/src/galaxy.rs` imports owned GOG Galaxy installs from `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games` read-only once per folder (`galaxy-imports.json`).
+- Registration order in `crates/irori/src/stores.rs`: Epic, GOG, Amazon, ZOOM, itch.io, Xbox (Linux only), Steam, Launchers, Emulation, Sideload. ZOOM and itch.io stay registered so toggling `zoomPlatform` or `iroriItchIo` takes effect live without restarting Irori.
+- On Windows, `crates/store-gog/src/galaxy.rs` imports owned GOG Galaxy installs from `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games` read-only once per folder (`galaxy-imports.json`).
 
 ### Shell (`crates/irori`)
 
@@ -194,7 +195,7 @@ Key environment variables: `IRORI_HOME` (relocate config/data/cache), `IRORI_LOG
 - ROM library (`irori-emulation`) scans `iroriRomFolders` incrementally with `DETECTION_RULES` cache invalidation, `notHeaders` guards (keeping DOOM `IWAD`/`PWAD` out of Wii `.wad`), disc/folder markers (`PARAM.SFO`, `PS3_DISC.SFB`, `UMD_DATA.BIN`, bounded `iso9660`), and `notify` watches. Removing a ROM hides it and never deletes ROM files.
 - BIOS files are never downloaded or linked externally; existing local BIOS files are hashed with path/size/mtime caching and linked before launch (`BiosMissing`).
 - LaunchBox box art (`iroriLaunchBox`, opt-in only) streams `Metadata.zip` via `quick-xml`, stores per-system JSONs, and deletes the zip.
-- Launcher importers (Lutris `pga.db` read-only/immutable, Bottles, Faugus Launcher, Playnite read-only bounded LiteDB 4 reader) never modify external launchers; optional periodic sync (`launcher_sync.rs`, `state/launcher-imports.json`) imports only unseen games.
+- Launcher importers (Lutris `pga.db` read-only/immutable, Bottles, Faugus Launcher, Playnite read-only bounded LiteDB 4 reader) never modify external launchers; optional periodic sync (`crates/irori/src/launcher_sync.rs`, `state/launcher-imports.json`) imports only unseen games.
 - RetroAchievements (`irori-emulation::retro`) keeps API keys in `irori_secrets`, matches rcheevos hashes, and exchanges passwords once for emulator tokens (`irori_engines::cheevos`).
 - Lutris install scripts (`irori-scripts`): strictly typed command/task/variable enums (unknown items fail the whole script), explicit user consent (`Approvals::accepted`) covering all downloads/writes/overrides, verbatim shell command acknowledgement (`Approvals::shell_acknowledged`, shell metacharacters rejected in substitutions), symlink-resolved write confinement with rollback on failure, native-first refusals (`PreferNative`, `InstallFromStore`), and polite `lutris.net` caching (2 req/s, never bundled).
 
@@ -239,10 +240,17 @@ Key environment variables: `IRORI_HOME` (relocate config/data/cache), `IRORI_LOG
 
 - Errors: use `anyhow::Result` with user-facing `.context(...)` / `.with_context(...)` formatted with `{e:#}`. Use `thiserror` only for typed errors matched by callers.
 - Concurrency: never block Tokio workers; use `tokio::fs`, `irori_core::process`, or `spawn_blocking`. Never hold `parking_lot` locks across `.await`.
-- Dependencies: declare shared crates in `[workspace.dependencies]` (`default-features = false` where practical) and keep `Cargo.lock` committed (`--locked` in CI).
+- Dependencies: declare shared crates in `[workspace.dependencies]` (`default-features = false` where practical), keep `Cargo.lock` committed (`--locked` in CI), and keep `deny.toml` (`cargo deny check` in CI) passing.
 - Platform code: isolate OS-specific logic in dedicated modules gated with `#[cfg(target_os = "...")]` and ensure every branch builds on Linux, macOS, and Windows.
 - Docs and naming: start modules with `//!`, document public items with `///`, explain *why* in comments, avoid TODOs without issues, and follow `irori-<area>` / `*View` / `*Event` / `open_*_dialog` / `init(cx)` naming.
 - Workspace lints (`[workspace.lints.clippy]` in root `Cargo.toml`, inherited by all non-vendored crates via `[lints] workspace = true`): `dbg_macro = "deny"`, `todo = "deny"`, `unimplemented = "deny"`, `large_futures = "warn"`, `needless_collect = "warn"`. Root `clippy.toml` sets `allow-unwrap-in-tests = true` and `allow-expect-in-tests = true`.
+
+### Splitting large modules into submodules
+
+- Split `.rs` files before they grow past roughly 600 to 800 lines instead of letting views, forms, or schemas become monoliths.
+- Prefer the Rust 2018+ sibling facade layout (`<module>.rs` + `<module>/*.rs`) when refactoring an existing file, as used in `crates/core/src/settings.rs` + `crates/core/src/settings/`, `crates/feature-settings/src/form.rs` + `crates/feature-settings/src/form/`, `crates/feature-library/src/view.rs` + `crates/feature-library/src/view/`, and `crates/feature-settings/src/hud/panel.rs` + `crates/feature-settings/src/hud/panel/` (alongside existing directory modules such as `crates/feature-settings/src/registry/mod.rs` and `crates/extras/src/discounts/mod.rs`).
+- Keep `<module>.rs` thin (module docs, `mod` declarations, `pub` or `pub(crate)` re-exports, and core struct definitions) and move focused concerns into `<module>/{actions,render,sections,helpers,tests}.rs` using `pub(super)` or `pub(crate)` visibility so external crate paths never change.
+- Run `python3 .github/scripts/check_agent_docs.py` whenever splitting, moving, or renaming modules or crates so `docs/`, `docs/GRAPHS.md`, and `.agents/skills/` stay synchronized with the source tree.
 
 ### Testing conventions
 
@@ -250,7 +258,7 @@ Key environment variables: `IRORI_HOME` (relocate config/data/cache), `IRORI_LOG
 - Never reach real networks, real user configs, Heroic directories, store accounts, or OS keyrings. Isolate with `tempfile`, `Paths::init(Paths::under(tmp))`, `irori_depot::test_server::TestServer`, and store test constructors.
 - Every bug fix must add a regression test that fails without the fix.
 - Ignored (`#[ignore]`) integration tests require explicit environment opt-in (`IRORI_RELEASE_TEST_URL`, `IRORI_RUNTIME_SMOKE=1`, `IRORI_KEYRING_SMOKE=1` in throwaway `dbus-run-session`, `IRORI_SANDBOX_SMOKE=1`, `IRORI_SANDBOX_PROTON`).
-- Packaging changes must pass `python3 -m unittest discover -s packaging -p "test_*.py"`; PR-rule changes must pass `python3 -m unittest discover -s .github/scripts -p "test_*.py"`.
+- Packaging changes must pass `python3 -m unittest discover -s packaging -p "test_*.py"`; PR-rule and documentation-sync changes must pass `python3 -m unittest discover -s .github/scripts -p "test_*.py"` and `python3 .github/scripts/check_agent_docs.py`.
 
 ### Branches, commits, and pull requests
 
@@ -273,6 +281,7 @@ Enforced by `.github/workflows/pr-rules.yml` and `.github/scripts/pr_rules.py`:
 - Branch names must match `<type>/<short-kebab-description>` (lower case, digits, `-`, `.`, no extra slashes; agent prefixes like `claude/` or `codex/` fail CI).
 - PR titles must match `<type>(<scope>): <summary>` or `<type>: <summary>`, max 72 characters, same `<type>` as the branch, imperative lower-case summary (acronyms like `GOG` or `UI` may lead), no trailing period. Add `!` before `:` for breaking changes (settings keys, on-disk state, CLI, `irori-sign-in` CLI, or `irori://` schemes).
 - Base branch is `main`, or another convention-named branch when stacking (never target an already-merged branch). PRs squash-and-merge using the PR title.
+- Pull requests adding more than 1,500 lines across `*.rs` files fail `.github/scripts/pr_rules.py` unless split into smaller stacked PRs or labeled `large-pr-approved`.
 
 ## 8. Pitfalls and platform invariants
 

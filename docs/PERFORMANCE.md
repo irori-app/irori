@@ -37,7 +37,7 @@ Never re-sort, re-filter, compile regexes (`Regex::new`), or clone `LibrarySnaps
 
 ## GPU and disk art caches
 
-### Cover art pipeline (`irori-ui/src/art.rs`)
+### Cover art pipeline (`crates/ui/src/art.rs`)
 
 - Original images download once; thumbnails are generated per width bucket and persisted to disk.
 - Concurrent image decodes are capped at 2 at a time so bulk scrolling never saturates CPU or memory.
@@ -45,7 +45,7 @@ Never re-sort, re-filter, compile regexes (`Regex::new`), or clone `LibrarySnaps
 - Wrap art-heavy regions in `div().image_cache(LruImageCache::new(n, cx))` and use `GameCover` or `art_img` instead of loading raw images directly.
 - `art::aspect(url)` reads image dimensions once off the UI thread when a thumbnail becomes ready.
 
-### Disk cache trimming (`irori-services/src/art_cache.rs`)
+### Disk cache trimming (`crates/services/src/art_cache.rs`)
 
 - The art disk cache is capped by `iroriArtCacheLimit` (default 2 GiB, `0` disables the cap).
 - The periodic tick trims least-recently-used image groups (each original together with its thumbnails) every 6 hours.
@@ -69,7 +69,7 @@ Never re-sort, re-filter, compile regexes (`Regex::new`), or clone `LibrarySnaps
 
 ### Event-driven monitoring and bounded I/O
 
-- Controller input (`feature-bigpicture/src/gamepad/reader.rs`) runs on a dedicated `gilrs` thread that blocks until an input event arrives, consuming zero CPU when idle. The in-game overlay's raw `evdev` reader thread and Windows XInput watcher exist only while a game or overlay is active.
+- Controller input (`crates/feature-bigpicture/src/gamepad/reader.rs`) runs on a dedicated `gilrs` thread that blocks until an input event arrives, consuming zero CPU when idle. The in-game overlay's raw `evdev` reader thread and Windows XInput watcher exist only while a game or overlay is active.
 - Process tracking prefers kernel `pidfd_open(2)` with `poll(2)` on Linux (`GameWatch::wait_for_exit`) and checks known PIDs before falling back to broader scans; polling occurs only while a watched game is running, never at idle.
 - Download queue (`irori-services`) processes one download at a time, persisted in `state/downloads.json`, with cancellation via `CancellationToken`.
 - All shared HTTP requests use `irori_core::http::client()` (10 s connect timeout, 60 s total timeout unless overridden by `iroriNetworkTimeout`). Large transfers use `download_client()` or `irori-depot`.
@@ -107,17 +107,19 @@ IRORI_HOME=/tmp/irori-prof heaptrack target/profiling/irori
 
 Comparative memory, process-count, binary-size, and idle-CPU methodology and historical results live in [docs/BENCHMARKS.md](BENCHMARKS.md), driven by [docs/benchmarks/compare.py](benchmarks/compare.py).
 
-Summary of the documented baseline (Irori 0.2.0 on Linux Wayland, empty profile, median of 3 rounds):
+Summary of the current Irori 1.1.0 benchmark suite on Linux Wayland (2 rounds, 45 s warmup, 30 s idle window; historical 0.2.0 vs Heroic 2.22.4 comparison also lives in [docs/BENCHMARKS.md](BENCHMARKS.md)):
 
-- Memory (PSS): 87.5 MiB (range 87.4 to 92.2 MiB)
-- Process count: 1
-- Idle CPU (% of one core over 30 s after 45 s warmup): 0.0% across all three rounds
-- Binary size: 76 MB
+- 0 games (empty throwaway profile): 122.4 MiB median PSS, 1 process, 0.02% median idle CPU
+- 300 games (synthetic library + cover/hero art): 146.8 MiB median PSS, 1 process, 0.00% median idle CPU
+- 1,000 games (synthetic library + cover/hero art): 147.7 MiB median PSS, 1 process, 0.02% median idle CPU
+- 1,440 games (real multi-store library in Focus view): 385.1 MiB median PSS, 1 process, 0.03% median idle CPU
+- Release binary size (`irori 1.1.0`): 108.1 MB
 
-Reproduce locally without touching real user data:
+Reproduce locally against synthetic throwaway profiles without touching real user data:
 
 ```bash
-python3 docs/benchmarks/compare.py --irori target/release/irori --heroic heroic
+python3 docs/benchmarks/compare.py --irori target/release/irori --irori-only \
+  --library-sizes 0,300,1000 --rounds 2 --settle 45 --idle 30 --output results.csv
 ```
 
-When introducing a change that touches library indexing, cover art decoding, background tasks, or GPUI rendering hot paths, verify both idle CPU (must remain 0.0%) and memory growth across a large library before merging.
+When introducing a change that touches library indexing, cover art decoding, background tasks, or GPUI rendering hot paths, verify that idle CPU stays near 0.0% and memory scales cleanly across a 1,000-game library before merging.

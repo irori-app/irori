@@ -29,19 +29,19 @@ cx.spawn_in(window, async move |this, cx| {
 
 ## Reactive models and navigation
 
-### Models (`irori-ui/src/models.rs`)
+### Models (`crates/ui/src/models.rs`)
 
 - Global models accessed through `models(cx)`: `LibraryModel`, `StatusModel`, `DownloadsModel`, `ComponentsModel`, `AccountsModel`, `SettingsModel`, `NoticeModel`, and `SessionModel`.
 - One background event pump drains `EventBus` in batches and notifies each affected model once.
 - Wait for `LibraryUpdated` (after snapshot rebuild), never `LibraryChanged` (raw store signal before rebuild), in UI code.
 - Observe only the models a view actually renders and store returned `Subscription` handles in `_subscriptions: Vec<Subscription>`.
 
-### Navigation and cross-feature hooks (`irori-ui/src/nav.rs`, `irori-ui/src/hooks.rs`)
+### Navigation and cross-feature hooks (`crates/ui/src/nav.rs`, `crates/ui/src/hooks.rs`)
 
-- `Route` variants: `Library`, `Game`, `Downloads`, `Updates`, `Settings(section)`, `GameSettings`, `WineManager`, `Emulators`, `Accounts`, `Stores`, `Stats`, `YearInReview(year)`, `BigPicture`, and `Onboarding`.
+- `Route` variants: `Library`, `Game(id)`, `Downloads` (unified queue, app self-update banner, game updates, component updates, and history in `crates/feature-manage/src/downloads/mod.rs` and `crates/feature-manage/src/downloads/updates.rs`), `Settings(section)`, `GameSettings(id, section)`, `WineManager` (`crates/feature-manage/src/wine/`), `Emulators` (`crates/feature-manage/src/emulators/` and `crates/feature-manage/src/emulators/cores.rs`), `Accounts`, `Stores` (store cards and ProtonDB/GG.deals views in `crates/feature-manage/src/stores.rs` and `crates/feature-manage/src/deals.rs`), `Stats`, `YearInReview(year)`, `BigPicture`, and `Onboarding`.
 - Navigate with `navigate(route, cx)`, `go_back`, and `go_forward`. The shell decides which pages to cache.
-- Feature crates never depend on each other or on concrete store crates except where a dedicated screen requires a store's own API. The shell routes between features via events (`LibraryEvent`, `GamePageEvent`) and registers hooks in `irori_ui::hooks` (`game_panel` for `GamePage::embedded`, `game_settings` for `GameSettingsView::embedded`, `game_setup` for `irori_settings::setup_card`, `uninstall`, `play_game`, `install_game`, `open_store_page`, `show_unlocks`, `found_sources`) plus `irori_game::install_hooks`.
-- A game's settings open on the "Changed" section (`changed`) listing only fields that differ from global defaults, each with an inline reset.
+- Feature crates stay decoupled from each other (except `irori-settings` reading `irori_bigpicture::gamepad` and `irori_bigpicture::overlay::support` for controller mapping and overlay support tables) and depend on concrete store crates only where a dedicated screen requires a store's own API. The shell routes between features via events (`LibraryEvent`, `GamePageEvent`) and registers hooks in `irori_ui::hooks` (`game_panel` for `GamePage::embedded`, `game_settings` for `GameSettingsView::embedded`, `game_setup` for `irori_settings::setup_card`, `uninstall`, `play_game`, `install_game`, `open_store_page`, `show_unlocks`, `found_sources`) plus `irori_game::install_hooks`.
+- A game's settings open on the "Changed" section (`changed`) listing only fields that differ from global defaults, each with an inline reset. Settings field specs live in `crates/feature-settings/src/registry/`, form controls and actions in `crates/feature-settings/src/form.rs` + `crates/feature-settings/src/form/`, HUD controls in `crates/feature-settings/src/hud/panel.rs` + `crates/feature-settings/src/hud/panel/`, app update controls in `crates/feature-settings/src/app_update.rs`, and crash review sheets in `crates/feature-settings/src/crash_report.rs`.
 
 ### Feature crate contract
 
@@ -78,21 +78,21 @@ cx.spawn_in(window, async move |this, cx| {
 
 - Add `min_w_0()` (and `min_h_0()` vertically) plus `truncate()` on every flex child containing text that can overflow. Keep one scroll owner per region.
 - Leave 30% to 40% horizontal room for longer languages such as German and Russian. Never trap translated text inside a fixed-width box.
-- Adaptive controls (such as the library header's `iroriUi.libraryQuickControls`) must compute visibility from measured widths using a `canvas` and pure tested functions (`irori-library/src/quick.rs`), never hardcoded pixel breakpoints.
+- Adaptive controls (such as the library header's `iroriUi.libraryQuickControls`) must compute visibility from measured widths using a `canvas` and pure tested functions (`crates/feature-library/src/quick.rs`, rendered by `crates/feature-library/src/view.rs` and `crates/feature-library/src/view/quick.rs`), never hardcoded pixel breakpoints.
 - Focus view column counts (`libraryFocusColumns`, `layouts::focus_columns_for`), cover sizes (`libraryFocusCoverSize`, `layouts::focus_tile_rem`), and automatic Grid/Focus switching (`libraryAutoLayout`, `layouts::wide_enough_for_focus`) use measured widths and switch only on threshold crossings without overwriting manual picks.
 
-### Shared components (`irori-ui/src/components/`)
+### Shared components (`crates/ui/src/components/`)
 
 - Reuse `GameCover`, `ArtImage`, `EmptyState`, `PageHeader`, `SectionTitle`, `ProgressSummary`, `StoreBadge`, `StoreLogo`, and `clip_mark`.
 - Stores, launchers, and emulators with Simple Icons marks in `assets/brand/stores` (CC0; see `NOTICE.md`) render through `StoreLogo::icon` in the current text color; others render their text name.
 - `GameCover` honors `coverCorners`, `coverCaption` (full leading with `format::sort_value`, title-only, or none), `coverShape` (boxes, squares, or 16:9 hero banners via `components::cover_art_for`; Focus and favorites stay boxes, and only boxes render with `coverFit = "whole"`), `coverHover`, and `coverFavourite`. Games without cover art whose Windows executable exposes an icon render `components::program_icon_cover` centered on the placeholder wash.
-- Respect `iroriUi.hiddenDetailRows` (`detail_rows.rs` IDs are persisted user data) on the game page Details card.
+- Respect `iroriUi.hiddenDetailRows` (`crates/feature-game/src/detail_rows.rs` IDs are persisted user data) on the game page Details card.
 - Guided tour (`tour.rs`, triggered manually via "Show me around" in Settings, Getting Started, or the palette): anchors regions with `tour::mark`, navigable by arrows, Enter, Escape, and controller.
 
 ### Tooltips, feedback, and destructive confirmations
 
 - Every async action must visibly represent loading, success, and failure states.
-- Surface failures to users via `window.push_notification(Notification::error(format!("{e:#}")).title(t(..)))` or an inline `Alert`; never log errors silently without user feedback. Explain offline state clearly.
+- Surface failures to users via `window.push_notification(Notification::error(format!("{e:#}")).title(t(..)), cx)` or an inline `Alert`; never log errors silently without user feedback. Explain offline state clearly.
 - Add concise hover tooltips where icon-only buttons or compact controls benefit from explanation, and keep copy clear and direct without hover-only actions.
 - Confirm only destructive actions using `window.open_alert_dialog` with a danger button. Name the specific object in the title and action (for example: Uninstall "Hades"? / Uninstall), never generic "Are you sure?" prompts.
 - Reachability: every user action must be accessible from a visible button, context menu, command palette, and keyboard, all invoking the same action or handler. Never build hover-only workflows, and keep focus rings visible (`keyboard_focusable`).
@@ -106,7 +106,7 @@ cx.spawn_in(window, async move |this, cx| {
 - Each crate owns flat JSON catalogs under `crates/<crate>/locales/<code>.json` and a key namespace: `ui.`, `library.`, `game.`, `manage.`, `settings.`, `bigpicture.`, and `shell.` (`crates/irori/src/strings.rs`).
 - `en.json` is the source of truth. Always use `t("ns.area.intent")` and `t_args("ns.area.intent", &[("name", value)])` with intent-based keys and full sentences carrying `{placeholders}` (never concatenate sentence fragments). Use `_one` / `_other` keys for plurals. Do not translate log messages, identifiers, file paths, key names, or brand names.
 - Register `CATALOGS` once (`std::sync::Once`) from each crate's `init`. Language changes apply live via `set_language` and window refresh in `shell.rs`.
-- Put every new or changed string into all 19 locale catalogs in the same change, translated idiomatically with identical `{placeholder}` names (never leave English text in another catalog). Localization test suites across all seven crates validate JSON parsing, fail on missing keys in non-English catalogs (`missing_keys`), reject orphan keys absent from `en.json`, reject blank values, require every key referenced in `src/` to exist in `en.json`, and enforce exact `{placeholder}` parity (Big Picture also fails on unused keys).
+- Put every new or changed UI string into `crates/<crate>/locales/en.json` with matching `{placeholder}` names. English is the runtime fallback (`crates/ui/src/i18n.rs`), so updating the other 18 locale files in code PRs is optional and translations flow through Hosted Weblate or `i18n` PRs (see [docs/TRANSLATING.md](TRANSLATING.md)). Localization test suites across all seven crates validate JSON parsing across all 19 catalogs, verify namespace prefixes, reject blank values, reject orphan keys absent from `en.json`, require every key referenced in `src/` to exist in `en.json`, and enforce exact `{placeholder}` parity on translated keys (`irori-manage` and `irori-bigpicture` also fail on unused `en.json` keys).
 
 ## Big Picture, controllers, and in-game overlay
 
@@ -121,9 +121,9 @@ cx.spawn_in(window, async move |this, cx| {
 
 ### Big Picture UI (`crates/feature-bigpicture/src/`)
 
-- Pure state and layout math live in `model.rs` (shelves, filters, page rows) and `layout.rs` / `layout/home.rs` / `layout/wheel.rs` (window-relative `rem` sizes, scrolling, mouse wheel conversion) and must be unit-tested there.
+- Pure state and layout math live in `model.rs` (shelves, filters, page rows) and `layout/mod.rs` / `layout/home.rs` / `layout/wheel.rs` (window-relative `rem` sizes, scrolling, mouse wheel conversion) and must be unit-tested there.
 - Six Home layouts (`Shelves`, `Spotlight`, `Cinema`, `Wall`, `Carousel`, `Compact`) share one `FocusGrid`.
-- Themes (`theme/`, `<config>/bigpicture/themes/<id>.irori-theme.json`): versioned, field-validated, with bounded embedded PNG/JPEG/WebP images (never arbitrary paths or URLs) and Irori-generated IDs. The live editor (`view/editor.rs`) supports 100-step undo/redo via Page Up/Down (LB/RB).
+- Themes (`theme/`, `<config>/bigpicture/themes/<id>.irori-theme.json`): versioned, field-validated, with bounded embedded PNG/JPEG/WebP images (never arbitrary paths or URLs) and Irori-generated IDs. The live editor (`crates/feature-bigpicture/src/view/editor/mod.rs`) supports 100-step undo/redo via Page Up/Down (LB/RB).
 - Navigation sounds (`nav_sound.rs`, opt-in): synthesized WAV files written once under `<cache>/bigpicture-sounds` and played via OS helpers (`PlaySoundW`, `afplay`, `pw-play`/`paplay`/`aplay`) with zero linked audio libraries.
 - Idle screen (`view/idle.rs`, `iroriBigPicture.idleMinutes`): single timer task sleeping until due; dimmed mode uses no timer. Any input wakes Big Picture and is consumed.
 - Shelf kinds (`theme::ShelfKind`, `model::build_rows_on`) and pinned category shelves respect hidden games and the hidden-games PIN (`LibrarySnapshot::hidden_locked`).
