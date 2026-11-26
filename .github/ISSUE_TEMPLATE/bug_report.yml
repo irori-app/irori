@@ -1,0 +1,101 @@
+name: Bug report
+description: Report a reproducible bug in Irori
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing open and closed issues before opening a new report.
+        Never paste login tokens, cookies, API keys, passwords, or account identifiers anywhere in an issue or log excerpt.
+  - type: input
+    id: irori_version
+    attributes:
+      label: Irori version
+      description: Run `irori --version` in a terminal or check Settings -> System info.
+      placeholder: "irori 1.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux (Wayland)
+        - Linux (X11)
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows 11/10 (x64)
+        - Windows (ARM64)
+    validations:
+      required: true
+  - type: dropdown
+    id: install_channel
+    attributes:
+      label: Install method
+      options:
+        - Linux package repository (apt / dnf / pacman)
+        - Linux Flatpak bundle
+        - Linux tarball / install.sh
+        - macOS DMG
+        - macOS Homebrew cask
+        - Windows installer (windows-setup.exe)
+        - Windows Scoop bucket
+        - Built from source
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Store or component
+      options:
+        - Steam
+        - Epic Games
+        - GOG
+        - Amazon Games
+        - itch.io
+        - Xbox / Microsoft Store
+        - ZOOM Platform
+        - Emulators / ROM library
+        - Third-party launchers (Battle.net / EA / Ubisoft / Rockstar)
+        - Lutris scripts / Lutris import
+        - Sideloaded apps
+        - Library / UI / Big Picture / Settings
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: game_and_runtime
+    attributes:
+      label: Game and runtime (if applicable)
+      description: Name the game and runtime involved (Native, Proton, Wine, umu, CrossOver, GPTK, or emulator core).
+      placeholder: "Control (Proton Experimental)"
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce, expected behaviour, and actual behaviour
+      description: Explain what you did, what you expected to happen, and what happened instead.
+      placeholder: |
+        1. Open...
+        2. Click...
+        3. Expected: ...
+        4. Actual: ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log excerpt
+      description: |
+        Attach relevant lines from `data/logs/irori.log` (or `crash-*.txt`) inside Irori's data directory.
+        Review logs before pasting, redact personal paths or usernames if desired, and remove any tokens, cookies, or secrets.
+      render: text
+  - type: checkboxes
+    id: safety_checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched open issues and did not find an existing report for this bug.
+          required: true
+        - label: I verified that my description and logs contain no login tokens, cookies, passwords, or API keys.
+          required: true

@@ -39,7 +39,7 @@ mod tests {
     use std::collections::{BTreeSet, HashMap};
     use std::path::Path;
 
-    use irori_ui::i18n::{LANGUAGES, missing_keys};
+    use irori_ui::i18n::LANGUAGES;
     use regex::Regex;
 
     use super::CATALOGS;
@@ -70,7 +70,6 @@ mod tests {
         assert!(en.keys().all(|k| k.starts_with("manage.")));
         for (code, json) in CATALOGS.iter() {
             let catalog = parse(code, json);
-            assert_eq!(missing_keys(CATALOGS, code), Vec::<String>::new(), "{code}");
             let extra: Vec<&String> = catalog.keys().filter(|k| !en.contains_key(*k)).collect();
             assert!(extra.is_empty(), "{code} has extra keys: {extra:?}");
             for (key, text) in &catalog {

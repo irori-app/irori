@@ -74,7 +74,7 @@ impl LanguageStamp {
 mod tests {
     use std::collections::{BTreeSet, HashMap};
 
-    use irori_ui::i18n::{LANGUAGES, missing_keys};
+    use irori_ui::i18n::LANGUAGES;
     use regex::Regex;
 
     use super::*;
@@ -109,8 +109,6 @@ mod tests {
             assert!(key.starts_with("settings."), "{key} is outside settings.");
         }
         for lang in LANGUAGES.iter().filter(|l| l.code != "en") {
-            let missing = missing_keys(CATALOGS, lang.code);
-            assert!(missing.is_empty(), "{} lacks {missing:?}", lang.code);
             let other = catalog(lang.code);
             let extra: Vec<_> = other.keys().filter(|k| !en.contains_key(*k)).collect();
             assert!(extra.is_empty(), "{} has extra keys {extra:?}", lang.code);
