@@ -40,14 +40,32 @@ fn connection_opened_on_tokio_works_from_other_threads() {
     // object server spawns a task on the connection's executor.
     std::thread::spawn(move || {
         server.object_server();
-        let reply = futures::executor::block_on(client.call_method(
-            None::<&str>,
-            "/",
-            Some("org.freedesktop.DBus.Peer"),
-            "Ping",
-            &(),
-        ));
-        reply.expect("the peer answers");
+        // `object_server()` registers its method-call match rule asynchronously
+        // on zbus' executor, so a single immediate Ping can race ahead of it
+        // and wait forever. Retry with short timeouts up to a bounded deadline.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let client = client.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let res = futures::executor::block_on(client.call_method(
+                    None::<&str>,
+                    "/",
+                    Some("org.freedesktop.DBus.Peer"),
+                    "Ping",
+                    &(),
+                ));
+                let _ = tx.send(res);
+            });
+            if let Ok(reply) = rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                reply.expect("the peer answers");
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "timed out waiting for peer Ping reply"
+            );
+        }
     })
     .join()
     .expect("zbus needs no Tokio runtime on the calling thread");
