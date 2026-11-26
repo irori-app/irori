@@ -12,13 +12,14 @@ Use this skill before committing, pushing, or opening a pull request against `ir
 Run the checks matching your change from the repository root:
 
 ```bash
-# 1. Branch, title, base, and Rust diff-size conventions (.github/workflows/pr-rules.yml)
+# 1. Branch, title, base, PR body structure, and Rust diff-size conventions (.github/workflows/pr-rules.yml)
 python3 .github/scripts/pr_rules.py \
   --title "<type>(<scope>): <imperative lower-case summary>" \
   --head "<type>/<short-kebab-name>" \
   --base "main" \
   --base-sha "$(git merge-base origin/main HEAD)" \
-  --head-sha HEAD
+  --head-sha HEAD \
+  --body-file /tmp/pr_body.md
 
 # 2. PR rule tests and agent documentation/graph sync
 python3 -m unittest discover -s .github/scripts -p "test_*.py"
@@ -43,10 +44,11 @@ cargo build --locked --profile quick -p irori -p irori-sign-in
 ## Pre-PR audit rules
 
 - Match branch prefix and Conventional Commit PR title `<type>` (`feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `i18n`, `build`, `ci`, `chore`, `revert`), keep the title at 72 characters or fewer, start the summary in lower case (except leading acronyms like `GOG` or `UI`), and omit trailing periods. Never use agent branch prefixes such as `claude/` or `codex/`.
-- Keep pull requests focused and small. `.github/scripts/pr_rules.py` rejects pull requests adding more than 1,500 lines across `*.rs` files unless split into smaller stacked PRs or labeled `large-pr-approved`.
+- Keep pull requests focused and small. `.github/scripts/pr_rules.py` rejects pull requests adding more than 1,500 lines across `*.rs` files unless split into smaller stacked PRs or labeled `large-pr-approved`, and emits a non-blocking warning when any added or modified `.rs` file exceeds 800 lines.
 - Audit every `#[cfg(target_os = "...")]` block so imports, helper functions, and struct fields compile cleanly across Linux, macOS, and Windows without dead-code or unused-import warnings (`-D warnings`).
 - Check that new or changed UI text exists in `crates/<crate>/locales/en.json` and that `SECURITY.md` reflects any new external domain or helper process.
-- Write the PR description using `.github/pull_request_template.md`: open with a plain-language summary for end users (2 to 4 clear sentences without code jargon), follow with technical details and exact verification commands run, and state honestly which platforms or themes were not visually exercised. Never claim to have inspected a screen you did not render.
+- Write the PR description using `.github/pull_request_template.md`: CI enforces that every non-bot PR opens with `## Plain-language summary` (2 to 4 clear sentences for end users, zero fenced code blocks, optional leading Draft blockquote allowed) followed by `## Technical details`, exact verification commands run, and honest notes on which platforms or themes were not visually exercised. Never claim to have inspected a screen you did not render.
+- When opening GitHub Issues (via browser or `gh issue create`), follow `.github/ISSUE_TEMPLATE/bug_report.yml` or `.github/ISSUE_TEMPLATE/feature_request.yml`: lead with the user-visible impact in plain language, include Irori version, OS, install channel, and reproduction steps, and strip any tokens, cookies, or account IDs from logs.
 
 ## Few-shot examples
 
