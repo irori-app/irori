@@ -1,0 +1,895 @@
+use super::options::{
+    AGE_RATING_BOARDS, ART_CACHE_LIMIT, BIG_PICTURE_SCALE, COVER_CAPTION, COVER_CORNERS, COVER_FIT,
+    COVER_HOVER, COVER_SHAPE, DENSITY, FOCUS_COLUMNS, FOCUS_COVER_SIZE, LIBRARY_BACKGROUND,
+    LIBRARY_LAYOUT, LUDUSAVI_DIFFERENTIAL_LIMIT, LUDUSAVI_FULL_LIMIT, NEEDS_AGE_RATINGS,
+    NEEDS_STORE_BADGES, NEEDS_WALLPAPER_COLORS, PROTON_CPU_LEVEL, THEME_MODE, TRANSLUCENCY,
+};
+use super::types::{
+    ActionKind, CustomKind,
+    FieldKind::{Action, Choice, Custom, Panel, Text, Toggle},
+    FieldSection::{Advanced, Appearance, Saves},
+    FieldSpec,
+    Label::{Key, Verbatim},
+    PanelKind, TextKind, app,
+};
+
+pub(super) const APPEARANCE: &[FieldSpec] = &[
+    // ---- Appearance ----
+    app(
+        "iroriUi.theme",
+        "settings.field.ui_theme.label",
+        Appearance,
+        "settings.group.theme",
+        Choice(THEME_MODE),
+    )
+    .tooltip("settings.field.ui_theme.tip")
+    .keywords(&["dark", "light", "system", "mode"]),
+    app(
+        "iroriUi.themeName",
+        "settings.field.ui_theme_name.label",
+        Appearance,
+        "settings.group.theme",
+        Custom(CustomKind::ThemeName),
+    )
+    .tooltip("settings.field.ui_theme_name.tip")
+    .keywords(&[
+        "colors",
+        "palette",
+        "catppuccin",
+        "gruvbox",
+        "omarchy",
+        "cosmic",
+    ]),
+    app(
+        "iroriUi.systemAccent",
+        "settings.field.ui_system_accent.label",
+        Appearance,
+        "settings.group.theme",
+        Toggle,
+    )
+    .help("settings.field.ui_system_accent.help")
+    .tooltip("settings.field.ui_system_accent.tip")
+    .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
+    app(
+        "iroriUi.wallpaperColors",
+        "settings.field.ui_wallpaper_colors.label",
+        Appearance,
+        "settings.group.theme",
+        Toggle,
+    )
+    .help("settings.field.ui_wallpaper_colors.help")
+    .tooltip("settings.field.ui_wallpaper_colors.tip")
+    .keywords(&[
+        "pywal",
+        "wal",
+        "wallust",
+        "matugen",
+        "material you",
+        "wallpaper",
+        "colour",
+        "color",
+        "palette",
+    ]),
+    app(
+        "iroriUi.wallpaperColorsFile",
+        "settings.field.ui_wallpaper_colors_file.label",
+        Appearance,
+        "settings.group.theme",
+        Text(TextKind::File),
+    )
+    .help("settings.field.ui_wallpaper_colors_file.help")
+    .tooltip("settings.field.ui_wallpaper_colors_file.tip")
+    .placeholder(Verbatim("~/.cache/wal/colors.json"))
+    .keywords(&[
+        "pywal",
+        "wallust",
+        "matugen",
+        "colors.json",
+        "template",
+        "file",
+    ])
+    .requires(NEEDS_WALLPAPER_COLORS),
+    app(
+        "iroriUi.accentColor",
+        "settings.field.ui_accent_color.label",
+        Appearance,
+        "settings.group.theme",
+        Custom(CustomKind::AccentColor),
+    )
+    .help("settings.field.ui_accent_color.help")
+    .tooltip("settings.field.ui_accent_color.tip")
+    .keywords(&["accent", "colour", "color", "highlight", "tint", "picker"]),
+    app(
+        "iroriUi.translucency",
+        "settings.field.ui_translucency.label",
+        Appearance,
+        "settings.group.theme",
+        Choice(TRANSLUCENCY),
+    )
+    .help("settings.field.ui_translucency.help")
+    .tooltip("settings.field.ui_translucency.tip")
+    .keywords(&[
+        "translucency",
+        "transparency",
+        "blur",
+        "glass",
+        "vibrancy",
+        "mica",
+        "acrylic",
+    ]),
+    app(
+        "iroriUi.fontSize",
+        "settings.field.ui_font_size.label",
+        Appearance,
+        "settings.group.size",
+        Custom(CustomKind::FontSize),
+    )
+    .help("settings.field.ui_font_size.help")
+    .tooltip("settings.field.ui_font_size.tip")
+    .keywords(&["zoom", "font", "scale", "text size"]),
+    app(
+        "iroriUi.tileSize",
+        "settings.field.ui_tile_size.label",
+        Appearance,
+        "settings.group.size",
+        Custom(CustomKind::TileSize),
+    )
+    .help("settings.field.ui_tile_size.help")
+    .tooltip("settings.field.ui_tile_size.tip")
+    .keywords(&["tile", "grid", "cover", "library"]),
+    app(
+        "iroriUi.density",
+        "settings.field.ui_density.label",
+        Appearance,
+        "settings.group.size",
+        Choice(DENSITY),
+    )
+    .help("settings.field.ui_density.help")
+    .tooltip("settings.field.ui_density.tip")
+    .keywords(&[
+        "density", "compact", "spacious", "spacing", "padding", "dense",
+    ]),
+    app(
+        "iroriUi.bigPictureScale",
+        "settings.field.ui_big_picture_scale.label",
+        Appearance,
+        "settings.group.size",
+        Choice(BIG_PICTURE_SCALE),
+    )
+    .help("settings.field.ui_big_picture_scale.help")
+    .tooltip("settings.field.ui_big_picture_scale.tip")
+    .keywords(&[
+        "big picture",
+        "tv",
+        "console",
+        "zoom",
+        "scale",
+        "steam deck",
+    ]),
+    app(
+        "iroriUi.libraryLayout",
+        "settings.field.ui_library_layout.label",
+        Appearance,
+        "settings.group.library",
+        Choice(LIBRARY_LAYOUT),
+    )
+    .tooltip("settings.field.ui_library_layout.tip")
+    .keywords(&["grid", "list", "focus", "view"]),
+    app(
+        "iroriUi.showStoreBadges",
+        "settings.field.ui_show_store_badges.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .tooltip("settings.field.ui_show_store_badges.tip")
+    .keywords(&["badge", "store", "label"]),
+    app(
+        "iroriUi.storeBadgesAlways",
+        "settings.field.ui_store_badges_always.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_always.help")
+    .keywords(&["badge", "store", "logo", "always", "cover", "emulator"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
+        "iroriUi.storeBadgesOneStore",
+        "settings.field.ui_store_badges_one_store.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_one_store.help")
+    .keywords(&["badge", "store", "filter", "one store"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
+        "iroriUi.groupCopies",
+        "settings.field.ui_group_copies.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_group_copies.help")
+    .tooltip("settings.field.ui_group_copies.tip")
+    .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
+    app(
+        "iroriUi.programIconArt",
+        "settings.field.ui_program_icon_art.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_program_icon_art.help")
+    .keywords(&[
+        "icon",
+        "exe",
+        "program",
+        "cover",
+        "art",
+        "missing",
+        "placeholder",
+        "lutris",
+    ]),
+    app(
+        "iroriUi.showAgeRatings",
+        "settings.field.ui_show_age_ratings.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_show_age_ratings.help")
+    .keywords(&["age", "rating", "pegi", "esrb", "usk", "cero", "board"]),
+    app(
+        "iroriUi.ageRatingBoard",
+        "settings.field.ui_age_rating_board.label",
+        Appearance,
+        "settings.group.library",
+        Choice(AGE_RATING_BOARDS),
+    )
+    .help("settings.field.ui_age_rating_board.help")
+    .keywords(&[
+        "age", "rating", "pegi", "esrb", "usk", "cero", "board", "region",
+    ])
+    .requires(NEEDS_AGE_RATINGS),
+    app(
+        "iroriUi.trailerAutoplay",
+        "settings.field.ui_trailer_autoplay.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_trailer_autoplay.help")
+    .keywords(&["trailer", "video", "movie", "autoplay", "ffmpeg"]),
+    app(
+        "iroriUi.coverCategories",
+        "settings.field.ui_cover_categories.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_cover_categories.help")
+    .tooltip("settings.field.ui_cover_categories.tip")
+    .keywords(&["category", "categories", "tag", "cover", "label"]),
+    app(
+        "iroriUi.coverCorners",
+        "settings.field.ui_cover_corners.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_CORNERS),
+    )
+    .keywords(&["cover", "corner", "round", "square", "radius"]),
+    app(
+        "iroriUi.coverFit",
+        "settings.field.ui_cover_fit.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_FIT),
+    )
+    .help("settings.field.ui_cover_fit.help")
+    .keywords(&[
+        "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
+    ]),
+    app(
+        "iroriUi.coverShape",
+        "settings.field.ui_cover_shape.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_SHAPE),
+    )
+    .help("settings.field.ui_cover_shape.help")
+    .keywords(&[
+        "cover", "shape", "square", "banner", "wide", "hero", "aspect",
+    ]),
+    app(
+        "iroriUi.coverCaption",
+        "settings.field.ui_cover_caption.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_CAPTION),
+    )
+    .help("settings.field.ui_cover_caption.help")
+    .keywords(&["cover", "caption", "title", "name", "text", "label"]),
+    app(
+        "iroriUi.coverHover",
+        "settings.field.ui_cover_hover.label",
+        Appearance,
+        "settings.group.library",
+        Choice(COVER_HOVER),
+    )
+    .keywords(&["cover", "hover", "lift", "pointer", "focus", "animation"]),
+    app(
+        "iroriUi.libraryFocusColumns",
+        "settings.field.ui_focus_columns.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COLUMNS),
+    )
+    .help("settings.field.ui_focus_columns.help")
+    .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
+    app(
+        "iroriUi.libraryFocusCoverSize",
+        "settings.field.ui_focus_cover_size.label",
+        Appearance,
+        "settings.group.library",
+        Choice(FOCUS_COVER_SIZE),
+    )
+    .keywords(&["focus", "cover", "size", "small", "large", "column"]),
+    app(
+        "iroriUi.libraryOpenDetailsOnSelect",
+        "settings.field.ui_open_details_on_select.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_open_details_on_select.help")
+    .keywords(&["click", "drawer", "details", "select", "grid", "panel"]),
+    app(
+        "iroriUi.libraryAutoLayout",
+        "settings.field.ui_auto_layout.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_auto_layout.help")
+    .keywords(&[
+        "focus",
+        "grid",
+        "width",
+        "window",
+        "automatic",
+        "resize",
+        "layout",
+    ]),
+    app(
+        "iroriUi.coverFavourite",
+        "settings.field.ui_cover_favourite.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .keywords(&["cover", "favourite", "favorite", "star"]),
+    app(
+        "iroriUi.libraryQuickControls",
+        "settings.field.ui_library_quick_controls.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_library_quick_controls.help")
+    .tooltip("settings.field.ui_library_quick_controls.tip")
+    .keywords(&[
+        "quick",
+        "sort",
+        "filter",
+        "installed",
+        "favourites",
+        "favorites",
+        "group",
+        "header",
+        "toolbar",
+    ]),
+    app(
+        "iroriUi.reduceMotion",
+        "settings.field.ui_reduce_motion.label",
+        Appearance,
+        "settings.group.motion",
+        Toggle,
+    )
+    .help("settings.field.ui_reduce_motion.help")
+    .tooltip("settings.field.ui_reduce_motion.tip")
+    .keywords(&["animation", "accessibility", "motion"]),
+    app(
+        "disableAnimations",
+        "settings.field.disable_animations.label",
+        Appearance,
+        "settings.group.motion",
+        Toggle,
+    )
+    .tooltip("settings.field.disable_animations.tip")
+    .keywords(&["animation", "accessibility"]),
+    app(
+        "iroriUi.middleClickScroll",
+        "settings.field.ui_middle_click_scroll.label",
+        Appearance,
+        "settings.group.mouse",
+        Toggle,
+    )
+    .help("settings.field.ui_middle_click_scroll.help")
+    .tooltip("settings.field.ui_middle_click_scroll.tip")
+    .keywords(&[
+        "middle",
+        "mouse",
+        "scroll",
+        "autoscroll",
+        "wheel",
+        "drag",
+        "scrollanywhere",
+    ]),
+    app(
+        "iroriUi.fontFamily",
+        "settings.field.ui_font_family.label",
+        Appearance,
+        "settings.group.font",
+        Custom(CustomKind::FontFamily),
+    )
+    .help("settings.field.ui_font_family.help")
+    .tooltip("settings.field.ui_font_family.tip")
+    .keywords(&["font", "typeface", "manrope", "text", "family"]),
+    app(
+        "iroriUi.libraryBackground",
+        "settings.field.ui_library_background.label",
+        Appearance,
+        "settings.group.background",
+        Choice(LIBRARY_BACKGROUND),
+    )
+    .help("settings.field.ui_library_background.help")
+    .tooltip("settings.field.ui_library_background.tip")
+    .keywords(&[
+        "background",
+        "wallpaper",
+        "backdrop",
+        "art",
+        "picture",
+        "image",
+    ]),
+    app(
+        "iroriUi.libraryBackgroundPicture",
+        "settings.field.ui_library_background_picture.label",
+        Appearance,
+        "settings.group.background",
+        Text(TextKind::File),
+    )
+    .help("settings.field.ui_library_background_picture.help")
+    .tooltip("settings.field.ui_library_background_picture.tip")
+    .keywords(&["background", "wallpaper", "picture", "image"]),
+    app(
+        "iroriUi.libraryBackgroundStrength",
+        "settings.field.ui_library_background_strength.label",
+        Appearance,
+        "settings.group.background",
+        Custom(CustomKind::Percent),
+    )
+    .help("settings.field.ui_library_background_strength.help")
+    .tooltip("settings.field.ui_library_background_strength.tip")
+    .keywords(&["background", "strength", "opacity", "intensity"]),
+    app(
+        "iroriUi.libraryBackgroundDim",
+        "settings.field.ui_library_background_dim.label",
+        Appearance,
+        "settings.group.background",
+        Custom(CustomKind::Percent),
+    )
+    .help("settings.field.ui_library_background_dim.help")
+    .tooltip("settings.field.ui_library_background_dim.tip")
+    .keywords(&["background", "dim", "darken", "fade"]),
+];
+
+pub(super) const ADVANCED: &[FieldSpec] = &[
+    // ---- Advanced ----
+    app(
+        "steamGridDbApiKey",
+        "settings.field.steam_grid_db_api_key.label",
+        Advanced,
+        "settings.group.artwork",
+        Text(TextKind::Secret),
+    )
+    .help("settings.field.steam_grid_db_api_key.help")
+    .tooltip("settings.field.steam_grid_db_api_key.tip")
+    .placeholder(Key("settings.field.steam_grid_db_api_key.placeholder"))
+    .keywords(&["steamgriddb", "artwork", "cover", "key"]),
+    app(
+        "iroriArtCacheLimit",
+        "settings.field.art_cache_limit.label",
+        Advanced,
+        "settings.group.artwork",
+        Choice(ART_CACHE_LIMIT),
+    )
+    .help("settings.field.art_cache_limit.help")
+    .tooltip("settings.field.art_cache_limit.tip")
+    .keywords(&[
+        "art",
+        "image",
+        "cache",
+        "disk",
+        "space",
+        "size",
+        "limit",
+        "thumbnail",
+    ]),
+    app(
+        "iroriIgdb",
+        "settings.field.igdb.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.igdb.help")
+    .tooltip("settings.field.igdb.tip")
+    .keywords(&[
+        "igdb",
+        "twitch",
+        "metadata",
+        "description",
+        "genres",
+        "artwork",
+        "cover",
+        "screenshots",
+    ]),
+    app(
+        "iroriSteamTitleMatch",
+        "settings.field.steam_title_match.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.steam_title_match.help")
+    .keywords(&[
+        "steam", "app id", "link", "match", "tags", "protondb", "metadata",
+    ]),
+    app(
+        "iroriSteamTagLimit",
+        "settings.field.steam_tag_limit.label",
+        Advanced,
+        "settings.group.artwork",
+        Text(TextKind::Number { min: 5, max: 20 }),
+    )
+    .help("settings.field.steam_tag_limit.help")
+    .keywords(&["steam", "tags", "limit", "metadata"]),
+    app(
+        "panel.igdb",
+        "settings.field.panel_igdb.label",
+        Advanced,
+        "settings.group.artwork",
+        Panel(PanelKind::Igdb),
+    )
+    .tooltip("settings.field.panel_igdb.tip")
+    .keywords(&["igdb", "twitch", "client id", "client secret"]),
+    app(
+        "iroriVndb",
+        "settings.field.vndb.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.vndb.help")
+    .keywords(&[
+        "vndb",
+        "visual novel",
+        "metadata",
+        "description",
+        "developer",
+        "cover",
+        "screenshots",
+    ]),
+    app(
+        "iroriLaunchBox",
+        "settings.field.launchbox.label",
+        Advanced,
+        "settings.group.artwork",
+        Toggle,
+    )
+    .help("settings.field.launchbox.help")
+    .keywords(&[
+        "launchbox",
+        "box art",
+        "cover",
+        "rom",
+        "emulation",
+        "region",
+        "download",
+    ]),
+    app(
+        "panel.launchbox",
+        "settings.field.panel_launchbox.label",
+        Advanced,
+        "settings.group.artwork",
+        Panel(PanelKind::LaunchBox),
+    )
+    .keywords(&["launchbox", "game list", "remove", "disk", "space"]),
+    app(
+        "panel.eos-overlay",
+        "settings.field.panel_eos_overlay.label",
+        Advanced,
+        "settings.group.epic_games",
+        Panel(PanelKind::EosOverlay),
+    )
+    .tag(Verbatim("Epic"))
+    .help("settings.field.panel_eos_overlay.help")
+    .tooltip("settings.field.panel_eos_overlay.tip")
+    .keywords(&[
+        "eos",
+        "overlay",
+        "epic online services",
+        "epic",
+        "legendary",
+    ]),
+    app(
+        "panel.egl-sync",
+        "settings.field.panel_egl_sync.label",
+        Advanced,
+        "settings.group.epic_games",
+        Panel(PanelKind::EglSync),
+    )
+    .tag(Verbatim("Epic"))
+    .help("settings.field.panel_egl_sync.help")
+    .tooltip("settings.field.panel_egl_sync.tip")
+    .keywords(&[
+        "egl",
+        "egs",
+        "epic games launcher",
+        "sync",
+        "epic",
+        "legendary",
+        "link",
+    ]),
+    app(
+        "showValveProton",
+        "settings.field.show_valve_proton.label",
+        Advanced,
+        "settings.group.wine",
+        Toggle,
+    )
+    .help("settings.field.show_valve_proton.help")
+    .tooltip("settings.field.show_valve_proton.tip")
+    .keywords(&["proton", "valve", "steam"]),
+    app(
+        "iroriCompatToolsPath",
+        "settings.field.compat_tools_path.label",
+        Advanced,
+        "settings.group.wine",
+        Text(TextKind::Directory),
+    )
+    .help("settings.field.compat_tools_path.help")
+    .tooltip("settings.field.compat_tools_path.tip")
+    .keywords(&["proton", "wine", "download", "folder", "path", "ge-proton"]),
+    app(
+        "downloadProtonToSteam",
+        "settings.field.download_proton_to_steam.label",
+        Advanced,
+        "settings.group.wine",
+        Toggle,
+    )
+    .help("settings.field.download_proton_to_steam.help")
+    .tooltip("settings.field.download_proton_to_steam.tip")
+    .keywords(&["proton", "steam", "compatibilitytools"]),
+    app(
+        "iroriProtonCpuLevel",
+        "settings.field.proton_cpu_level.label",
+        Advanced,
+        "settings.group.wine",
+        Choice(PROTON_CPU_LEVEL),
+    )
+    .help("settings.field.proton_cpu_level.help")
+    .keywords(&[
+        "proton",
+        "cachyos",
+        "wineland",
+        "v3",
+        "avx2",
+        "x86-64",
+        "cpu",
+        "processor",
+    ]),
+    app(
+        "allowInstallationBrokenAnticheat",
+        "settings.field.allow_installation_broken_anticheat.label",
+        Advanced,
+        "settings.group.installs",
+        Toggle,
+    )
+    .help("settings.field.allow_installation_broken_anticheat.help")
+    .tooltip("settings.field.allow_installation_broken_anticheat.tip")
+    .keywords(&["anticheat", "eac", "battleye", "denied"]),
+    app(
+        "disableLogs",
+        "settings.field.disable_logs.label",
+        Advanced,
+        "settings.group.diagnostics",
+        Toggle,
+    )
+    .help("settings.field.disable_logs.help")
+    .tooltip("settings.field.disable_logs.tip")
+    .keywords(&["log", "debug"]),
+    app(
+        "action.open-logs",
+        "settings.field.action_open_logs.label",
+        Advanced,
+        "settings.group.diagnostics",
+        Action(ActionKind::OpenLogsFolder),
+    )
+    .tooltip("settings.field.action_open_logs.tip")
+    .keywords(&["log", "folder", "open"]),
+    app(
+        "action.import-heroic",
+        "settings.field.action_import_heroic.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportHeroic),
+    )
+    .help("settings.field.action_import_heroic.help")
+    .tooltip("settings.field.action_import_heroic.tip")
+    .keywords(&["heroic", "import", "migrate"]),
+    app(
+        "action.import-lutris",
+        "settings.field.action_import_lutris.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportLutris),
+    )
+    .help("settings.field.action_import_lutris.help")
+    .tooltip("settings.field.action_import_lutris.tip")
+    .keywords(&["lutris", "import", "migrate", "emulator"]),
+    app(
+        "action.import-bottles",
+        "settings.field.action_import_bottles.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportBottles),
+    )
+    .help("settings.field.action_import_bottles.help")
+    .tooltip("settings.field.action_import_bottles.tip")
+    .keywords(&["bottles", "import", "migrate", "wine", "prefix"]),
+    app(
+        "action.import-faugus",
+        "settings.field.action_import_faugus.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportFaugus),
+    )
+    .help("settings.field.action_import_faugus.help")
+    .tooltip("settings.field.action_import_faugus.tip")
+    .keywords(&["faugus", "import", "migrate", "proton", "umu"]),
+    app(
+        "iroriLauncherImports.lutris",
+        "settings.field.launcher_sync_lutris.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["lutris", "sync", "import", "keep"]),
+    app(
+        "iroriLauncherImports.bottles",
+        "settings.field.launcher_sync_bottles.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["bottles", "sync", "import", "keep"]),
+    app(
+        "iroriLauncherImports.faugus",
+        "settings.field.launcher_sync_faugus.label",
+        Advanced,
+        "settings.group.maintenance",
+        Toggle,
+    )
+    .help("settings.field.launcher_sync.help")
+    .keywords(&["faugus", "sync", "import", "keep"]),
+    app(
+        "action.import-playnite",
+        "settings.field.action_import_playnite.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ImportPlaynite),
+    )
+    .help("settings.field.action_import_playnite.help")
+    .tooltip("settings.field.action_import_playnite.tip")
+    .keywords(&["playnite", "import", "migrate", "playtime", "windows"]),
+    app(
+        "action.clear-caches",
+        "settings.field.action_clear_caches.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ClearCaches),
+    )
+    .help("settings.field.action_clear_caches.help")
+    .tooltip("settings.field.action_clear_caches.tip")
+    .keywords(&["cache", "clear", "artwork", "refresh"]),
+    app(
+        "action.reset-settings",
+        "settings.field.action_reset_settings.label",
+        Advanced,
+        "settings.group.maintenance",
+        Action(ActionKind::ResetSettings),
+    )
+    .help("settings.field.action_reset_settings.help")
+    .tooltip("settings.field.action_reset_settings.tip")
+    .keywords(&["reset", "defaults", "factory"]),
+];
+
+pub(super) const SAVES: &[FieldSpec] = &[
+    // ---- Saves ----
+    app(
+        "iroriSaveSnapshots",
+        "settings.field.save_snapshots.label",
+        Saves,
+        "settings.group.save_sync",
+        Text(TextKind::Number { min: 0, max: 50 }),
+    )
+    .help("settings.field.save_snapshots.help")
+    .keywords(&[
+        "save", "snapshot", "cloud", "sync", "restore", "undo", "keep",
+    ]),
+    app(
+        "panel.ludusavi",
+        "settings.field.panel_ludusavi.label",
+        Saves,
+        "settings.group.ludusavi",
+        Panel(PanelKind::Ludusavi),
+    )
+    .help("settings.field.panel_ludusavi.help")
+    .tooltip("settings.field.panel_ludusavi.tip")
+    .keywords(&["ludusavi", "backup", "save", "install"]),
+    app(
+        "iroriLudusaviPath",
+        "settings.field.ludusavi_path.label",
+        Saves,
+        "settings.group.ludusavi",
+        Text(TextKind::File),
+    )
+    .help("settings.field.ludusavi_path.help")
+    .tooltip("settings.field.ludusavi_path.tip")
+    .placeholder(Key("settings.field.ludusavi_path.placeholder"))
+    .keywords(&["ludusavi", "program", "path", "flatpak"]),
+    app(
+        "iroriLudusaviBackupPath",
+        "settings.field.ludusavi_backup_path.label",
+        Saves,
+        "settings.group.ludusavi",
+        Text(TextKind::Directory),
+    )
+    .help("settings.field.ludusavi_backup_path.help")
+    .tooltip("settings.field.ludusavi_backup_path.tip")
+    .placeholder(Key("settings.field.ludusavi_backup_path.placeholder"))
+    .keywords(&["ludusavi", "backup", "folder", "path"]),
+    app(
+        "iroriLudusaviFullLimit",
+        "settings.field.ludusavi_full_limit.label",
+        Saves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_FULL_LIMIT),
+    )
+    .help("settings.field.ludusavi_full_limit.help")
+    .tooltip("settings.field.ludusavi_full_limit.tip")
+    .keywords(&["ludusavi", "backup", "retention", "keep", "full", "limit"]),
+    app(
+        "iroriLudusaviDifferentialLimit",
+        "settings.field.ludusavi_differential_limit.label",
+        Saves,
+        "settings.group.ludusavi",
+        Choice(LUDUSAVI_DIFFERENTIAL_LIMIT),
+    )
+    .help("settings.field.ludusavi_differential_limit.help")
+    .tooltip("settings.field.ludusavi_differential_limit.tip")
+    .keywords(&[
+        "ludusavi",
+        "backup",
+        "retention",
+        "keep",
+        "differential",
+        "limit",
+    ]),
+];
