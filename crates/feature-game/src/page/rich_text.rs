@@ -668,14 +668,12 @@ impl Converter {
                     }
                 }
             }
-            "hr" => {
-                if !self.in_table_cell() {
-                    self.flush_all_inline();
-                    self.ensure_blank_line();
-                    self.push_blockquote_prefix();
-                    self.out.push_str("---\n\n");
-                    self.at_list_item_start = false;
-                }
+            "hr" if !self.in_table_cell() => {
+                self.flush_all_inline();
+                self.ensure_blank_line();
+                self.push_blockquote_prefix();
+                self.out.push_str("---\n\n");
+                self.at_list_item_start = false;
             }
             "img" => {
                 let attrs = parse_attrs(raw_attrs);
@@ -742,38 +740,34 @@ impl Converter {
                     buf: String::new(),
                 });
             }
-            "ul" if !self_closing => {
-                if !self.in_table_cell() {
-                    self.flush_all_inline();
-                    if self.list_stack.is_empty() {
-                        self.ensure_blank_line();
-                    } else {
-                        self.ensure_newline();
-                    }
-                    self.list_stack.push(ListLevel {
-                        kind: ListKind::Unordered,
-                        item_indent: 2,
-                    });
+            "ul" if !self_closing && !self.in_table_cell() => {
+                self.flush_all_inline();
+                if self.list_stack.is_empty() {
+                    self.ensure_blank_line();
+                } else {
+                    self.ensure_newline();
                 }
+                self.list_stack.push(ListLevel {
+                    kind: ListKind::Unordered,
+                    item_indent: 2,
+                });
             }
-            "ol" if !self_closing => {
-                if !self.in_table_cell() {
-                    self.flush_all_inline();
-                    if self.list_stack.is_empty() {
-                        self.ensure_blank_line();
-                    } else {
-                        self.ensure_newline();
-                    }
-                    let start = parse_attrs(raw_attrs)
-                        .into_iter()
-                        .find(|(k, _)| k == "start")
-                        .and_then(|(_, v)| v.trim().parse::<usize>().ok())
-                        .unwrap_or(1);
-                    self.list_stack.push(ListLevel {
-                        kind: ListKind::Ordered(start),
-                        item_indent: 3,
-                    });
+            "ol" if !self_closing && !self.in_table_cell() => {
+                self.flush_all_inline();
+                if self.list_stack.is_empty() {
+                    self.ensure_blank_line();
+                } else {
+                    self.ensure_newline();
                 }
+                let start = parse_attrs(raw_attrs)
+                    .into_iter()
+                    .find(|(k, _)| k == "start")
+                    .and_then(|(_, v)| v.trim().parse::<usize>().ok())
+                    .unwrap_or(1);
+                self.list_stack.push(ListLevel {
+                    kind: ListKind::Ordered(start),
+                    item_indent: 3,
+                });
             }
             "li" => {
                 if self.in_table_cell() {
@@ -810,12 +804,10 @@ impl Converter {
                     self.at_list_item_start = true;
                 }
             }
-            "blockquote" if !self_closing => {
-                if !self.in_table_cell() {
-                    self.flush_all_inline();
-                    self.ensure_blank_line();
-                    self.blockquote_depth += 1;
-                }
+            "blockquote" if !self_closing && !self.in_table_cell() => {
+                self.flush_all_inline();
+                self.ensure_blank_line();
+                self.blockquote_depth += 1;
             }
             "table" if !self_closing => {
                 if self.table.is_none() {
@@ -909,32 +901,26 @@ impl Converter {
                 let level = name.as_bytes()[1] - b'0';
                 self.pop_matching_inline(|k| matches!(k, InlineKind::Heading(l) if *l == level));
             }
-            "ul" | "ol" => {
-                if !self.in_table_cell() {
-                    self.flush_all_inline();
-                    self.list_stack.pop();
-                    if self.list_stack.is_empty() {
-                        self.in_list_item = false;
-                        self.ensure_blank_line();
-                    } else {
-                        self.ensure_newline();
-                    }
-                }
-            }
-            "li" => {
-                if !self.in_table_cell() {
-                    self.flush_all_inline();
-                    self.ensure_newline();
+            "ul" | "ol" if !self.in_table_cell() => {
+                self.flush_all_inline();
+                self.list_stack.pop();
+                if self.list_stack.is_empty() {
                     self.in_list_item = false;
-                    self.at_list_item_start = false;
+                    self.ensure_blank_line();
+                } else {
+                    self.ensure_newline();
                 }
             }
-            "blockquote" => {
-                if !self.in_table_cell() {
-                    self.flush_all_inline();
-                    self.blockquote_depth = self.blockquote_depth.saturating_sub(1);
-                    self.ensure_blank_line();
-                }
+            "li" if !self.in_table_cell() => {
+                self.flush_all_inline();
+                self.ensure_newline();
+                self.in_list_item = false;
+                self.at_list_item_start = false;
+            }
+            "blockquote" if !self.in_table_cell() => {
+                self.flush_all_inline();
+                self.blockquote_depth = self.blockquote_depth.saturating_sub(1);
+                self.ensure_blank_line();
             }
             "td" | "th" => {
                 if self.nested_table_depth > 0 {
