@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} 等另外 {more} 个",
   "shell.notice.crashed_last_time": "Irori 上次意外关闭",
-  "shell.notice.crashed_last_time_message": "崩溃报告已保存到 {path}。报告问题时请附上它。",
+  "shell.notice.crashed_last_time_message": "已保存崩溃报告。请查看或分享以帮助修复此问题。",
   "shell.notice.login_expired": "请重新登录 {store}",
   "shell.notice.login_expired_message": "已保存的登录已失效。请打开“账号”重新登录。",
   "shell.notice.xbox_login_expired_message": "已保存的 Xbox 登录已失效。请在“商店”页面的“其他启动器”中重新登录。",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "检查重复的已添加游戏",
   "shell.palette.duplicates_keywords": "重复 合并 相同 两次 已添加 lutris 导入",
   "shell.palette.performance_hud": "游戏内统计",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆盖层 overlay fps 帧时间 计数器 性能 游戏内统计 统计 in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal 覆盖层 overlay fps 帧时间 计数器 性能 游戏内统计 统计 in-game stats",
+  "shell.notice.crashed_review_action": "查看并报告",
+  "shell.palette.latest_crash_report": "查看最新崩溃报告",
+  "shell.palette.latest_crash_report_keywords": "crash 崩溃 报告 日志 错误 bug"
 }

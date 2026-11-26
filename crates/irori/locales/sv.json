@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} och {more} till",
   "shell.notice.crashed_last_time": "Irori stängdes oväntat förra gången",
-  "shell.notice.crashed_last_time_message": "En kraschrapport sparades i {path}. Bifoga den när du rapporterar problemet.",
+  "shell.notice.crashed_last_time_message": "En kraschrapport sparades. Granska eller dela den för att hjälpa till att åtgärda problemet.",
   "shell.notice.login_expired": "Logga in på {store} igen",
   "shell.notice.login_expired_message": "Din sparade inloggning fungerar inte längre. Öppna Konton för att logga in igen.",
   "shell.notice.xbox_login_expired_message": "Din sparade Xbox-inloggning fungerar inte längre. Logga in igen på sidan Butiker, under Andra startprogram.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Granska dubbla tillagda spel",
   "shell.palette.duplicates_keywords": "dubblett slå ihop samma två gånger tillagd lutris import",
   "shell.palette.performance_hud": "Statistik i spelet",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal överlägg overlay fps frametime räknare prestanda statistik i spelet in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal överlägg overlay fps frametime räknare prestanda statistik i spelet in-game stats",
+  "shell.notice.crashed_review_action": "Granska och rapportera",
+  "shell.palette.latest_crash_report": "Visa senaste kraschrapporten",
+  "shell.palette.latest_crash_report_keywords": "crash krasch rapport logg bugg"
 }

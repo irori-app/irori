@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Anfangsverzögerung",
   "settings.pair.interval": "Intervall",
   "settings.sysinfo.hardware": "Hardware & Bildschirme",
-  "settings.sysinfo.software": "System & Werkzeuge"
+  "settings.sysinfo.software": "System & Werkzeuge",
+  "settings.crash.title": "Absturzbericht",
+  "settings.crash.saved_at": "Gespeichert am {when}",
+  "settings.crash.location": "Ort: {location}",
+  "settings.crash.privacy_note": "Nichts wird automatisch gesendet. Prüfe den Bericht unten, bevor du ihn kopierst, hochlädst oder ein GitHub-Issue öffnest.",
+  "settings.crash.report_github": "Auf GitHub melden",
+  "settings.crash.copied_for_github": "Absturzbericht kopiert. Füge ihn im GitHub-Issue ein.",
+  "settings.crash.copy": "Bericht kopieren",
+  "settings.crash.redact_home": "Persönlichen Benutzerordner-Pfad verbergen",
+  "settings.crash.open_logs": "Launcher-Log öffnen",
+  "settings.crash.recent_title": "Letzte Absturzberichte",
+  "settings.crash.recent_help": "Berichte unerwarteter Abstürze bleiben hier, bis du sie entfernst.",
+  "settings.crash.review_action": "Prüfen & melden",
+  "settings.crash.delete": "Bericht löschen",
+  "settings.crash.delete_failed": "Absturzbericht konnte nicht gelöscht werden"
 }

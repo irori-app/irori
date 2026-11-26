@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} a další ({more})",
   "shell.notice.crashed_last_time": "Irori se minule neočekávaně ukončil",
-  "shell.notice.crashed_last_time_message": "Zpráva o pádu byla uložena do {path}. Přiložte ji, když budete problém hlásit.",
+  "shell.notice.crashed_last_time_message": "Byla uložena zpráva o pádu. Zkontrolujte ji nebo ji sdílejte, abyste pomohli problém opravit.",
   "shell.notice.login_expired": "Znovu se přihlaste do {store}",
   "shell.notice.login_expired_message": "Uložené přihlášení už nefunguje. Otevřete Účty a přihlaste se znovu.",
   "shell.notice.xbox_login_expired_message": "Uložené přihlášení k Xboxu už nefunguje. Přihlaste se znovu na stránce Obchody v části Další spouštěče.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Zkontrolovat duplicitní přidané hry",
   "shell.palette.duplicates_keywords": "duplicita sloučit stejné dvakrát přidané lutris import",
   "shell.palette.performance_hud": "Statistiky ve hře",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal překrytí fps frametime počítadlo výkon statistiky ve hře in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal překrytí fps frametime počítadlo výkon statistiky ve hře in-game stats",
+  "shell.notice.crashed_review_action": "Zkontrolovat a nahlásit",
+  "shell.palette.latest_crash_report": "Zobrazit poslední zprávu o pádu",
+  "shell.palette.latest_crash_report_keywords": "crash pád zpráva log chyba bug"
 }

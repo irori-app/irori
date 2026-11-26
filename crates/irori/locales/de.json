@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} und {more} weitere",
   "shell.notice.crashed_last_time": "Irori wurde beim letzten Mal unerwartet beendet",
-  "shell.notice.crashed_last_time_message": "Ein Absturzbericht wurde unter {path} gespeichert. Hänge ihn an, wenn du das Problem meldest.",
+  "shell.notice.crashed_last_time_message": "Ein Absturzbericht wurde gespeichert. Prüfe oder teile ihn, um bei der Behebung zu helfen.",
   "shell.notice.login_expired": "Melde dich erneut bei {store} an",
   "shell.notice.login_expired_message": "Deine gespeicherte Anmeldung funktioniert nicht mehr. Öffne Konten, um dich erneut anzumelden.",
   "shell.notice.xbox_login_expired_message": "Deine gespeicherte Xbox-Anmeldung funktioniert nicht mehr. Melde dich auf der Seite „Stores“ unter „Andere Launcher“ erneut an.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Doppelte hinzugefügte Spiele prüfen",
   "shell.palette.duplicates_keywords": "doppelt zusammenführen gleich zweimal hinzugefügt Lutris Import",
   "shell.palette.performance_hud": "Statistiken im Spiel",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime zähler leistung statistiken im spiel in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime zähler leistung statistiken im spiel in-game stats",
+  "shell.notice.crashed_review_action": "Prüfen & melden",
+  "shell.palette.latest_crash_report": "Letzten Absturzbericht ansehen",
+  "shell.palette.latest_crash_report_keywords": "crash absturz bericht log panic bug"
 }

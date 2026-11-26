@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Întârziere inițială",
   "settings.pair.interval": "Interval",
   "settings.sysinfo.hardware": "Hardware și afișaje",
-  "settings.sysinfo.software": "Sistem și instrumente"
+  "settings.sysinfo.software": "Sistem și instrumente",
+  "settings.crash.title": "Raport de blocare",
+  "settings.crash.saved_at": "Salvat la {when}",
+  "settings.crash.location": "Locație: {location}",
+  "settings.crash.privacy_note": "Nimic nu este trimis automat. Verifică raportul de mai jos înainte de a-l copia, încărca sau deschide o problemă pe GitHub.",
+  "settings.crash.report_github": "Raportează pe GitHub",
+  "settings.crash.copied_for_github": "Raport copiat. Lipește-l în problema de pe GitHub.",
+  "settings.crash.copy": "Copiază raportul",
+  "settings.crash.redact_home": "Ascunde calea folderului personal",
+  "settings.crash.open_logs": "Deschide jurnalul launcherului",
+  "settings.crash.recent_title": "Rapoarte recente de blocare",
+  "settings.crash.recent_help": "Rapoartele închiderilor neașteptate rămân aici până când le ștergi.",
+  "settings.crash.review_action": "Revizuiește și raportează",
+  "settings.crash.delete": "Șterge raportul",
+  "settings.crash.delete_failed": "Nu s-a putut șterge raportul de blocare"
 }

@@ -26,6 +26,7 @@ mod artwork;
 mod backup;
 mod controller_map;
 mod controllers;
+mod crash_report;
 mod displays;
 mod epic;
 pub mod feedback;
@@ -67,6 +68,7 @@ mod view;
 mod widgets;
 mod winetricks;
 
+pub use crash_report::open_crash_report_sheet;
 pub use form::{FormTarget, GameSettingsForm, SettingsForm};
 pub use game_view::{GameSection, GameSettingsView};
 pub use i18n::CATALOGS;

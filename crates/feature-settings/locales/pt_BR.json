@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Atraso inicial",
   "settings.pair.interval": "Intervalo",
   "settings.sysinfo.hardware": "Hardware e telas",
-  "settings.sysinfo.software": "Sistema e ferramentas"
+  "settings.sysinfo.software": "Sistema e ferramentas",
+  "settings.crash.title": "Relatório de falha",
+  "settings.crash.saved_at": "Salvo em {when}",
+  "settings.crash.location": "Local: {location}",
+  "settings.crash.privacy_note": "Nada é enviado automaticamente. Revise o relatório abaixo antes de copiar, enviar ou abrir uma issue no GitHub.",
+  "settings.crash.report_github": "Relatar no GitHub",
+  "settings.crash.copied_for_github": "Relatório copiado. Cole na issue do GitHub.",
+  "settings.crash.copy": "Copiar relatório",
+  "settings.crash.redact_home": "Ocultar caminho da pasta pessoal",
+  "settings.crash.open_logs": "Abrir log do launcher",
+  "settings.crash.recent_title": "Relatórios de falha recentes",
+  "settings.crash.recent_help": "Relatórios de fechamentos inesperados ficam aqui até você removê-los.",
+  "settings.crash.review_action": "Revisar e relatar",
+  "settings.crash.delete": "Excluir relatório",
+  "settings.crash.delete_failed": "Não foi possível excluir o relatório de falha"
 }

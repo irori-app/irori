@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} and {more} more",
   "shell.notice.crashed_last_time": "Irori closed unexpectedly last time",
-  "shell.notice.crashed_last_time_message": "A crash report was saved to {path}. Attach it when you report the problem.",
+  "shell.notice.crashed_last_time_message": "A crash report was saved. Review or share it to help fix the issue.",
   "shell.notice.login_expired": "Log in to {store} again",
   "shell.notice.login_expired_message": "Your saved login no longer works. Open Accounts to log in again.",
   "shell.notice.xbox_login_expired_message": "Your saved Xbox sign-in no longer works. Sign in again on the Stores page, under Other launchers.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Review duplicate added games",
   "shell.palette.duplicates_keywords": "duplicate merge same twice added lutris import",
   "shell.palette.performance_hud": "In-game stats",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime counter performance in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime counter performance in-game stats",
+  "shell.notice.crashed_review_action": "Review & report",
+  "shell.palette.latest_crash_report": "View latest crash report",
+  "shell.palette.latest_crash_report_keywords": "crash report log panic backtrace bug"
 }

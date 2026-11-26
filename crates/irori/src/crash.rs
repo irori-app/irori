@@ -1,17 +1,16 @@
 //! Crash reports. Release builds abort on a panic, so a crash used to leave
 //! no trace: the window vanished and the log ended mid-session. A panic hook
 //! now writes a report next to the log before the abort, and the next start
-//! tells the user where it is.
+//! offers an actionable notification and sheet to review or share it.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use irori_core::{EventBus, Notice, NoticeLevel, Paths, util};
+use gpui_kit::{App, BorrowAppContext as _, Global};
+use irori_core::{Paths, crash, util};
 
-/// Reports kept on disk; older ones are deleted.
-const KEPT: usize = 5;
-const PREFIX: &str = "crash-";
-/// Suffix of a report the user has been told about.
-const REPORTED: &str = ".reported.txt";
+struct PendingCrash(Option<PathBuf>);
+
+impl Global for PendingCrash {}
 
 /// Write a crash report for every panic, then run the default hook (which
 /// prints to stderr). Call once, before other threads start.
@@ -26,7 +25,7 @@ pub(crate) fn install() {
             &backtrace.to_string(),
         );
         // Plain file writes: the logger may be the thing that panicked.
-        if let Some(path) = write(&dir, util::unix_now(), &text) {
+        if let Some(path) = crash::write_report(&dir, util::unix_now(), &text) {
             eprintln!("Irori crashed; report saved to {}", path.display());
         }
         previous(info);
@@ -52,67 +51,20 @@ fn report(message: &str, location: Option<&str>, backtrace: &str) -> String {
     )
 }
 
-fn write(dir: &Path, now: u64, text: &str) -> Option<PathBuf> {
-    std::fs::create_dir_all(dir).ok()?;
-    let path = dir.join(format!("{PREFIX}{now}.txt"));
-    std::fs::write(&path, text).ok()?;
-    Some(path)
+/// The newest unreported crash report, marked as reported once taken.
+pub(crate) fn take_last_crash() -> Option<PathBuf> {
+    crash::take_unreported(&Paths::get().logs_dir())
 }
 
-/// Reports in `dir`, oldest first.
-fn reports(dir: &Path) -> Vec<PathBuf> {
-    let mut list: Vec<PathBuf> = std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with(PREFIX) && n.ends_with(".txt"))
-        })
-        .collect();
-    list.sort();
-    list
+/// Stash `path` on GPUI globals so the first shell window can show it.
+pub(crate) fn install_pending(path: Option<PathBuf>, cx: &mut App) {
+    cx.set_global(PendingCrash(path));
 }
 
-/// The newest report the user has not been told about, marked as told; older
-/// reports past [`KEPT`] are deleted.
-fn take_unreported(dir: &Path) -> Option<PathBuf> {
-    let all = reports(dir);
-    for old in all.iter().take(all.len().saturating_sub(KEPT)) {
-        let _ = std::fs::remove_file(old);
-    }
-    let mut newest = None;
-    for path in reports(dir) {
-        let name = path.file_name()?.to_str()?.to_string();
-        if name.ends_with(REPORTED) {
-            continue;
-        }
-        let told = path.with_file_name(name.replace(".txt", REPORTED));
-        if std::fs::rename(&path, &told).is_ok() {
-            newest = Some(told);
-        }
-    }
-    newest
-}
-
-/// Tell the user, once, that the last session crashed and where its report
-/// is.
-pub(crate) fn notice_last_crash(bus: &EventBus) {
-    let Some(path) = take_unreported(&Paths::get().logs_dir()) else {
-        return;
-    };
-    let shown = path.display().to_string();
-    bus.startup_notice(
-        Notice::new(NoticeLevel::Warning, "Irori closed unexpectedly last time")
-            .message(format!("A crash report was saved to {shown}"))
-            .keys(
-                "shell.notice.crashed_last_time",
-                Some("shell.notice.crashed_last_time_message"),
-                &[("path", &shown)],
-            ),
-    );
+/// Take the pending startup crash report once for the active shell window.
+pub(crate) fn take_pending(cx: &mut App) -> Option<PathBuf> {
+    cx.try_global::<PendingCrash>()?;
+    cx.update_global::<PendingCrash, _>(|pending, _| pending.0.take())
 }
 
 #[cfg(test)]
@@ -126,18 +78,5 @@ mod tests {
         assert!(text.contains("Location: src/a.rs:3:9"));
         assert!(text.contains("Message: index out of bounds"));
         assert!(text.contains("0: main"));
-    }
-
-    #[test]
-    fn tells_about_the_newest_crash_once_and_keeps_a_few() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(take_unreported(dir.path()).is_none());
-        for t in 1..=7 {
-            write(dir.path(), 1_000 + t, "x").unwrap();
-        }
-        let told = take_unreported(dir.path()).unwrap();
-        assert!(told.ends_with(format!("crash-1007{REPORTED}")));
-        assert!(take_unreported(dir.path()).is_none(), "only once");
-        assert_eq!(reports(dir.path()).len(), KEPT);
     }
 }

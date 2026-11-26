@@ -160,6 +160,7 @@ impl AppShell {
             this.show_notices(&m.notices, window, cx);
             this.on_sessions(&m.sessions, window, cx);
             this.app_update.show(window, cx);
+            this.show_last_crash(window, cx);
             if *navigator(cx).read(cx).current() == Route::BigPicture {
                 irori_ui::state::run_infallible(cx, irori_services::power::activate_window())
                     .detach();
@@ -209,6 +210,34 @@ impl AppShell {
         if let Some(route) = route_once_loaded(nav.read(cx).current(), wants_onboarding(cx)) {
             nav.update(cx, |nav, cx| nav.replace(route, cx));
         }
+    }
+
+    fn show_last_crash(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = crate::crash::take_pending(cx) else {
+            return;
+        };
+        let click_path = path.clone();
+        let action_path = path;
+        let note = Notification::warning(t("shell.notice.crashed_last_time_message"))
+            .title(t("shell.notice.crashed_last_time"))
+            .id::<LastCrashNote>()
+            .autohide(false)
+            .on_click(move |_, window, cx| {
+                irori_settings::open_crash_report_sheet(click_path.clone(), window, cx);
+                window.remove_notification::<LastCrashNote>(cx);
+            })
+            .action(move |_, _, cx| {
+                let action_path = action_path.clone();
+                Button::new("crash-review-report")
+                    .small()
+                    .primary()
+                    .label(t("shell.notice.crashed_review_action"))
+                    .on_click(cx.listener(move |note, _, window, cx| {
+                        irori_settings::open_crash_report_sheet(action_path.clone(), window, cx);
+                        note.dismiss(window, cx);
+                    }))
+            });
+        window.push_notification(note, cx);
     }
 
     fn show_notices(
@@ -673,6 +702,7 @@ impl AppShell {
 /// Names the notice of a countdown to sleeping or powering off, so it can be
 /// taken away when the countdown ends.
 struct PowerCountdownNote;
+struct LastCrashNote;
 
 /// The notice the backend raises when a finished queue starts counting down
 /// (not the ones saying the computer was left on).

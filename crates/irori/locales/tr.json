@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} ve {more} tane daha",
   "shell.notice.crashed_last_time": "Irori geçen sefer beklenmedik şekilde kapandı",
-  "shell.notice.crashed_last_time_message": "Bir çökme raporu {path} konumuna kaydedildi. Sorunu bildirirken ekleyin.",
+  "shell.notice.crashed_last_time_message": "Bir çökme raporu kaydedildi. Sorunu düzeltmeye yardımcı olmak için inceleyin veya paylaşın.",
   "shell.notice.login_expired": "{store} hesabında yeniden oturum açın",
   "shell.notice.login_expired_message": "Kayıtlı oturumunuz artık çalışmıyor. Yeniden oturum açmak için Hesaplar'ı açın.",
   "shell.notice.xbox_login_expired_message": "Kayıtlı Xbox oturumun artık çalışmıyor. Mağazalar sayfasında, Diğer başlatıcılar altında yeniden oturum aç.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Yinelenen eklenmiş oyunları incele",
   "shell.palette.duplicates_keywords": "yinelenen birleştir aynı iki kez eklenen lutris içe aktar",
   "shell.palette.performance_hud": "Oyun içi istatistikler",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal katman overlay fps frametime sayaç performans oyun içi istatistikler in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal katman overlay fps frametime sayaç performans oyun içi istatistikler in-game stats",
+  "shell.notice.crashed_review_action": "İncele ve bildir",
+  "shell.palette.latest_crash_report": "Son çökme raporunu görüntüle",
+  "shell.palette.latest_crash_report_keywords": "crash çökme rapor günlük hata bug"
 }

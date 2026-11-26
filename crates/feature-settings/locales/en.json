@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Initial delay",
   "settings.pair.interval": "Interval",
   "settings.sysinfo.hardware": "Hardware & displays",
-  "settings.sysinfo.software": "System & tools"
+  "settings.sysinfo.software": "System & tools",
+  "settings.crash.title": "Crash report",
+  "settings.crash.saved_at": "Saved {when}",
+  "settings.crash.location": "Location: {location}",
+  "settings.crash.privacy_note": "Nothing is sent automatically. Review the report below before copying, uploading or opening a GitHub issue.",
+  "settings.crash.report_github": "Report on GitHub",
+  "settings.crash.copied_for_github": "Crash report copied. Paste it into the GitHub issue.",
+  "settings.crash.copy": "Copy report",
+  "settings.crash.redact_home": "Hide personal home folder path",
+  "settings.crash.open_logs": "Open launcher log",
+  "settings.crash.recent_title": "Recent crash reports",
+  "settings.crash.recent_help": "Reports from unexpected exits stay here until you remove them.",
+  "settings.crash.review_action": "Review & report",
+  "settings.crash.delete": "Delete report",
+  "settings.crash.delete_failed": "Couldn’t delete the crash report"
 }

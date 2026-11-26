@@ -95,7 +95,7 @@
   "shell.notice.achievements_unlocked_message": "{names}",
   "shell.notice.achievements_unlocked_more_message": "{names} en nog {more}",
   "shell.notice.crashed_last_time": "Irori is de vorige keer onverwacht gesloten",
-  "shell.notice.crashed_last_time_message": "Er is een crashrapport opgeslagen in {path}. Voeg het toe als je het probleem meldt.",
+  "shell.notice.crashed_last_time_message": "Er is een crashrapport opgeslagen. Bekijk of deel het om het probleem te helpen oplossen.",
   "shell.notice.login_expired": "Log opnieuw in bij {store}",
   "shell.notice.login_expired_message": "Je opgeslagen inlog werkt niet meer. Open Accounts om opnieuw in te loggen.",
   "shell.notice.xbox_login_expired_message": "Je opgeslagen Xbox-aanmelding werkt niet meer. Meld je opnieuw aan op de pagina Winkels, onder Andere launchers.",
@@ -282,5 +282,8 @@
   "shell.palette.duplicates": "Dubbele toegevoegde games bekijken",
   "shell.palette.duplicates_keywords": "dubbel samenvoegen zelfde twee keer toegevoegd lutris import",
   "shell.palette.performance_hud": "Statistieken in het spel",
-  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime teller prestaties statistieken in het spel in-game stats"
+  "shell.palette.performance_hud_keywords": "hud mangohud metal overlay fps frametime teller prestaties statistieken in het spel in-game stats",
+  "shell.notice.crashed_review_action": "Bekijken en melden",
+  "shell.palette.latest_crash_report": "Laatste crashrapport bekijken",
+  "shell.palette.latest_crash_report_keywords": "crash rapport log panic bug fout"
 }

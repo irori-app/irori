@@ -113,13 +113,28 @@ pub async fn upload(path: &Path, name: &str) -> Result<UploadedLog> {
         .read_to_end(&mut bytes)
         .await?;
     let content = String::from_utf8_lossy(&bytes);
+    upload_text(&content, name).await
+}
+
+/// Upload up to 10 MiB of in-memory log or crash-report text to dpaste and
+/// record it.
+pub async fn upload_text(text: &str, name: &str) -> Result<UploadedLog> {
+    let content = if text.len() as u64 > MAX_UPLOAD_BYTES {
+        let mut end = MAX_UPLOAD_BYTES as usize;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        &text[..end]
+    } else {
+        text
+    };
     let resp = irori_core::http::client()
         .post(DPASTE_URL)
         .header(
             reqwest::header::CONTENT_TYPE,
             "application/x-www-form-urlencoded",
         )
-        .body(form_body(&content))
+        .body(form_body(content))
         .timeout(Duration::from_secs(60))
         .send()
         .await

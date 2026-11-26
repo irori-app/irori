@@ -2295,5 +2295,19 @@
   "settings.pair.delay": "Начальная задержка",
   "settings.pair.interval": "Интервал",
   "settings.sysinfo.hardware": "Оборудование и дисплеи",
-  "settings.sysinfo.software": "Система и инструменты"
+  "settings.sysinfo.software": "Система и инструменты",
+  "settings.crash.title": "Отчёт о сбое",
+  "settings.crash.saved_at": "Сохранено {when}",
+  "settings.crash.location": "Место: {location}",
+  "settings.crash.privacy_note": "Ничего не отправляется автоматически. Проверьте отчёт ниже перед копированием, загрузкой или созданием задачи на GitHub.",
+  "settings.crash.report_github": "Сообщить на GitHub",
+  "settings.crash.copied_for_github": "Отчёт о сбое скопирован. Вставьте его в задачу на GitHub.",
+  "settings.crash.copy": "Копировать отчёт",
+  "settings.crash.redact_home": "Скрыть путь к домашней папке",
+  "settings.crash.open_logs": "Открыть журнал лаунчера",
+  "settings.crash.recent_title": "Недавние отчёты о сбоях",
+  "settings.crash.recent_help": "Отчёты о неожиданных завершениях остаются здесь, пока вы их не удалите.",
+  "settings.crash.review_action": "Просмотреть и сообщить",
+  "settings.crash.delete": "Удалить отчёт",
+  "settings.crash.delete_failed": "Не удалось удалить отчёт о сбое"
 }
