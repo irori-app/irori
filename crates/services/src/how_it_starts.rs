@@ -69,14 +69,20 @@ pub(crate) fn assemble(
     install_folder: Option<&str>,
     args: Vec<String>,
 ) -> HowItStarts {
-    let mut command: Vec<String> = preview.wrappers.into_iter().flatten().collect();
-    command.extend(preview.runner);
     let program_from_store = program.is_none();
-    command.push(match program {
+    let program_arg = match program {
         Some(p) => p.to_string_lossy().into_owned(),
         None => install_folder.unwrap_or_default().to_string(),
-    });
-    command.extend(args);
+    };
+    let command = preview
+        .wrappers
+        .into_iter()
+        .flatten()
+        .chain(preview.runner)
+        .chain(std::iter::once(program_arg))
+        .chain(args)
+        .filter(|w| !w.is_empty())
+        .collect();
     let mut masked = 0;
     let env = preview
         .env
@@ -91,7 +97,7 @@ pub(crate) fn assemble(
         })
         .collect();
     HowItStarts {
-        command: command.into_iter().filter(|w| !w.is_empty()).collect(),
+        command,
         env,
         masked,
         prefix: preview.prefix,

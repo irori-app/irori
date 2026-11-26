@@ -34,3 +34,6 @@ gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
 tempfile = "3"
 regex.workspace = true
 irori-steam-api.workspace = true
+
+[lints]
+workspace = true

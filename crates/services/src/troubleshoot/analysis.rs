@@ -638,11 +638,12 @@ pub fn diagnose(facts: &Facts, tried: &HashSet<String>) -> Diagnosis {
                     f.fixes.push(Fix::Winetricks(wanted));
                 }
             }
-            LaunchHint::DotNet => {
-                if ctx.needs_wine && !has_verb("dotnet48") && !has_verb("dotnet481") {
-                    f.fixes.push(Fix::Winetricks(vec!["dotnet48"]));
-                }
+            LaunchHint::DotNet
+                if ctx.needs_wine && !has_verb("dotnet48") && !has_verb("dotnet481") =>
+            {
+                f.fixes.push(Fix::Winetricks(vec!["dotnet48"]));
             }
+            LaunchHint::DotNet => {}
             LaunchHint::AntiCheat => {
                 if let Some(ac) = &facts.anticheat
                     && matches!(ac.status, AntiCheatStatus::Broken | AntiCheatStatus::Denied)

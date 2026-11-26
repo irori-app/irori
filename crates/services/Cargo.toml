@@ -118,3 +118,6 @@ windows-core = "0.62"
 [dev-dependencies]
 tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }
+
+[lints]
+workspace = true

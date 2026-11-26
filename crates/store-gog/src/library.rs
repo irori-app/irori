@@ -80,7 +80,7 @@ pub fn gamesdb_to_game_info(v: &Value) -> Option<MappedRelease> {
         .get("visible_in_library")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    if !is_dlc && !(matches!(kind, "game" | "mod") && visible) {
+    if !(is_dlc || matches!(kind, "game" | "mod") && visible) {
         return None;
     }
     let app_name = v

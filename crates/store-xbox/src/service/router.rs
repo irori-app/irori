@@ -45,7 +45,7 @@ async fn route_with_budget(
                 )),
             }
         };
-        let result = match peer::run_request(&peer, &token, budget, request).await {
+        let result = match Box::pin(peer::run_request(&peer, &token, budget, request)).await {
             peer::RequestEnd::Stopped => return,
             peer::RequestEnd::Finished(result) => result,
         };

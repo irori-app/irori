@@ -48,3 +48,6 @@ nix.workspace = true
 irori-depot = { workspace = true, features = ["test-server"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 ed25519-dalek = "3"
+
+[lints]
+workspace = true

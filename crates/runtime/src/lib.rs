@@ -716,7 +716,7 @@ async fn gather_facts(
     let (wc, metalfx) = match how {
         Gather::Launch(ctx) => {
             let wc = wine_context(app, settings, target.game, ctx, true).await?;
-            let metalfx = set_up_prefix(app, settings, target, &wc, ctx).await?;
+            let metalfx = Box::pin(set_up_prefix(app, settings, target, &wc, ctx)).await?;
             (wc, metalfx)
         }
         Gather::Preview => {
@@ -907,7 +907,7 @@ pub async fn prepare_launch(
             ..Default::default()
         });
     }
-    let mut facts = gather_facts(app, settings, target, Gather::Launch(ctx)).await?;
+    let mut facts = Box::pin(gather_facts(app, settings, target, Gather::Launch(ctx))).await?;
     let target = facts.target(target);
     let mut vars = compose_env(app, target, &facts);
     let effective = match &facts.wine {
@@ -1010,7 +1010,7 @@ pub async fn preview_launch(
             ..Default::default()
         });
     }
-    let mut facts = gather_facts(app, settings, target, Gather::Preview).await?;
+    let mut facts = Box::pin(gather_facts(app, settings, target, Gather::Preview)).await?;
     let target = facts.target(target);
     let mut vars = compose_env(app, target, &facts);
     let effective = match &facts.wine {

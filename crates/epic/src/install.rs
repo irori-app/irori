@@ -177,16 +177,17 @@ pub fn plan(input: &PlanInput<'_>, mode: Mode) -> Result<Plan> {
         files.push(builder.entry(f, old)?);
     }
 
-    let mut remove: Vec<String> = comparison.removed.iter().cloned().collect();
-    remove.extend(
-        m.files
-            .iter()
-            .filter(|f| !f.selected_by(tags))
-            .map(|f| f.filename.clone()),
-    );
-    let remove = remove
-        .into_iter()
-        .filter_map(|p| irori_depot::path::normalize(&p).ok())
+    let remove = comparison
+        .removed
+        .iter()
+        .map(String::as_str)
+        .chain(
+            m.files
+                .iter()
+                .filter(|f| !f.selected_by(tags))
+                .map(|f| f.filename.as_str()),
+        )
+        .filter_map(|p| irori_depot::path::normalize(p).ok())
         .collect();
 
     let mut counted = HashSet::new();

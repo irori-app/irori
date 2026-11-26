@@ -280,12 +280,12 @@ impl Plan {
             let cid = Uuid::parse_str(raw)
                 .map_err(|_| "Invalid selected Content ID")?
                 .to_string();
-            let matches: Vec<_> = self
+            let match_count = self
                 .choices
                 .iter()
                 .filter(|c| c.supported && c.content_id == cid)
-                .collect();
-            if matches.len() != 1 {
+                .count();
+            if match_count != 1 {
                 return Err(
                     "Selected package is not a unique supported member of this Store offer".into(),
                 );
@@ -324,7 +324,7 @@ async fn resolve_from(
     market: &str,
     catalog: &str,
 ) -> Result<Plan, String> {
-    if !product_id(root) || !(market.len() == 2 && market.bytes().all(|c| c.is_ascii_uppercase())) {
+    if !(product_id(root) && market.len() == 2 && market.bytes().all(|c| c.is_ascii_uppercase())) {
         return Err("Invalid Store product or market".into());
     }
     let fetch = async {

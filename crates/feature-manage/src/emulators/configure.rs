@@ -224,14 +224,12 @@ impl Render for EngineSettings {
         let muted = cx.theme().muted_foreground;
         let os = Os::current();
         let values = Self::values_of(&self.manifest, cx);
-        let visible: Vec<&EngineOption> = self
+        let (basic, advanced): (Vec<&EngineOption>, Vec<&EngineOption>) = self
             .manifest
             .options
             .iter()
             .filter(|o| o.visible_when.visible(os, &values))
-            .collect();
-        let (basic, advanced): (Vec<&EngineOption>, Vec<&EngineOption>) =
-            visible.into_iter().partition(|o| !o.advanced);
+            .partition(|o| !o.advanced);
         let basic: Vec<AnyElement> = basic
             .into_iter()
             .map(|o| self.render_option(o, &values, cx))

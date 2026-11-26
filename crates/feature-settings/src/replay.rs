@@ -256,7 +256,7 @@ impl ReplayPanel {
                     }
                     None => t("settings.replay.found"),
                 };
-                let details: Vec<SharedString> = [
+                let details = [
                     (!info.codecs.is_empty()).then(|| {
                         t_args(
                             "settings.replay.codecs",
@@ -277,8 +277,7 @@ impl ReplayPanel {
                     (info.app_audio == Some(false)).then(|| t("settings.replay.no_app_audio")),
                 ]
                 .into_iter()
-                .flatten()
-                .collect();
+                .flatten();
                 row.child(
                     Icon::new(IconName::CircleCheck)
                         .small()
@@ -291,7 +290,7 @@ impl ReplayPanel {
                         .min_w_0()
                         .gap_0p5()
                         .child(div().truncate().text_sm().child(found))
-                        .children(details.into_iter().map(|d| muted(d, cx))),
+                        .children(details.map(|d| muted(d, cx))),
                 )
                 .child(
                     Tag::secondary()

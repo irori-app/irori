@@ -179,14 +179,12 @@ fn run(args: Args) -> Result<()> {
             Event::UserEvent(PageEvent::Loaded) => {
                 read_page_text(&webview, re.clone(), proxy.clone());
             }
-            Event::UserEvent(PageEvent::Matched(text)) => {
-                if matches(&re, &text) {
-                    let line = serde_json::json!({ "text": text }).to_string();
-                    let mut out = std::io::stdout().lock();
-                    let _ = writeln!(out, "{line}");
-                    let _ = out.flush();
-                    std::process::exit(0);
-                }
+            Event::UserEvent(PageEvent::Matched(text)) if matches(&re, &text) => {
+                let line = serde_json::json!({ "text": text }).to_string();
+                let mut out = std::io::stdout().lock();
+                let _ = writeln!(out, "{line}");
+                let _ = out.flush();
+                std::process::exit(0);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

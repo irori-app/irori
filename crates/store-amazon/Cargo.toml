@@ -31,3 +31,6 @@ tempfile = "3"
 irori-amazon-api = { workspace = true, features = ["test-support"] }
 irori-depot = { workspace = true, features = ["test-server"] }
 hex.workspace = true
+
+[lints]
+workspace = true

@@ -129,17 +129,17 @@ pub(crate) fn find_with(
     }
     for source in &manifest.sources {
         match source {
-            Source::Flatpak { id } if probe.os == Os::Linux => {
-                if probe
-                    .flatpak_roots
-                    .iter()
-                    .any(|root| root.join(id).join("current").exists())
-                {
-                    out.push(Installation {
-                        flatpak: Some(id.clone()),
-                        ..base(Origin::Flatpak, PathBuf::from("flatpak"))
-                    });
-                }
+            Source::Flatpak { id }
+                if probe.os == Os::Linux
+                    && probe
+                        .flatpak_roots
+                        .iter()
+                        .any(|root| root.join(id).join("current").exists()) =>
+            {
+                out.push(Installation {
+                    flatpak: Some(id.clone()),
+                    ..base(Origin::Flatpak, PathBuf::from("flatpak"))
+                });
             }
             Source::Path { names } => {
                 let cwd = std::env::current_dir().unwrap_or_default();
@@ -240,7 +240,7 @@ pub fn locate_program(dir: &Path, names: &[String]) -> Option<PathBuf> {
         }
         entries
             .iter()
-            .filter(|e| e.path().is_dir() && !e.path().extension().is_some_and(|x| x == "app"))
+            .filter(|e| e.path().is_dir() && e.path().extension().is_none_or(|x| x != "app"))
             .find_map(|e| walk(&e.path(), pattern, depth - 1))
     }
     names.iter().find_map(|n| walk(dir, n, 2))

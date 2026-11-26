@@ -20,3 +20,6 @@ tracing.workspace = true
 irori-depot = { workspace = true, features = ["test-server"] }
 tokio.workspace = true
 url.workspace = true
+
+[lints]
+workspace = true

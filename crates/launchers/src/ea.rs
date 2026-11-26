@@ -98,10 +98,10 @@ pub fn parse_installer_data(bytes: &[u8], install_dir: PathBuf) -> anyhow::Resul
                 let parent = stack.last().map(String::as_str).unwrap_or("");
                 let value = text_buf.trim().to_string();
                 match (parent, name.as_str()) {
-                    ("contentIDs", "contentID") if !value.is_empty() => {
-                        if !content_ids.contains(&value) {
-                            content_ids.push(value);
-                        }
+                    ("contentIDs", "contentID")
+                        if !value.is_empty() && !content_ids.contains(&value) =>
+                    {
+                        content_ids.push(value);
                     }
                     ("gameTitles", "gameTitle") if !value.is_empty() => {
                         titles.push((current_locale.take(), value));

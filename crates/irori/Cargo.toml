@@ -122,3 +122,6 @@ assets = [
 
 [package.metadata.generate-rpm.recommends]
 irori-sign-in = "*"
+
+[lints]
+workspace = true

@@ -31,3 +31,6 @@ serde_json.workspace = true
 tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }
 base64.workspace = true
+
+[lints]
+workspace = true

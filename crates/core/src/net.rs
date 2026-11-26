@@ -8,7 +8,7 @@
 //! ([`OfflineAwareResolver`]): a client built with it never reaches a host
 //! other than this computer, whatever code made the request.
 
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs as _};
+use std::net::{IpAddr, ToSocketAddrs as _};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
@@ -132,12 +132,10 @@ impl reqwest::dns::Resolve for OfflineAwareResolver {
                 return Err(Box::new(WorkingOffline) as Box<dyn std::error::Error + Send + Sync>);
             }
             // getaddrinfo blocks, as in reqwest's own resolver.
-            let addrs: Vec<SocketAddr> =
-                tokio::task::spawn_blocking(move || (host.as_str(), 0).to_socket_addrs())
-                    .await
-                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)??
-                    .collect();
-            Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
+            let addrs = tokio::task::spawn_blocking(move || (host.as_str(), 0).to_socket_addrs())
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)??;
+            Ok(Box::new(addrs) as reqwest::dns::Addrs)
         })
     }
 }

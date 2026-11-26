@@ -654,7 +654,12 @@ fn galaxy_communication_exe() -> Option<PathBuf> {
     if own.is_file() {
         return Some(own);
     }
-    let mut roots: Vec<PathBuf> = [
+    let user_root = dirs::home_dir().map(|home| {
+        home.join(
+            ".local/share/flatpak/app/com.heroicgameslauncher.hgl/current/active/files/bin/heroic",
+        )
+    });
+    [
         "/usr/lib64/heroic",
         "/usr/lib/heroic",
         "/opt/Heroic",
@@ -662,18 +667,11 @@ fn galaxy_communication_exe() -> Option<PathBuf> {
         "/usr/share/heroic",
         "/var/lib/flatpak/app/com.heroicgameslauncher.hgl/current/active/files/bin/heroic",
     ]
-    .iter()
+    .into_iter()
     .map(PathBuf::from)
-    .collect();
-    if let Some(home) = dirs::home_dir() {
-        roots.push(home.join(
-            ".local/share/flatpak/app/com.heroicgameslauncher.hgl/current/active/files/bin/heroic",
-        ));
-    }
-    roots
-        .into_iter()
-        .map(|r| r.join(SUFFIX).join(NAME))
-        .find(|p| p.is_file())
+    .chain(user_root)
+    .map(|r| r.join(SUFFIX).join(NAME))
+    .find(|p| p.is_file())
 }
 
 #[cfg(test)]

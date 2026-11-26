@@ -513,7 +513,13 @@ impl XvdFile {
             match key_id.get() {
                 None => continue,
                 Some(0) => (),
-                Some(n) => todo!("KeyID other than 0 or unencrypted is not supported, found {n}"),
+                Some(n) => {
+                    return Err(io::Error::new(
+                        ErrorKind::Unsupported,
+                        format!("KeyID other than 0 or unencrypted is not supported, found {n}"),
+                    )
+                    .into());
+                }
             }
 
             let start_page = h.offset - layout.user_data.start;
@@ -815,15 +821,20 @@ impl XvdFile {
                 drive_plain_len,
             );
 
+            let logical_block_size = match block_size {
+                512 => gpt::disk::LogicalBlockSize::Lb512,
+                4096 => gpt::disk::LogicalBlockSize::Lb4096,
+                _ => {
+                    return Err(io::Error::new(
+                        ErrorKind::Unsupported,
+                        format!("unsupported block_size: {block_size}"),
+                    )
+                    .into());
+                }
+            };
             let gp = gpt::GptConfig::new()
                 .writable(false)
-                .logical_block_size(if block_size == 512 {
-                    gpt::disk::LogicalBlockSize::Lb512
-                } else if block_size == 4096 {
-                    gpt::disk::LogicalBlockSize::Lb4096
-                } else {
-                    todo!("unsupported block_size: {}", block_size)
-                })
+                .logical_block_size(logical_block_size)
                 .open_from_device(drive)?;
 
             let (_, part) = gp

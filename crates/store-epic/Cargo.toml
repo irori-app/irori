@@ -30,3 +30,6 @@ tempfile = "3"
 irori-depot = { workspace = true, features = ["test-server"] }
 sha1.workspace = true
 hex.workspace = true
+
+[lints]
+workspace = true

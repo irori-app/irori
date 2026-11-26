@@ -273,10 +273,10 @@ pub fn map_global_settings(defaults: &Value, home: &Path) -> MappedSettings {
         heroic.insert("uiLanguage".into(), lang);
     }
     let legacy_prefix_dir = heroic.remove("defaultWinePrefix");
-    if !heroic
+    if heroic
         .get("defaultWinePrefixDir")
         .and_then(Value::as_str)
-        .is_some_and(|s| !s.is_empty())
+        .is_none_or(|s| s.is_empty())
         && let Some(v) = legacy_prefix_dir
     {
         heroic.insert("defaultWinePrefixDir".into(), v);

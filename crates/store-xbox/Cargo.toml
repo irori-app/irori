@@ -37,3 +37,6 @@ nix = { workspace = true, features = ["poll"] }
 
 [dev-dependencies]
 irori-depot = { workspace = true, features = ["test-server"] }
+
+[lints]
+workspace = true

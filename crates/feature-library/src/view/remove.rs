@@ -229,32 +229,27 @@ impl Render for RemoveOptions {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         let count = self.plan.remove.len();
-        let mut lines: Vec<String> = self
-            .plan
-            .remove
-            .iter()
-            .take(LISTED)
-            .map(|g| g.title.clone())
-            .collect();
-        if count > LISTED {
-            lines.push(
-                t_args(
-                    "library.bulk.and_more",
-                    &[("count", &(count - LISTED).to_string())],
-                )
-                .to_string(),
-            );
-        }
+        let more = (count > LISTED).then(|| {
+            t_args(
+                "library.bulk.and_more",
+                &[("count", &(count - LISTED).to_string())],
+            )
+            .to_string()
+        });
         let left = left_lines(&self.plan);
         v_flex()
             .gap_3()
             .child(div().text_sm().child(t("library.bulk.remove_description")))
             .child(
-                v_flex()
-                    .gap_1()
-                    .text_sm()
-                    .text_color(muted)
-                    .children(lines.into_iter().map(|l| div().truncate().child(l))),
+                v_flex().gap_1().text_sm().text_color(muted).children(
+                    self.plan
+                        .remove
+                        .iter()
+                        .take(LISTED)
+                        .map(|g| g.title.clone())
+                        .chain(more)
+                        .map(|l| div().truncate().child(l)),
+                ),
             )
             .children(
                 left.into_iter()
