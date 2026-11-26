@@ -397,5 +397,11 @@
   "ui.month.9": "sept.",
   "ui.month.10": "oct.",
   "ui.month.11": "nov.",
-  "ui.month.12": "déc."
+  "ui.month.12": "déc.",
+  "ui.app_update.restart_failed": "Impossible de redémarrer avec la mise à jour",
+  "ui.time.just_now": "à l’instant",
+  "ui.time.minutes_ago": "il y a {count} min",
+  "ui.time.hours_ago": "il y a {count} h",
+  "ui.time.yesterday": "hier",
+  "ui.time.days_ago": "il y a {count} jours"
 }

@@ -183,6 +183,8 @@ impl NoticeModel {
 /// New versions of Irori itself.
 pub struct AppUpdateModel {
     pub status: AppUpdateStatus,
+    /// Starting the helper process that swaps in a staged update before quitting.
+    pub restarting: bool,
 }
 
 /// A game session that ended.
@@ -278,6 +280,7 @@ pub(crate) fn install(cx: &mut App) {
     let sessions = cx.new(|_| SessionModel::default());
     let app_update = cx.new(|_| AppUpdateModel {
         status: b.app_update(),
+        restarting: false,
     });
     let components = cx.new(|_| ComponentsModel {
         report: b.component_updates(),

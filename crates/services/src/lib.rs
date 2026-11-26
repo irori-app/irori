@@ -106,7 +106,7 @@ pub use accounts::{MakeSlot, MultiAccountStore, SlotDirs};
 pub use achievements::{
     AchievementIndex, AchievementTotals, GameAchievements, Unlock, unlock_notice,
 };
-pub use app_update::{AppUpdateStatus, InstallKind, Release, SelfInstall};
+pub use app_update::{AppUpdateStatus, InstallKind, Release, SelfInstall, SystemPackageManager};
 pub use audio::{GameAudio, Volume, VolumeTarget};
 pub use backup::{
     Backup, BackupParts, ExportFormat, InstallRecord, PathCheck, PathKind, RestoreSummary,
@@ -137,6 +137,7 @@ pub use replay::{QuickLaunchShortcut, Recorder, RecorderInfo, ReplayInfo, Shortc
 pub use reshade::{ReshadeStatus, reshade_needs_steam_overrides, supports_reshade};
 pub use screenshots::{Screenshot, ScreenshotIndex};
 pub use scripts::{ScriptInstall, ScriptProgress, ScriptPrompt, ScriptRun};
+pub use self_update::SelfUpdateChannel;
 pub use sessions::Session;
 pub use settings::SettingsService;
 pub use smart_categories::{
@@ -742,14 +743,9 @@ impl Backend {
         let Some(layout) = self.app_update.layout().cloned() else {
             anyhow::bail!("This copy of Irori is updated another way");
         };
-        if matches!(
-            self.app_update.install_state(),
-            SelfInstall::Downloading { .. }
-        ) {
+        if !self.app_update.try_begin_install() {
             return Ok(());
         }
-        self.app_update
-            .set_install(SelfInstall::Downloading { percent: None });
         self.bus.emit(Event::AppUpdateChanged);
         // Only whole percents reach the UI.
         let shown = Arc::new(AtomicU8::new(u8::MAX));
@@ -803,10 +799,19 @@ impl Backend {
     /// caller quits right after. Blocking: it may copy the helper.
     pub fn restart_into_app_update(&self) -> anyhow::Result<()> {
         use anyhow::Context as _;
+        if !self.app_update.try_begin_restart() {
+            anyhow::bail!("Already restarting into the update");
+        }
         let record = self.app_update.staged_record().to_path_buf();
-        let staged: self_update::Staged =
-            irori_core::json_store::read(&record)?.context("No update is waiting for a restart")?;
-        self_update::start_helper(&staged, &record)
+        let result = (|| -> anyhow::Result<()> {
+            let staged: self_update::Staged = irori_core::json_store::read(&record)?
+                .context("No update is waiting for a restart")?;
+            self_update::start_helper(&staged, &record)
+        })();
+        if result.is_err() {
+            self.app_update.finish_restart_failed();
+        }
+        result
     }
 
     /// Stop announcing `version` of Irori; a later one is announced again.

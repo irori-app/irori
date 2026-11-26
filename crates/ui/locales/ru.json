@@ -397,5 +397,11 @@
   "ui.month.9": "сент.",
   "ui.month.10": "окт.",
   "ui.month.11": "нояб.",
-  "ui.month.12": "дек."
+  "ui.month.12": "дек.",
+  "ui.app_update.restart_failed": "Не удалось перезапуститься с обновлением",
+  "ui.time.just_now": "только что",
+  "ui.time.minutes_ago": "{count} мин назад",
+  "ui.time.hours_ago": "{count} ч назад",
+  "ui.time.yesterday": "вчера",
+  "ui.time.days_ago": "{count} дн. назад"
 }

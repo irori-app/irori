@@ -397,5 +397,11 @@
   "ui.month.9": "sept.",
   "ui.month.10": "oct.",
   "ui.month.11": "nov.",
-  "ui.month.12": "dec."
+  "ui.month.12": "dec.",
+  "ui.app_update.restart_failed": "Repornirea cu actualizarea nu a reușit",
+  "ui.time.just_now": "chiar acum",
+  "ui.time.minutes_ago": "acum {count} min",
+  "ui.time.hours_ago": "acum {count} h",
+  "ui.time.yesterday": "ieri",
+  "ui.time.days_ago": "acum {count} zile"
 }

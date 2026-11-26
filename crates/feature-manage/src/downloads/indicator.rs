@@ -120,7 +120,12 @@ impl Indicator {
             .filter(|id| !queue.active.iter().any(|i| &i.id == *id))
             .count();
         let pending_components = m.components.read(cx).report.pending().count();
-        Self::new(queue, progress, pending_games + pending_components)
+        let pending_app = usize::from(m.app_update.read(cx).status.has_update());
+        Self::new(
+            queue,
+            progress,
+            pending_games + pending_components + pending_app,
+        )
     }
 }
 
@@ -141,6 +146,7 @@ fn follow<V: 'static>(cx: &mut Context<V>, get: fn(&mut V) -> &mut Indicator) ->
         cx.observe(&m.statuses, move |this, _, cx| refresh(this, cx)),
         cx.observe(&m.library, move |this, _, cx| refresh(this, cx)),
         cx.observe(&m.components, move |this, _, cx| refresh(this, cx)),
+        cx.observe(&m.app_update, move |this, _, cx| refresh(this, cx)),
     ]
 }
 
@@ -520,5 +526,65 @@ mod tests {
             Some("3"),
             "idle badge surfaces pending updates"
         );
+    }
+
+    #[gpui_kit::test]
+    fn idle_badge_counts_available_irori_update(cx: &mut gpui_kit::TestAppContext) {
+        use irori_services::{InstallKind, Release, SelfInstall};
+
+        crate::ui_tests::setup(cx);
+        let badge = cx.update(|cx| cx.new(DownloadsBadge::new));
+        cx.update(|cx| {
+            let app_update = models(cx).app_update.clone();
+            app_update.update(cx, |m, cx| {
+                m.status.kind = InstallKind::Manual;
+                m.status.available = None;
+                m.status.install = SelfInstall::Idle;
+                cx.notify();
+            });
+        });
+        assert_eq!(cx.read(|cx| badge.read(cx).state.badge()), None);
+
+        cx.update(|cx| {
+            let app_update = models(cx).app_update.clone();
+            app_update.update(cx, |m, cx| {
+                m.status.available = Some(Release {
+                    version: "9.9.9".into(),
+                    url: "https://github.com/irori-app/irori/releases/tag/v9.9.9".into(),
+                });
+                cx.notify();
+            });
+        });
+        assert_eq!(
+            cx.read(|cx| badge.read(cx).state.badge()).as_deref(),
+            Some("1"),
+            "idle Downloads badge should count an available Irori update"
+        );
+
+        // Staged Ready update still counts even if `available` is cleared.
+        cx.update(|cx| {
+            let app_update = models(cx).app_update.clone();
+            app_update.update(cx, |m, cx| {
+                m.status.available = None;
+                m.status.install = SelfInstall::Ready {
+                    version: "9.9.9".into(),
+                };
+                cx.notify();
+            });
+        });
+        assert_eq!(
+            cx.read(|cx| badge.read(cx).state.badge()).as_deref(),
+            Some("1"),
+            "idle Downloads badge should count a staged Ready Irori update"
+        );
+
+        cx.update(|cx| {
+            let app_update = models(cx).app_update.clone();
+            app_update.update(cx, |m, cx| {
+                m.status.install = SelfInstall::Idle;
+                cx.notify();
+            });
+        });
+        assert_eq!(cx.read(|cx| badge.read(cx).state.badge()), None);
     }
 }

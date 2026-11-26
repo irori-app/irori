@@ -24,8 +24,9 @@ use gpui_kit::{
 };
 use irori_core::{GameId, GameInfo, Runner};
 use irori_services::{
-    AppUpdateStatus, AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, SelfInstall,
+    AutoUpdateHold, ComponentKind, ComponentReport, ComponentUpdate, SelfInstall,
 };
+use irori_ui::app_update::{can_install, install_update, restart_into_update};
 use irori_ui::components::{BrandMark, GameCover, SectionTitle, StoreBadge};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::state::run_infallible;
@@ -94,13 +95,6 @@ pub(super) fn sorted_games(
     games
 }
 
-/// Whether Irori can download and install `status.available` itself.
-fn can_self_install(status: &AppUpdateStatus) -> bool {
-    status.available.is_some()
-        && status.kind.update_command().is_none()
-        && !matches!(status.install, SelfInstall::Unavailable)
-}
-
 impl DownloadsView {
     /// Ask the stores, component sources and GitHub now.
     pub(super) fn check_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -113,7 +107,7 @@ impl DownloadsView {
         let task = irori_ui::run(cx, async move {
             b.refresh_updates().await;
             b.check_components().await;
-            if b.app_update().kind.checks() {
+            if b.app_update().kind.can_check_manually() {
                 b.check_app_update().await?;
             }
             Ok(())
@@ -162,44 +156,23 @@ impl DownloadsView {
         cx.write_to_clipboard(ClipboardItem::new_string(command.to_string()));
         self.irori_copied = true;
         cx.notify();
-        cx.spawn_in(window, async move |this, cx| {
+        self.irori_copy_reset = Some(cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(2)).await;
             let _ = this.update(cx, |this, cx| {
                 this.irori_copied = false;
+                this.irori_copy_reset = None;
                 cx.notify();
             });
-        })
-        .detach();
+        }));
     }
 
-    fn install_irori_update(&self, cx: &mut Context<Self>) {
-        let b = backend(cx);
-        irori_ui::run(cx, async move { b.install_app_update().await }).detach();
-    }
-
-    fn restart_irori_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.irori_restarting {
-            return;
-        }
-        self.irori_restarting = true;
-        cx.notify();
-        let b = backend(cx);
-        let restart = b.clone();
-        let job = b.spawn_blocking(move || restart.restart_into_app_update());
-        let task = irori_ui::run(cx, async move { job.await? });
-        cx.spawn_in(window, async move |this, cx| match task.await {
-            Ok(()) => {
-                let _ = cx.update(|_, cx| cx.quit());
-            }
-            Err(e) => {
-                let _ = this.update_in(cx, |this, window, cx| {
-                    this.irori_restarting = false;
-                    notify_error(t("manage.updates.irori_restart_failed"), &e, window, cx);
-                    cx.notify();
-                });
-            }
-        })
-        .detach();
+    #[cfg(test)]
+    pub(crate) fn trigger_restart_irori_for_test(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        restart_into_update(window, cx).detach();
     }
 
     /// Alerts from auto-update scheduling or failed store/component checks.
@@ -237,139 +210,222 @@ impl DownloadsView {
     /// Dedicated top banner for an Irori self-update (kept apart from
     /// "Update all" because applying it restarts the app).
     pub(super) fn render_irori(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let status = models(cx).app_update.read(cx).status.clone();
-        let release = status.available.clone()?;
-        if !status.kind.checks() {
+        let model = models(cx).app_update.read(cx);
+        let status = model.status.clone();
+        let restarting = model.restarting;
+        let show = status.has_update()
+            || matches!(
+                status.install,
+                SelfInstall::Downloading { .. }
+                    | SelfInstall::Failed { .. }
+                    | SelfInstall::RolledBack { .. }
+            );
+        if !show {
             return None;
         }
+
+        let version = match &status.install {
+            SelfInstall::Ready { version } => Some(version.clone()),
+            _ => status
+                .available
+                .as_ref()
+                .filter(|_| status.kind.can_check_manually())
+                .map(|r| r.version.clone())
+                .or_else(|| match &status.install {
+                    SelfInstall::RolledBack { version } => Some(version.clone()),
+                    _ => None,
+                }),
+        }?;
+        let url = status
+            .available
+            .as_ref()
+            .filter(|r| r.version == version)
+            .map(|r| r.url.clone())
+            .unwrap_or_else(|| irori_services::app_update::release_page(&version));
         let theme = cx.theme();
-        let url = release.url.clone();
-        let installable = can_self_install(&status);
-        let detail: SharedString = match status.kind.update_command() {
-            Some(command) => command.into(),
-            None => match &status.install {
-                SelfInstall::Downloading { percent: Some(p) } => t_args(
-                    "manage.updates.irori_downloading_percent",
-                    &[("percent", &p.to_string())],
-                ),
-                SelfInstall::Downloading { percent: None } => t("manage.updates.irori_downloading"),
-                SelfInstall::Failed { error } => error.clone().into(),
-                _ if installable => t_args(
+        let command = status.kind.update_command();
+        let installable = can_install(&status);
+        let ready = matches!(status.install, SelfInstall::Ready { .. });
+        let downloading_percent = match status.install {
+            SelfInstall::Downloading { percent } => Some(percent),
+            _ => None,
+        };
+        let error = match &status.install {
+            SelfInstall::Failed { error } => Some(error.clone()),
+            _ => None,
+        };
+        let rollback_warning = match &status.install {
+            SelfInstall::RolledBack { version } => Some(t_args(
+                "manage.updates.irori_rolled_back",
+                &[("version", version), ("current", &status.current)],
+            )),
+            _ => None,
+        };
+
+        let title = match &status.install {
+            SelfInstall::Ready { version } => {
+                t_args("manage.updates.irori_ready_title", &[("version", version)])
+            }
+            SelfInstall::RolledBack { version } if status.available.is_none() => t_args(
+                "manage.updates.irori_rolled_back_title",
+                &[("version", version)],
+            ),
+            _ => t_args("manage.updates.irori_available", &[("version", &version)]),
+        };
+        let detail: Option<SharedString> = match &status.install {
+            SelfInstall::Downloading { percent: Some(p) } => Some(t_args(
+                "manage.updates.irori_downloading_percent",
+                &[("percent", &p.to_string())],
+            )),
+            SelfInstall::Downloading { percent: None } => {
+                Some(t("manage.updates.irori_downloading"))
+            }
+            SelfInstall::Ready { .. } => Some(t("manage.updates.irori_ready_detail")),
+            _ => Some(match command {
+                Some(command) => command.into(),
+                None if installable => t_args(
                     "manage.updates.irori_running",
                     &[("current", &status.current)],
                 ),
-                _ => format!("v{}", status.current).into(),
-            },
+                None => format!("v{}", status.current).into(),
+            }),
         };
-        let failed = matches!(status.install, SelfInstall::Failed { .. });
-        let notes_primary = !installable && status.kind.update_command().is_none();
+
+        let has_primary = command.is_some() || ready || installable;
         let mut actions: Vec<AnyElement> = vec![
             Button::new("irori-release-notes")
-                .map(|b| {
-                    if notes_primary {
-                        b.primary()
-                    } else {
-                        b.ghost()
-                    }
-                })
+                .debug_selector(|| "irori-release-notes".into())
+                .map(|b| if has_primary { b.ghost() } else { b.primary() })
                 .small()
                 .icon(IconName::ExternalLink)
                 .label(t("manage.updates.release_notes"))
                 .on_click(move |_, _, cx| cx.open_url(&url))
                 .into_any_element(),
         ];
-        match status.kind.update_command() {
-            Some(command) => {
-                actions.push(
-                    Button::new("irori-copy-command")
-                        .small()
-                        .primary()
-                        .icon(if self.irori_copied {
-                            IconName::Check
-                        } else {
-                            IconName::Copy
-                        })
-                        .label(if self.irori_copied {
-                            t("manage.updates.irori_copied")
-                        } else {
-                            t("manage.updates.irori_copy_command")
-                        })
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.copy_irori_command(command, window, cx)
-                        }))
-                        .into_any_element(),
-                );
-            }
-            None if installable => match &status.install {
-                SelfInstall::Ready { .. } => {
-                    actions.push(
-                        Button::new("irori-restart-update")
-                            .small()
-                            .primary()
-                            .icon(IconName::RotateCw)
-                            .label(t("manage.updates.irori_restart"))
-                            .loading(self.irori_restarting)
-                            .disabled(self.irori_restarting)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.restart_irori_update(window, cx)
-                            }))
-                            .into_any_element(),
-                    );
-                }
-                install => {
-                    let downloading = matches!(install, SelfInstall::Downloading { .. });
-                    actions.push(
-                        Button::new("irori-install-update")
-                            .small()
-                            .primary()
-                            .icon(IconName::Download)
-                            .label(t("manage.updates.irori_install"))
-                            .loading(downloading)
-                            .disabled(downloading)
-                            .on_click(cx.listener(|this, _, _, cx| this.install_irori_update(cx)))
-                            .into_any_element(),
-                    );
-                }
-            },
-            None => {}
+        if let Some(command) = command {
+            actions.push(
+                Button::new("irori-copy-command")
+                    .debug_selector(|| "irori-copy-command".into())
+                    .small()
+                    .primary()
+                    .icon(if self.irori_copied {
+                        IconName::Check
+                    } else {
+                        IconName::Copy
+                    })
+                    .label(if self.irori_copied {
+                        t("manage.updates.irori_copied")
+                    } else {
+                        t("manage.updates.irori_copy_command")
+                    })
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.copy_irori_command(command, window, cx)
+                    }))
+                    .into_any_element(),
+            );
+        } else if ready {
+            actions.push(
+                Button::new("irori-restart-update")
+                    .debug_selector(|| "irori-restart-update".into())
+                    .small()
+                    .primary()
+                    .icon(IconName::RotateCw)
+                    .label(t("manage.updates.irori_restart"))
+                    .loading(restarting)
+                    .disabled(restarting)
+                    .on_click(|_, window, cx| restart_into_update(window, cx).detach())
+                    .into_any_element(),
+            );
+        } else if installable {
+            let downloading = downloading_percent.is_some();
+            actions.push(
+                Button::new("irori-install-update")
+                    .debug_selector(|| "irori-install-update".into())
+                    .small()
+                    .primary()
+                    .icon(IconName::Download)
+                    .label(t("manage.updates.irori_install"))
+                    .loading(downloading)
+                    .disabled(downloading)
+                    .on_click(|_, _, cx| install_update(cx))
+                    .into_any_element(),
+            );
         }
 
+        let accent = if error.is_some() {
+            theme.danger
+        } else if rollback_warning.is_some() {
+            theme.warning
+        } else {
+            theme.primary
+        };
+
         Some(
-            h_flex()
+            v_flex()
                 .id("irori-self-update-banner")
                 .debug_selector(|| "irori-self-update-banner".into())
                 .w_full()
-                .gap_3()
+                .gap_2()
                 .px_4()
                 .py_3()
-                .items_center()
                 .rounded(theme.radius_lg)
                 .border_1()
-                .border_color(theme.primary.opacity(0.4))
-                .bg(theme.primary.opacity(0.08))
-                .child(BrandMark::new(rems(1.5)))
+                .border_color(accent.opacity(0.4))
+                .bg(accent.opacity(0.08))
                 .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .gap_0p5()
-                        .child(div().font_semibold().truncate().child(t_args(
-                            "manage.updates.irori_available",
-                            &[("version", &release.version)],
-                        )))
+                    h_flex()
+                        .w_full()
+                        .gap_3()
+                        .items_center()
+                        .child(div().flex_shrink_0().child(BrandMark::new(rems(1.5))))
                         .child(
-                            div()
-                                .text_xs()
-                                .truncate()
-                                .text_color(if failed {
-                                    theme.danger
-                                } else {
-                                    theme.muted_foreground
-                                })
-                                .child(detail),
-                        ),
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().font_semibold().truncate().child(title))
+                                .when_some(detail, |this, detail| {
+                                    this.child(
+                                        div()
+                                            .text_xs()
+                                            .truncate()
+                                            .text_color(theme.muted_foreground)
+                                            .child(detail),
+                                    )
+                                }),
+                        )
+                        .child(h_flex().flex_shrink_0().gap_2().children(actions)),
                 )
-                .child(h_flex().flex_shrink_0().gap_2().children(actions))
+                .when_some(error, |this, error| {
+                    this.child(
+                        div()
+                            .debug_selector(|| "irori-update-error".into())
+                            .w_full()
+                            .text_xs()
+                            .text_color(theme.danger)
+                            .child(error),
+                    )
+                })
+                .when_some(rollback_warning, |this, warning| {
+                    this.child(
+                        div()
+                            .debug_selector(|| "irori-rollback-warning".into())
+                            .w_full()
+                            .text_xs()
+                            .text_color(theme.warning)
+                            .child(warning),
+                    )
+                })
+                .when_some(downloading_percent, |this, percent| {
+                    this.child(
+                        div()
+                            .debug_selector(|| "irori-update-progress".into())
+                            .child(irori_ui::motion::gliding_progress(
+                                "irori-update-progress",
+                                percent.map(f32::from),
+                            )),
+                    )
+                })
                 .into_any_element(),
         )
     }

@@ -397,5 +397,11 @@
   "ui.month.9": "zář",
   "ui.month.10": "říj",
   "ui.month.11": "lis",
-  "ui.month.12": "pro"
+  "ui.month.12": "pro",
+  "ui.app_update.restart_failed": "Restart do aktualizace se nepodařil",
+  "ui.time.just_now": "právě teď",
+  "ui.time.minutes_ago": "před {count} min",
+  "ui.time.hours_ago": "před {count} h",
+  "ui.time.yesterday": "včera",
+  "ui.time.days_ago": "před {count} dny"
 }

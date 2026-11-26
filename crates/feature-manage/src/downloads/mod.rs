@@ -32,7 +32,9 @@ use gpui_kit::{
 };
 use irori_core::util::{format_bytes, unix_now};
 use irori_core::{GameId, GameStatus, StatusKind};
-use irori_services::{DownloadKind, DownloadState, FileState, LaunchParams};
+use irori_services::{
+    AppUpdateStatus, DownloadKind, DownloadState, FileState, LaunchParams, SelfInstall,
+};
 use irori_ui::art::{LruImageCache, ambient, art_store};
 use irori_ui::components::{
     ArtBackdrop, BackdropInk, BrandMark, GameCover, ProgressSummary, SectionTitle, StoreBadge,
@@ -78,7 +80,7 @@ pub struct DownloadsView {
     queuing_updates: bool,
     checking: bool,
     irori_copied: bool,
-    irori_restarting: bool,
+    irori_copy_reset: Option<Task<()>>,
     games_shown: usize,
     history_shown: usize,
     /// Which finished downloads the history lists.
@@ -142,7 +144,7 @@ impl DownloadsView {
             queuing_updates: false,
             checking: false,
             irori_copied: false,
-            irori_restarting: false,
+            irori_copy_reset: None,
             games_shown: updates::GAMES_PAGE,
             history_shown: HISTORY_PAGE,
             history_filter: HistoryFilter::All,
@@ -538,7 +540,7 @@ impl DownloadsView {
     }
 
     /// Status line under the title: independent facts joined by " · ".
-    fn summary(&self, checked_at: Option<u64>) -> String {
+    fn summary(&self, checked_at: Option<u64>, app_update: &AppUpdateStatus) -> String {
         let mut parts: Vec<SharedString> = Vec::new();
         if let Some(c) = &self.queue.current {
             parts.push(if c.paused {
@@ -548,6 +550,8 @@ impl DownloadsView {
             });
         } else if self.running_components > 0 {
             parts.push(t("manage.updates.updating"));
+        } else if matches!(app_update.install, SelfInstall::Downloading { .. }) {
+            parts.push(t("manage.downloads.summary.downloading"));
         }
         let waiting = self.queue.waiting.len();
         if waiting > 0 {
@@ -567,9 +571,10 @@ impl DownloadsView {
                 &[("when", &format::finish_from_now(secs))],
             ));
         }
-        if self.pending_updates > 0 {
-            let count = self.pending_updates.to_string();
-            parts.push(if self.pending_updates == 1 {
+        let total_updates = self.pending_updates + usize::from(app_update.has_update());
+        if total_updates > 0 {
+            let count = total_updates.to_string();
+            parts.push(if total_updates == 1 {
                 t_args("manage.downloads.summary.updates_one", &[("count", &count)])
             } else {
                 t_args(
@@ -610,6 +615,7 @@ impl DownloadsView {
         &self,
         checked_at: Option<u64>,
         checking: bool,
+        app_update: &AppUpdateStatus,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let queue = models(cx).downloads.read(cx).queue.clone();
@@ -705,7 +711,7 @@ impl DownloadsView {
                         div()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child(self.summary(checked_at)),
+                            .child(self.summary(checked_at, app_update)),
                     ),
             )
             .child(
@@ -1834,10 +1840,20 @@ impl Render for DownloadsView {
         self.sync_countdown_tick(countdown.is_some(), cx);
 
         let report = m.components.read(cx).report.clone();
+        let app_status = m.app_update.read(cx).status.clone();
         let game_update_ids = m.library.read(cx).updates.clone();
         let games = updates::sorted_games(game_update_ids.iter().cloned(), cx);
         let failed_stores = backend(cx).update_check_failures();
-        let checking = self.checking || report.checking;
+        let checking = self.checking || report.checking || app_status.checking;
+        let checked_at = match (
+            report.checked_at,
+            app_status
+                .checked_at
+                .filter(|_| app_status.kind.can_check_manually()),
+        ) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
 
         let alerts = self.render_update_alerts(&report, &failed_stores);
         let irori = self.render_irori(cx);
@@ -1927,7 +1943,7 @@ impl Render for DownloadsView {
                     .pt_6()
                     .pb_4()
                     .gap_4()
-                    .child(self.render_header(report.checked_at, checking, cx))
+                    .child(self.render_header(checked_at, checking, &app_status, cx))
                     .children(countdown.map(|c| when_done::countdown_banner(&c, cx))),
             )
             .child(body)
@@ -1961,5 +1977,10 @@ impl Render for DraggedDownload {
 impl DownloadsView {
     pub(crate) fn queue_for_tests(&self) -> &QueuePresentation {
         &self.queue
+    }
+
+    pub(crate) fn summary_for_tests(&self, cx: &App) -> String {
+        let app_status = models(cx).app_update.read(cx).status.clone();
+        self.summary(None, &app_status)
     }
 }

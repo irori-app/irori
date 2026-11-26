@@ -200,9 +200,13 @@ impl ReportFacts {
 
 /// How Irori was installed, in the words of an issue.
 fn install_words(install: &InstallKind) -> String {
+    use irori_services::SystemPackageManager;
     match install {
         InstallKind::Flatpak => "Flatpak",
-        InstallKind::SystemPackage => "system package",
+        InstallKind::SystemPackage(Some(SystemPackageManager::Pacman)) => "system package (pacman)",
+        InstallKind::SystemPackage(Some(SystemPackageManager::Apt)) => "system package (apt)",
+        InstallKind::SystemPackage(Some(SystemPackageManager::Dnf)) => "system package (dnf)",
+        InstallKind::SystemPackage(None) => "system package",
         InstallKind::Nix => "Nix",
         InstallKind::Source => "built from source",
         // The packager's text may name anything; the kind is enough.

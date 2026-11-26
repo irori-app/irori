@@ -397,5 +397,11 @@
   "ui.month.9": "9월",
   "ui.month.10": "10월",
   "ui.month.11": "11월",
-  "ui.month.12": "12월"
+  "ui.month.12": "12월",
+  "ui.app_update.restart_failed": "업데이트로 다시 시작하지 못했습니다",
+  "ui.time.just_now": "방금",
+  "ui.time.minutes_ago": "{count}분 전",
+  "ui.time.hours_ago": "{count}시간 전",
+  "ui.time.yesterday": "어제",
+  "ui.time.days_ago": "{count}일 전"
 }

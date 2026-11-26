@@ -397,5 +397,11 @@
   "ui.month.9": "9月",
   "ui.month.10": "10月",
   "ui.month.11": "11月",
-  "ui.month.12": "12月"
+  "ui.month.12": "12月",
+  "ui.app_update.restart_failed": "無法重新啟動並套用更新",
+  "ui.time.just_now": "剛剛",
+  "ui.time.minutes_ago": "{count} 分鐘前",
+  "ui.time.hours_ago": "{count} 小時前",
+  "ui.time.yesterday": "昨天",
+  "ui.time.days_ago": "{count} 天前"
 }

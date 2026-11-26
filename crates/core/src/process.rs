@@ -917,6 +917,100 @@ pub fn wait_pids_exit(_pids: &[u32], _timeout: Duration) -> bool {
     false
 }
 
+/// Block in the kernel until process `pid` exits (or `timeout` elapses) using
+/// `pidfd_open(2)` and `poll(2)`, with zero user-space polling.
+///
+/// Returns `Some(true)` when `pid` has exited (including when it is already
+/// gone), `Some(false)` when `timeout` elapsed while `pid` was still running,
+/// and `None` when `pidfd_open(2)` or `poll(2)` is unavailable (non-Linux,
+/// older kernels, or restricted environments) so the caller can fall back to
+/// polling.
+#[cfg(target_os = "linux")]
+pub fn wait_pid_exit(pid: u32, timeout: Duration) -> Option<bool> {
+    use nix::errno::Errno;
+    use nix::libc::{
+        POLLERR, POLLHUP, POLLIN, POLLNVAL, SYS_pidfd_open, c_uint, close, nfds_t, pid_t, poll,
+        pollfd, syscall,
+    };
+
+    let raw_pid = pid_t::try_from(pid).ok()?;
+    if raw_pid <= 0 {
+        return Some(true);
+    }
+    // SAFETY: `SYS_pidfd_open` takes `(pid_t, unsigned int)` and returns an
+    // owned file descriptor or -1 on error.
+    let fd = unsafe { syscall(SYS_pidfd_open, raw_pid, 0 as c_uint) };
+    if fd < 0 {
+        return if Errno::last() == Errno::ESRCH {
+            Some(true)
+        } else {
+            None
+        };
+    }
+
+    struct OwnedFd(i32);
+    impl Drop for OwnedFd {
+        fn drop(&mut self) {
+            // SAFETY: `self.0` is an open file descriptor returned by `pidfd_open`.
+            unsafe {
+                close(self.0);
+            }
+        }
+    }
+    let owned = OwnedFd(fd as i32);
+    let mut pfd = pollfd {
+        fd: owned.0,
+        events: POLLIN,
+        revents: 0,
+    };
+    let deadline = std::time::Instant::now().checked_add(timeout);
+    loop {
+        pfd.revents = 0;
+        let remaining_ms = match deadline {
+            Some(deadline) => {
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    0
+                } else {
+                    remaining.as_millis().max(1).min(i32::MAX as u128) as i32
+                }
+            }
+            None => i32::MAX,
+        };
+        // SAFETY: `pfd` is a valid single-element `pollfd` holding an open pidfd.
+        let rc = unsafe { poll(&mut pfd, 1 as nfds_t, remaining_ms) };
+        if rc < 0 {
+            if Errno::last() == Errno::EINTR {
+                if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                    return Some(false);
+                }
+                continue;
+            }
+            return None;
+        }
+        if rc == 0 {
+            if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                return Some(false);
+            }
+            continue;
+        }
+        if (pfd.revents & (POLLERR | POLLNVAL)) != 0 {
+            return None;
+        }
+        if (pfd.revents & (POLLIN | POLLHUP)) != 0 {
+            return Some(true);
+        }
+        if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+            return Some(false);
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn wait_pid_exit(_pid: u32, _timeout: Duration) -> Option<bool> {
+    None
+}
+
 #[cfg(windows)]
 pub async fn terminate(child: &mut Child) {
     if let Some(pid) = child.id() {
@@ -1534,6 +1628,31 @@ mod tests {
         let _ = child.wait();
         assert!(waited);
         assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn wait_pid_exit_distinguishes_exit_timeout_and_gone() {
+        let mut short = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.05"])
+            .spawn()
+            .unwrap();
+        let started = std::time::Instant::now();
+        let exited = wait_pid_exit(short.id(), Duration::from_secs(5));
+        let elapsed = started.elapsed();
+        let _ = short.wait();
+        assert_eq!(exited, Some(true));
+        assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+
+        let mut running = std::process::Command::new("sh")
+            .args(["-c", "sleep 10"])
+            .spawn()
+            .unwrap();
+        let pid = running.id();
+        assert_eq!(wait_pid_exit(pid, Duration::from_millis(40)), Some(false));
+        let _ = running.kill();
+        let _ = running.wait();
+        assert_eq!(wait_pid_exit(pid, Duration::from_millis(40)), Some(true));
     }
 
     /// What an opener starts may outlive it and hold whatever it was given:

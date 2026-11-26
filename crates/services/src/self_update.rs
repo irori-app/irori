@@ -62,6 +62,32 @@ pub enum Layout {
     WindowsSetup { dir: PathBuf },
 }
 
+/// Which self-updatable package format this install uses, without exposing
+/// filesystem paths to the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelfUpdateChannel {
+    AppImage,
+    Tarball,
+    MacApp,
+    WindowsZip,
+    WindowsPortable,
+    WindowsSetup,
+}
+
+impl Layout {
+    /// The package format corresponding to this layout.
+    pub fn channel(&self) -> SelfUpdateChannel {
+        match self {
+            Layout::AppImage { .. } => SelfUpdateChannel::AppImage,
+            Layout::Tarball { .. } => SelfUpdateChannel::Tarball,
+            Layout::MacApp { .. } => SelfUpdateChannel::MacApp,
+            Layout::WindowsZip { .. } => SelfUpdateChannel::WindowsZip,
+            Layout::WindowsPortable { .. } => SelfUpdateChannel::WindowsPortable,
+            Layout::WindowsSetup { .. } => SelfUpdateChannel::WindowsSetup,
+        }
+    }
+}
+
 /// The systems Irori is packaged for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Os {
@@ -91,6 +117,8 @@ pub struct Probe<'a> {
     pub os: Os,
     /// `$APPIMAGE`, which the AppImage runtime sets to the file it runs.
     pub appimage: Option<&'a Path>,
+    /// `$APPDIR`, the mounted directory holding the AppImage's own binaries.
+    pub appdir: Option<&'a Path>,
     /// `install.ini` beside the program says the Windows setup installed it.
     pub setup: bool,
     /// The `portable` marker beside the program.
@@ -101,10 +129,23 @@ pub struct Probe<'a> {
 pub fn layout(probe: &Probe) -> Option<Layout> {
     let dir = probe.exe.parent()?.to_path_buf();
     Some(match probe.os {
-        Os::Linux => match probe.appimage {
-            Some(file) if file.is_absolute() => Layout::AppImage {
-                file: file.to_path_buf(),
-            },
+        Os::Linux => match (probe.appimage, probe.appdir) {
+            (Some(file), Some(appdir))
+                if file.is_absolute()
+                    && appdir.is_absolute()
+                    && appdir.parent().is_some()
+                    && !appdir.components().any(|c| {
+                        matches!(
+                            c,
+                            std::path::Component::ParentDir | std::path::Component::CurDir
+                        )
+                    })
+                    && probe.exe.starts_with(appdir) =>
+            {
+                Layout::AppImage {
+                    file: file.to_path_buf(),
+                }
+            }
             _ => Layout::Tarball { dir },
         },
         Os::Mac => {
@@ -134,11 +175,18 @@ pub fn detect() -> Option<Layout> {
     let dir = exe.parent()?;
     let setup = std::fs::read_to_string(dir.join("install.ini"))
         .is_ok_and(|ini| ini.to_ascii_lowercase().contains("channel=setup"));
-    let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
+    let appimage = std::env::var_os("APPIMAGE")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from);
+    let appdir = std::env::var_os("APPDIR")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .map(|d| std::fs::canonicalize(&d).unwrap_or(d));
     layout(&Probe {
         exe: &exe,
         os: Os::current()?,
         appimage: appimage.as_deref(),
+        appdir: appdir.as_deref(),
         setup,
         portable: irori_core::paths::is_portable(),
     })
@@ -338,23 +386,70 @@ pub async fn stage(
     let asset = layout
         .asset(version, arch)
         .context("No package of Irori is built for this computer")?;
-    let body = irori_core::http::client()
+    let resp = irori_core::http::client()
         .get(format!("{}{version}", source.release_by_tag))
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .context("Could not reach GitHub")?
-        .error_for_status()
-        .context("GitHub refused the request")?
-        .text()
-        .await
-        .context("Unexpected answer from GitHub")?;
-    let release: GhRelease =
-        serde_json::from_str(&body).context("Unexpected answer from GitHub")?;
+        .map_err(|e| {
+            tracing::debug!("reaching GitHub for v{version}: {e:#}");
+            anyhow::anyhow!("Could not reach GitHub")
+        })?;
+    let status = resp.status();
+    if !status.is_success() {
+        let headers = resp.headers().clone();
+        let body = if status.as_u16() == 403 {
+            resp.text().await.ok()
+        } else {
+            None
+        };
+        let not_found = format!("Release v{version} was not found on GitHub");
+        return Err(crate::app_update::github_http_error(
+            status.as_u16(),
+            &headers,
+            body.as_deref(),
+            Some(&not_found),
+            irori_core::util::unix_now(),
+        ));
+    }
+    let body = resp.text().await.map_err(|e| {
+        tracing::debug!("reading GitHub release v{version}: {e:#}");
+        anyhow::anyhow!("Unexpected answer from GitHub")
+    })?;
+    let release: GhRelease = serde_json::from_str(&body).map_err(|e| {
+        tracing::debug!("parsing GitHub release v{version} JSON: {e:#}");
+        anyhow::anyhow!("Unexpected answer from GitHub")
+    })?;
     let picked = pick(&release, version, &asset, &source.downloads)?;
-    let sums = download::get_text(&picked.sums_url)
+    let sums_resp = irori_core::http::client()
+        .get(&picked.sums_url)
+        .timeout(irori_core::net::timeout_or(Duration::from_secs(20)))
+        .send()
         .await
-        .context("Couldn't read the release's checksums")?;
+        .map_err(|e| {
+            tracing::debug!("fetching checksums for v{version}: {e:#}");
+            anyhow::anyhow!("Could not reach GitHub")
+        })?;
+    let sums_status = sums_resp.status();
+    if !sums_status.is_success() {
+        let headers = sums_resp.headers().clone();
+        let body = if sums_status.as_u16() == 403 {
+            sums_resp.text().await.ok()
+        } else {
+            None
+        };
+        return Err(crate::app_update::github_http_error(
+            sums_status.as_u16(),
+            &headers,
+            body.as_deref(),
+            Some("Couldn't find the release's checksums on GitHub"),
+            irori_core::util::unix_now(),
+        ));
+    }
+    let sums = sums_resp.text().await.map_err(|e| {
+        tracing::debug!("reading checksums for v{version}: {e:#}");
+        anyhow::anyhow!("Couldn't read the release's checksums")
+    })?;
     let Some(expected) = expected_digest(&sums, &picked.package) else {
         bail!("The release's checksums don't list {}", picked.package);
     };
@@ -386,7 +481,22 @@ pub async fn stage(
             DigestKind::Sha256,
         )
         .await
-        .context("Couldn't download the update")?;
+        .map_err(|e| {
+            if let Some(req_err) = e.chain().find_map(|c| c.downcast_ref::<reqwest::Error>()) {
+                tracing::debug!("downloading {}: {e:#}", picked.package);
+                if let Some(status) = req_err.status() {
+                    return crate::app_update::github_http_error(
+                        status.as_u16(),
+                        &reqwest::header::HeaderMap::new(),
+                        None,
+                        Some("The update package wasn't found on GitHub"),
+                        irori_core::util::unix_now(),
+                    );
+                }
+                return anyhow::anyhow!("Couldn't download the update");
+            }
+            e.context("Couldn't download the update")
+        })?;
         if !download::checksum_matches(&expected, &got.digest) {
             bail!("The download doesn't match the release's checksum, so it wasn't used");
         }
@@ -781,24 +891,42 @@ fn write_record(path: &Path, staged: &Staged) -> Result<()> {
 }
 
 /// Whether process `pid` ended within `limit`.
+///
+/// Uses Linux `pidfd_open(2)` + `poll(2)` when available for zero-polling
+/// kernel exit notification, falling back to `sysinfo` polling on non-Linux
+/// platforms or kernels without `pidfd_open`.
 fn wait_until_gone(pid: u32, limit: Duration) -> bool {
-    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+    if let Some(exited) = irori_core::process::wait_pid_exit(pid, limit) {
+        return exited;
+    }
+    wait_until_gone_poll(pid, limit)
+}
+
+fn wait_until_gone_poll(pid: u32, limit: Duration) -> bool {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
     let pid = Pid::from_u32(pid);
     let deadline = Instant::now() + limit;
-    let mut sys = System::new();
     loop {
+        // Fresh `System` per poll: on macOS `sysinfo` caches `process_status`
+        // for existing entries and misses the transition to `SZOMB`, so a fresh
+        // lookup ensures zombie processes are recognized as exited.
+        let mut sys = System::new();
         sys.refresh_processes_specifics(
             ProcessesToUpdate::Some(&[pid]),
             true,
             ProcessRefreshKind::nothing(),
         );
-        if sys.process(pid).is_none() {
+        if sys
+            .process(pid)
+            .is_none_or(|p| matches!(p.status(), ProcessStatus::Zombie | ProcessStatus::Dead))
+        {
             return true;
         }
-        if Instant::now() >= deadline {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
             return false;
         }
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(200).min(remaining));
     }
 }
 
@@ -838,11 +966,28 @@ fn starts_well(mut child: std::process::Child, within: Duration) -> bool {
     while Instant::now() < deadline {
         match child.try_wait() {
             Ok(Some(status)) => return status.success(),
-            Ok(None) => std::thread::sleep(Duration::from_millis(200)),
+            Ok(None) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                match irori_core::process::wait_pid_exit(child.id(), remaining) {
+                    Some(true) => {
+                        if let Ok(Some(status)) = child.try_wait() {
+                            return status.success();
+                        }
+                        // Yield briefly in case wait status lags pidfd readiness.
+                        std::thread::sleep(Duration::from_millis(5).min(remaining));
+                    }
+                    Some(false) => break,
+                    None => std::thread::sleep(Duration::from_millis(200).min(remaining)),
+                }
+            }
             Err(_) => return false,
         }
     }
-    true
+    match child.try_wait() {
+        Ok(Some(status)) => status.success(),
+        Ok(None) => true,
+        Err(_) => false,
+    }
 }
 
 #[cfg(test)]
@@ -857,6 +1002,7 @@ mod tests {
             exe: Path::new(exe),
             os,
             appimage: None,
+            appdir: None,
             setup: false,
             portable: false,
         }
@@ -876,6 +1022,7 @@ mod tests {
         assert_eq!(
             layout(&Probe {
                 appimage: Some(appimage),
+                appdir: Some(Path::new("/tmp/.mount_IroriX")),
                 ..probe("/tmp/.mount_IroriX/usr/bin/irori", Os::Linux)
             }),
             Some(Layout::AppImage {
@@ -911,6 +1058,80 @@ mod tests {
             windows(false, false),
             Some(Layout::WindowsZip { .. })
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_inherited_appimage_outside_appdir() {
+        let parent_appimage = Path::new("/opt/antigravity/Antigravity.AppImage");
+        // Inherited $APPIMAGE with no $APPDIR must not hijack a tarball install.
+        assert_eq!(
+            layout(&Probe {
+                appimage: Some(parent_appimage),
+                appdir: None,
+                ..probe("/tmp/irori/bin/irori", Os::Linux)
+            }),
+            Some(Layout::Tarball {
+                dir: "/tmp/irori/bin".into()
+            })
+        );
+        // Inherited $APPIMAGE + $APPDIR from a parent AppImage mount whose exe
+        // is outside $APPDIR must also resolve to Tarball.
+        assert_eq!(
+            layout(&Probe {
+                appimage: Some(parent_appimage),
+                appdir: Some(Path::new("/tmp/.mount_Antigravity")),
+                ..probe("/tmp/irori/bin/irori", Os::Linux)
+            }),
+            Some(Layout::Tarball {
+                dir: "/tmp/irori/bin".into()
+            })
+        );
+        // Empty, root, relative, or traversal $APPDIR must never match.
+        for bad_dir in ["", "/", "relative/mount", "/tmp/.."] {
+            assert_eq!(
+                layout(&Probe {
+                    appimage: Some(parent_appimage),
+                    appdir: Some(Path::new(bad_dir)),
+                    ..probe("/tmp/irori/bin/irori", Os::Linux)
+                }),
+                Some(Layout::Tarball {
+                    dir: "/tmp/irori/bin".into()
+                })
+            );
+        }
+        // Traversal $APPDIR even when exe has the same literal prefix must not match.
+        assert_eq!(
+            layout(&Probe {
+                appimage: Some(parent_appimage),
+                appdir: Some(Path::new("/tmp/..")),
+                ..probe("/tmp/../usr/bin/irori", Os::Linux)
+            }),
+            Some(Layout::Tarball {
+                dir: "/tmp/../usr/bin".into()
+            })
+        );
+        // Genuine AppImage mount running its own binary inside $APPDIR.
+        let irori_appimage = Path::new("/home/a/Apps/Irori.AppImage");
+        assert_eq!(
+            layout(&Probe {
+                appimage: Some(irori_appimage),
+                appdir: Some(Path::new("/tmp/.mount_Irori123")),
+                ..probe("/tmp/.mount_Irori123/usr/bin/irori", Os::Linux)
+            }),
+            Some(Layout::AppImage {
+                file: irori_appimage.into()
+            })
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn detect_returns_tarball_when_exe_is_outside_appdir() {
+        assert!(
+            matches!(detect(), Some(Layout::Tarball { .. })),
+            "detect() must resolve to Tarball when current_exe is outside any AppImage $APPDIR"
+        );
     }
 
     #[test]
@@ -1276,5 +1497,196 @@ mod tests {
         let e = stage_from(&server, &layout).await.unwrap_err();
         assert!(format!("{e:#}").contains("disagree"));
         assert!(!install.join(STAGE_DIR).exists());
+    }
+
+    #[tokio::test]
+    async fn formats_rate_limit_and_not_found_errors_cleanly() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = Layout::Tarball {
+            dir: dir.path().join("Irori"),
+        };
+
+        let reset = irori_core::util::unix_now() + 245;
+        let rate_limited = TestServer::start(move |_| Resp {
+            status: 403,
+            headers: vec![
+                ("x-ratelimit-remaining".into(), "0".into()),
+                ("x-ratelimit-reset".into(), reset.to_string()),
+            ],
+            ..Default::default()
+        });
+        let err = stage_from(&rate_limited, &layout).await.unwrap_err();
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("GitHub's rate limit was reached") && text.contains("minutes"),
+            "unexpected rate limit message: {text}"
+        );
+        assert!(
+            !text.contains("http://") && !text.contains("https://"),
+            "error must not leak raw request URL: {text}"
+        );
+
+        let rate_limited_no_reset = TestServer::start(|_| Resp {
+            status: 403,
+            headers: vec![("x-ratelimit-remaining".into(), "0".into())],
+            ..Default::default()
+        });
+        let err = stage_from(&rate_limited_no_reset, &layout)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            format!("{err:#}"),
+            "GitHub's rate limit was reached. Try again later, or download it from the release page."
+        );
+
+        let too_many = TestServer::start(|_| Resp {
+            status: 429,
+            headers: vec![("retry-after".into(), "120".into())],
+            ..Default::default()
+        });
+        let err = stage_from(&too_many, &layout).await.unwrap_err();
+        assert_eq!(
+            format!("{err:#}"),
+            "GitHub's rate limit was reached. Try again in about 2 minutes, or download it from the release page."
+        );
+
+        let missing = TestServer::start(|_| Resp::status(404));
+        let err = stage_from(&missing, &layout).await.unwrap_err();
+        assert_eq!(format!("{err:#}"), "Release v1.4.0 was not found on GitHub");
+
+        let server_error = TestServer::start(|_| Resp::status(502));
+        let err = stage_from(&server_error, &layout).await.unwrap_err();
+        assert_eq!(format!("{err:#}"), "GitHub returned HTTP 502");
+
+        // Secondary HTTP errors during SHA256SUMS and package download must
+        // also stay clean without leaking raw reqwest URLs.
+        let asset = "Irori-1.4.0-linux.tar.gz";
+        let digest = "a".repeat(64);
+        let sums_forbidden = TestServer::start(move |req| {
+            let base = format!(
+                "http://{}/download/",
+                req.header("host").unwrap_or_default()
+            );
+            match req.path.as_str() {
+                "/tag/v1.4.0" => Resp::json(serde_json::json!({
+                    "tag_name": "v1.4.0",
+                    "assets": [
+                        {"name": asset, "browser_download_url": format!("{base}{asset}")},
+                        {"name": SUMS, "browser_download_url": format!("{base}{SUMS}")},
+                    ]
+                })),
+                "/download/SHA256SUMS" => Resp {
+                    status: 403,
+                    headers: vec![("x-ratelimit-remaining".into(), "0".into())],
+                    ..Default::default()
+                },
+                _ => Resp::status(404),
+            }
+        });
+        let err = stage_from(&sums_forbidden, &layout).await.unwrap_err();
+        let text = format!("{err:#}");
+        assert_eq!(
+            text,
+            "GitHub's rate limit was reached. Try again later, or download it from the release page."
+        );
+        assert!(!text.contains("http://") && !text.contains("https://"));
+
+        let package_missing = TestServer::start(move |req| {
+            let base = format!(
+                "http://{}/download/",
+                req.header("host").unwrap_or_default()
+            );
+            match req.path.as_str() {
+                "/tag/v1.4.0" => Resp::json(serde_json::json!({
+                    "tag_name": "v1.4.0",
+                    "assets": [
+                        {"name": asset, "browser_download_url": format!("{base}{asset}")},
+                        {"name": SUMS, "browser_download_url": format!("{base}{SUMS}")},
+                    ]
+                })),
+                "/download/SHA256SUMS" => bytes(format!("{digest}  {asset}\n").into_bytes()),
+                "/download/Irori-1.4.0-linux.tar.gz" => Resp::status(404),
+                _ => Resp::status(404),
+            }
+        });
+        let err = stage_from(&package_missing, &layout).await.unwrap_err();
+        let text = format!("{err:#}");
+        assert_eq!(text, "The update package wasn't found on GitHub");
+        assert!(!text.contains("http://") && !text.contains("https://"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wait_until_gone_and_starts_well_track_child_lifecycle() {
+        let mut short = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.05"])
+            .spawn()
+            .unwrap();
+        let short_pid = short.id();
+        let reaper = std::thread::spawn(move || {
+            let _ = short.wait();
+        });
+        let started = Instant::now();
+        assert!(wait_until_gone(short_pid, Duration::from_secs(5)));
+        let _ = reaper.join();
+        assert!(started.elapsed() < Duration::from_secs(1));
+
+        let mut lingering = std::process::Command::new("sh")
+            .args(["-c", "sleep 10"])
+            .spawn()
+            .unwrap();
+        assert!(!wait_until_gone(lingering.id(), Duration::from_millis(40)));
+        let _ = lingering.kill();
+        let _ = lingering.wait();
+
+        let crashing = std::process::Command::new("sh")
+            .args(["-c", "exit 1"])
+            .spawn()
+            .unwrap();
+        assert!(!starts_well(crashing, Duration::from_secs(2)));
+
+        let handover = std::process::Command::new("sh")
+            .args(["-c", "exit 0"])
+            .spawn()
+            .unwrap();
+        assert!(starts_well(handover, Duration::from_secs(2)));
+
+        let mut healthy = std::process::Command::new("sh")
+            .args(["-c", "sleep 10"])
+            .spawn()
+            .unwrap();
+        let healthy_pid = healthy.id();
+        let copy = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.2"])
+            .spawn()
+            .unwrap();
+        assert!(starts_well(copy, Duration::from_millis(50)));
+        let _ = healthy.kill();
+        let _ = healthy.wait();
+        assert!(wait_until_gone(healthy_pid, Duration::from_secs(1)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn wait_until_gone_poll_recognizes_zombie_reaped_and_running() {
+        // Unreaped child exits into zombie state: poll fallback must treat it as gone.
+        let mut zombie = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.05"])
+            .spawn()
+            .unwrap();
+        let started = Instant::now();
+        assert!(wait_until_gone_poll(zombie.id(), Duration::from_secs(2)));
+        let _ = zombie.wait();
+        assert!(started.elapsed() < Duration::from_secs(1));
+
+        let mut running = std::process::Command::new("sh")
+            .args(["-c", "sleep 10"])
+            .spawn()
+            .unwrap();
+        let pid = running.id();
+        assert!(!wait_until_gone_poll(pid, Duration::from_millis(40)));
+        let _ = running.kill();
+        let _ = running.wait();
+        assert!(wait_until_gone_poll(pid, Duration::from_secs(1)));
     }
 }

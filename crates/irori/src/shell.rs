@@ -107,6 +107,7 @@ impl AppShell {
             }),
             cx.observe_in(&m.app_update, window, |this, _, window, cx| {
                 this.app_update.show(window, cx);
+                cx.notify();
             }),
             cx.observe_in(&m.settings, window, |this, settings, window, cx| {
                 let lang = settings.read(cx).app.ui_language.clone();
@@ -521,7 +522,8 @@ impl AppShell {
         let section = navigator(cx).read(cx).current().section();
         let downloads = models(cx).downloads.read(cx).queue.active.len();
         let updates = models(cx).library.read(cx).updates.len()
-            + models(cx).components.read(cx).report.pending().count();
+            + models(cx).components.read(cx).report.pending().count()
+            + usize::from(models(cx).app_update.read(cx).status.has_update());
         let collapsed = self.sidebar_collapsed_now(window);
         let any_account = models(cx).accounts.read(cx).any_logged_in();
         let theme = cx.theme();

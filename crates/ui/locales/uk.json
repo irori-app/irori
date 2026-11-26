@@ -397,5 +397,11 @@
   "ui.month.9": "вер.",
   "ui.month.10": "жовт.",
   "ui.month.11": "лист.",
-  "ui.month.12": "груд."
+  "ui.month.12": "груд.",
+  "ui.app_update.restart_failed": "Не вдалося перезапуститися з оновленням",
+  "ui.time.just_now": "щойно",
+  "ui.time.minutes_ago": "{count} хв тому",
+  "ui.time.hours_ago": "{count} год тому",
+  "ui.time.yesterday": "учора",
+  "ui.time.days_ago": "{count} дн. тому"
 }

@@ -397,5 +397,11 @@
   "ui.month.9": "wrz",
   "ui.month.10": "paź",
   "ui.month.11": "lis",
-  "ui.month.12": "gru"
+  "ui.month.12": "gru",
+  "ui.app_update.restart_failed": "Nie udało się uruchomić ponownie z aktualizacją",
+  "ui.time.just_now": "przed chwilą",
+  "ui.time.minutes_ago": "{count} min temu",
+  "ui.time.hours_ago": "{count} godz. temu",
+  "ui.time.yesterday": "wczoraj",
+  "ui.time.days_ago": "{count} dni temu"
 }
