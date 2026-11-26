@@ -14,10 +14,39 @@ use super::{GamePage, GamePageEvent};
 use crate::state::{ActionInputs, PrimaryAction};
 use crate::{install, manage, ops, redmod};
 
+/// Optional context for [`build_menu`].
+#[derive(Default)]
+pub(super) struct MenuOptions {
+    pub(super) shortcuts_exist: Option<bool>,
+    pub(super) store_url: Option<String>,
+    pub(super) page: Option<WeakEntity<GamePage>>,
+    pub(super) in_recent: bool,
+}
+
 /// Append every game command for `id` to `menu`. Use it as the builder of a
 /// `DropdownMenu` or `ContextMenu` anywhere a game is shown.
 pub fn game_menu(menu: PopupMenu, id: &GameId, window: &mut Window, cx: &mut App) -> PopupMenu {
-    build_menu(menu, id, None, None, None, window, cx)
+    build_menu(menu, id, MenuOptions::default(), window, cx)
+}
+
+/// Append every game command for `id` to `menu`, plus "Remove from Recent" for
+/// rows in the sidebar's Recent section.
+pub fn recent_game_menu(
+    menu: PopupMenu,
+    id: &GameId,
+    window: &mut Window,
+    cx: &mut App,
+) -> PopupMenu {
+    build_menu(
+        menu,
+        id,
+        MenuOptions {
+            in_recent: true,
+            ..Default::default()
+        },
+        window,
+        cx,
+    )
 }
 
 /// One-off launch variants offered next to Play: label key, icon, params.
@@ -71,12 +100,16 @@ fn idle(game: &GameInfo, cx: &App) -> bool {
 pub(super) fn build_menu(
     mut menu: PopupMenu,
     id: &GameId,
-    shortcuts_exist: Option<bool>,
-    store_url: Option<String>,
-    page: Option<WeakEntity<GamePage>>,
+    options: MenuOptions,
     _: &mut Window,
     cx: &mut App,
 ) -> PopupMenu {
+    let MenuOptions {
+        shortcuts_exist,
+        store_url,
+        page,
+        in_recent,
+    } = options;
     let Some(game) = backend(cx).game(id) else {
         return menu;
     };
@@ -438,6 +471,17 @@ pub(super) fn build_menu(
         )
         .on_click(move |_, _, cx| ops::set_hidden(&i, !hidden, cx)),
     );
+    if in_recent {
+        let i = id.clone();
+        menu = menu.item(
+            item("game.menu.remove_from_recent", IconName::Minus).on_click(move |_, _, cx| {
+                let b = backend(cx);
+                let id = i.clone();
+                irori_ui::state::run_infallible(cx, async move { b.userdata.remove_recent(&id) })
+                    .detach();
+            }),
+        );
+    }
     if irori_ui::copies::of(id, cx).len() > 1 {
         menu = irori_ui::copies::menu_items(menu.separator(), id, cx).separator();
     }

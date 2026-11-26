@@ -48,13 +48,7 @@ pub fn top_games(
         LibraryTopSection::Disabled => return None,
         LibraryTopSection::RecentlyPlayed | LibraryTopSection::RecentlyPlayedInstalled => {
             let installed_only = setting == LibraryTopSection::RecentlyPlayedInstalled;
-            // Without Irori's own history (such as right after importing from
-            // Heroic), recorded playtime still says what was played last.
-            let keys: Vec<String> = if user.recent.is_empty() {
-                played_by_recency(user)
-            } else {
-                user.recent.clone()
-            };
+            let keys = user.recent_keys();
             let games: Vec<_> = keys
                 .iter()
                 .filter_map(|k| parse_key(k))
@@ -113,14 +107,26 @@ fn recency_ranks(user: &UserData) -> std::collections::HashMap<String, usize> {
     ranks
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 struct Key {
     revision: u64,
-    user: usize,
+    user: Arc<UserData>,
     setting: LibraryTopSection,
     max: usize,
     show_hidden: bool,
 }
+
+impl PartialEq for Key {
+    fn eq(&self, other: &Self) -> bool {
+        self.revision == other.revision
+            && Arc::ptr_eq(&self.user, &other.user)
+            && self.setting == other.setting
+            && self.max == other.max
+            && self.show_hidden == other.show_hidden
+    }
+}
+
+impl Eq for Key {}
 
 /// [`top_games`] cached by library revision, user-data identity and settings.
 #[derive(Default)]
@@ -140,7 +146,7 @@ impl TopCache {
     ) -> Option<(TopKind, Arc<[Arc<GameInfo>]>)> {
         let key = Key {
             revision: library.revision,
-            user: Arc::as_ptr(user) as usize,
+            user: user.clone(),
             setting,
             max: max_recent,
             show_hidden,
@@ -195,6 +201,17 @@ mod tests {
             top_games(LibraryTopSection::RecentlyPlayed, 8, false, &user, &lookup).unwrap();
         let titles: Vec<_> = recent.iter().map(|g| g.title.as_str()).collect();
         assert_eq!(titles, vec!["Hades", "Witcher"]);
+
+        // Removing a game from Continue playing when `recent` is empty (playtime fallback)
+        // must actually drop it instead of falling back again.
+        user.recent_dismissed.insert("legendary:b".into());
+        let (_, recent) =
+            top_games(LibraryTopSection::RecentlyPlayed, 8, false, &user, &lookup).unwrap();
+        let titles: Vec<_> = recent.iter().map(|g| g.title.as_str()).collect();
+        assert_eq!(titles, vec!["Witcher"]);
+
+        user.recent_dismissed.insert("gog:1".into());
+        assert!(top_games(LibraryTopSection::RecentlyPlayed, 8, false, &user, &lookup).is_none());
     }
 
     #[test]
