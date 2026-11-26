@@ -722,9 +722,17 @@ impl Backend {
     /// Ask GitHub for a new version of Irori now, however recent the last
     /// check ("Check now").
     pub async fn check_app_update(&self) -> anyhow::Result<AppUpdateStatus> {
+        self.check_app_update_with_kind(irori_core::github_releases::CheckKind::Manual)
+            .await
+    }
+
+    async fn check_app_update_with_kind(
+        &self,
+        check: irori_core::github_releases::CheckKind,
+    ) -> anyhow::Result<AppUpdateStatus> {
         self.app_update.set_checking(true);
         self.bus.emit(Event::AppUpdateChanged);
-        let result = self.app_update.check().await;
+        let result = self.app_update.check(check).await;
         self.app_update.set_checking(false);
         self.bus.emit(Event::AppUpdateChanged);
         result.map(|()| self.app_update())
@@ -830,7 +838,10 @@ impl Backend {
         {
             return;
         }
-        if let Err(e) = self.check_app_update().await {
+        if let Err(e) = self
+            .check_app_update_with_kind(irori_core::github_releases::CheckKind::Automatic)
+            .await
+        {
             tracing::info!("checking for a new version of Irori: {e:#}");
         }
     }

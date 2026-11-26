@@ -97,8 +97,24 @@ impl Backend {
 
     /// Downloadable versions of `engine`, newest first.
     pub async fn engine_releases(&self, engine: &str, refresh: bool) -> Result<Vec<Release>> {
+        let check = if refresh {
+            irori_core::github_releases::CheckKind::Manual
+        } else {
+            irori_core::github_releases::CheckKind::Automatic
+        };
+        self.engine_releases_with_kind(engine, refresh, check).await
+    }
+
+    /// Downloadable versions of `engine`, with an explicit [`CheckKind`] for
+    /// GitHub's shared API rate-limit budget.
+    pub async fn engine_releases_with_kind(
+        &self,
+        engine: &str,
+        refresh: bool,
+        check: irori_core::github_releases::CheckKind,
+    ) -> Result<Vec<Release>> {
         let manifest = irori_engines::engine(engine).context("unknown emulator")?;
-        releases::list(&manifest, refresh).await
+        releases::list_with_kind(&manifest, refresh, check).await
     }
 
     /// Install `release` (the newest when `None`). With `make_default`, games

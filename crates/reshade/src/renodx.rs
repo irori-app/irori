@@ -368,15 +368,42 @@ pub async fn catalog(endpoints: &Endpoints, cache: &Path, fresh: bool) -> Result
         Ok(b.to_vec())
     };
     let (index_url, release_url) = (endpoints.index.clone(), endpoints.release.clone());
+    let release_cache_path = release_path.clone();
     let fetch_index = async move || {
         get(&index_url)
             .await
             .context("Could not read RenoDX's list of mods")
     };
     let fetch_release = async move || {
-        get(&release_url)
+        if irori_core::github_releases::is_github(&release_url) {
+            let cached_bytes = tokio::fs::read(&release_cache_path).await.ok();
+            let check = if fresh {
+                irori_core::github_releases::CheckKind::Manual
+            } else {
+                irori_core::github_releases::CheckKind::Automatic
+            };
+            match irori_core::github_releases::fetch_guarded_json(
+                &release_url,
+                "renodx:snapshot",
+                cached_bytes.is_some(),
+                check,
+            )
             .await
-            .context("Could not read RenoDX's release")
+            .context("Could not read RenoDX's release")?
+            {
+                irori_core::github_releases::GuardedFetch::Unchanged => {
+                    cached_bytes.context("RenoDX release cache missing after unchanged feed check")
+                }
+                irori_core::github_releases::GuardedFetch::Updated(body) => Ok(body.into_bytes()),
+                irori_core::github_releases::GuardedFetch::NotFound => {
+                    bail!("RenoDX's snapshot release was not found on GitHub")
+                }
+            }
+        } else {
+            get(&release_url)
+                .await
+                .context("Could not read RenoDX's release")
+        }
     };
     let (index, release) = if fresh {
         (

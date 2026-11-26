@@ -135,6 +135,9 @@ pub struct ComponentReport {
     pub failed: BTreeMap<String, String>,
     /// Sources the last check couldn't read.
     pub check_errors: Vec<String>,
+    /// Unix timestamp when GitHub's release-check rate limit refills, if one
+    /// or more component checks were rate-limited.
+    pub rate_limited_until: Option<u64>,
 }
 
 impl ComponentReport {
@@ -287,13 +290,18 @@ impl Backend {
         self.bus.emit(Event::ComponentUpdatesChanged);
     }
 
-    /// Look for new builds of every installed component.
+    /// Look for new builds of every installed component (user-triggered).
     pub async fn check_components(&self) {
+        self.check_components_with_kind(irori_core::github_releases::CheckKind::Manual)
+            .await;
+    }
+
+    async fn check_components_with_kind(&self, check: irori_core::github_releases::CheckKind) {
         if self.component_updates().checking {
             return;
         }
         self.set_components(|r| r.checking = true);
-        let (mut found, errors) = self.find_component_updates().await;
+        let (mut found, errors, rate_limited_until) = self.find_component_updates(check).await;
         if found.iter().any(|u| u.kind == ComponentKind::Wine) {
             let present = self.present_builds().await;
             found.retain(|u| !already_present(u, &present));
@@ -327,6 +335,7 @@ impl Backend {
             r.checking = false;
             r.checked_at = Some(now);
             r.check_errors = errors;
+            r.rate_limited_until = rate_limited_until;
         });
     }
 
@@ -394,11 +403,23 @@ impl Backend {
         }
     }
 
-    async fn find_component_updates(&self) -> (Vec<ComponentUpdate>, Vec<String>) {
+    async fn find_component_updates(
+        &self,
+        check: irori_core::github_releases::CheckKind,
+    ) -> (Vec<ComponentUpdate>, Vec<String>, Option<u64>) {
         let mut found = Vec::new();
         let mut errors = Vec::new();
+        let mut rate_limited_until: Option<u64> = None;
+        let mut record_err = |e: anyhow::Error| {
+            if let Some(limited) = irori_core::github_releases::rate_limited(&e) {
+                rate_limited_until =
+                    Some(rate_limited_until.map_or(limited.reset, |cur| cur.max(limited.reset)));
+            } else {
+                errors.push(format!("{e:#}"));
+            }
+        };
         for tool in DxTool::ALL {
-            match tools::tool_update(tool).await {
+            match tools::tool_update_with_kind(tool, check).await {
                 Ok(Some((installed, latest))) => found.push(ComponentUpdate {
                     id: tool.id().to_string(),
                     kind: ComponentKind::Translation,
@@ -413,7 +434,7 @@ impl Backend {
                     target: Target::Tool(tool),
                 }),
                 Ok(None) => {}
-                Err(e) => errors.push(format!("{e:#}")),
+                Err(e) => record_err(e),
             }
         }
         match manager::check_updates().await {
@@ -438,7 +459,7 @@ impl Backend {
                     target: Target::Wine(Box::new(u.latest)),
                 }
             })),
-            Err(e) => errors.push(format!("{e:#}")),
+            Err(e) => record_err(e),
         }
         match runtimes::check_updates().await {
             Ok(list) => {
@@ -459,7 +480,7 @@ impl Backend {
                         }),
                 )
             }
-            Err(e) => errors.push(format!("{e:#}")),
+            Err(e) => record_err(e),
         }
         let engines = self.engine_statuses().await;
         let from_flatpak = engines
@@ -514,13 +535,13 @@ impl Backend {
                     target: Target::Cores(update.cores),
                 }),
                 Ok(None) => {}
-                Err(e) => errors.push(format!("{e:#}")),
+                Err(e) => record_err(e),
             }
             let Some(have) = status.newest_managed().map(str::to_string) else {
                 continue;
             };
             let id = status.manifest.id.clone();
-            match self.engine_releases(&id, false).await {
+            match self.engine_releases_with_kind(&id, false, check).await {
                 Ok(list) => {
                     let Some(newest) = list
                         .into_iter()
@@ -543,13 +564,13 @@ impl Backend {
                         target: Target::Engine(id, Box::new(newest)),
                     });
                 }
-                Err(e) => errors.push(format!("{e:#}")),
+                Err(e) => record_err(e),
             }
         }
         if let Err(e) = tools::refresh_winetricks().await {
-            errors.push(format!("{e:#}"));
+            record_err(e);
         }
-        (found, errors)
+        (found, errors, rate_limited_until)
     }
 
     /// The daily check: online, once a session and when a day has passed.
@@ -562,7 +583,8 @@ impl Backend {
         if !due || !self.is_online() {
             return;
         }
-        self.check_components().await;
+        self.check_components_with_kind(irori_core::github_releases::CheckKind::Automatic)
+            .await;
     }
 
     /// What holds automatic updates back right now.
