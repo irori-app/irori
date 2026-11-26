@@ -23,7 +23,7 @@ use irori_steam::{
 };
 use irori_ui::i18n::{t, t_args};
 
-use crate::common::{notify_error, notify_success};
+use crate::common::{info_tip, notify_error, notify_success};
 
 struct SteamHandle(Arc<SteamStore>);
 impl Global for SteamHandle {}
@@ -115,7 +115,7 @@ pub fn open_steam_library_dialog(window: &mut Window, cx: &mut App) {
     if steam_store(cx).is_none() {
         return;
     }
-    window.open_alert_dialog(cx, move |alert, _, cx| {
+    window.open_alert_dialog(cx, move |alert, window, cx| {
         let muted = cx.theme().muted_foreground;
         let choice = |label: SharedString, help: SharedString| {
             v_flex()
@@ -125,6 +125,7 @@ pub fn open_steam_library_dialog(window: &mut Window, cx: &mut App) {
                 .into_any_element()
         };
         alert
+            .width(window.rem_size() * 34.)
             .title(t("manage.steam_library.dialog.title"))
             .description(
                 v_flex()
@@ -146,29 +147,36 @@ pub fn open_steam_library_dialog(window: &mut Window, cx: &mut App) {
                     )),
             )
             .footer(
-                DialogFooter::new()
+                div()
+                    .w_full()
+                    .debug_selector(|| "steam-library-dialog-footer".into())
                     .child(
-                        Button::new("steam-library-cancel")
-                            .label(t("manage.steam_library.dialog.cancel"))
-                            .on_click(|_, window, cx| window.close_dialog(cx)),
-                    )
-                    .child(
-                        Button::new("steam-library-keep")
-                            .outline()
-                            .label(t("manage.steam_library.dialog.keep"))
-                            .on_click(|_, window, cx| {
-                                window.close_dialog(cx);
-                                start(ClientLibraryMode::Keep, false, window, cx);
-                            }),
-                    )
-                    .child(
-                        Button::new("steam-library-once")
-                            .primary()
-                            .label(t("manage.steam_library.dialog.once"))
-                            .on_click(|_, window, cx| {
-                                window.close_dialog(cx);
-                                start(ClientLibraryMode::Once, false, window, cx);
-                            }),
+                        DialogFooter::new()
+                            .flex_wrap()
+                            .child(
+                                Button::new("steam-library-cancel")
+                                    .debug_selector(|| "steam-library-dialog-cancel".into())
+                                    .label(t("manage.steam_library.dialog.cancel"))
+                                    .on_click(|_, window, cx| window.close_dialog(cx)),
+                            )
+                            .child(
+                                Button::new("steam-library-keep")
+                                    .outline()
+                                    .label(t("manage.steam_library.dialog.keep"))
+                                    .on_click(|_, window, cx| {
+                                        window.close_dialog(cx);
+                                        start(ClientLibraryMode::Keep, false, window, cx);
+                                    }),
+                            )
+                            .child(
+                                Button::new("steam-library-once")
+                                    .primary()
+                                    .label(t("manage.steam_library.dialog.once"))
+                                    .on_click(|_, window, cx| {
+                                        window.close_dialog(cx);
+                                        start(ClientLibraryMode::Once, false, window, cx);
+                                    }),
+                            ),
                     ),
             )
     });
@@ -368,7 +376,8 @@ pub(crate) fn status_text(state: &ClientLibraryState, now: u64) -> SharedString 
 /// The part of Steam's account card about reading the client, shown while
 /// no Steam account is signed in to Irori.
 pub(crate) fn render_section(state: &ClientLibraryState, reading: bool, cx: &App) -> AnyElement {
-    let muted = cx.theme().muted_foreground;
+    let theme = cx.theme();
+    let muted = theme.muted_foreground;
     let now = irori_core::util::unix_now();
     let on = state.mode != ClientLibraryMode::Off;
     let read_label = if state.read_at.is_some() {
@@ -418,12 +427,32 @@ pub(crate) fn render_section(state: &ClientLibraryState, reading: bool, cx: &App
             .on_click(|_, window, cx| forget(window, cx))
     });
     v_flex()
+        .w_full()
         .gap_2()
-        .pt_3()
-        .border_t_1()
-        .border_color(cx.theme().border)
+        .p_3()
+        .rounded(theme.radius)
+        .bg(theme.background)
+        .border_1()
+        .border_color(theme.border)
+        .child(
+            h_flex()
+                .gap_1()
+                .items_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_medium()
+                        .child(t("manage.steam_library.section_title")),
+                )
+                .child(info_tip(
+                    "steam-library",
+                    t("manage.steam_library.section_tip"),
+                    cx,
+                )),
+        )
         .child(
             div()
+                .flex_1()
                 .text_sm()
                 .text_color(muted)
                 .child(status_text(state, now)),
@@ -448,6 +477,7 @@ pub(crate) fn render_section(state: &ClientLibraryState, reading: bool, cx: &App
             h_flex()
                 .flex_wrap()
                 .gap_2()
+                .pt_1()
                 .child(read)
                 .children(switch_off_button)
                 .children(forget_button),

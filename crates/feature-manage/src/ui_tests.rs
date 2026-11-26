@@ -179,6 +179,7 @@ fn downloads_show_items_of_every_store_in_queue_order(cx: &mut TestAppContext) {
 struct TestStore {
     runner: Runner,
     accounts: Vec<StoreAccount>,
+    user: Option<UserInfo>,
 }
 
 impl TestStore {
@@ -187,6 +188,35 @@ impl TestStore {
         Arc::new(Self {
             runner,
             accounts: Vec::new(),
+            user: None,
+        })
+    }
+
+    /// A store with one signed-in account.
+    fn signed_in(runner: Runner, name: &str) -> DynStore {
+        Arc::new(Self {
+            runner,
+            accounts: vec![StoreAccount {
+                slot: MAIN_ACCOUNT.into(),
+                account_id: "1".into(),
+                display_name: name.into(),
+                signed_in: true,
+                games: 8,
+                ..Default::default()
+            }],
+            user: None,
+        })
+    }
+
+    /// A local store detected on disk (such as Steam without a web account).
+    fn local_found(runner: Runner) -> DynStore {
+        Arc::new(Self {
+            runner,
+            accounts: Vec::new(),
+            user: Some(UserInfo {
+                account_id: "local".into(),
+                display_name: "On disk".into(),
+            }),
         })
     }
 
@@ -212,6 +242,7 @@ impl TestStore {
                     ..Default::default()
                 },
             ],
+            user: None,
         })
     }
 }
@@ -225,13 +256,15 @@ impl Store for TestStore {
         Ok(())
     }
     fn user(&self) -> Option<UserInfo> {
-        self.accounts
-            .iter()
-            .find(|a| a.signed_in)
-            .map(|a| UserInfo {
-                account_id: a.account_id.clone(),
-                display_name: a.display_name.clone(),
-            })
+        self.user.clone().or_else(|| {
+            self.accounts
+                .iter()
+                .find(|a| a.signed_in)
+                .map(|a| UserInfo {
+                    account_id: a.account_id.clone(),
+                    display_name: a.display_name.clone(),
+                })
+        })
     }
     fn accounts(&self) -> Vec<StoreAccount> {
         self.accounts.clone()
@@ -325,7 +358,7 @@ fn account_cards_are_all_as_tall_as_the_tallest(cx: &mut TestAppContext) {
             TestStore::signed_out(Runner::Zoom),
         ]
     });
-    // Narrow enough for two rows of cards.
+    // Narrow enough for two rows in the available section.
     let options = cx.update(|cx| WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
             None,
@@ -342,23 +375,141 @@ fn account_cards_are_all_as_tall_as_the_tallest(cx: &mut TestAppContext) {
     });
     let mut vcx = VisualTestContext::from_window(handle, cx);
     vcx.run_until_parked();
+    // Card grids measure their width during paint and call `window.refresh()`.
+    vcx.update(|window, cx| {
+        let _ = window.draw(cx);
+    });
+    vcx.run_until_parked();
     let mut card = |id: &'static str| {
         vcx.debug_bounds(id)
             .unwrap_or_else(|| panic!("{id} is rendered"))
     };
     let gog = card("account-gog");
-    let cards = [
-        card("account-legendary"),
-        card("account-nile"),
-        card("account-zoom"),
-    ];
+    let legendary = card("account-legendary");
+    let nile = card("account-nile");
+    let zoom = card("account-zoom");
     assert!(
-        cards.iter().any(|c| c.top() > gog.bottom()),
-        "the cards take two rows"
+        gog.bottom() < legendary.top(),
+        "connected stores appear above available stores"
     );
-    for other in cards {
-        assert_eq!(other.size.height, gog.size.height);
+    assert!(
+        zoom.top() > legendary.bottom(),
+        "available cards take two rows on narrow windows"
+    );
+    for other in [nile, zoom] {
+        assert_eq!(other.size.height, legendary.size.height);
     }
+}
+
+#[gpui_kit::test]
+fn accounts_page_separates_sections_and_features_steam_on_wide_window(cx: &mut TestAppContext) {
+    setup_with(cx, || {
+        vec![
+            TestStore::signed_in(Runner::Legendary, "EpicPlayer"),
+            TestStore::two_accounts(),
+            TestStore::signed_out(Runner::Nile),
+            TestStore::signed_out(Runner::Zoom),
+            TestStore::signed_out(Runner::Itch),
+            TestStore::local_found(Runner::Steam),
+        ]
+    });
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(2200.), px(1000.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| AccountsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    // Card grids measure their width during paint and call `window.refresh()`.
+    vcx.update(|window, cx| {
+        let _ = window.draw(cx);
+    });
+    vcx.run_until_parked();
+    let mut card = |id: &'static str| {
+        vcx.debug_bounds(id)
+            .unwrap_or_else(|| panic!("{id} is rendered"))
+    };
+    let legendary = card("account-legendary");
+    let gog = card("account-gog");
+    let steam = card("account-steam");
+    let nile = card("account-nile");
+    let zoom = card("account-zoom");
+    let itch = card("account-itch");
+
+    assert_eq!(legendary.top(), gog.top(), "2-column connected grid");
+    assert!(
+        steam.top() > gog.bottom(),
+        "featured Steam card sits below the connected account grid"
+    );
+    assert!(
+        steam.size.width > gog.size.width * 1.5,
+        "Steam spans full width instead of squeezing into one column"
+    );
+    assert!(
+        nile.top() > steam.bottom(),
+        "available section follows connected"
+    );
+    assert_eq!(nile.top(), zoom.top());
+    assert!(
+        itch.top() > zoom.bottom(),
+        "turned-off stores appear in the inactive section below available stores"
+    );
+}
+
+#[gpui_kit::test]
+fn accounts_page_caps_available_grid_columns_on_ultrawide(cx: &mut TestAppContext) {
+    setup_with(cx, || {
+        vec![
+            TestStore::signed_out(Runner::Legendary),
+            TestStore::signed_out(Runner::Gog),
+            TestStore::signed_out(Runner::Nile),
+            TestStore::signed_out(Runner::Zoom),
+        ]
+    });
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(2400.), px(900.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| AccountsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    // Card grids measure their width during paint and call `window.refresh()`.
+    vcx.update(|window, cx| {
+        let _ = window.draw(cx);
+    });
+    vcx.run_until_parked();
+    let mut card = |id: &'static str| {
+        vcx.debug_bounds(id)
+            .unwrap_or_else(|| panic!("{id} is rendered"))
+    };
+    let legendary = card("account-legendary");
+    let gog = card("account-gog");
+    let nile = card("account-nile");
+    let zoom = card("account-zoom");
+    assert_eq!(legendary.top(), gog.top());
+    assert_eq!(gog.top(), nile.top());
+    assert!(
+        zoom.top() > legendary.bottom(),
+        "4 available cards wrap to a second row even on ultrawide screens"
+    );
 }
 
 /// Steam without an account offers to read its library from the Steam
@@ -738,9 +889,21 @@ fn steam_sign_in_view_renders_both_tabs_and_validates_api_key(cx: &mut TestAppCo
     let mut vcx = VisualTestContext::from_window(handle, cx);
     vcx.run_until_parked();
 
-    // Default tab is Steam website, showing the tab bar and either the open
-    // button (when irori-sign-in is present) or the API key fallback button.
-    assert!(vcx.debug_bounds("steam-sign-in-mode").is_some());
+    // Default tab is Steam website, showing the full-width tab bar with
+    // equal-width tabs and either the open button (when irori-sign-in is
+    // present) or the API key fallback button.
+    let bar = vcx
+        .debug_bounds("steam-sign-in-mode")
+        .expect("steam mode tab bar rendered");
+    let web_tab = vcx
+        .debug_bounds("steam-tab-web")
+        .expect("steam web tab rendered");
+    let api_tab = vcx
+        .debug_bounds("steam-tab-api")
+        .expect("steam api tab rendered");
+    assert_eq!(web_tab.top(), api_tab.top());
+    assert!((web_tab.size.width - api_tab.size.width).abs() < px(2.));
+    assert!((web_tab.size.width + api_tab.size.width) > bar.size.width * 0.9);
     assert!(
         vcx.debug_bounds("steam-web-open").is_some()
             || vcx.debug_bounds("steam-web-use-api-key").is_some()
@@ -786,4 +949,59 @@ fn steam_sign_in_view_renders_both_tabs_and_validates_api_key(cx: &mut TestAppCo
     assert_eq!(sent.len(), 1);
     assert!(sent[0].contains("apiKey"));
     assert!(sent[0].contains("76561197960265729"));
+}
+
+#[gpui_kit::test]
+fn steam_library_dialog_keeps_cancel_button_inside_footer(cx: &mut TestAppContext) {
+    use irori_core::{AppSettings, EventBus};
+
+    let dir = tempfile::tempdir().expect("temp dir").keep();
+    let steam = dir.join("Steam");
+    std::fs::create_dir_all(steam.join("steamapps")).expect("mkdir");
+    let data = steam.join("irori");
+    std::fs::create_dir_all(data.join("cache")).expect("mkdir");
+    let app = Arc::new(AppSettings::default());
+    let dead = "http://127.0.0.1:9".to_string();
+    let store = irori_steam::SteamStore::with_layout(
+        EventBus::new(),
+        Arc::new(move || app.clone()),
+        steam,
+        &data,
+        irori_steam_api::Endpoints {
+            api: dead.clone(),
+            store: dead.clone(),
+            login: dead.clone(),
+            assets: dead,
+        },
+    );
+    let registered: DynStore = store.clone();
+    setup_with(cx, move || vec![registered]);
+    cx.update(|cx| crate::install_steam_library_store(store.clone(), cx));
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| AccountsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    vcx.update(|window, cx| {
+        crate::steam_library::open_steam_library_dialog(window, cx);
+    });
+    vcx.run_until_parked();
+
+    let footer = vcx
+        .debug_bounds("steam-library-dialog-footer")
+        .expect("dialog footer rendered");
+    let cancel = vcx
+        .debug_bounds("steam-library-dialog-cancel")
+        .expect("dialog cancel button rendered");
+    assert!(
+        cancel.left() >= footer.left(),
+        "cancel button must stay within dialog footer left edge"
+    );
+    assert!(
+        cancel.right() <= footer.right(),
+        "cancel button must stay within dialog footer right edge"
+    );
 }

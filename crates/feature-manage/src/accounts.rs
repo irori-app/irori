@@ -17,19 +17,22 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _,
-    Pixels, Render, SharedString, Styled as _, Subscription, Window, div, px,
+    AnyElement, App, Context, Div, ElementId, InteractiveElement as _, IntoElement,
+    ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Window, div, px, rems,
 };
 use irori_core::{Runner, ShownStores, StoreAccount};
-use irori_ui::components::PageHeader;
+use irori_ui::components::{PageHeader, SectionTitle};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use crate::common::{backend_op, card, card_grid, notify_error, notify_success};
+use crate::common::{
+    backend_op, card, card_grid_capped, info_tip, notify_error, notify_success, plain_tooltip,
+};
 use crate::login::{open_account_login_dialog, open_login_dialog};
 
-/// Stores with a card on the accounts page, in display order. Steam has no
-/// login: its card reports what Irori found on this computer.
+/// Stores with a card on the accounts page, in display order. Steam is
+/// detected on this computer and also supports an optional account sign-in.
 pub(crate) const ACCOUNT_STORES: [Runner; 7] = [
     Runner::Legendary,
     Runner::Gog,
@@ -40,8 +43,54 @@ pub(crate) const ACCOUNT_STORES: [Runner; 7] = [
     Runner::Steam,
 ];
 
-/// Narrowest an account card gets before the grid drops a column, in rem.
-const MIN_CARD_REM: f32 = 20.;
+/// Narrowest a connected account card gets before dropping a column, in rem.
+const CONNECTED_CARD_REM: f32 = 22.;
+/// Narrowest an available or inactive store card gets before dropping a column, in rem.
+const COMPACT_CARD_REM: f32 = 20.;
+/// Narrowest a Steam optional sub-panel gets before stacking vertically, in rem.
+const STEAM_SUB_REM: f32 = 26.;
+/// Comfortable maximum width of the Accounts page content, in rem.
+const PAGE_MAX_WIDTH_REM: f32 = 74.;
+
+/// Visual section a store card belongs to on the Accounts page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AccountSection {
+    Connected,
+    Available,
+    Inactive,
+}
+
+/// Group a store card by whether it is active/connected, ready to set up, or
+/// hidden/turned off.
+pub(crate) fn classify_card(card: &StoreCard) -> AccountSection {
+    if card.hidden || card.disabled {
+        AccountSection::Inactive
+    } else if card.user.is_some()
+        || !card.accounts.is_empty()
+        || card.expired.is_some()
+        || card
+            .steam_client
+            .as_ref()
+            .is_some_and(|client| client.steam_found)
+    {
+        AccountSection::Connected
+    } else {
+        AccountSection::Available
+    }
+}
+
+/// Subtle inset container inside a store card (account rows and Steam sub-panels).
+fn inset_panel(cx: &App) -> Div {
+    let theme = cx.theme();
+    v_flex()
+        .w_full()
+        .p_3()
+        .gap_2()
+        .rounded(theme.radius)
+        .bg(theme.background)
+        .border_1()
+        .border_color(theme.border)
+}
 
 /// Icon used for a store across the management screens: its mark where
 /// Irori has one (`irori_ui::components::StoreLogo`), else a generic icon.
@@ -187,8 +236,11 @@ const STORE_WIDE: &str = "";
 /// One card per store with its account state and actions.
 pub struct AccountsView {
     cards: Vec<StoreCard>,
-    /// Width of the cards' grid at the last layout.
-    grid_width: Rc<Cell<Pixels>>,
+    /// Measured widths of each grid at the last layout.
+    connected_grid_width: Rc<Cell<Pixels>>,
+    steam_sub_width: Rc<Cell<Pixels>>,
+    available_grid_width: Rc<Cell<Pixels>>,
+    inactive_grid_width: Rc<Cell<Pixels>>,
     online: bool,
     /// Accounts being refreshed or logged out, by store and slot.
     refreshing: BTreeSet<(Runner, String)>,
@@ -210,7 +262,10 @@ impl AccountsView {
         ];
         let mut this = Self {
             cards: Vec::new(),
-            grid_width: Rc::new(Cell::new(px(0.))),
+            connected_grid_width: Rc::new(Cell::new(px(0.))),
+            steam_sub_width: Rc::new(Cell::new(px(0.))),
+            available_grid_width: Rc::new(Cell::new(px(0.))),
+            inactive_grid_width: Rc::new(Cell::new(px(0.))),
             online: true,
             refreshing: BTreeSet::new(),
             logging_out: BTreeSet::new(),
@@ -379,22 +434,130 @@ impl AccountsView {
         .detach();
     }
 
-    fn render_card(&self, card_data: &StoreCard, cx: &mut Context<Self>) -> AnyElement {
-        if card_data.local {
-            return self.render_local_card(card_data, cx);
-        }
+    fn hide_button(runner: Runner) -> Option<AnyElement> {
+        ShownStores::can_hide(runner).then(|| {
+            let tip_id = ElementId::Name(format!("hide-tip-{}", runner.id()).into());
+            div()
+                .id(tip_id)
+                .tooltip(move |window, cx| {
+                    plain_tooltip(t("manage.accounts.hide_tooltip"), window, cx)
+                })
+                .child(
+                    Button::new("hide")
+                        .ghost()
+                        .icon(IconName::EyeOff)
+                        .label(t("manage.accounts.hide"))
+                        .on_click(move |_, _, cx| {
+                            backend_op(cx, move |b| {
+                                b.settings.update_app(|s| s.ui.stores.set(runner, false))
+                            })
+                        }),
+                )
+                .into_any_element()
+        })
+    }
+
+    fn render_inactive_card(&self, card_data: &StoreCard, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let runner = card_data.runner;
-        let any_expired = card_data.accounts.iter().any(|a| a.expired.is_some());
         let state_tag = if card_data.hidden {
             Tag::secondary()
                 .small()
                 .child(t("manage.accounts.state.hidden"))
-        } else if card_data.disabled {
+        } else {
             Tag::secondary()
                 .small()
                 .child(t("manage.accounts.state.turned_off"))
-        } else if card_data.expired.is_some() || any_expired {
+        };
+        let description = if card_data.hidden && card_data.local {
+            t("manage.accounts.local_hidden_detail")
+        } else if card_data.hidden {
+            t("manage.accounts.hidden_detail")
+        } else {
+            t_args(
+                "manage.accounts.turned_off",
+                &[("store", runner.store_name())],
+            )
+        };
+        let action: AnyElement = if card_data.hidden {
+            Button::new("show")
+                .small()
+                .outline()
+                .icon(IconName::Eye)
+                .label(t("manage.accounts.show"))
+                .on_click(move |_, _, cx| {
+                    backend_op(cx, move |b| {
+                        b.settings.update_app(|s| s.ui.stores.set(runner, true))
+                    })
+                })
+                .into_any_element()
+        } else {
+            Button::new("enable")
+                .small()
+                .outline()
+                .label(t("manage.accounts.turn_on"))
+                .on_click(move |_, _, cx| {
+                    backend_op(cx, move |b| {
+                        b.settings
+                            .update_app(|s| set_store_enabled(s, runner, true))
+                    })
+                })
+                .into_any_element()
+        };
+        card(cx)
+            .id(ElementId::Name(format!("account-{}", runner.id()).into()))
+            .debug_selector(move || format!("account-{}", runner.id()))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .child(store_icon(runner).text_color(theme.muted_foreground))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_semibold()
+                            .truncate()
+                            .child(runner.store_name()),
+                    )
+                    .child(state_tag),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child(description),
+            )
+            .child(h_flex().pt_1().child(action))
+            .into_any_element()
+    }
+
+    fn render_card(
+        &self,
+        card_data: &StoreCard,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if card_data.hidden || card_data.disabled {
+            return self.render_inactive_card(card_data, cx);
+        }
+        if card_data.local {
+            return self.render_local_card(card_data, window, cx);
+        }
+        let (muted, border, radius, background, warning) = {
+            let theme = cx.theme();
+            (
+                theme.muted_foreground,
+                theme.border,
+                theme.radius,
+                theme.background,
+                theme.warning,
+            )
+        };
+        let runner = card_data.runner;
+        let any_expired = card_data.accounts.iter().any(|a| a.expired.is_some());
+        let state_tag = if card_data.expired.is_some() || any_expired {
             Tag::warning()
                 .small()
                 .child(t("manage.accounts.state.expired"))
@@ -407,25 +570,10 @@ impl AccountsView {
                 .small()
                 .child(t("manage.accounts.state.signed_out"))
         };
-        let detail: AnyElement = if card_data.hidden {
-            div()
-                .text_sm()
-                .text_color(theme.muted_foreground)
-                .child(t("manage.accounts.hidden_detail"))
-                .into_any_element()
-        } else if card_data.disabled {
-            div()
-                .text_sm()
-                .text_color(theme.muted_foreground)
-                .child(t_args(
-                    "manage.accounts.turned_off",
-                    &[("store", runner.store_name())],
-                ))
-                .into_any_element()
-        } else if !card_data.accounts.is_empty() {
+        let detail: AnyElement = if !card_data.accounts.is_empty() {
             let several = card_data.accounts.len() > 1;
             v_flex()
-                .gap_3()
+                .gap_2p5()
                 .children(
                     card_data
                         .accounts
@@ -435,60 +583,43 @@ impl AccountsView {
                 .into_any_element()
         } else if let Some(reason) = &card_data.expired {
             v_flex()
-                .gap_0p5()
-                .child(div().text_sm().child(t_args(
-                    "manage.accounts.expired_hint",
-                    &[("store", runner.store_name())],
-                )))
+                .gap_1()
+                .p_3()
+                .rounded(radius)
+                .bg(background)
+                .border_1()
+                .border_color(warning)
                 .child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.muted_foreground)
-                        .child(reason.clone()),
+                    h_flex()
+                        .gap_2()
+                        .items_start()
+                        .child(
+                            div().pt_0p5().child(
+                                Icon::new(IconName::TriangleAlert)
+                                    .small()
+                                    .text_color(warning),
+                            ),
+                        )
+                        .child(div().flex_1().min_w_0().text_sm().child(t_args(
+                            "manage.accounts.expired_hint",
+                            &[("store", runner.store_name())],
+                        ))),
                 )
+                .child(div().text_xs().text_color(muted).child(reason.clone()))
                 .into_any_element()
         } else {
             div()
                 .text_sm()
-                .text_color(theme.muted_foreground)
+                .text_color(muted)
                 .child(t_args(
                     "manage.accounts.login_hint",
                     &[("store", runner.short_name())],
                 ))
                 .into_any_element()
         };
-        let set_shown = move |shown: bool| {
-            move |_: &gpui_kit::ClickEvent, _: &mut Window, cx: &mut gpui_kit::App| {
-                backend_op(cx, move |b| {
-                    b.settings.update_app(|s| s.ui.stores.set(runner, shown))
-                })
-            }
-        };
-        let hide = ShownStores::can_hide(runner).then(|| {
-            Button::new("hide")
-                .ghost()
-                .icon(IconName::EyeOff)
-                .label(t("manage.accounts.hide"))
-                .on_click(set_shown(false))
-        });
+        let hide = Self::hide_button(runner);
         let signed_in = card_data.accounts.iter().any(|a| a.signed_in);
-        let actions: AnyElement = if card_data.hidden {
-            Button::new("show")
-                .icon(IconName::Eye)
-                .label(t("manage.accounts.show"))
-                .on_click(set_shown(true))
-                .into_any_element()
-        } else if card_data.disabled {
-            Button::new("enable")
-                .label(t("manage.accounts.turn_on"))
-                .on_click(move |_, _, cx| {
-                    backend_op(cx, move |b| {
-                        b.settings
-                            .update_app(|s| set_store_enabled(s, runner, true))
-                    })
-                })
-                .into_any_element()
-        } else if signed_in {
+        let primary_actions: AnyElement = if signed_in {
             h_flex()
                 .flex_wrap()
                 .gap_2()
@@ -505,7 +636,6 @@ impl AccountsView {
                             }),
                     )
                 })
-                .children(hide)
                 .into_any_element()
         } else {
             let label = if card_data.expired.is_some() {
@@ -513,21 +643,27 @@ impl AccountsView {
             } else {
                 t("manage.accounts.login")
             };
-            h_flex()
-                .flex_wrap()
-                .gap_2()
-                .child(
-                    Button::new("login")
-                        .primary()
-                        .icon(IconName::LogIn)
-                        .label(label)
-                        .disabled(!self.online)
-                        .on_click(move |_, window, cx| open_login_dialog(runner, window, cx)),
-                )
-                .children(hide)
+            Button::new("login")
+                .primary()
+                .icon(IconName::LogIn)
+                .label(label)
+                .disabled(!self.online)
+                .on_click(move |_, window, cx| open_login_dialog(runner, window, cx))
                 .into_any_element()
         };
-        Self::card_frame(runner, state_tag, detail, actions, cx)
+        let footer = h_flex()
+            .w_full()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .pt_2()
+            .border_t_1()
+            .border_color(border)
+            .child(primary_actions)
+            .children(hide)
+            .into_any_element();
+        Self::card_frame(runner, vec![state_tag], detail, footer, cx)
     }
 
     /// One account of a store: its name, what it holds and its actions.
@@ -634,11 +770,21 @@ impl AccountsView {
         h_flex()
             .id(ElementId::Name(id.clone().into()))
             .debug_selector(move || id.clone())
-            .gap_2()
+            .gap_2p5()
+            .px_3()
+            .py_2p5()
+            .rounded(theme.radius)
+            .bg(theme.background)
+            .border_1()
+            .border_color(if warn { theme.warning } else { theme.border })
             .items_center()
             .child(
                 Icon::new(IconName::CircleUser)
-                    .text_color(theme.muted_foreground)
+                    .text_color(if warn {
+                        theme.warning
+                    } else {
+                        theme.muted_foreground
+                    })
                     .flex_shrink_0(),
             )
             .child(
@@ -663,7 +809,7 @@ impl AccountsView {
 
     fn card_frame(
         runner: Runner,
-        state_tag: Tag,
+        state_tags: Vec<Tag>,
         detail: AnyElement,
         actions: AnyElement,
         cx: &mut Context<Self>,
@@ -675,6 +821,7 @@ impl AccountsView {
             .child(
                 h_flex()
                     .gap_2()
+                    .items_center()
                     .child(store_icon(runner).text_color(theme.muted_foreground))
                     .child(
                         div()
@@ -684,7 +831,7 @@ impl AccountsView {
                             .truncate()
                             .child(runner.store_name()),
                     )
-                    .child(state_tag),
+                    .child(h_flex().gap_1p5().flex_wrap().children(state_tags)),
             )
             // Takes the card's spare height, so the actions sit at the bottom
             // of every card in a row.
@@ -693,33 +840,51 @@ impl AccountsView {
             .into_any_element()
     }
 
-    /// A store without login (Steam): what Irori found on this computer,
-    /// a rescan and the hide switch. Rescanning needs no connection.
-    fn render_local_card(&self, card_data: &StoreCard, cx: &mut Context<Self>) -> AnyElement {
+    /// A store detected locally (Steam): installed games on disk, optional
+    /// web/API account connection, client library reading, and rescan/hide.
+    fn render_local_card(
+        &self,
+        card_data: &StoreCard,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = cx.theme();
         let runner = card_data.runner;
         let found = card_data.user.is_some();
         let refreshing = self.refreshing.contains(&(runner, STORE_WIDE.to_string()));
-        let muted = cx.theme().muted_foreground;
-        let state_tag = if card_data.hidden {
-            Tag::secondary()
-                .small()
-                .child(t("manage.accounts.state.hidden"))
-        } else if found {
-            Tag::success()
-                .small()
-                .child(t("manage.accounts.state.local"))
+        let muted = theme.muted_foreground;
+        let account_expired =
+            card_data.expired.is_some() || card_data.accounts.iter().any(|a| a.expired.is_some());
+        let account_signed_in = card_data.accounts.iter().any(|a| a.signed_in);
+        let mut state_tags = Vec::new();
+        if found {
+            state_tags.push(
+                Tag::success()
+                    .small()
+                    .child(t("manage.accounts.state.local")),
+            );
         } else {
-            Tag::secondary()
-                .small()
-                .child(t("manage.accounts.state.not_found"))
-        };
-        let detail = if card_data.hidden {
-            div()
-                .text_sm()
-                .text_color(muted)
-                .child(t("manage.accounts.local_hidden_detail"))
-                .into_any_element()
-        } else if found {
+            state_tags.push(
+                Tag::secondary()
+                    .small()
+                    .child(t("manage.accounts.state.not_found")),
+            );
+        }
+        if account_expired {
+            state_tags.push(
+                Tag::warning()
+                    .small()
+                    .child(t("manage.accounts.state.expired")),
+            );
+        } else if account_signed_in {
+            state_tags.push(
+                Tag::success()
+                    .small()
+                    .child(t("manage.accounts.state.signed_in")),
+            );
+        }
+
+        let local_summary = if found {
             v_flex()
                 .gap_0p5()
                 .child(div().font_medium().child(match card_data.games {
@@ -744,55 +909,69 @@ impl AccountsView {
                 ))
                 .into_any_element()
         };
-        let actions = if card_data.hidden {
-            Button::new("show")
-                .icon(IconName::Eye)
-                .label(t("manage.accounts.show"))
-                .on_click(move |_, _, cx| {
-                    backend_op(cx, move |b| {
-                        b.settings.update_app(|s| s.ui.stores.set(runner, true))
+
+        let footer = h_flex()
+            .w_full()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .pt_2()
+            .border_t_1()
+            .border_color(theme.border)
+            .child(
+                div()
+                    .id(ElementId::Name(
+                        format!("rescan-tip-{}", runner.id()).into(),
+                    ))
+                    .tooltip(move |window, cx| {
+                        plain_tooltip(t("manage.accounts.rescan_tooltip"), window, cx)
                     })
-                })
-                .into_any_element()
-        } else {
-            h_flex()
-                .flex_wrap()
-                .gap_2()
-                .child(
-                    Button::new("rescan")
-                        .icon(IconName::RefreshCw)
-                        .label(t("manage.accounts.rescan"))
-                        .loading(refreshing)
-                        .disabled(refreshing)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.refresh(runner, STORE_WIDE.to_string(), window, cx)
-                        })),
-                )
-                .child(
-                    Button::new("hide")
-                        .ghost()
-                        .icon(IconName::EyeOff)
-                        .label(t("manage.accounts.hide"))
-                        .on_click(move |_, _, cx| {
-                            backend_op(cx, move |b| {
-                                b.settings.update_app(|s| s.ui.stores.set(runner, false))
-                            })
-                        }),
-                )
-                .into_any_element()
-        };
-        let detail = if runner.has_optional_account() && !card_data.hidden {
+                    .child(
+                        Button::new("rescan")
+                            .icon(IconName::RefreshCw)
+                            .label(t("manage.accounts.rescan"))
+                            .loading(refreshing)
+                            .disabled(refreshing)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.refresh(runner, STORE_WIDE.to_string(), window, cx)
+                            })),
+                    ),
+            )
+            .children(Self::hide_button(runner))
+            .into_any_element();
+
+        let detail = if runner.has_optional_account() {
             let reading = self.steam_ops.read(cx).reading;
+            let optional_panel = self.render_optional_account(card_data, cx);
+            let client_panel = card_data
+                .steam_client
+                .as_ref()
+                .filter(|s| s.steam_found)
+                .map(|s| crate::steam_library::render_section(s, reading, cx));
+            let integrations: AnyElement = match client_panel {
+                Some(client) => card_grid_capped(
+                    &self.steam_sub_width,
+                    STEAM_SUB_REM,
+                    2,
+                    vec![optional_panel, client],
+                    window,
+                )
+                .into_any_element(),
+                None => optional_panel,
+            };
             v_flex()
                 .gap_3()
-                .child(detail)
-                .child(self.render_optional_account(card_data, cx))
+                .child(local_summary)
                 .children(card_data.steam_hidden.clone().map(|text| {
-                    div()
+                    h_flex()
                         .debug_selector(|| "steam-hidden-note".into())
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(text)
+                        .gap_1p5()
+                        .items_start()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(div().pt_0p5().child(Icon::new(IconName::Info).xsmall()))
+                        .child(div().flex_1().min_w_0().child(text))
                 }))
                 .children(card_data.steam_waiting.clone().map(|text| {
                     h_flex()
@@ -804,45 +983,88 @@ impl AccountsView {
                         .child(Icon::new(IconName::Clock).small())
                         .child(div().min_w_0().child(text))
                 }))
-                .children(
-                    card_data
-                        .steam_client
-                        .as_ref()
-                        .filter(|s| s.steam_found)
-                        .map(|s| crate::steam_library::render_section(s, reading, cx)),
-                )
+                .child(integrations)
                 .into_any_element()
         } else {
-            detail
+            local_summary
         };
-        Self::card_frame(runner, state_tag, detail, actions, cx)
+        Self::card_frame(runner, state_tags, detail, footer, cx)
     }
 
     /// The account part of a store that works without one (Steam): who is
     /// logged in and how many games the account adds, or why to log in.
     fn render_optional_account(&self, card_data: &StoreCard, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
         let runner = card_data.runner;
         let store = runner.store_name();
-        let muted = cx.theme().muted_foreground;
+        let muted = theme.muted_foreground;
         let account = card_data.accounts.iter().find(|a| a.signed_in).cloned();
         let logging_out = account
             .as_ref()
             .is_some_and(|a| self.logging_out.contains(&(runner, a.slot.clone())));
-        let (text, button) = match (&card_data.expired, account) {
-            (Some(_), _) => (
-                div()
-                    .text_sm()
-                    .text_color(muted)
-                    .child(t_args("manage.accounts.expired_hint", &[("store", store)]))
-                    .into_any_element(),
-                Button::new("optional-login")
-                    .small()
-                    .primary()
-                    .icon(IconName::LogIn)
-                    .label(t("manage.accounts.login_again"))
-                    .on_click(move |_, window, cx| open_login_dialog(runner, window, cx))
-                    .into_any_element(),
-            ),
+        let expired = card_data.expired.is_some();
+
+        let body: AnyElement = match (&card_data.expired, account) {
+            (Some(reason), account) => v_flex()
+                .gap_2p5()
+                .items_start()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .items_start()
+                        .child(
+                            div().pt_0p5().child(
+                                Icon::new(IconName::TriangleAlert)
+                                    .small()
+                                    .text_color(theme.warning),
+                            ),
+                        )
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(div().text_sm().child(t_args(
+                                    "manage.accounts.expired_hint",
+                                    &[("store", store)],
+                                )))
+                                .when(!reason.is_empty(), |col| {
+                                    col.child(
+                                        div().text_xs().text_color(muted).child(reason.clone()),
+                                    )
+                                }),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            Button::new("optional-login")
+                                .small()
+                                .primary()
+                                .icon(IconName::LogIn)
+                                .label(t("manage.accounts.login_again"))
+                                .on_click(move |_, window, cx| {
+                                    open_login_dialog(runner, window, cx)
+                                }),
+                        )
+                        .when_some(account, |row, acc| {
+                            row.child(
+                                Button::new("optional-logout")
+                                    .small()
+                                    .ghost()
+                                    .icon(IconName::LogOut)
+                                    .label(t("manage.accounts.logout"))
+                                    .loading(logging_out)
+                                    .disabled(logging_out)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.confirm_logout(runner, acc.clone(), false, window, cx)
+                                    })),
+                            )
+                        }),
+                )
+                .into_any_element(),
             (None, Some(account)) => {
                 let name = account_name(&account);
                 let games = match account.games {
@@ -852,89 +1074,146 @@ impl AccountsView {
                         &[("count", &n.to_string())],
                     ),
                 };
-                (
-                    v_flex()
-                        .min_w_0()
-                        .gap_0p5()
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .min_w_0()
-                                .child(Icon::new(IconName::CircleUser).small())
-                                .child(div().min_w_0().truncate().font_medium().child(name)),
-                        )
-                        .child(div().text_sm().text_color(muted).child(games))
-                        .into_any_element(),
-                    h_flex()
-                        .gap_1()
-                        .when(
-                            runner == Runner::Steam && crate::friends::steam_friends_available(cx),
-                            |row| {
-                                row.child(
-                                    Button::new("optional-friends")
-                                        .small()
-                                        .ghost()
-                                        .icon(IconName::Users)
-                                        .label(t("manage.friends.button"))
-                                        .on_click(|_, window, cx| {
-                                            crate::friends::open_steam_friends_dialog(window, cx)
-                                        }),
-                                )
-                            },
-                        )
-                        .child(
-                            Button::new("optional-logout")
-                                .small()
-                                .ghost()
-                                .icon(IconName::LogOut)
-                                .label(t("manage.accounts.logout"))
-                                .loading(logging_out)
-                                .disabled(logging_out)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.confirm_logout(runner, account.clone(), false, window, cx)
-                                })),
-                        )
-                        .into_any_element(),
-                )
+                h_flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        v_flex()
+                            .min_w_0()
+                            .flex_1()
+                            .gap_0p5()
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .min_w_0()
+                                    .child(Icon::new(IconName::CircleUser).small())
+                                    .child(div().min_w_0().truncate().font_medium().child(name)),
+                            )
+                            .child(div().text_sm().text_color(muted).child(games)),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .flex_shrink_0()
+                            .when(
+                                runner == Runner::Steam
+                                    && crate::friends::steam_friends_available(cx),
+                                |row| {
+                                    row.child(
+                                        Button::new("optional-friends")
+                                            .small()
+                                            .ghost()
+                                            .icon(IconName::Users)
+                                            .label(t("manage.friends.button"))
+                                            .on_click(|_, window, cx| {
+                                                crate::friends::open_steam_friends_dialog(
+                                                    window, cx,
+                                                )
+                                            }),
+                                    )
+                                },
+                            )
+                            .child(
+                                Button::new("optional-logout")
+                                    .small()
+                                    .ghost()
+                                    .icon(IconName::LogOut)
+                                    .label(t("manage.accounts.logout"))
+                                    .loading(logging_out)
+                                    .disabled(logging_out)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.confirm_logout(
+                                            runner,
+                                            account.clone(),
+                                            false,
+                                            window,
+                                            cx,
+                                        )
+                                    })),
+                            ),
+                    )
+                    .into_any_element()
             }
-            (None, None) => (
-                div()
-                    .text_sm()
-                    .text_color(muted)
-                    .child(t_args(
-                        "manage.accounts.optional_login_hint",
-                        &[("store", store)],
-                    ))
-                    .into_any_element(),
-                Button::new("optional-login")
-                    .small()
-                    .outline()
-                    .icon(IconName::LogIn)
-                    .label(t("manage.accounts.login"))
-                    .on_click(move |_, window, cx| open_login_dialog(runner, window, cx))
-                    .into_any_element(),
-            ),
+            (None, None) => v_flex()
+                .flex_1()
+                .justify_between()
+                .gap_3()
+                .items_start()
+                .child(div().text_sm().text_color(muted).child(t_args(
+                    "manage.accounts.optional_login_hint",
+                    &[("store", store)],
+                )))
+                .child(
+                    Button::new("optional-login")
+                        .small()
+                        .outline()
+                        .icon(IconName::LogIn)
+                        .label(t("manage.accounts.login"))
+                        .on_click(move |_, window, cx| open_login_dialog(runner, window, cx)),
+                )
+                .into_any_element(),
         };
-        h_flex()
-            .gap_3()
-            .items_center()
-            .pt_3()
-            .border_t_1()
-            .border_color(cx.theme().border)
-            .child(div().flex_1().min_w_0().child(text))
-            .child(button)
+
+        inset_panel(cx)
+            .when(expired, |panel| panel.border_color(theme.warning))
+            .child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_medium()
+                            .child(t("manage.accounts.steam_account_title")),
+                    )
+                    .child(info_tip(
+                        "steam-account",
+                        t("manage.accounts.steam_account_tip"),
+                        cx,
+                    )),
+            )
+            .child(body)
             .into_any_element()
     }
 }
 
 impl Render for AccountsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let cards: Vec<AnyElement> = self
-            .cards
-            .clone()
+        let snapshot = self.cards.clone();
+        let expired_stores: Vec<&str> = snapshot
             .iter()
-            .map(|c| self.render_card(c, cx))
+            .filter(|c| {
+                !c.hidden
+                    && !c.disabled
+                    && (c.expired.is_some() || c.accounts.iter().any(|a| a.expired.is_some()))
+            })
+            .map(|c| c.runner.store_name())
             .collect();
+
+        let mut connected_cards = Vec::new();
+        let mut connected_steam: Option<AnyElement> = None;
+        let mut available_cards = Vec::new();
+        let mut inactive_cards = Vec::new();
+
+        for card_data in &snapshot {
+            let rendered = self.render_card(card_data, window, cx);
+            match classify_card(card_data) {
+                AccountSection::Connected => {
+                    if card_data.runner == Runner::Steam {
+                        connected_steam = Some(rendered);
+                    } else {
+                        connected_cards.push(rendered);
+                    }
+                }
+                AccountSection::Available => available_cards.push(rendered),
+                AccountSection::Inactive => inactive_cards.push(rendered),
+            }
+        }
+
+        let has_connected = !connected_cards.is_empty() || connected_steam.is_some();
+
         v_flex()
             .id("accounts-page")
             .size_full()
@@ -942,6 +1221,8 @@ impl Render for AccountsView {
             .overflow_y_scrollbar()
             .child(
                 v_flex()
+                    .w_full()
+                    .max_w(rems(PAGE_MAX_WIDTH_REM))
                     .px_6()
                     .py_6()
                     .gap_6()
@@ -955,7 +1236,108 @@ impl Render for AccountsView {
                             t("manage.accounts.offline"),
                         ))
                     })
-                    .child(card_grid(&self.grid_width, MIN_CARD_REM, cards, window)),
+                    .when(!expired_stores.is_empty(), |this| {
+                        this.child(Alert::warning(
+                            "accounts-expired-banner",
+                            t_args(
+                                "manage.accounts.expired_banner",
+                                &[("stores", &expired_stores.join(", "))],
+                            ),
+                        ))
+                    })
+                    .when(has_connected, |this| {
+                        this.child(
+                            v_flex()
+                                .gap_3()
+                                .child(SectionTitle::new(t("manage.accounts.section.connected")))
+                                .when(!connected_cards.is_empty(), |sec| {
+                                    sec.child(card_grid_capped(
+                                        &self.connected_grid_width,
+                                        CONNECTED_CARD_REM,
+                                        2,
+                                        connected_cards,
+                                        window,
+                                    ))
+                                })
+                                .children(connected_steam),
+                        )
+                    })
+                    .when(!available_cards.is_empty(), |this| {
+                        this.child(
+                            v_flex()
+                                .gap_3()
+                                .child(SectionTitle::new(t("manage.accounts.section.available")))
+                                .child(card_grid_capped(
+                                    &self.available_grid_width,
+                                    COMPACT_CARD_REM,
+                                    3,
+                                    available_cards,
+                                    window,
+                                )),
+                        )
+                    })
+                    .when(!inactive_cards.is_empty(), |this| {
+                        this.child(
+                            v_flex()
+                                .gap_3()
+                                .child(SectionTitle::new(t("manage.accounts.section.inactive")))
+                                .child(card_grid_capped(
+                                    &self.inactive_grid_width,
+                                    COMPACT_CARD_REM,
+                                    3,
+                                    inactive_cards,
+                                    window,
+                                )),
+                        )
+                    }),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_card(runner: Runner) -> StoreCard {
+        StoreCard {
+            runner,
+            user: None,
+            games: 0,
+            disabled: false,
+            hidden: false,
+            expired: None,
+            local: !runner.has_account(),
+            accounts: Vec::new(),
+            can_add: false,
+            steam_client: None,
+            steam_hidden: None,
+            steam_waiting: None,
+        }
+    }
+
+    #[test]
+    fn classifies_stores_by_state() {
+        let mut connected = empty_card(Runner::Gog);
+        connected.user = Some("player".into());
+        assert_eq!(classify_card(&connected), AccountSection::Connected);
+
+        let available = empty_card(Runner::Nile);
+        assert_eq!(classify_card(&available), AccountSection::Available);
+
+        let mut hidden = connected.clone();
+        hidden.hidden = true;
+        assert_eq!(classify_card(&hidden), AccountSection::Inactive);
+
+        let mut turned_off = empty_card(Runner::Itch);
+        turned_off.disabled = true;
+        assert_eq!(classify_card(&turned_off), AccountSection::Inactive);
+
+        let steam_missing = empty_card(Runner::Steam);
+        assert_eq!(classify_card(&steam_missing), AccountSection::Available);
+
+        let mut steam_expired = empty_card(Runner::Steam);
+        steam_expired.user = Some("On disk".into());
+        steam_expired.expired = Some("Token expired".into());
+        assert_eq!(classify_card(&steam_expired), AccountSection::Connected);
     }
 }

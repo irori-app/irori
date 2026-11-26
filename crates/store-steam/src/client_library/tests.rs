@@ -458,3 +458,32 @@ async fn another_program_on_the_port_is_not_steam() {
         );
     }
 }
+
+#[tokio::test]
+async fn reads_keep_alive_response_without_waiting_for_eof() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    let body = r#"[{"title":"SharedJSContext","url":"https://steamloopback.host/index.html","webSocketDebuggerUrl":"ws://127.0.0.1:8080/devtools/page/A"}]"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Security-Policy:frame-ancestors 'none'\r\nContent-Length:{}\r\nContent-Type:application/json; charset=UTF-8\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (hold_tx, hold_rx) = tokio::sync::oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = vec![0; 4096];
+        let _ = socket.read(&mut buf).await;
+        let _ = socket.write_all(response.as_bytes()).await;
+        let _ = hold_rx.await;
+    });
+
+    let got = tokio::time::timeout(std::time::Duration::from_secs(2), devtools::list(port))
+        .await
+        .expect("keep-alive response must not wait for EOF")
+        .unwrap();
+    assert_eq!(got.as_deref(), Some(body));
+    let _ = hold_tx.send(());
+}

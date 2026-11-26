@@ -230,16 +230,87 @@ async fn get(port: u16, path: &str) -> Result<String> {
         format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     stream.write_all(request.as_bytes()).await?;
     let mut raw = Vec::new();
-    (&mut stream)
-        .take(MAX_LIST_BYTES as u64 + 1)
-        .read_to_end(&mut raw)
-        .await?;
-    if raw.len() > MAX_LIST_BYTES {
+    let mut buf = [0u8; 4096];
+    let mut expected_len: Option<usize> = None;
+    let mut headers_checked = false;
+
+    loop {
+        let n = stream.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        raw.extend_from_slice(&buf[..n]);
+        if raw.len() > MAX_LIST_BYTES {
+            return Err(ClientLibraryError::NotSteam { port }.into());
+        }
+        if !headers_checked && let Some(header_end) = find_header_end(&raw) {
+            headers_checked = true;
+            let head = String::from_utf8_lossy(&raw[..header_end - 4]);
+            if !status_is_200(&head) || is_chunked(&head) {
+                return Err(ClientLibraryError::NotSteam { port }.into());
+            }
+            if let Some(len) = content_length(&head) {
+                let Ok(len) = len else {
+                    return Err(ClientLibraryError::NotSteam { port }.into());
+                };
+                let Some(expected) = header_end.checked_add(len) else {
+                    return Err(ClientLibraryError::NotSteam { port }.into());
+                };
+                if expected > MAX_LIST_BYTES {
+                    return Err(ClientLibraryError::NotSteam { port }.into());
+                }
+                expected_len = Some(expected);
+            }
+        }
+        // Steam's CEF endpoint ignores `Connection: close` and keeps HTTP/1.1
+        // keep-alive sockets open after sending `Content-Length` bytes.
+        if let Some(expected) = expected_len
+            && raw.len() >= expected
+        {
+            raw.truncate(expected);
+            break;
+        }
+    }
+
+    if expected_len.is_some_and(|expected| raw.len() < expected) {
         return Err(ClientLibraryError::NotSteam { port }.into());
     }
+
     parse_response(&raw).map_err(|e| {
         tracing::debug!("port {port} doesn't answer like Steam: {e:#}");
         ClientLibraryError::NotSteam { port }.into()
+    })
+}
+
+fn find_header_end(raw: &[u8]) -> Option<usize> {
+    raw.windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map(|pos| pos + 4)
+}
+
+fn status_is_200(head: &str) -> bool {
+    head.lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        == Some("200")
+}
+
+fn is_chunked(head: &str) -> bool {
+    head.lines().any(|l| {
+        l.to_ascii_lowercase()
+            .replace(' ', "")
+            .starts_with("transfer-encoding:chunked")
+    })
+}
+
+fn content_length(head: &str) -> Option<Result<usize, std::num::ParseIntError>> {
+    head.lines().skip(1).find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if name.trim().eq_ignore_ascii_case("content-length") {
+            Some(value.trim().parse::<usize>())
+        } else {
+            None
+        }
     })
 }
 
@@ -251,15 +322,13 @@ fn parse_response(raw: &[u8]) -> Result<String> {
         .context("Steam's debugging port gave an unreadable answer")?;
     let status = head.lines().next().unwrap_or_default();
     anyhow::ensure!(
-        status.split_whitespace().nth(1) == Some("200"),
+        status_is_200(head),
         "Steam's debugging port answered {status}"
     );
-    let chunked = head.lines().any(|l| {
-        l.to_ascii_lowercase()
-            .replace(' ', "")
-            .starts_with("transfer-encoding:chunked")
-    });
-    anyhow::ensure!(!chunked, "Steam's debugging port gave an unreadable answer");
+    anyhow::ensure!(
+        !is_chunked(head),
+        "Steam's debugging port gave an unreadable answer"
+    );
     Ok(body.to_string())
 }
 

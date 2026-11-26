@@ -16,6 +16,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -238,7 +239,8 @@ impl SteamSignInView {
     }
 
     fn render_web_tab(&self, cx: &mut Context<Self>) -> AnyElement {
-        let muted = cx.theme().muted_foreground;
+        let theme = cx.theme();
+        let muted = theme.muted_foreground;
         let controls: AnyElement = if !self.has_helper {
             v_flex()
                 .gap_3()
@@ -307,12 +309,15 @@ impl SteamSignInView {
 
         v_flex()
             .gap_3()
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(muted)
-                    .child(t("manage.steam.web.summary")),
-            )
+            .child(method_summary(
+                t("manage.steam.web.summary"),
+                vec![
+                    t("manage.steam.web.tag_qr"),
+                    t("manage.steam.web.tag_private"),
+                    t("manage.steam.web.tag_family"),
+                ],
+                cx,
+            ))
             .child(Alert::info(
                 "steam-web-vpn-notice",
                 t("manage.steam.web.vpn_notice"),
@@ -325,12 +330,16 @@ impl SteamSignInView {
         let muted = cx.theme().muted_foreground;
         v_flex()
             .gap_3()
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(muted)
-                    .child(t("manage.steam.api.summary")),
-            )
+            .child(method_summary(
+                t("manage.steam.api.summary"),
+                vec![
+                    t("manage.steam.api.tag_no_session"),
+                    t("manage.steam.api.tag_never_expires"),
+                    t("manage.steam.api.tag_vpn"),
+                    t("manage.steam.api.tag_public_games"),
+                ],
+                cx,
+            ))
             .child(step(
                 1,
                 t("manage.steam.api.step1_title"),
@@ -409,6 +418,30 @@ impl SteamSignInView {
     }
 }
 
+/// Summary surface for a Steam connection method with concise capability tags.
+fn method_summary(summary: SharedString, tags: Vec<SharedString>, cx: &App) -> impl IntoElement {
+    let theme = cx.theme();
+    v_flex()
+        .gap_2p5()
+        .p_3()
+        .rounded(theme.radius)
+        .bg(theme.group_box)
+        .border_1()
+        .border_color(theme.border)
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .child(summary),
+        )
+        .child(
+            h_flex().flex_wrap().gap_1p5().children(
+                tags.into_iter()
+                    .map(|label| Tag::secondary().small().outline().child(label)),
+            ),
+        )
+}
+
 /// One numbered step in the guided API key setup.
 fn step(n: usize, title: SharedString, body: impl IntoElement, cx: &App) -> impl IntoElement {
     let theme = cx.theme();
@@ -420,7 +453,9 @@ fn step(n: usize, title: SharedString, body: impl IntoElement, cx: &App) -> impl
                 .flex_shrink_0()
                 .size_6()
                 .rounded_full()
-                .bg(theme.muted)
+                .bg(theme.secondary)
+                .border_1()
+                .border_color(theme.border)
                 .text_xs()
                 .font_semibold()
                 .flex()
@@ -471,21 +506,35 @@ impl Render for SteamSignInView {
                     .child(t("manage.steam.intro")),
             )
             .child(
-                div().debug_selector(|| "steam-sign-in-mode".into()).child(
-                    TabBar::new("steam-sign-in-mode")
-                        .segmented()
-                        .small()
-                        .selected_index(match mode {
-                            Mode::Web => 0,
-                            Mode::ApiKey => 1,
-                        })
-                        .child(Tab::new().label(t("manage.steam.tab_web")))
-                        .child(Tab::new().label(t("manage.steam.tab_api_key")))
-                        .on_click(cx.listener(|this, ix: &usize, window, cx| {
-                            let mode = if *ix == 0 { Mode::Web } else { Mode::ApiKey };
-                            this.set_mode(mode, window, cx);
-                        })),
-                ),
+                div()
+                    .w_full()
+                    .debug_selector(|| "steam-sign-in-mode".into())
+                    .child(
+                        TabBar::new("steam-sign-in-mode")
+                            .w_full()
+                            .segmented()
+                            .large()
+                            .selected_index(match mode {
+                                Mode::Web => 0,
+                                Mode::ApiKey => 1,
+                            })
+                            .child(
+                                Tab::new()
+                                    .flex_1()
+                                    .debug_selector(|| "steam-tab-web".into())
+                                    .label(t("manage.steam.tab_web")),
+                            )
+                            .child(
+                                Tab::new()
+                                    .flex_1()
+                                    .debug_selector(|| "steam-tab-api".into())
+                                    .label(t("manage.steam.tab_api_key")),
+                            )
+                            .on_click(cx.listener(|this, ix: &usize, window, cx| {
+                                let mode = if *ix == 0 { Mode::Web } else { Mode::ApiKey };
+                                this.set_mode(mode, window, cx);
+                            })),
+                    ),
             )
             .child(match mode {
                 Mode::Web => self.render_web_tab(cx),
