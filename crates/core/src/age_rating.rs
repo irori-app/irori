@@ -74,6 +74,34 @@ impl RatingSystem {
         }
     }
 
+    /// The language stores write this board's content descriptors in, when
+    /// it belongs to a single regional language (`None` for English and
+    /// pan-regional boards such as ESRB, PEGI and ACB).
+    pub fn descriptor_language(self) -> Option<&'static str> {
+        match self {
+            RatingSystem::ClassInd => Some("pt"),
+            RatingSystem::Usk => Some("de"),
+            RatingSystem::Cero => Some("ja"),
+            RatingSystem::Grac => Some("ko"),
+            RatingSystem::Csrr => Some("zh"),
+            RatingSystem::Esrb
+            | RatingSystem::Pegi
+            | RatingSystem::Acb
+            | RatingSystem::Gog
+            | RatingSystem::Unknown => None,
+        }
+    }
+
+    /// Whether this board's content descriptors fit `ui_language`. Boards
+    /// without a single regional language always fit.
+    pub fn descriptors_match_language(self, ui_language: &str) -> bool {
+        let Some(board_lang) = self.descriptor_language() else {
+            return true;
+        };
+        let (ui_lang, _) = split_locale(ui_language);
+        ui_lang == board_lang
+    }
+
     /// The system a store's key names (`esrb`, Steam's `dejus`, `oflc` and
     /// `kgrb`, GOG's `brRating`…), case and a `Rating` suffix ignored.
     pub fn from_key(key: &str) -> Option<Self> {
@@ -612,5 +640,34 @@ mod tests {
         let json = serde_json::to_string(&r).unwrap();
         assert_eq!(json, r#"{"system":"ClassInd","rating":"16","age":16}"#);
         assert_eq!(serde_json::from_str::<AgeRating>(&json).unwrap(), r);
+    }
+
+    #[test]
+    fn regional_board_descriptors_match_only_their_language() {
+        use RatingSystem::*;
+        assert!(ClassInd.descriptors_match_language("pt_BR"));
+        assert!(ClassInd.descriptors_match_language("pt"));
+        assert!(!ClassInd.descriptors_match_language("en"));
+        assert!(!ClassInd.descriptors_match_language("es"));
+
+        assert!(Usk.descriptors_match_language("de"));
+        assert!(Usk.descriptors_match_language("de-AT"));
+        assert!(!Usk.descriptors_match_language("en"));
+
+        assert!(Cero.descriptors_match_language("ja"));
+        assert!(!Cero.descriptors_match_language("en"));
+
+        assert!(Grac.descriptors_match_language("ko"));
+        assert!(!Grac.descriptors_match_language("en"));
+
+        assert!(Csrr.descriptors_match_language("zh_Hant"));
+        assert!(Csrr.descriptors_match_language("zh_Hans"));
+        assert!(!Csrr.descriptors_match_language("en"));
+
+        for board in [Esrb, Pegi, Acb, Gog] {
+            assert!(board.descriptors_match_language("en"), "{board:?}");
+            assert!(board.descriptors_match_language("fr"), "{board:?}");
+            assert!(board.descriptors_match_language("pt_BR"), "{board:?}");
+        }
     }
 }

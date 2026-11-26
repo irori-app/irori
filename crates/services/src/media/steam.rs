@@ -7,7 +7,7 @@
 //! ([`crate::steam_link`]), one fetch per linked app, which also fills the
 //! description, genres and release date a page lacks.
 
-use irori_core::Video;
+use irori_core::{AgeRating, RatingSystem, Video, age_rating};
 use irori_steam_api::library::AppDetails;
 
 /// The page's full-size screenshots (`https` only).
@@ -38,6 +38,25 @@ pub(crate) fn videos_of(details: &AppDetails) -> Vec<Video> {
     videos.into_iter().map(|(_, v)| v).collect()
 }
 
+/// The page's age ratings by board (unknown boards such as `steam_germany`
+/// are left out).
+pub(crate) fn age_ratings_of(details: &AppDetails) -> Vec<AgeRating> {
+    details
+        .ratings
+        .iter()
+        .filter_map(|(board, r)| {
+            let system = RatingSystem::from_key(board)?;
+            let age = u8::try_from(r.required_age).ok().filter(|a| *a > 0);
+            AgeRating::new(
+                system,
+                &r.rating,
+                age_rating::split_descriptors(&r.descriptors, false),
+                age,
+            )
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -59,5 +78,25 @@ mod tests {
         assert_eq!(screenshots_of(&details), ["https://cdn/1.jpg"]);
         let names: Vec<String> = videos_of(&details).into_iter().map(|v| v.name).collect();
         assert_eq!(names, ["Launch", "Gameplay"]);
+    }
+
+    #[test]
+    fn reads_known_age_ratings() {
+        let details: AppDetails = serde_json::from_value(serde_json::json!({
+            "ratings": {
+                "esrb": {"rating": "m", "descriptors": "Blood and Gore\r\nIntense Violence", "required_age": "17"},
+                "pegi": {"rating": "18", "descriptors": "Violence", "required_age": "18"},
+                "dejus": {"rating": "18", "descriptors": "Violência Extrema", "required_age": "18"},
+                "steam_germany": {"rating": "18", "required_age": "18"}
+            }
+        }))
+        .unwrap();
+        let ratings = age_ratings_of(&details);
+        let titles: Vec<String> = ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(titles, ["ClassInd 18", "ESRB M", "PEGI 18"]);
+        assert_eq!(
+            ratings[1].descriptors,
+            ["Blood and Gore", "Intense Violence"]
+        );
     }
 }

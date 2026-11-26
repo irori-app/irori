@@ -23,7 +23,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
-use irori_core::{ExtraInfo, GameId, GameInfo, Paths, Runner, Video, json_store, util};
+use irori_core::{
+    AgeRating, ExtraInfo, GameId, GameInfo, Paths, Runner, Video, age_rating, json_store, util,
+};
 use irori_steam_api::{Client, Endpoints, StoreHit, app_id_in};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -439,6 +441,9 @@ struct SteamPage {
     videos: Vec<Video>,
     /// The Metacritic score the page shows.
     metacritic: Option<u8>,
+    /// Age ratings by board from the Steam store page.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    age_ratings: Vec<AgeRating>,
 }
 
 fn details_file(app: u32, language: &str) -> PathBuf {
@@ -479,6 +484,9 @@ fn fill_extra(info: &mut ExtraInfo, page: &SteamPage) -> bool {
             .metacritic
             .and_then(|s| irori_core::CriticScore::new("Metacritic", f64::from(s)));
     }
+    // Age ratings name their own board, so merging boards the store lacked
+    // doesn't make the page "from Steam".
+    age_rating::merge(&mut info.age_ratings, &page.age_ratings);
     if filled && info.details_from.is_none() {
         info.details_from = Some("Steam".into());
     }
@@ -846,6 +854,7 @@ impl Backend {
                 .as_ref()
                 .and_then(|m| u8::try_from(m.score).ok())
                 .filter(|s| (1..=100).contains(s)),
+            age_ratings: crate::media::steam::age_ratings_of(&d),
         });
         let stored = page.clone().unwrap_or(SteamPage {
             fetched: now,
@@ -1005,6 +1014,31 @@ mod tests {
 
     #[test]
     fn steam_pages_fill_only_gaps() {
+        use irori_core::RatingSystem;
+
+        let esrb = AgeRating::new(
+            RatingSystem::Esrb,
+            "m",
+            vec!["Blood and Gore".into()],
+            Some(17),
+        )
+        .unwrap();
+        let pegi =
+            AgeRating::new(RatingSystem::Pegi, "18", vec!["Violence".into()], Some(18)).unwrap();
+        let steam_class_ind = AgeRating::new(
+            RatingSystem::ClassInd,
+            "16",
+            vec!["From Steam".into()],
+            Some(16),
+        )
+        .unwrap();
+        let store_class_ind = AgeRating::new(
+            RatingSystem::ClassInd,
+            "18",
+            vec!["Conteúdo Sexual".into()],
+            Some(18),
+        )
+        .unwrap();
         let page = SteamPage {
             fetched: 1,
             description: "From Steam.".into(),
@@ -1017,9 +1051,11 @@ mod tests {
                 url: "https://cdn.example/l.m3u8".into(),
             }],
             metacritic: Some(88),
+            age_ratings: vec![esrb, pegi, steam_class_ind],
         };
         let mut info = ExtraInfo {
             description: Some("The store's own.".into()),
+            age_ratings: vec![store_class_ind.clone()],
             ..Default::default()
         };
         assert!(fill_extra(&mut info, &page));
@@ -1029,7 +1065,31 @@ mod tests {
         assert_eq!(info.details_from.as_deref(), Some("Steam"));
         assert_eq!(info.videos.len(), 1);
         assert_eq!(info.score.as_ref().map(|s| s.score), Some(88));
+        let titles: Vec<String> = info.age_ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(titles, ["ClassInd 18", "ESRB M", "PEGI 18"]);
+        assert_eq!(info.age_ratings[0], store_class_ind);
         assert!(!lacks_any(&info));
         assert!(!fill_extra(&mut info, &page), "nothing left to fill");
+
+        // Adding only age ratings on an already-complete page doesn't mark it "from Steam".
+        let mut complete = ExtraInfo {
+            description: Some("Own".into()),
+            genres: vec!["RPG".into()],
+            release_date: Some("2020-12-10".into()),
+            screenshots: vec!["https://gog/1.jpg".into()],
+            videos: page.videos.clone(),
+            score: irori_core::CriticScore::new("Metacritic", 86.0),
+            age_ratings: vec![store_class_ind],
+            ..Default::default()
+        };
+        assert!(!fill_extra(&mut complete, &page));
+        assert_eq!(complete.details_from, None);
+        let merged: Vec<String> = complete.age_ratings.iter().map(AgeRating::title).collect();
+        assert_eq!(merged, ["ClassInd 18", "ESRB M", "PEGI 18"]);
+
+        // Legacy cached files without `age_ratings` still deserialize cleanly.
+        let legacy: SteamPage =
+            serde_json::from_str(r#"{"fetched":1,"description":"Old"}"#).unwrap();
+        assert!(legacy.age_ratings.is_empty());
     }
 }
