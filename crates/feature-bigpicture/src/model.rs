@@ -161,7 +161,7 @@ pub fn build_rows_on(
             ShelfKind::ContinuePlaying => rows.push(Row {
                 kind: RowKind::ContinuePlaying,
                 games: user
-                    .recent
+                    .recent_keys()
                     .iter()
                     .filter(|k| parse_key(k).is_some())
                     .filter_map(|k| by_key.get(k.as_str()).map(|g| (*g).clone()))

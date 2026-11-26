@@ -73,7 +73,10 @@ pub use manage::{
     open_move_dialog, open_uninstall_dialog,
 };
 pub use mods::{ModsPanel, open_mods_sheet, open_nxm_dialog, open_thunderstore_link_dialog};
-pub use page::{AchievementFilter, GAME_PAGE_CONTEXT, GamePage, GamePageEvent, InfoTab, game_menu};
+pub use page::{
+    AchievementFilter, GAME_PAGE_CONTEXT, GamePage, GamePageEvent, InfoTab, game_menu,
+    recent_game_menu,
+};
 pub use play_with::open_play_with_dialog;
 pub use playtime_edit::open_playtime_dialog;
 pub use redmod::{RedmodPanel, open_redmod_sheet};

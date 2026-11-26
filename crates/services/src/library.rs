@@ -435,7 +435,7 @@ impl Backend {
         let lib = self.library();
         let user = self.userdata.snapshot();
         let max = self.settings.app().max_recent_games.max(1) as usize;
-        user.recent
+        user.recent_keys()
             .iter()
             .filter_map(|key| {
                 let (runner, app) = key.split_once(':')?;
