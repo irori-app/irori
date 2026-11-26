@@ -133,7 +133,7 @@ See [docs/PLATFORMS.md](docs/PLATFORMS.md) for macOS/Windows build details and d
 | `crates/store-*`, `crates/extras`, `crates/scripts` | Store integrations, importers, trackers, Lutris scripts |
 | `crates/ui`, `crates/feature-*`, `crates/irori`, `crates/sign-in` | GPUI interface, screens, shell binary, sign-in helper |
 
-See [AGENTS.md](AGENTS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (once merged) for crate rules.
+See [AGENTS.md](AGENTS.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate rules.
 ## Notes
 
 - Store sign-ins use the optional `irori-sign-in` helper window (WebKitGTK on Linux, WKWebView on macOS, WebView2 on Windows) and fall back cleanly to your system browser when omitted.
