@@ -1,0 +1,78 @@
+{
+  "id": "uzdoom",
+  "name": "UZDoom",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/UZDoom/UZDoom",
+  "kind": "standalone",
+  "systems": [
+    "doom"
+  ],
+  "sources": [
+    {
+      "type": "github",
+      "repo": "UZDoom/UZDoom",
+      "assets": {
+        "linux-x86_64": "^Linux-UZDoom-Release-x86_64\\.AppImage$",
+        "macos-aarch64": "^MacOS-UZDoom-Release-ARM64\\.dmg$",
+        "windows-x86_64": "^Windows-UZDoom-Release-x86_64\\.zip$"
+      }
+    },
+    {
+      "type": "path",
+      "names": [
+        "uzdoom"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "UZDoom.app"
+    },
+    {
+      "type": "windows",
+      "paths": [
+        "%ProgramFiles%\\UZDoom\\uzdoom.exe",
+        "%LOCALAPPDATA%\\Programs\\UZDoom\\uzdoom.exe"
+      ]
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "Linux-UZDoom-Release-x86_64.AppImage",
+      "uzdoom"
+    ],
+    "macos": [
+      "UZDoom.app"
+    ],
+    "windows": [
+      "uzdoom.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "+fullscreen",
+          "1"
+        ]
+      },
+      {
+        "unless": "fullscreen",
+        "args": [
+          "+fullscreen",
+          "0"
+        ]
+      },
+      "-iwad",
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true
+    }
+  ],
+  "exitHotkey": "F10"
+}

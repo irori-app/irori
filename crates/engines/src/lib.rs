@@ -84,6 +84,14 @@ pub const BUILT_IN: &[(&str, &str)] = &[
         "dosbox-staging",
         include_str!("../../../assets/engines/dosbox-staging.json"),
     ),
+    (
+        "uzdoom",
+        include_str!("../../../assets/engines/uzdoom.json"),
+    ),
+    (
+        "gzdoom",
+        include_str!("../../../assets/engines/gzdoom.json"),
+    ),
     ("pcsx2", include_str!("../../../assets/engines/pcsx2.json")),
     (
         "melonds",

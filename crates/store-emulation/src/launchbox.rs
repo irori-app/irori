@@ -62,6 +62,7 @@ pub const PLATFORMS: &[(&str, &str)] = &[
     ("MS-DOS", "dos"),
     ("ScummVM", "scummvm"),
     ("Arcade", "arcade"),
+    ("Windows", "doom"),
 ];
 
 /// [`PLATFORMS`] as the index takes it.

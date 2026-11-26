@@ -52,8 +52,9 @@ pub struct RomEntry {
 /// The version of the detection rules. A file detected under older rules is
 /// looked at again, so a newer Irori recognises what an older one didn't
 /// (1: disc images by their marker files; 2: Dreamcast, PS Vita and Switch,
-/// and the tracks a `.gdi` lists; 3: DOOM's WADs aren't Wii games).
-pub const DETECTION_RULES: u32 = 3;
+/// and the tracks a `.gdi` lists; 3: DOOM's WADs aren't Wii games; 4: DOOM
+/// standalone IWADs).
+pub const DETECTION_RULES: u32 = 4;
 
 /// What a file was detected as last time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
