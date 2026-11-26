@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "KLUCZ=wartość, oddzielone spacjami. Dotyczą launchera i każdej uruchomionej przez niego gry, ponad domyślnymi ustawieniami gier.",
   "manage.launchers.wine.save": "Zapisz",
   "manage.launchers.wine.saved": "{launcher} użyje nowych ustawień Wine od następnego uruchomienia",
-  "manage.launchers.wine.failed": "Nie udało się zapisać ustawień Wine dla {launcher}"
+  "manage.launchers.wine.failed": "Nie udało się zapisać ustawień Wine dla {launcher}",
+  "manage.wine.prefixes.search": "Szukaj prefiksów lub gier",
+  "manage.wine.prefixes.filter.all": "Wszystkie",
+  "manage.wine.prefixes.filter.in_use": "Używane",
+  "manage.wine.prefixes.filter.unused": "Nieużywane",
+  "manage.wine.prefixes.tag.unused": "Nieużywany",
+  "manage.wine.prefixes.no_match": "Żaden prefiks nie pasuje do wyszukiwania.",
+  "manage.wine.prefixes.open_game": "Otwórz grę"
 }

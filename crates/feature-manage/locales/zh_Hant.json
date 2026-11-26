@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "KEY=value，以空格分隔。適用於該啟動器及透過它啟動的每個遊戲，優先於遊戲預設設定。",
   "manage.launchers.wine.save": "儲存",
   "manage.launchers.wine.saved": "{launcher} 將從下次啟動起使用新的 Wine 設定",
-  "manage.launchers.wine.failed": "無法儲存 {launcher} 的 Wine 設定"
+  "manage.launchers.wine.failed": "無法儲存 {launcher} 的 Wine 設定",
+  "manage.wine.prefixes.search": "搜尋前綴或遊戲",
+  "manage.wine.prefixes.filter.all": "全部",
+  "manage.wine.prefixes.filter.in_use": "使用中",
+  "manage.wine.prefixes.filter.unused": "未使用",
+  "manage.wine.prefixes.tag.unused": "未使用",
+  "manage.wine.prefixes.no_match": "沒有符合的前綴。",
+  "manage.wine.prefixes.open_game": "開啟遊戲"
 }

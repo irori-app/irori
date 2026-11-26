@@ -1005,3 +1005,40 @@ fn steam_library_dialog_keeps_cancel_button_inside_footer(cx: &mut TestAppContex
         "cancel button must stay within dialog footer right edge"
     );
 }
+
+#[gpui_kit::test]
+fn wine_manager_fills_width_and_switches_large_tabs(cx: &mut TestAppContext) {
+    setup(cx);
+    let options = cx.update(|_| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+            Default::default(),
+            size(px(2400.), px(1000.)),
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| crate::WineManagerView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    let viewport = vcx.update(|window, _| window.viewport_size());
+    let header = vcx
+        .debug_bounds("wine-header")
+        .expect("wine header is rendered");
+    assert!(
+        header.size.width >= px(2300.) && header.size.width >= viewport.width - px(2.),
+        "wine manager fills width: header={:?}, viewport={:?}",
+        header.size.width,
+        viewport.width
+    );
+
+    click(&mut vcx, "wine-tab-system");
+    assert!(vcx.debug_bounds("wine-content").is_some());
+
+    click(&mut vcx, "wine-tab-prefixes");
+    assert!(vcx.debug_bounds("wine-header").is_some());
+}

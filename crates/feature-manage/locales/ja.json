@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "KEY=value をスペースで区切って入力します。ランチャーとそこから起動するすべてのゲームに、ゲームの既定値より優先して適用されます。",
   "manage.launchers.wine.save": "保存",
   "manage.launchers.wine.saved": "{launcher} は次回の起動から新しい Wine の設定を使います",
-  "manage.launchers.wine.failed": "{launcher} の Wine の設定を保存できませんでした"
+  "manage.launchers.wine.failed": "{launcher} の Wine の設定を保存できませんでした",
+  "manage.wine.prefixes.search": "プレフィックスやゲームを検索",
+  "manage.wine.prefixes.filter.all": "すべて",
+  "manage.wine.prefixes.filter.in_use": "使用中",
+  "manage.wine.prefixes.filter.unused": "未使用",
+  "manage.wine.prefixes.tag.unused": "未使用",
+  "manage.wine.prefixes.no_match": "検索に一致するプレフィックスがありません。",
+  "manage.wine.prefixes.open_game": "ゲームを開く"
 }

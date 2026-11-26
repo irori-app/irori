@@ -863,5 +863,12 @@
   "manage.launchers.wine.variables_help": "КЛЮЧ=значення через пробіл. Діють для лаунчера й кожної гри, запущеної через нього, поверх типових налаштувань ігор.",
   "manage.launchers.wine.save": "Зберегти",
   "manage.launchers.wine.saved": "{launcher} використовуватиме нові налаштування Wine з наступного запуску",
-  "manage.launchers.wine.failed": "Не вдалося зберегти налаштування Wine для {launcher}"
+  "manage.launchers.wine.failed": "Не вдалося зберегти налаштування Wine для {launcher}",
+  "manage.wine.prefixes.search": "Пошук префіксів або ігор",
+  "manage.wine.prefixes.filter.all": "Усі",
+  "manage.wine.prefixes.filter.in_use": "Використовуються",
+  "manage.wine.prefixes.filter.unused": "Не використовуються",
+  "manage.wine.prefixes.tag.unused": "Не використовується",
+  "manage.wine.prefixes.no_match": "Жоден префікс не відповідає запиту.",
+  "manage.wine.prefixes.open_game": "Відкрити гру"
 }
