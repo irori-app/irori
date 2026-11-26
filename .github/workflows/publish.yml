@@ -100,12 +100,15 @@ jobs:
     if: vars.PUBLISH_PACKAGE_REPOSITORIES == 'true'
     needs: [assets, arch-repository]
     runs-on: ubuntu-24.04
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy_1.outputs.page_url || steps.deploy_2.outputs.page_url || steps.deploy_3.outputs.page_url }}
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -186,7 +189,26 @@ jobs:
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: site
-      - id: deploy
+      # GitHub Pages occasionally fails with a transient "Deployment failed,
+      # try again later." error; retry from the same uploaded artifact.
+      - id: deploy_1
+        name: Deploy to GitHub Pages (attempt 1)
+        continue-on-error: true
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - name: Wait before retrying GitHub Pages deploy (attempt 2)
+        if: steps.deploy_1.outcome != 'success'
+        run: sleep 30
+      - id: deploy_2
+        name: Deploy to GitHub Pages (attempt 2)
+        if: steps.deploy_1.outcome != 'success'
+        continue-on-error: true
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - name: Wait before retrying GitHub Pages deploy (attempt 3)
+        if: steps.deploy_1.outcome != 'success' && steps.deploy_2.outcome != 'success'
+        run: sleep 60
+      - id: deploy_3
+        name: Deploy to GitHub Pages (attempt 3)
+        if: steps.deploy_1.outcome != 'success' && steps.deploy_2.outcome != 'success'
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
 
   aur:
