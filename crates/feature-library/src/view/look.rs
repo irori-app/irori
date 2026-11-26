@@ -317,21 +317,42 @@ fn top_section_control(current: LibraryTopSection, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-fn caption_control(current: CoverCaption, cx: &App) -> AnyElement {
-    let items: [(CoverCaption, &'static str, &'static str); 3] = [
+fn caption_control(current: CoverCaption, for_focus: bool, cx: &App) -> AnyElement {
+    let items: [(CoverCaption, &'static str, &'static str); 4] = [
         (
             CoverCaption::Full,
-            "look-cap-full",
+            if for_focus {
+                "look-fcap-full"
+            } else {
+                "look-cap-full"
+            },
             "library.look.caption_full",
         ),
         (
             CoverCaption::Title,
-            "look-cap-title",
+            if for_focus {
+                "look-fcap-title"
+            } else {
+                "look-cap-title"
+            },
             "library.look.caption_title",
         ),
         (
+            CoverCaption::Hover,
+            if for_focus {
+                "look-fcap-hover"
+            } else {
+                "look-cap-hover"
+            },
+            "library.look.caption_hover",
+        ),
+        (
             CoverCaption::None,
-            "look-cap-none",
+            if for_focus {
+                "look-fcap-none"
+            } else {
+                "look-cap-none"
+            },
             "library.look.caption_none",
         ),
     ];
@@ -341,7 +362,13 @@ fn caption_control(current: CoverCaption, cx: &App) -> AnyElement {
         .child(segmented_bar(
             items.into_iter().map(|(value, id, key)| {
                 Segment::new(id, t(key), current == value, move |cx| {
-                    persist_ui(cx, move |u| u.cover_caption = value);
+                    persist_ui(cx, move |u| {
+                        if for_focus {
+                            u.library_focus_cover_caption = Some(value);
+                        } else {
+                            u.cover_caption = value;
+                        }
+                    });
                 })
             }),
             cx,
@@ -508,11 +535,21 @@ fn build_look_body(
             ];
 
             let details = vec![
-                caption_control(ui.cover_caption, cx),
+                caption_control(ui.cover_caption, false, cx),
                 on_covers_pills(ui, true, cx),
             ];
             let page = vec![
                 top_section_control(top_section, cx),
+                h_flex()
+                    .w_full()
+                    .child(toggle_pill(
+                        "look-greeting",
+                        t("library.look.greeting"),
+                        ui.library_greeting,
+                        |cx| persist_ui(cx, |u| u.library_greeting = !u.library_greeting),
+                        cx,
+                    ))
+                    .into_any_element(),
                 background_control(ui, cx),
             ];
 
@@ -560,7 +597,7 @@ fn build_look_body(
                 corners_control(ui, cx),
             ];
             let details = vec![
-                caption_control(ui.cover_caption, cx),
+                caption_control(ui.focus_cover_caption(), true, cx),
                 on_covers_pills(ui, false, cx),
             ];
 
@@ -701,6 +738,16 @@ fn build_look_body(
                     t("library.look.section.page"),
                     [
                         top_section_control(top_section, cx),
+                        h_flex()
+                            .w_full()
+                            .child(toggle_pill(
+                                "look-greeting",
+                                t("library.look.greeting"),
+                                ui.library_greeting,
+                                |cx| persist_ui(cx, |u| u.library_greeting = !u.library_greeting),
+                                cx,
+                            ))
+                            .into_any_element(),
                         background_control(ui, cx),
                     ],
                     cx,

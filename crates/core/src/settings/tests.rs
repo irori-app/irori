@@ -608,3 +608,34 @@ fn list_row_size_defaults_round_trips_and_falls_back_on_unknown() {
     let unknown: UiPrefs = serde_json::from_str(r#"{"libraryListRowSize":"giant"}"#).unwrap();
     assert_eq!(unknown.library_list_row_size, ListRowSize::Medium);
 }
+
+#[test]
+fn greeting_and_hover_caption_defaults_and_round_trip() {
+    let ui: UiPrefs = serde_json::from_str("{}").unwrap();
+    assert!(ui.library_greeting);
+    assert_eq!(ui.greeting_name, None);
+    assert_eq!(ui.library_focus_cover_caption, None);
+    assert_eq!(ui.focus_cover_caption(), CoverCaption::Full);
+
+    let custom = UiPrefs {
+        cover_caption: CoverCaption::Hover,
+        library_focus_cover_caption: Some(CoverCaption::Title),
+        library_greeting: false,
+        greeting_name: Some("Alex".into()),
+        ..UiPrefs::default()
+    };
+    assert_eq!(custom.focus_cover_caption(), CoverCaption::Title);
+    let value = serde_json::to_value(&custom).unwrap();
+    assert_eq!(value["coverCaption"], Value::String("hover".into()));
+    assert_eq!(
+        value["libraryFocusCoverCaption"],
+        Value::String("title".into())
+    );
+    assert_eq!(value["libraryGreeting"], Value::Bool(false));
+    assert_eq!(value["greetingName"], Value::String("Alex".into()));
+    let back: UiPrefs = serde_json::from_value(value).unwrap();
+    assert_eq!(back.cover_caption, CoverCaption::Hover);
+    assert_eq!(back.library_focus_cover_caption, Some(CoverCaption::Title));
+    assert!(!back.library_greeting);
+    assert_eq!(back.greeting_name.as_deref(), Some("Alex"));
+}

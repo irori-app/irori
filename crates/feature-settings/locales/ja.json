@@ -2320,5 +2320,8 @@
   "settings.crash.delete": "レポートを削除",
   "settings.crash.delete_failed": "クラッシュレポートを削除できませんでした",
   "settings.field.ui_cover_compat_badges.label": "カバーに ProtonDB と Steam Deck バッジを表示",
-  "settings.field.ui_cover_compat_badges.help": "未インストールゲームのカバーに ProtonDB 評価と Steam Deck 確認済みバッジを表示します。"
+  "settings.field.ui_cover_compat_badges.help": "未インストールゲームのカバーに ProtonDB 評価と Steam Deck 確認済みバッジを表示します。",
+  "settings.option.cover_caption.hover": "ホバー時のみ",
+  "settings.field.ui_library_greeting.label": "ライブラリのヘッダーに挨拶を表示",
+  "settings.field.ui_library_greeting.help": "ライブラリの上部に時間帯に応じた挨拶を表示します。名前をクリックして編集または非表示にできます。"
 }

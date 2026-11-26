@@ -2320,5 +2320,8 @@
   "settings.crash.delete": "Bericht löschen",
   "settings.crash.delete_failed": "Absturzbericht konnte nicht gelöscht werden",
   "settings.field.ui_cover_compat_badges.label": "ProtonDB- und Steam-Deck-Abzeichen auf Covern",
-  "settings.field.ui_cover_compat_badges.help": "ProtonDB-Bewertungen und „Steam Deck Verified“-Abzeichen auf Covern nicht installierter Spiele anzeigen."
+  "settings.field.ui_cover_compat_badges.help": "ProtonDB-Bewertungen und „Steam Deck Verified“-Abzeichen auf Covern nicht installierter Spiele anzeigen.",
+  "settings.option.cover_caption.hover": "Beim Überfahren",
+  "settings.field.ui_library_greeting.label": "Begrüßung in der Bibliotheksüberschrift anzeigen",
+  "settings.field.ui_library_greeting.help": "Begrüßt dich oben in der Bibliothek passend zur Tageszeit. Klicke dort auf deinen Namen, um ihn zu ändern oder auszublenden."
 }

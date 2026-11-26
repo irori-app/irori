@@ -2320,5 +2320,8 @@
   "settings.crash.delete": "Elimina rapporto",
   "settings.crash.delete_failed": "Impossibile eliminare il rapporto di arresto anomalo",
   "settings.field.ui_cover_compat_badges.label": "Badge ProtonDB e Steam Deck sulle copertine",
-  "settings.field.ui_cover_compat_badges.help": "Mostra le valutazioni ProtonDB e i badge Steam Deck Verified sulle copertine dei giochi non installati."
+  "settings.field.ui_cover_compat_badges.help": "Mostra le valutazioni ProtonDB e i badge Steam Deck Verified sulle copertine dei giochi non installati.",
+  "settings.option.cover_caption.hover": "Al passaggio",
+  "settings.field.ui_library_greeting.label": "Mostra saluto nell’intestazione della libreria",
+  "settings.field.ui_library_greeting.help": "Ti saluta in base all’ora in cima alla Libreria. Clicca sul tuo nome lì per modificarlo o nasconderlo."
 }

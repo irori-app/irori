@@ -2320,5 +2320,8 @@
   "settings.crash.delete": "Удалить отчёт",
   "settings.crash.delete_failed": "Не удалось удалить отчёт о сбое",
   "settings.field.ui_cover_compat_badges.label": "Значки ProtonDB и Steam Deck на обложках",
-  "settings.field.ui_cover_compat_badges.help": "Показывать рейтинги ProtonDB и значки Steam Deck Verified на обложках неустановленных игр."
+  "settings.field.ui_cover_compat_badges.help": "Показывать рейтинги ProtonDB и значки Steam Deck Verified на обложках неустановленных игр.",
+  "settings.option.cover_caption.hover": "При наведении",
+  "settings.field.ui_library_greeting.label": "Показывать приветствие в заголовке библиотеки",
+  "settings.field.ui_library_greeting.help": "Приветствует вас по времени суток вверху библиотеки. Нажмите на имя, чтобы изменить или скрыть его."
 }

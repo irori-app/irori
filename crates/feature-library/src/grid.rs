@@ -17,7 +17,59 @@ pub fn caption_rem(caption: CoverCaption) -> f32 {
     match caption {
         CoverCaption::Full => CAPTION_REM,
         CoverCaption::Title => TITLE_ONLY_REM,
-        CoverCaption::None => 0.0,
+        CoverCaption::Hover | CoverCaption::None => 0.0,
+    }
+}
+
+/// Base width of secondary "Continue playing" cards when 4 or more games
+/// scroll horizontally, in rem. The most recently played card is 1.5× wider.
+pub const TOP_CARD_BASE_REM: f32 = 16.0;
+/// Cap on a "Continue playing" card's height so a single wide banner never
+/// grows overly tall, in rem.
+pub const TOP_CARD_MAX_HEIGHT_REM: f32 = 14.5;
+/// Floor on a "Continue playing" card's height on narrow windows, in rem.
+pub const TOP_CARD_MIN_HEIGHT_REM: f32 = 10.5;
+
+/// Width of each "Continue playing" card and the row's shared card height (in
+/// rem) for `count` games across `available_rem` horizontal room:
+/// - 1 game: 100% of available width
+/// - 2 games: 60% / 40%
+/// - 3 games: 50% / 25% / 25%
+/// - 4+ games: first 1.5× [`TOP_CARD_BASE_REM`], rest [`TOP_CARD_BASE_REM`],
+///   scrolling horizontally
+///
+/// The height follows 16:9 capped at [`TOP_CARD_MAX_HEIGHT_REM`].
+pub fn top_card_widths(count: usize, available_rem: f32) -> (Vec<f32>, f32) {
+    let available = available_rem.max(TOP_CARD_BASE_REM);
+    let ratio = 9.0 / 16.0;
+    match count {
+        0 => (Vec::new(), 0.0),
+        1 => {
+            let h = (available * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, TOP_CARD_MAX_HEIGHT_REM);
+            (vec![available], h)
+        }
+        2 => {
+            let usable = (available - GAP_REM).max(TOP_CARD_BASE_REM * 2.0);
+            let w0 = usable * 0.6;
+            let w1 = usable - w0;
+            let h = (w1 * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, TOP_CARD_MAX_HEIGHT_REM);
+            (vec![w0, w1], h)
+        }
+        3 => {
+            let usable = (available - 2.0 * GAP_REM).max(TOP_CARD_BASE_REM * 2.0);
+            let w0 = usable * 0.5;
+            let side = (usable - w0) * 0.5;
+            let h = (w0 * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, 13.0);
+            (vec![w0, side, side], h)
+        }
+        n => {
+            let first = TOP_CARD_BASE_REM * 1.5;
+            let mut widths = Vec::with_capacity(n);
+            widths.push(first);
+            widths.resize(n, TOP_CARD_BASE_REM);
+            let h = (first * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, 12.0);
+            (widths, h)
+        }
     }
 }
 /// Space above each row so a focused tile's ring is not clipped, in rem.
@@ -362,8 +414,10 @@ mod tests {
     fn rows_leave_room_for_the_caption_shown() {
         let full = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Full);
         let title = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Title);
+        let hover = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Hover);
         let none = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::None);
         assert_eq!(full, grid_metrics(60.0, 11.0));
+        assert_eq!(hover, none);
         assert!((full.row_rem - title.row_rem - (CAPTION_REM - TITLE_ONLY_REM)).abs() < 1e-4);
         assert!((full.row_rem - none.row_rem - CAPTION_REM).abs() < 1e-4);
         assert_eq!((full.columns, full.tile_rem), (none.columns, none.tile_rem));
@@ -634,6 +688,40 @@ mod tests {
                     "thumb height {thumb_h} overflows row height {row} for ({size:?}, {density:?})"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn top_card_widths_scale_dynamically_by_count() {
+        assert_eq!(top_card_widths(0, 60.0), (vec![], 0.0));
+
+        // 1 game: fills full width, height capped at 16:9 max.
+        let (w1, h1) = top_card_widths(1, 60.0);
+        assert_eq!(w1, vec![60.0]);
+        assert!((h1 - TOP_CARD_MAX_HEIGHT_REM).abs() < 1e-4);
+
+        // 2 games: 60% / 40% of usable width.
+        let (w2, h2) = top_card_widths(2, 61.25);
+        assert_eq!(w2.len(), 2);
+        assert!((w2[0] - 36.0).abs() < 1e-4);
+        assert!((w2[1] - 24.0).abs() < 1e-4);
+        assert!((TOP_CARD_MIN_HEIGHT_REM..=TOP_CARD_MAX_HEIGHT_REM).contains(&h2));
+
+        // 3 games: 50% / 25% / 25%.
+        let (w3, h3) = top_card_widths(3, 62.5);
+        assert_eq!(w3.len(), 3);
+        assert!((w3[0] - 30.0).abs() < 1e-4);
+        assert!((w3[1] - 15.0).abs() < 1e-4);
+        assert!((w3[2] - 15.0).abs() < 1e-4);
+        assert!((TOP_CARD_MIN_HEIGHT_REM..=TOP_CARD_MAX_HEIGHT_REM).contains(&h3));
+
+        // 4 and 8 games: first 1.5x base, rest base.
+        for n in [4usize, 8] {
+            let (w, h) = top_card_widths(n, 60.0);
+            assert_eq!(w.len(), n);
+            assert!((w[0] - TOP_CARD_BASE_REM * 1.5).abs() < 1e-4);
+            assert!(w[1..].iter().all(|&x| (x - TOP_CARD_BASE_REM).abs() < 1e-4));
+            assert!((TOP_CARD_MIN_HEIGHT_REM..=TOP_CARD_MAX_HEIGHT_REM).contains(&h));
         }
     }
 }

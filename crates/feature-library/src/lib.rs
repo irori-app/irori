@@ -31,6 +31,7 @@ mod dialogs;
 mod filter;
 mod filters_panel;
 pub mod format;
+mod greeting;
 mod grid;
 mod groups;
 mod i18n;

@@ -123,6 +123,8 @@ pub enum CoverCaption {
     Full,
     /// Only the title.
     Title,
+    /// Title overlaid on the cover only when hovered or focused (no space below).
+    Hover,
     /// Nothing: the covers alone.
     None,
 }
@@ -334,6 +336,17 @@ pub struct UiPrefs {
     pub library_focus_columns: u32,
     /// How large the Focus view's covers are (`libraryFocusCoverSize`).
     pub library_focus_cover_size: FocusCoverSize,
+    /// What Focus writes under (or over) its covers (`libraryFocusCoverCaption`);
+    /// `None` inherits `coverCaption` from the Grid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_focus_cover_caption: Option<CoverCaption>,
+    /// Show a time-of-day greeting in the library header (`libraryGreeting`,
+    /// on unless turned off).
+    pub library_greeting: bool,
+    /// Custom display name for the library greeting (`greetingName`); `None`
+    /// derives a first name from the OS user name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub greeting_name: Option<String>,
     /// The library switches to Focus when the window grows wide enough for
     /// its page beside the covers, and to the grid when it shrinks below
     /// that (`libraryAutoLayout`, off unless turned on).
@@ -434,6 +447,13 @@ impl UiPrefs {
         }
         u32::from_str_radix(hex, 16).ok()
     }
+
+    /// Effective cover caption for the Focus layout (`libraryFocusCoverCaption`
+    /// if explicitly chosen, otherwise inherits Grid's `coverCaption`).
+    pub fn focus_cover_caption(&self) -> CoverCaption {
+        self.library_focus_cover_caption
+            .unwrap_or(self.cover_caption)
+    }
 }
 
 impl Default for UiPrefs {
@@ -490,6 +510,9 @@ impl Default for UiPrefs {
             cover_favourite: true,
             library_focus_columns: 0,
             library_focus_cover_size: FocusCoverSize::Medium,
+            library_focus_cover_caption: None,
+            library_greeting: true,
+            greeting_name: None,
             library_auto_layout: false,
             library_open_details_on_select: true,
             store_badges_always: false,

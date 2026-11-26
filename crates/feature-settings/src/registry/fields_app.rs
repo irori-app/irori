@@ -389,6 +389,15 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
     )
     .keywords(&["cover", "favourite", "favorite", "star"]),
     app(
+        "iroriUi.libraryGreeting",
+        "settings.field.ui_library_greeting.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_library_greeting.help")
+    .keywords(&["greeting", "welcome", "hello", "name", "header", "library"]),
+    app(
         "iroriUi.libraryQuickControls",
         "settings.field.ui_library_quick_controls.label",
         Appearance,

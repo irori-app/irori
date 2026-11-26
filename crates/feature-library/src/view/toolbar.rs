@@ -143,12 +143,15 @@ impl LibraryView {
             .child(sort_popover)
             .child(
                 Button::new("library-random")
+                    .debug_selector(|| "library-random-trigger".into())
                     .small()
                     .outline()
                     .icon(IconName::Dices)
                     .label(t("library.random.button"))
                     .tooltip(t("library.random.tooltip"))
-                    .on_click(|_, window, cx| crate::random::open_random_game(window, cx)),
+                    .on_click(|_, window, cx| {
+                        crate::dialogs::shuffle::open_shuffle_dialog(window, cx)
+                    }),
             );
 
         let display = h_flex()
@@ -198,7 +201,13 @@ impl LibraryView {
         let rem = window.rem_size();
         let offset = -self.scroll.offset().y;
         let top_kind = self.frame.top.as_ref().map(|(kind, _)| *kind);
-        let row = rem * item_rem(Item::Top, top_kind, &self.frame.metrics);
+        let row = rem
+            * item_rem(
+                Item::Top,
+                top_kind,
+                self.frame.top_card_height_rem,
+                &self.frame.metrics,
+            );
         let y = (row - offset).max(px(0.));
         let stuck = offset > row;
         self.toolbar.offset = offset;

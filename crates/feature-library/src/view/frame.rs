@@ -14,7 +14,7 @@ use irori_services::StoreFilter;
 use irori_ui::i18n::t;
 use irori_ui::{backend, models};
 
-use super::{CARD_REM, FAVOURITE_REM, LibraryView, toolbar};
+use super::{FAVOURITE_REM, LibraryView, toolbar};
 use crate::availability;
 use crate::commands::GameState;
 use crate::filter::{self, GroupKind, HiddenMode, StatusGroup};
@@ -57,6 +57,8 @@ struct FrameKey {
     /// Height of the toolbar's room in the list, in whole pixels; zero
     /// when the toolbar is in the header.
     toolbar: u32,
+    /// Height of the "Continue playing" card row in 1/16 rem units.
+    top_card_h: u32,
 }
 
 /// Everything derived for the current frame. Rebuilt only when its inputs
@@ -66,7 +68,13 @@ pub(super) struct Frame {
     /// Sections of `games`; empty when the list is not grouped.
     pub(super) groups: Arc<[StatusGroup]>,
     pub(super) top: Option<(TopKind, Arc<[Arc<GameInfo>]>)>,
+    /// Dynamic widths (in rem) for each "Continue playing" card.
+    pub(super) top_card_widths: Vec<f32>,
+    /// Shared height (in rem) for the "Continue playing" cards.
+    pub(super) top_card_height_rem: f32,
     pub(super) stores: Vec<Runner>,
+    /// Total installed games in the snapshot (cached per revision).
+    pub(super) installed_count: usize,
     /// Title of the main section under the top row.
     pub(super) heading: SharedString,
     pub(super) metrics: GridMetrics,
@@ -92,7 +100,10 @@ impl Default for Frame {
             games: Arc::from(Vec::new()),
             groups: Arc::from(Vec::new()),
             top: None,
+            top_card_widths: Vec::new(),
+            top_card_height_rem: grid::TOP_CARD_MIN_HEIGHT_REM,
             stores: Vec::new(),
+            installed_count: 0,
             heading: SharedString::default(),
             metrics: grid::grid_metrics(60.0, 11.0),
             list_columns: [true; 7],
@@ -233,7 +244,10 @@ impl LibraryView {
             _ => body_rem,
         };
         let available = list_rem - 2.0 * grid::EDGE_REM;
-        let caption = self.ui_prefs.cover_caption;
+        let caption = match self.layout {
+            LibraryLayout::Focus => self.ui_prefs.focus_cover_caption(),
+            _ => self.ui_prefs.cover_caption,
+        };
         let mut metrics = match self.layout {
             LibraryLayout::Focus => grid::focus_metrics(available, focus_tile, caption),
             _ => grid::grid_metrics_shaped(
@@ -245,6 +259,15 @@ impl LibraryView {
             ),
         };
         metrics.list_row_rem = grid::list_row_rem(self.list_row_size, self.density);
+        let (top_card_widths, top_card_height_rem) = match &top {
+            Some((TopKind::ContinuePlaying, games)) => {
+                grid::top_card_widths(games.len(), available)
+            }
+            _ => (Vec::new(), grid::TOP_CARD_MIN_HEIGHT_REM),
+        };
+        let installed_count = *self.installed_count.get(&snapshot, |lib| {
+            lib.games.iter().filter(|g| g.is_installed).count()
+        });
         // The top row isn't filtered, so the controls that filter sit under
         // it; without one (or with nothing to show) they stay in the header.
         let toolbar_in_list = top.is_some() && !games.is_empty();
@@ -267,6 +290,7 @@ impl LibraryView {
             } else {
                 0
             },
+            top_card_h: (top_card_height_rem * 16.0).round() as u32,
         };
         if self.frame.key.as_ref() != Some(&key) {
             let mut items = Vec::new();
@@ -304,7 +328,10 @@ impl LibraryView {
                 .iter()
                 .map(|item| match item {
                     Item::Toolbar => size(width, toolbar_height),
-                    _ => size(width, rem * item_rem(*item, top_kind, &metrics)),
+                    _ => size(
+                        width,
+                        rem * item_rem(*item, top_kind, top_card_height_rem, &metrics),
+                    ),
                 })
                 .collect();
             self.frame.items = Rc::new(items);
@@ -319,6 +346,9 @@ impl LibraryView {
         self.frame.games = games;
         self.frame.groups = groups;
         self.frame.top = top;
+        self.frame.top_card_widths = top_card_widths;
+        self.frame.top_card_height_rem = top_card_height_rem;
+        self.frame.installed_count = installed_count;
         self.frame.toolbar_in_list = toolbar_in_list;
         self.frame.stores = stores;
         self.frame.one_store = matches!(filter.store, StoreFilter::Store(_));
@@ -520,14 +550,19 @@ fn section_ranges(groups: &[StatusGroup], len: usize) -> Vec<Range<usize>> {
 }
 
 /// Height of a virtual-list item, in rem.
-pub(super) fn item_rem(item: Item, top: Option<TopKind>, metrics: &GridMetrics) -> f32 {
+pub(super) fn item_rem(
+    item: Item,
+    top: Option<TopKind>,
+    top_card_height_rem: f32,
+    metrics: &GridMetrics,
+) -> f32 {
     match item {
         Item::Top => {
             // Favourites carry their title below the cover; continue-playing
             // cards carry it on the art.
             let (art, caption) = match top {
                 Some(TopKind::Favourites) => (FAVOURITE_REM * grid::COVER_RATIO, grid::CAPTION_REM),
-                _ => (CARD_REM * 9.0 / 16.0, 0.0),
+                _ => (top_card_height_rem, 0.0),
             };
             grid::HEADING_REM + grid::ROW_INSET_REM + art + caption + grid::GAP_REM
         }

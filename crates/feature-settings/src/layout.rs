@@ -332,6 +332,7 @@ fn appearance_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.libraryOpenDetailsOnSelect"
         | "iroriUi.libraryAutoLayout"
         | "iroriUi.coverFavourite"
+        | "iroriUi.libraryGreeting"
         | "iroriUi.libraryQuickControls"
         | "iroriUi.libraryBackground"
         | "iroriUi.libraryBackgroundPicture"

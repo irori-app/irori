@@ -12,6 +12,7 @@ pub mod fields;
 pub mod folder;
 pub mod lutris;
 pub mod metadata;
+pub mod shuffle;
 pub mod sideload;
 pub mod smart;
 pub mod steamgrid;
