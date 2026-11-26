@@ -1766,3 +1766,137 @@ fn the_art_picker_offers_vndb_while_it_is_on(cx: &mut TestAppContext) {
     cx.update(|cx| picker.update(cx, |p, cx| p.set_source(ArtSource::Vndb, cx)));
     assert_eq!(source(&picker, cx), (ArtSource::Vndb, false));
 }
+
+#[gpui_kit::test]
+fn the_filters_popover_opens_below_trigger_and_closes_on_list_scroll(cx: &mut TestAppContext) {
+    use gpui_kit::{ScrollDelta, ScrollWheelEvent, TouchPhase, point};
+    use irori_core::LibraryTopSection;
+
+    let _backend = start(cx);
+    cx.update(|cx| {
+        let m = models(cx).clone();
+        m.settings.update(cx, |s, cx| {
+            Arc::make_mut(&mut s.app).library_top_section = LibraryTopSection::RecentlyPlayed;
+            cx.notify();
+        });
+        m.library.update(cx, |l, cx| {
+            let mut u = (*l.user).clone();
+            let key = GameId::new(Runner::Gog, "2").key();
+            if !u.recent.contains(&key) {
+                u.recent.insert(0, key);
+            }
+            l.user = Arc::new(u);
+            cx.notify();
+        });
+    });
+
+    let win_h = px(1032.);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1920.), win_h),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+
+    let draw = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    draw(cx);
+    draw(cx);
+
+    let trigger = {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.debug_bounds("library-filters-trigger")
+            .expect("filters trigger is rendered")
+    };
+    assert!(
+        trigger.bottom() > px(250.),
+        "expected Continue playing row to push toolbar down, got trigger={trigger:?}"
+    );
+
+    // Click the Filters button and check its placement on the very first draw.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.simulate_click(trigger.center(), Default::default());
+    }
+    draw(cx);
+    let first = {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.debug_bounds("library-filters-panel")
+            .expect("filters popover opened")
+    };
+    assert!(
+        first.top() >= trigger.bottom(),
+        "popover overlapped trigger/Continue playing on first frame: trigger={trigger:?} panel={first:?}"
+    );
+    assert!(
+        first.bottom() <= win_h,
+        "popover extended past bottom of 1080p window: panel={first:?}"
+    );
+
+    // Redrawing must not jump or resize the popover (no feedback loop).
+    draw(cx);
+    let second = {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.debug_bounds("library-filters-panel")
+            .expect("filters popover stayed open")
+    };
+    assert!(
+        (second.top() - first.top()).abs() <= px(0.5)
+            && (second.size.height - first.size.height).abs() <= px(0.5),
+        "popover jumped between frames: first={first:?} second={second:?}"
+    );
+
+    // Scrolling inside the Filters popover must keep it open.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.simulate_event(ScrollWheelEvent {
+            position: second.center(),
+            delta: ScrollDelta::Pixels(point(px(0.), px(-60.))),
+            modifiers: Default::default(),
+            touch_phase: TouchPhase::Moved,
+        });
+    }
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-filters-panel").is_some(),
+            "scrolling inside the popover closed it"
+        );
+    }
+
+    // Scrolling the library list outside the popover must dismiss it cleanly.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.simulate_event(ScrollWheelEvent {
+            position: point(px(1500.), px(700.)),
+            delta: ScrollDelta::Pixels(point(px(0.), px(-120.))),
+            modifiers: Default::default(),
+            touch_phase: TouchPhase::Moved,
+        });
+    }
+    draw(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-filters-panel").is_none(),
+            "scrolling the library list left the popover open"
+        );
+    }
+    let _ = view;
+}

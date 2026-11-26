@@ -2,6 +2,9 @@
 //! popover that edits them. A search field at its top finds any filter
 //! value by name ([`crate::value_search`]), with how many games carry it.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
@@ -15,7 +18,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Bounds, Context, Entity, Global, InteractiveElement as _,
     IntoElement, ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Task, WeakEntity, Window, canvas, div, px,
+    Styled as _, Subscription, Task, WeakEntity, Window, div,
 };
 use irori_core::{GameMode, InstallPlatform};
 use irori_services::EffectiveStatus;
@@ -131,8 +134,10 @@ pub struct FiltersPanel {
     /// The commonest developers and publishers, as (key, name).
     developers: crate::filter::PerRevision<Vec<(String, String)>>,
     publishers: crate::filter::PerRevision<Vec<(String, String)>>,
-    /// Where the panel was last drawn, for the room under it.
-    top: Option<Pixels>,
+    /// Bottom edge of the Filters trigger button in window coordinates,
+    /// updated during trigger prepaint so the panel sizes to the room below
+    /// the button on the very first frame without measuring itself.
+    anchor_bottom: Rc<Cell<Option<Pixels>>>,
     /// The field that finds a filter value by name, made at the first draw
     /// (it needs the window).
     search: Option<Entity<InputState>>,
@@ -141,18 +146,34 @@ pub struct FiltersPanel {
     _observe: Vec<Subscription>,
 }
 
-/// Room the filter sections may take: from `top` (the panel's measured top,
-/// unknown before its first paint) to the foot of the `visible` window, less
-/// the panel's footer and margins, but never under half the window, where
-/// the popover is moved up to fit instead.
-fn filters_height(visible: Bounds<Pixels>, top: Option<Pixels>, rem: Pixels) -> Pixels {
-    // The search field deduction (2.5rem), gaps, footer with reset button,
-    // popover padding, and a safety margin below the panel.
-    let reserved = rem * 6.;
-    let most = (visible.size.height - reserved).max(rem * 8.);
-    let top = top.unwrap_or(visible.origin.y + rem * 10.);
-    let least = (visible.size.height * 0.5 - reserved).max(rem * 4.);
-    (visible.bottom() - top - reserved).clamp(least, most)
+/// Vertical chrome around the scrollable filter body (`library-filters-sections`
+/// or search results): popover offset (0.25rem), popover padding and borders
+/// (~1.6rem), search field (~1.75rem), panel gaps (1.5rem), footer (~2.3rem),
+/// popup window margin (0.5rem), and a small safety margin.
+const PANEL_CHROME_REM: f32 = 8.5;
+
+/// Maximum height of the scrollable filter list so the popover fits cleanly
+/// below `anchor_bottom` without triggering upward viewport clamping. Falls
+/// back to a usable height only when there is too little room below the button.
+fn filters_body_height(
+    visible: Bounds<Pixels>,
+    anchor_bottom: Option<Pixels>,
+    rem: Pixels,
+) -> Pixels {
+    let chrome = rem * PANEL_CHROME_REM;
+    let most = (visible.size.height - chrome).max(rem * 4.);
+    let min_comfortable = (rem * 10.).min(most);
+    let Some(bottom) = anchor_bottom else {
+        return (visible.size.height * 0.5 - chrome).clamp(rem * 4., most);
+    };
+    let room_below = visible.bottom() - bottom - chrome;
+    if room_below >= min_comfortable {
+        room_below.min(most)
+    } else {
+        (visible.size.height * 0.5 - chrome)
+            .max(min_comfortable)
+            .min(most)
+    }
 }
 
 impl FiltersPanel {
@@ -164,7 +185,7 @@ impl FiltersPanel {
             tags: Default::default(),
             developers: Default::default(),
             publishers: Default::default(),
-            top: None,
+            anchor_bottom: Rc::new(Cell::new(None)),
             search: None,
             values: ValueCache::default(),
             _observe: vec![
@@ -173,6 +194,12 @@ impl FiltersPanel {
             ],
             model,
         }
+    }
+
+    /// Shared cell where the Filters trigger button records its bottom edge
+    /// in window coordinates.
+    pub(crate) fn anchor_bottom(&self) -> Rc<Cell<Option<Pixels>>> {
+        self.anchor_bottom.clone()
     }
 
     fn set(&self, f: impl FnOnce(&mut ViewFilter) + 'static, cx: &mut Context<Self>) {
@@ -987,33 +1014,12 @@ impl Render for FiltersPanel {
         let install_values = installs.clone().map(|(v, _)| v);
         let hidden_values = hidden.clone().map(|(v, _)| v);
 
-        // The popover opens under its button and is only moved, never
-        // shrunk, to stay in the window: the sections scroll within the room
-        // below the button (or half the window, where it is moved up).
+        // The popover opens under its button and clamps upward if it overflows
+        // the window: size the scrollable body from the button's measured
+        // bottom edge so it fits below the trigger on the very first frame.
         let visible = irori_ui::style::visible_bounds(window);
         let rem = window.rem_size();
-        // Less the search field above the sections.
-        let max_h = (filters_height(visible, self.top, rem) - rem * 2.5).max(rem * 4.);
-        let view = cx.entity().downgrade();
-        let measure = canvas(
-            move |bounds, _, cx| {
-                view.update(cx, |this, cx| {
-                    let moved = this
-                        .top
-                        .is_none_or(|top| (top - bounds.origin.y).abs() > px(0.5));
-                    if moved {
-                        this.top = Some(bounds.origin.y);
-                        cx.notify();
-                    }
-                })
-                .ok();
-            },
-            |_, _, _, _| {},
-        )
-        .absolute()
-        .top_0()
-        .left_0()
-        .size_full();
+        let max_h = filters_body_height(visible, self.anchor_bottom.get(), rem);
 
         let sections = v_flex()
             .id("library-filters-sections")
@@ -1162,10 +1168,10 @@ impl Render for FiltersPanel {
 
         v_flex()
             .id("library-filters-panel")
+            .debug_selector(|| "library-filters-panel".into())
             .relative()
             .w_96()
             .gap_3()
-            .child(measure)
             .child(
                 Input::new(&search)
                     .small()
@@ -1205,36 +1211,47 @@ impl Render for FiltersPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui_kit::{point, size};
+    use gpui_kit::{point, px, size};
 
     #[test]
-    fn filters_fit_under_their_button_or_in_half_the_window() {
+    fn filters_fit_under_their_button_or_fall_back_near_bottom() {
         let rem = px(16.);
+        let chrome = rem * PANEL_CHROME_REM;
         let visible = Bounds::new(point(px(0.), px(0.)), size(px(1000.), px(800.)));
-        // Room under a button near the top: the rest of the window.
+        // Room under a button near the top: fills the remaining space below it.
         assert_eq!(
-            filters_height(visible, Some(px(100.)), rem),
-            px(800. - 100. - 96.)
+            filters_body_height(visible, Some(px(100.)), rem),
+            px(800.) - px(100.) - chrome
         );
-        // Near the foot: half the window, and the popover moves up.
-        assert_eq!(filters_height(visible, Some(px(700.)), rem), px(400. - 96.));
-        // Never taller than the window, even before it was measured.
+        // Near the foot: too little room below, so it falls back to half the
+        // window (minus chrome) and lets the positioner shift upward.
+        assert_eq!(
+            filters_body_height(visible, Some(px(700.)), rem),
+            px(400.) - chrome
+        );
+        // Never taller than the window, even before the trigger is measured.
         let short = Bounds::new(point(px(0.), px(0.)), size(px(1000.), px(200.)));
-        assert!(filters_height(short, None, rem) <= px(200.));
+        assert!(filters_body_height(short, None, rem) <= px(200.));
     }
 
     #[test]
-    fn filters_fit_1080p_at_100_percent_scaling() {
+    fn filters_fit_1080p_below_trigger_including_top_sections() {
         let rem = px(16.);
-        let top = px(140.);
-        for height in [px(1080.), px(1032.)] {
-            let visible = Bounds::new(point(px(0.), px(0.)), size(px(1920.), height));
-            let max_h = (filters_height(visible, Some(top), rem) - rem * 2.5).max(rem * 4.);
-            assert!(max_h > rem * 20., "unexpectedly cramped: {max_h:?}");
-            assert!(
-                top + max_h + rem * 8. <= visible.bottom(),
-                "overflows {height:?}: top={top:?} max_h={max_h:?}"
-            );
+        let chrome = rem * PANEL_CHROME_REM;
+        // Header toolbar (140px), Continue playing (440px), Favourites (560px).
+        for anchor_bottom in [px(140.), px(440.), px(560.)] {
+            for height in [px(1080.), px(1032.)] {
+                let visible = Bounds::new(point(px(0.), px(0.)), size(px(1920.), height));
+                let max_h = filters_body_height(visible, Some(anchor_bottom), rem);
+                assert!(
+                    max_h >= rem * 10.,
+                    "unexpectedly cramped for anchor={anchor_bottom:?} height={height:?}: {max_h:?}"
+                );
+                assert!(
+                    anchor_bottom + max_h + chrome <= visible.bottom(),
+                    "overflows {height:?} (would push popover over trigger): anchor={anchor_bottom:?} max_h={max_h:?}"
+                );
+            }
         }
     }
 
