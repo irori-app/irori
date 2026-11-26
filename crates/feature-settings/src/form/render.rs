@@ -640,11 +640,18 @@ impl SettingsForm {
                 section = Some(spec.section);
                 group = "";
             }
-            if matches!(spec.kind, FieldKind::Panel(PanelKind::PerformanceHud)) {
+            if matches!(
+                spec.kind,
+                FieldKind::Panel(PanelKind::PerformanceHud | PanelKind::Optiscaler)
+            ) {
                 body = body.children(rows.take());
                 body = body.child(section_heading(spec.group_text()));
                 if let Some(view) = self.panels.get(spec.path) {
-                    body = body.child(div().id("row-panel.performance-hud").child(view.clone()));
+                    body = body.child(
+                        div()
+                            .id(ElementId::Name(format!("row-{}", spec.path).into()))
+                            .child(view.clone()),
+                    );
                 }
                 group = spec.group;
                 first_group = false;

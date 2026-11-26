@@ -46,10 +46,10 @@ This document holds the full feature reference previously inline in `README.md`.
 
 - Wine manager on Linux (`GE-Proton`, `Proton-CachyOS`, `Proton-Wineland`, `DW-Proton`, `UMU-Proton`, `Proton-EM`, `Proton-Sarek`, `Wine-GE`, `Kron4ek`) and macOS (`Game-Porting-Toolkit`, `Wine-Crossover`, `Wine-Staging-macOS`), plus discovery of system, Steam, Lutris, Bottles, CrossOver, and Whisky runtimes.
 - Built-in toggles for gamescope, GameMode, DXVK/VKD3D-Proton version selection, DLSS/FSR/XeSS upgrades, 10 GB Mesa/NVIDIA shader cache sizing, NTSync, and Winetricks/Protontricks.
-- Per-game in-game overlay configuration for MangoHud on Linux (with live preview and per-game overrides) and Metal HUD on macOS.
+- Per-game in-game overlay configuration for MangoHud on Linux (with live preview, Steam launch options copy with an interactive paste guide, and per-game overrides) and Metal HUD on macOS.
 - Linux GPU selection (`DRI_PRIME`, `MESA_VK_DEVICE_SELECT`, PRIME render offload), NVIDIA Smooth Motion, NVIDIA Reflex for Vulkan games, frame generation via `lsfg-vk` or MAKO, and Windows per-program GPU preference (`UserGpuPreferences`) or temporary device hiding.
 - Third-party launcher prefix management for Battle.net, the EA app, Ubisoft Connect, and the Rockstar Games Launcher on Linux, plus confined Lutris install-script execution with consent previews and rollback.
-- ReShade and RenoDX HDR installation per Windows game from official releases with SHA-256 hash tracking for clean removal.
+- ReShade, RenoDX HDR, and OptiScaler (with global defaults, menu shortcut sync, proxy conflict confirmation, and support for Steam Windows builds on Linux) from official releases with SHA-256 hash tracking for clean removal.
 
 ## Emulators and ROMs
 

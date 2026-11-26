@@ -116,6 +116,8 @@
   "shell.palette.tour": "Fazer um tour",
   "shell.palette.graphics_mods": "ReShade e RenoDX para {title}",
   "shell.palette.graphics_mods_keywords": "reshade renodx hdr shaders gráficos mods filtros",
+  "shell.palette.optiscaler": "OptiScaler para {title}",
+  "shell.palette.optiscaler_keywords": "optiscaler dlss fsr xess upscaling fakenvapi optipatcher desempenho",
   "shell.duration.minutes": "{minutes} min",
   "shell.duration.hours": "{hours} h",
   "shell.duration.hours_minutes": "{hours} h {minutes} min",

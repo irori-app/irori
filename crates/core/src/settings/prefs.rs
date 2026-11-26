@@ -311,3 +311,34 @@ impl Default for SunshinePrefs {
         }
     }
 }
+
+/// Global defaults inherited by per-game OptiScaler setups (`iroriOptiscaler`).
+/// Stored as plain strings/flags to avoid coupling `irori-core` to `irori-reshade`.
+/// Irori-only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct OptiscalerDefaults {
+    /// Release channel: `"stable"` or `"nightly"`.
+    pub channel: String,
+    /// GPU driver mode: `"mesaAuto"` or `"nvidia"`.
+    pub gpu_driver: String,
+    /// Proxy file name (`"dxgi.dll"`, `"version.dll"`, `"winmm.dll"`, `"OptiScaler.asi"`, ...).
+    pub proxy_dll: String,
+    /// Install `plugins/OptiPatcher.asi` and enable `LoadAsiPlugins=true`.
+    pub enable_optipatcher: bool,
+    /// Default `[Menu] ShortcutKey` Windows VK hex code (e.g. `"0x2E"`, `"0x24"`),
+    /// or empty for OptiScaler's default (`auto` / Insert).
+    pub shortcut_key: String,
+}
+
+impl Default for OptiscalerDefaults {
+    fn default() -> Self {
+        Self {
+            channel: "stable".into(),
+            gpu_driver: "mesaAuto".into(),
+            proxy_dll: "dxgi.dll".into(),
+            enable_optipatcher: false,
+            shortcut_key: String::new(),
+        }
+    }
+}

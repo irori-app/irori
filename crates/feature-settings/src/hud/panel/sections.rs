@@ -16,7 +16,9 @@ use gpui_kit::{
 use irori_core::{
     FpsLimitMethod, GameHudMode, GlobalHudMode, HudBackend, HudPreset, MetalHudAlignment,
 };
+use irori_ui::backend;
 
+use crate::hud::steam_guide::open_steam_launch_guide_dialog;
 use crate::widgets::{RowState, field_row, group_heading, group_panel, muted};
 
 use super::helpers::{
@@ -66,122 +68,161 @@ impl HudPanel {
             }))
     }
 
-    pub(super) fn render_scope_notice(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (id, text) = self.scope_notice()?;
-        let alert = Alert::info(id, text.clone());
-        let snippet_row = if matches!(self.scope, HudPanelScope::Global) {
-            self.display.steam_snippet.clone().map(|snippet| {
-                let (radius, muted_bg, border_color, mono_font) = {
-                    let theme = cx.theme();
-                    (
-                        theme.radius,
-                        theme.muted,
-                        theme.border,
-                        theme.mono_font_family.clone(),
-                    )
+    pub(super) fn how_to_paste_button(
+        &self,
+        id: &'static str,
+        snippet: SharedString,
+        cx: &mut Context<Self>,
+    ) -> Button {
+        let copy_label = self.labels.steam_copy.clone();
+        let copied_msg = self.labels.steam_copied.clone();
+        Button::new(id)
+            .ghost()
+            .small()
+            .icon(IconName::CircleQuestionMark)
+            .label(self.labels.steam_how_to_paste.clone())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                let game_title = match &this.scope {
+                    HudPanelScope::PerGame { id, .. } => backend(cx)
+                        .game(id)
+                        .map(|g| SharedString::from(g.title.clone())),
+                    HudPanelScope::Global => None,
                 };
-                h_flex()
-                    .w_full()
-                    .min_w_0()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .rounded(radius)
-                    .bg(muted_bg)
-                    .border_1()
-                    .border_color(border_color)
-                    .child(
-                        div()
-                            .id("hud-global-steam-snippet")
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .text_xs()
-                            .font_family(mono_font)
-                            .tooltip({
-                                let full = snippet.clone();
-                                move |window, cx| Tooltip::new(full.clone()).build(window, cx)
-                            })
-                            .child(snippet.clone()),
-                    )
-                    .child(self.copy_steam_button("hud-global-steam-copy", snippet, cx))
-                    .into_any_element()
-            })
-        } else {
-            None
-        };
+                open_steam_launch_guide_dialog(
+                    cx.entity().downgrade(),
+                    snippet.clone(),
+                    game_title,
+                    copy_label.clone(),
+                    copied_msg.clone(),
+                    window,
+                    cx,
+                );
+            }))
+    }
+
+    pub(super) fn render_scope_notice(&self, _cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (id, text) = self.scope_notice()?;
         Some(
-            v_flex()
+            div()
                 .w_full()
-                .gap_2()
                 .pb_1()
-                .child(alert)
-                .children(snippet_row)
+                .child(Alert::info(id, text.clone()))
                 .into_any_element(),
         )
     }
 
-    pub(super) fn render_steam_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.is_steam() {
-            return None;
-        }
-        let snippet_card = match self.display.steam_snippet.clone() {
-            Some(snippet) => {
-                let (radius, muted_bg, border_color, mono_font) = {
-                    let theme = cx.theme();
-                    (
-                        theme.radius,
-                        theme.muted,
-                        theme.border,
-                        theme.mono_font_family.clone(),
-                    )
-                };
-                let code_box = div()
-                    .w_full()
-                    .min_w_0()
-                    .p_3()
-                    .rounded(radius)
-                    .bg(muted_bg)
-                    .border_1()
-                    .border_color(border_color)
-                    .text_xs()
-                    .font_family(mono_font)
-                    .child(snippet.clone());
-                let copy_btn = self.copy_steam_button("hud-steam-copy", snippet, cx);
+    pub(super) fn render_steam_launch_card(
+        &self,
+        snippet: SharedString,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let (radius, radius_lg, surface, muted_bg, border_color, muted_fg, mono_font) = {
+            let theme = cx.theme();
+            (
+                theme.radius,
+                theme.radius_lg,
+                theme.secondary,
+                theme.muted,
+                theme.border,
+                theme.muted_foreground,
+                theme.mono_font_family.clone(),
+            )
+        };
+        let code_box = div()
+            .id("hud-steam-snippet")
+            .w_full()
+            .flex_1()
+            .min_w_0()
+            .p_3()
+            .rounded(radius)
+            .bg(muted_bg)
+            .border_1()
+            .border_color(border_color)
+            .overflow_hidden()
+            .text_xs()
+            .font_family(mono_font)
+            .tooltip({
+                let full = snippet.clone();
+                move |window, cx| Tooltip::new(full.clone()).build(window, cx)
+            })
+            .child(snippet.clone());
+
+        let actions = h_flex()
+            .w_full()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(self.copy_steam_button("hud-steam-copy", snippet.clone(), cx))
+            .child(self.how_to_paste_button("hud-steam-how-to", snippet, cx));
+
+        v_flex()
+            .w_full()
+            .h_full()
+            .min_w_0()
+            .p_4()
+            .gap_3()
+            .rounded(radius_lg)
+            .bg(surface)
+            .border_1()
+            .border_color(border_color)
+            .child(
                 v_flex()
                     .w_full()
-                    .gap_2()
-                    .items_start()
-                    .child(code_box)
-                    .child(copy_btn)
-                    .into_any_element()
-            }
-            None => muted(self.labels.steam_none_needed.clone(), cx).into_any_element(),
-        };
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_medium()
+                            .child(self.labels.steam_snippet_label.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(self.labels.steam_card_subtitle.clone()),
+                    ),
+            )
+            .child(code_box)
+            .child(actions)
+            .into_any_element()
+    }
 
+    pub(super) fn render_preview_row(&self, cx: &mut Context<Self>) -> AnyElement {
+        let show_steam_card = matches!(self.scope, HudPanelScope::Global) || self.is_steam();
+        if show_steam_card && let Some(snippet) = self.display.steam_snippet.clone() {
+            return h_flex()
+                .w_full()
+                .items_stretch()
+                .gap_3()
+                .child(div().flex_1().min_w_0().child(self.preview.clone()))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(self.render_steam_launch_card(snippet, cx)),
+                )
+                .into_any_element();
+        }
+        self.preview.clone().into_any_element()
+    }
+
+    pub(super) fn render_steam_empty_notice(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.is_steam() || self.display.steam_snippet.is_some() {
+            return None;
+        }
         let row = field_row(
             RowState {
                 label: self.labels.steam_snippet_label.clone(),
                 stacked: true,
                 ..Default::default()
             },
-            snippet_card,
+            muted(self.labels.steam_none_needed.clone(), cx).into_any_element(),
             cx,
         );
-
         Some(
-            v_flex()
+            div()
                 .w_full()
-                .gap_3()
-                .pb_2()
-                .child(
-                    Alert::info("hud-steam-notice", self.labels.steam_description.clone())
-                        .title(self.labels.steam_title.clone()),
-                )
+                .pb_1()
                 .child(group_panel(cx).child(row))
                 .into_any_element(),
         )

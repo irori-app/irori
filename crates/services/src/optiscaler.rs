@@ -10,14 +10,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail};
-use irori_core::GameId;
 use irori_core::install::ProgressSink;
 use irori_core::process::CancellationToken;
+use irori_core::{GameId, Runner};
 use irori_reshade::optiscaler::{
     self, GpuDriverMode, OptiscalerChannel, OptiscalerConfig, OptiscalerEndpoints,
-    OptiscalerInstallRequest, OptiscalerRelease,
+    OptiscalerInstallRequest, OptiscalerReconfigureOptions, OptiscalerRelease,
 };
-use irori_reshade::{Detection, GraphicsMod, Manifest, RemoveReport, ReshadeError, Step, journal};
+use irori_reshade::{
+    Detection, ExistingDllKind, GraphicsMod, Manifest, RemoveReport, ReshadeError, Step, journal,
+};
 
 use crate::Backend;
 use crate::reshade::{anticheat_of, load};
@@ -90,9 +92,113 @@ pub struct OptiscalerInstallParams {
     pub config: OptiscalerConfig,
     /// Explicit executable chosen by the user, overriding auto-detection.
     pub chosen_exe: Option<PathBuf>,
+    /// Explicitly confirmed by the user to overwrite an unmanaged file already
+    /// occupying the target proxy slot.
+    pub overwrite_proxy: bool,
 }
 
 impl Backend {
+    fn global_optiscaler_shortcut(&self) -> Option<String> {
+        optiscaler::default_shortcut_from(&self.settings.app().game.optiscaler)
+    }
+
+    /// Inspect an unmanaged file already occupying `proxy_name` in `id`'s
+    /// target OptiScaler folder so the UI can explain whether it belongs to
+    /// ReShade, an older OptiScaler installation, or another mod.
+    pub async fn inspect_optiscaler_conflict(
+        &self,
+        id: &GameId,
+        proxy_name: &str,
+        chosen_exe: Option<PathBuf>,
+    ) -> ExistingDllKind {
+        let Ok(game) = self.graphics_mod_game(id, GraphicsMod::Optiscaler) else {
+            return ExistingDllKind::Unknown;
+        };
+        let Some(root) = game.install_path() else {
+            return ExistingDllKind::Unknown;
+        };
+        let configured = self.configured_exe(id, &game);
+        let previous = load(GraphicsMod::Optiscaler, id).await.ok().flatten();
+        let chosen = chosen_exe.or_else(|| previous.as_ref().map(|m| m.exe.clone()));
+        let proxy = proxy_name.to_string();
+        tokio::task::spawn_blocking(move || {
+            let dir = optiscaler::detect_target(&root, configured.as_deref(), chosen.as_deref())
+                .map(|found| found.dir)
+                .or_else(|_| {
+                    previous
+                        .map(|m| m.dir)
+                        .ok_or_else(|| anyhow::anyhow!("no target dir"))
+                })
+                .unwrap_or(root);
+            journal::inspect_existing_dll(&dir, &proxy)
+        })
+        .await
+        .unwrap_or(ExistingDllKind::Unknown)
+    }
+
+    /// Synchronize `[Menu] ShortcutKey` in `OptiScaler.ini` for every installed
+    /// game (including Steam games) that inherits the global shortcut key and is
+    /// not currently running.
+    pub async fn sync_global_optiscaler_shortcut(
+        &self,
+        global_shortcut: Option<String>,
+    ) -> Result<usize> {
+        let root = GraphicsMod::Optiscaler.journals_root();
+        let running: std::collections::HashSet<String> =
+            self.running.lock().keys().map(GameId::key).collect();
+        tokio::task::spawn_blocking(move || -> Result<usize> {
+            let Ok(runners) = std::fs::read_dir(&root) else {
+                return Ok(0);
+            };
+            let mut updated = 0usize;
+            for runner_entry in runners.flatten() {
+                if !runner_entry.file_type().is_ok_and(|t| t.is_dir()) {
+                    continue;
+                }
+                let runner_name = runner_entry.file_name();
+                let runner_id = runner_name.to_string_lossy();
+                let runner = Runner::from_id(&runner_id);
+                let Ok(files) = std::fs::read_dir(runner_entry.path()) else {
+                    continue;
+                };
+                for file_entry in files.flatten() {
+                    let path = file_entry.path();
+                    if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                        continue;
+                    }
+                    if let (Some(runner), Some(stem)) =
+                        (runner, path.file_stem().and_then(|s| s.to_str()))
+                        && running.contains(&GameId::new(runner, stem).key())
+                    {
+                        continue;
+                    }
+                    match journal::load(&path) {
+                        Ok(Some(mut manifest)) if manifest.kind == GraphicsMod::Optiscaler => {
+                            match optiscaler::sync_global_shortcut_in_manifest(
+                                &path,
+                                &mut manifest,
+                                global_shortcut.as_deref(),
+                            ) {
+                                Ok(true) => updated += 1,
+                                Ok(false) => {}
+                                Err(e) => tracing::warn!(
+                                    "syncing global OptiScaler shortcut for {}: {e:#}",
+                                    path.display()
+                                ),
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::warn!("reading OptiScaler manifest {}: {e:#}", path.display())
+                        }
+                    }
+                }
+            }
+            Ok(updated)
+        })
+        .await
+        .context("Global OptiScaler shortcut sync stopped")?
+    }
     /// Read the OptiScaler install state, detected target executable,
     /// anticheat list, and latest release for `channel`.
     ///
@@ -261,10 +367,15 @@ impl Backend {
         if same_channel_and_dir {
             let prev = previous.expect("checked is_some_and");
             let prev_overrides = prev.overrides.clone();
-            let manifest = optiscaler::reconfigure(
+            let options = OptiscalerReconfigureOptions {
+                overwrite_proxy: params.overwrite_proxy,
+                default_shortcut_key: self.global_optiscaler_shortcut(),
+            };
+            let manifest = optiscaler::reconfigure_with(
                 journal,
                 prev,
                 params.config,
+                options,
                 cache,
                 endpoints,
                 step,
@@ -344,7 +455,7 @@ impl Backend {
         let replaces_own_proxy = previous
             .as_ref()
             .is_some_and(|prev| prev.dir == found.dir && prev.dll.eq_ignore_ascii_case(proxy_name));
-        if !replaces_own_proxy {
+        if !replaces_own_proxy && !params.overwrite_proxy {
             let proxy_path = found.dir.join(proxy_name);
             let proxy_disabled = found
                 .dir
@@ -380,6 +491,8 @@ impl Backend {
             cache,
             endpoints,
             previous: keep_previous_for_update,
+            overwrite_proxy: params.overwrite_proxy,
+            default_shortcut_key: self.global_optiscaler_shortcut(),
         };
         let result = optiscaler::install(request, step, progress, cancel).await?;
         let manifest = result.manifest;
@@ -413,7 +526,7 @@ impl Backend {
         id: &GameId,
         env: &mut BTreeMap<String, String>,
     ) {
-        let manifest = match load(GraphicsMod::Optiscaler, id).await {
+        let mut manifest = match load(GraphicsMod::Optiscaler, id).await {
             Ok(Some(m)) => m,
             Ok(None) => return,
             Err(e) => {
@@ -424,6 +537,34 @@ impl Backend {
         let present = tokio::fs::try_exists(manifest.dll_path())
             .await
             .unwrap_or(false);
+        if manifest.enabled
+            && manifest.complete
+            && present
+            && manifest
+                .optiscaler
+                .as_ref()
+                .and_then(|c| c.shortcut_key.as_deref())
+                .is_none()
+        {
+            let global_shortcut = self.global_optiscaler_shortcut();
+            let journal_path = GraphicsMod::Optiscaler.journal_path(id);
+            let mut m_clone = manifest.clone();
+            if let Ok(Ok(true)) = tokio::task::spawn_blocking(move || {
+                optiscaler::sync_global_shortcut_in_manifest(
+                    &journal_path,
+                    &mut m_clone,
+                    global_shortcut.as_deref(),
+                )
+            })
+            .await
+            {
+                manifest = load(GraphicsMod::Optiscaler, id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .unwrap_or(manifest);
+            }
+        }
         apply_launch_env(&manifest, present, cfg!(target_os = "linux"), env);
     }
 }
@@ -768,6 +909,7 @@ mod tests {
                         shortcut_key: None,
                     },
                     chosen_exe: None,
+                    overwrite_proxy: false,
                 },
                 step,
                 _rx,
@@ -791,6 +933,82 @@ mod tests {
                     shortcut_key: None,
                 },
                 chosen_exe: None,
+                overwrite_proxy: false,
+            },
+            Arc::new(|_| {}),
+            Arc::new(|_| {}),
+            CancellationToken::new(),
+        ))
+        .unwrap();
+
+        // Syncing global shortcut updates inheriting games (shortcut_key: None) and leaves overrides intact.
+        let count = rt
+            .block_on(b.sync_global_optiscaler_shortcut(Some("0x24".into())))
+            .unwrap();
+        assert_eq!(count, 1);
+        let synced_ini = std::fs::read_to_string(dir.path().join("OptiScaler.ini")).unwrap();
+        assert!(synced_ini.contains("ShortcutKey=0x24"), "{synced_ini}");
+
+        // Switching proxy onto an occupied slot fails without overwrite_proxy, and succeeds with it.
+        std::fs::write(dir.path().join("dxgi.dll"), b"old-dll").unwrap();
+        let blocked = rt.block_on(b.configure_optiscaler(
+            &id,
+            OptiscalerInstallParams {
+                config: OptiscalerConfig {
+                    channel: OptiscalerChannel::Stable,
+                    gpu_driver: GpuDriverMode::MesaAuto,
+                    proxy_dll: ProxyDll::Dxgi,
+                    enable_optipatcher: true,
+                    shortcut_key: None,
+                },
+                chosen_exe: None,
+                overwrite_proxy: false,
+            },
+            Arc::new(|_| {}),
+            Arc::new(|_| {}),
+            CancellationToken::new(),
+        ));
+        assert!(matches!(
+            blocked.as_ref().err().and_then(ReshadeError::of),
+            Some(ReshadeError::DllTaken { name }) if name == "dxgi.dll"
+        ));
+        let overwritten = rt
+            .block_on(b.configure_optiscaler(
+                &id,
+                OptiscalerInstallParams {
+                    config: OptiscalerConfig {
+                        channel: OptiscalerChannel::Stable,
+                        gpu_driver: GpuDriverMode::MesaAuto,
+                        proxy_dll: ProxyDll::Dxgi,
+                        enable_optipatcher: true,
+                        shortcut_key: None,
+                    },
+                    chosen_exe: None,
+                    overwrite_proxy: true,
+                },
+                Arc::new(|_| {}),
+                Arc::new(|_| {}),
+                CancellationToken::new(),
+            ))
+            .unwrap();
+        assert_eq!(overwritten.dll, "dxgi.dll");
+        assert_eq!(
+            std::fs::read(dir.path().join("dxgi.dll")).unwrap(),
+            b"optiscaler-bin"
+        );
+        // Move back to version.dll for the remaining assertions below.
+        rt.block_on(b.configure_optiscaler(
+            &id,
+            OptiscalerInstallParams {
+                config: OptiscalerConfig {
+                    channel: OptiscalerChannel::Stable,
+                    gpu_driver: GpuDriverMode::MesaAuto,
+                    proxy_dll: ProxyDll::Version,
+                    enable_optipatcher: true,
+                    shortcut_key: None,
+                },
+                chosen_exe: None,
+                overwrite_proxy: false,
             },
             Arc::new(|_| {}),
             Arc::new(|_| {}),

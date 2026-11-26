@@ -88,6 +88,10 @@ pub(crate) const DEFAULTS_TABS: &[SubTab] = &[
         label_key: "settings.subtab.defaults.performance",
     },
     SubTab {
+        id: "replay",
+        label_key: "settings.subtab.defaults.replay",
+    },
+    SubTab {
         id: "gpu",
         label_key: "settings.subtab.defaults.gpu",
     },
@@ -98,6 +102,18 @@ pub(crate) const DEFAULTS_TABS: &[SubTab] = &[
     SubTab {
         id: "saves",
         label_key: "settings.subtab.defaults.saves",
+    },
+];
+
+/// Horizontal sub-tabs inside a single game's Performance section.
+pub(crate) const GAME_PERFORMANCE_TABS: &[SubTab] = &[
+    SubTab {
+        id: "performance",
+        label_key: "settings.subtab.defaults.performance",
+    },
+    SubTab {
+        id: "replay",
+        label_key: "settings.subtab.defaults.replay",
     },
 ];
 
@@ -137,7 +153,7 @@ pub(crate) const BACKUP_TABS: &[SubTab] = &[
 pub(crate) fn defaults_section_for_tab(tab: &str) -> FieldSection {
     match tab {
         "wine" => FieldSection::Wine,
-        "performance" => FieldSection::Performance,
+        "performance" | "replay" => FieldSection::Performance,
         "gpu" => FieldSection::Gpu,
         "launch" => FieldSection::Launch,
         "saves" => FieldSection::CloudSaves,
@@ -146,8 +162,7 @@ pub(crate) fn defaults_section_for_tab(tab: &str) -> FieldSection {
 }
 
 /// Sub-tabs of `Settings -> Game defaults` that have at least one supported
-/// shared field on the current host (for example, Wine and Performance have no
-/// game defaults on Windows).
+/// shared field on the current host.
 pub(crate) fn supported_defaults_tabs() -> Vec<SubTab> {
     DEFAULTS_TABS
         .iter()
@@ -158,16 +173,40 @@ pub(crate) fn supported_defaults_tabs() -> Vec<SubTab> {
                 f.section == section
                     && f.scope == crate::registry::Scope::Shared
                     && f.supported_on_host()
+                    && subtab_of(f) == Some(tab.id)
             })
         })
         .collect()
 }
 
-/// Which sub-tab a registry field belongs to in compact App Settings mode.
+/// Horizontal sub-tabs of a game's Performance section supported on the
+/// current host (`Replay` is Linux-only).
+pub(crate) fn supported_game_performance_tabs() -> Vec<SubTab> {
+    GAME_PERFORMANCE_TABS
+        .iter()
+        .copied()
+        .filter(|tab| {
+            crate::registry::FIELDS.iter().any(|f| {
+                f.section == FieldSection::Performance
+                    && f.supported_on_host()
+                    && subtab_of(f) == Some(tab.id)
+            })
+        })
+        .collect()
+}
+
+/// Which sub-tab a registry field belongs to in compact App Settings mode
+/// and in a game's Performance sub-tabs.
 pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
     match spec.section {
         FieldSection::Wine => Some("wine"),
-        FieldSection::Performance => Some("performance"),
+        FieldSection::Performance => {
+            if spec.path == "panel.replay" || spec.path.starts_with("iroriReplay.") {
+                Some("replay")
+            } else {
+                Some("performance")
+            }
+        }
         FieldSection::Gpu => Some("gpu"),
         FieldSection::Launch => Some("launch"),
         FieldSection::CloudSaves => Some("saves"),
@@ -648,6 +687,7 @@ mod tests {
         for t in GENERAL_TABS
             .iter()
             .chain(DEFAULTS_TABS)
+            .chain(GAME_PERFORMANCE_TABS)
             .chain(APPEARANCE_TABS)
             .chain(BACKUP_TABS)
         {
@@ -687,6 +727,32 @@ mod tests {
                 "{}",
                 p.second_sublabel_key
             );
+        }
+    }
+
+    #[test]
+    fn performance_and_replay_fields_split_into_separate_subtabs() {
+        assert_eq!(
+            subtab_of(find("panel.performance-hud").unwrap()),
+            Some("performance")
+        );
+        assert_eq!(
+            subtab_of(find("panel.optiscaler").unwrap()),
+            Some("performance")
+        );
+        assert_eq!(subtab_of(find("panel.replay").unwrap()), Some("replay"));
+        assert_eq!(
+            subtab_of(find("iroriReplay.enabled").unwrap()),
+            Some("replay")
+        );
+        let tabs: Vec<_> = supported_game_performance_tabs()
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+        if cfg!(target_os = "linux") {
+            assert_eq!(tabs, ["performance", "replay"]);
+        } else {
+            assert_eq!(tabs, ["performance"]);
         }
     }
 }

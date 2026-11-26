@@ -266,3 +266,68 @@ fn global_steam_snippet_tracks_global_mode(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn steam_hud_renders_side_by_side_and_opens_guide_dialog(cx: &mut TestAppContext) {
+    let steam_id = GameId::new(Runner::Steam, "620");
+    let (handle, panel) = open_hud(
+        cx,
+        HudPanelScope::PerGame {
+            id: steam_id,
+            is_native_linux: false,
+            is_steam: true,
+        },
+        Some(HudBackend::MangoHud),
+    );
+    cx.update_window(handle, |_, window, cx| {
+        irori_ui::backend(cx).settings.update_app(|a| {
+            a.hud.mode = GlobalHudMode::IroriProfile;
+        });
+        panel.update(cx, |p, cx| {
+            p.reload_from_settings(window, cx);
+            assert!(p.display.steam_snippet.is_some());
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+
+        let snippet = panel
+            .read(cx)
+            .display
+            .steam_snippet
+            .clone()
+            .expect("Steam snippet present");
+        crate::hud::steam_guide::open_steam_launch_guide_dialog(
+            panel.downgrade(),
+            snippet,
+            Some("Portal 2".into()),
+            "Copy launch options".into(),
+            "Copied".into(),
+            window,
+            cx,
+        );
+        window.refresh();
+        let _ = window.draw(cx);
+
+        panel.update(cx, |p, cx| {
+            p.set_game_mode(GameHudMode::Disabled, window, cx);
+            assert_eq!(
+                p.display.steam_snippet.as_deref(),
+                Some("DISABLE_MANGOHUD=1 MANGOHUD=0 %command%")
+            );
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+
+        irori_ui::backend(cx).settings.update_app(|a| {
+            a.hud.mode = GlobalHudMode::Off;
+        });
+        panel.update(cx, |p, cx| {
+            p.set_game_mode(GameHudMode::InheritGlobal, window, cx);
+            p.reload_from_settings(window, cx);
+            assert!(p.display.steam_snippet.is_none());
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}

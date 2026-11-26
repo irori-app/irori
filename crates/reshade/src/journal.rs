@@ -163,20 +163,62 @@ pub enum Existing {
     /// Replace the file when it is a ReShade DLL installed without Irori
     /// (the user agreed); refuse anything else, as [`Existing::Refuse`].
     Adopt,
+    /// Replace any pre-existing file (the user explicitly confirmed
+    /// overwriting it) and remove any stale `.irori-disabled` sibling.
+    Overwrite,
+}
+
+/// Classification of an unmanaged DLL already occupying a proxy slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExistingDllKind {
+    /// Looks like an existing OptiScaler installation not tracked by Irori.
+    Optiscaler,
+    /// Identified as a ReShade DLL.
+    Reshade,
+    /// Any other DLL or file (another mod or game file).
+    Unknown,
 }
 
 /// Whether the file at `path` is a ReShade DLL: a Windows DLL whose version
 /// information names ReShade. Reads at most 64 MiB.
 pub fn is_reshade_dll(path: &Path) -> bool {
-    use std::io::Read as _;
-    let Ok(file) = std::fs::File::open(path) else {
-        return false;
+    read_capped_pe_bytes(path).is_some_and(|bytes| is_reshade_bytes(&bytes))
+}
+
+/// Inspect an existing proxy file (or its `.irori-disabled` sibling) in `dir`
+/// to identify whether it belongs to ReShade, an older OptiScaler install, or
+/// an unknown mod. Reads at most 64 MiB.
+pub fn inspect_existing_dll(dir: &Path, file_name: &str) -> ExistingDllKind {
+    let active = dir.join(file_name);
+    let disabled = dir.join(format!("{file_name}{DISABLED_SUFFIX}"));
+    let target = if exists(&active) {
+        active
+    } else if exists(&disabled) {
+        disabled
+    } else {
+        return ExistingDllKind::Unknown;
     };
-    let mut bytes = Vec::new();
-    if file.take(64 << 20).read_to_end(&mut bytes).is_err() {
-        return false;
+    if let Some(bytes) = read_capped_pe_bytes(&target) {
+        if is_reshade_bytes(&bytes) {
+            return ExistingDllKind::Reshade;
+        }
+        if is_optiscaler_bytes(&bytes) {
+            return ExistingDllKind::Optiscaler;
+        }
     }
-    is_reshade_bytes(&bytes)
+    if dir.join("OptiScaler.ini").is_file() {
+        return ExistingDllKind::Optiscaler;
+    }
+    ExistingDllKind::Unknown
+}
+
+fn read_capped_pe_bytes(path: &Path) -> Option<Vec<u8>> {
+    use std::io::Read as _;
+    let file = std::fs::File::open(path).ok()?;
+    let mut bytes = Vec::new();
+    file.take(64 << 20).read_to_end(&mut bytes).ok()?;
+    crate::pe::read_bytes(&bytes).ok()?;
+    Some(bytes)
 }
 
 fn is_reshade_bytes(bytes: &[u8]) -> bool {
@@ -186,6 +228,18 @@ fn is_reshade_bytes(bytes: &[u8]) -> bool {
         .flat_map(u16::to_le_bytes)
         .collect();
     crate::pe::read_bytes(bytes).is_ok() && bytes.windows(needle.len()).any(|w| w == needle)
+}
+
+fn is_optiscaler_bytes(bytes: &[u8]) -> bool {
+    let ascii = b"OptiScaler";
+    if bytes.windows(ascii.len()).any(|w| w == ascii) {
+        return true;
+    }
+    let utf16: Vec<u8> = "OptiScaler"
+        .encode_utf16()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    bytes.windows(utf16.len()).any(|w| w == utf16)
 }
 
 /// A file to write.
@@ -419,6 +473,17 @@ pub fn update_staged(
                 let reshade = !exists(&disabled) && is_reshade_dll(&target);
                 match file.existing {
                     Existing::Keep => continue,
+                    Existing::Overwrite => {
+                        records.push(FileRecord {
+                            path: rel.clone(),
+                            sha256: new_sha,
+                            size: new_size,
+                        });
+                        new_paths.insert(rel.clone());
+                        let stale_disabled = exists(&disabled).then_some(disabled);
+                        to_write.push((rel, file.source, stale_disabled));
+                        continue;
+                    }
                     Existing::Adopt if reshade => {
                         records.push(FileRecord {
                             path: rel.clone(),
@@ -439,7 +504,7 @@ pub fn update_staged(
                 .ok()
                 .is_some_and(|m| m.is_file() && m.len() == prev.size)
                 && sha256_file(&disabled).is_ok_and(|h| h == prev.sha256);
-            if unmodified_prev {
+            if unmodified_prev || file.existing == Existing::Overwrite {
                 records.push(FileRecord {
                     path: rel.clone(),
                     sha256: new_sha,
@@ -452,6 +517,14 @@ pub fn update_staged(
                     name: rel.to_string_lossy().into_owned()
                 });
             }
+        } else if file.existing == Existing::Overwrite && exists(&disabled) {
+            records.push(FileRecord {
+                path: rel.clone(),
+                sha256: new_sha,
+                size: new_size,
+            });
+            new_paths.insert(rel.clone());
+            to_write.push((rel, file.source, Some(disabled)));
         } else if file.existing == Existing::Refuse && exists(&disabled) {
             bail!(ReshadeError::DllTaken {
                 name: rel.to_string_lossy().into_owned()
@@ -574,7 +647,7 @@ pub fn apply_staged(
     if !dir.is_dir() {
         bail!("{} does not exist", dir.display());
     }
-    let mut planned = Vec::new();
+    let mut planned: Vec<(PathBuf, FileSource, Option<PathBuf>)> = Vec::new();
     let mut records = Vec::new();
     for file in files {
         let rel = relative_entry_path(&file.path)
@@ -586,11 +659,17 @@ pub fn apply_staged(
             rel.file_name().unwrap_or_default().to_string_lossy()
         ));
         let refuses = file.existing != Existing::Keep;
+        let mut cleanup_disabled = None;
         if exists(&target) || (refuses && exists(&disabled)) {
             let name = rel.to_string_lossy().into_owned();
             let reshade = exists(&target) && !exists(&disabled) && is_reshade_dll(&target);
             match file.existing {
                 Existing::Keep => continue,
+                Existing::Overwrite => {
+                    if exists(&disabled) {
+                        cleanup_disabled = Some(disabled);
+                    }
+                }
                 Existing::Adopt if reshade => {}
                 _ if reshade => bail!(ReshadeError::ManualInstall { name }),
                 _ => bail!(ReshadeError::DllTaken { name }),
@@ -605,11 +684,11 @@ pub fn apply_staged(
             sha256,
             size,
         });
-        planned.push((rel, file.source));
+        planned.push((rel, file.source, cleanup_disabled));
     }
 
     let mut created: Vec<PathBuf> = Vec::new();
-    for (rel, _) in &planned {
+    for (rel, _, _) in &planned {
         let mut acc = PathBuf::new();
         if let Some(parent) = rel.parent() {
             for part in parent.components() {
@@ -630,7 +709,7 @@ pub fn apply_staged(
             std::fs::create_dir(dir.join(rel))
                 .with_context(|| format!("Could not create {}", dir.join(rel).display()))?;
         }
-        for (rel, source) in &planned {
+        for (rel, source, cleanup_disabled) in &planned {
             if cancelled() {
                 bail!(irori_runtime::Cancelled);
             }
@@ -639,6 +718,9 @@ pub fn apply_staged(
                 FileSource::Bytes(bytes) => json_store::write_bytes(&target, bytes)
                     .with_context(|| format!("Could not write {}", target.display()))?,
                 FileSource::File(src) => copy_file_atomic(src, &target)?,
+            }
+            if let Some(old_disabled) = cleanup_disabled {
+                let _ = std::fs::remove_file(old_disabled);
             }
         }
         Ok(())

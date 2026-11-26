@@ -561,7 +561,7 @@ impl HudPanel {
     /// Rewrite `<data>/mangohud/global.conf` or `<runner>_<app>.conf` in-place
     /// on a background task so running games and Steam launches pick up edits
     /// (such as FPS limit or metric changes) live via MangoHud's `inotify`.
-    fn sync_live_mangohud_config(&self, cx: &App) {
+    pub(super) fn sync_live_mangohud_config(&self, cx: &App) {
         if self.backend != HudBackend::MangoHud {
             return;
         }
@@ -896,6 +896,12 @@ impl Render for HudPanel {
         }
 
         let editing = self.is_editing_profile();
+        let steam_preview = self.is_steam()
+            && self.display.steam_snippet.is_some()
+            && self.game.mode != GameHudMode::Disabled;
+        let steam_disabled_snippet = (self.is_steam() && self.game.mode == GameHudMode::Disabled)
+            .then(|| self.display.steam_snippet.clone())
+            .flatten();
 
         match self.backend {
             HudBackend::MangoHud => v_flex()
@@ -903,9 +909,13 @@ impl Render for HudPanel {
                 .gap_2()
                 .children(self.render_missing_mangohud())
                 .children(self.render_scope_notice(cx))
-                .children(self.render_steam_section(cx))
+                .children(self.render_steam_empty_notice(cx))
                 .when(!editing, |v| {
-                    v.child(self.render_mode_section(cx))
+                    v.when(steam_preview, |v| v.child(self.render_preview_row(cx)))
+                        .when_some(steam_disabled_snippet.clone(), |v, snippet| {
+                            v.child(self.render_steam_launch_card(snippet, cx))
+                        })
+                        .child(self.render_mode_section(cx))
                         .children(self.render_opengl_section(cx))
                 })
                 .when(editing, |v| {
@@ -920,7 +930,7 @@ impl Render for HudPanel {
                             .children(self.render_opengl_section(cx))
                             .into_any_element(),
                     };
-                    v.child(self.preview.clone())
+                    v.child(self.render_preview_row(cx))
                         .child(self.render_top_quick_card(cx))
                         .child(self.render_tab_bar(cx))
                         .child(tab_body)
@@ -930,12 +940,15 @@ impl Render for HudPanel {
                 .w_full()
                 .gap_2()
                 .children(self.render_scope_notice(cx))
-                .children(self.render_steam_section(cx))
+                .children(self.render_steam_empty_notice(cx))
+                .when(editing || steam_preview, |v| {
+                    v.child(self.render_preview_row(cx))
+                })
+                .when_some(steam_disabled_snippet, |v, snippet| {
+                    v.child(self.render_steam_launch_card(snippet, cx))
+                })
                 .child(self.render_mode_section(cx))
                 .child(self.render_metal_section(cx))
-                .when(editing, |v| {
-                    v.child(div().pt_4().child(self.preview.clone()))
-                })
                 .into_any_element(),
             HudBackend::Unsupported => div().into_any_element(),
         }

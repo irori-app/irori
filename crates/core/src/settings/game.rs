@@ -400,6 +400,10 @@ pub struct GameSettings {
     /// macOS). Inherits the global HUD profile by default. Irori-only.
     #[serde(rename = "iroriGameHud", default)]
     pub game_hud: crate::hud::GameHudSettings,
+    /// Global defaults inherited by OptiScaler installations and per-game
+    /// configuration. Irori-only.
+    #[serde(rename = "iroriOptiscaler", default)]
+    pub optiscaler: super::OptiscalerDefaults,
 }
 
 /// The sandbox a game runs in (`iroriSandbox`). Off when nothing is blocked.
@@ -648,6 +652,7 @@ impl Default for GameSettings {
             umu_id: String::new(),
             replay: ReplaySettings::default(),
             game_hud: crate::hud::GameHudSettings::default(),
+            optiscaler: super::OptiscalerDefaults::default(),
         }
     }
 }

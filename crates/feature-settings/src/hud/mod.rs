@@ -3,6 +3,7 @@
 pub mod panel;
 pub mod preview;
 pub mod shortcut_recorder;
+mod steam_guide;
 
 pub use panel::{HudPanel, HudPanelScope};
 pub use preview::HudPreview;

@@ -44,6 +44,7 @@ mod layout;
 mod library_folders;
 mod logs;
 mod optiscaler;
+mod optiscaler_defaults;
 mod optiscaler_key;
 mod overlay;
 mod quick_launch;

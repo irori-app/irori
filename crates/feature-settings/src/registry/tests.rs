@@ -378,6 +378,7 @@ fn steam_games_keep_only_what_irori_does_around_the_launch() {
         "iroriBeforeLaunchScriptAlongside",
         "panel.launchPrograms",
         "panel.performance-hud",
+        "panel.optiscaler",
         "iroriReplay.enabled",
         "panel.save-backups",
         "panel.artwork",
@@ -416,6 +417,12 @@ fn performance_hud_and_legacy_overlay_visibility() {
 
     let show_fps = find("showFps").expect("showFps");
     assert_eq!(show_fps.supported_on_host(), cfg!(target_os = "linux"));
+
+    let optiscaler = find("panel.optiscaler").expect("panel.optiscaler");
+    assert_eq!(optiscaler.section, FieldSection::Performance);
+    assert_eq!(optiscaler.scope, Scope::Shared);
+    assert!(optiscaler.applies_to_steam());
+    assert!(optiscaler.supported_on_host());
 }
 
 #[test]

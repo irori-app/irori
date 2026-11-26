@@ -49,11 +49,14 @@ use serde::{Deserialize, Serialize};
 pub use compat::{CompatEntry, CompatList};
 pub use detect::Detection;
 pub use install::{InstallRequest, Step, install};
-pub use journal::{FileRecord, FileSource, Manifest, ModSource, RemoveReport, StagedFile};
+pub use journal::{
+    ExistingDllKind, FileRecord, FileSource, Manifest, ModSource, RemoveReport, StagedFile,
+};
 pub use layer::GraphicsMod;
 pub use optiscaler::{
     GpuDriverMode, OptiscalerCatalog, OptiscalerChannel, OptiscalerConfig, OptiscalerEndpoints,
-    OptiscalerInstallRequest, OptiscalerInstallResult, OptiscalerRelease, ProxyDll,
+    OptiscalerInstallRequest, OptiscalerInstallResult, OptiscalerReconfigureOptions,
+    OptiscalerRelease, ProxyDll,
 };
 pub use pe::{Machine, PeInfo};
 

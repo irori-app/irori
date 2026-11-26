@@ -180,9 +180,45 @@ pub struct OptiscalerConfig {
     pub gpu_driver: GpuDriverMode,
     pub proxy_dll: ProxyDll,
     pub enable_optipatcher: bool,
-    /// Per-game `[Menu] ShortcutKey` override (`None` = leave at default / user's INI).
+    /// Per-game `[Menu] ShortcutKey` override (`None` = inherit global default / user's INI).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shortcut_key: Option<String>,
+}
+
+impl OptiscalerConfig {
+    /// Build an initial per-game configuration from the global [`irori_core::OptiscalerDefaults`].
+    /// `shortcut_key` is left as `None` so the game inherits the global shortcut until
+    /// explicitly overridden per game.
+    pub fn from_defaults(defaults: &irori_core::OptiscalerDefaults) -> Self {
+        let channel = if defaults.channel.eq_ignore_ascii_case("nightly") {
+            OptiscalerChannel::Nightly
+        } else {
+            OptiscalerChannel::Stable
+        };
+        let gpu_driver = if defaults.gpu_driver.eq_ignore_ascii_case("nvidia") {
+            GpuDriverMode::Nvidia
+        } else {
+            GpuDriverMode::MesaAuto
+        };
+        let proxy_dll = ProxyDll::from_file_name(defaults.proxy_dll.trim()).unwrap_or_default();
+        Self {
+            channel,
+            gpu_driver,
+            proxy_dll,
+            enable_optipatcher: defaults.enable_optipatcher,
+            shortcut_key: None,
+        }
+    }
+}
+
+/// Normalize the global default shortcut key from [`irori_core::OptiscalerDefaults`],
+/// returning `None` when unset or `"auto"` (meaning OptiScaler's default Insert key).
+pub fn default_shortcut_from(defaults: &irori_core::OptiscalerDefaults) -> Option<String> {
+    let trimmed = defaults.shortcut_key.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case(crate::optiscaler_keys::SHORTCUT_AUTO) {
+        return None;
+    }
+    crate::optiscaler_keys::normalize_shortcut_key(trimmed)
 }
 
 /// Release API endpoints; use [`OptiscalerEndpoints::official`] outside tests.
@@ -279,6 +315,23 @@ pub struct OptiscalerInstallRequest {
     /// Allows identical files to be skipped without rewriting and preserves
     /// user-edited INI settings.
     pub previous: Option<Manifest>,
+    /// Explicitly confirmed by the user to overwrite an unmanaged file already
+    /// occupying the target proxy slot.
+    pub overwrite_proxy: bool,
+    /// Global default `[Menu] ShortcutKey` used when `config.shortcut_key` is
+    /// `None` (inheriting global defaults).
+    pub default_shortcut_key: Option<String>,
+}
+
+/// Extra options for [`reconfigure_with`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OptiscalerReconfigureOptions {
+    /// Explicitly confirmed by the user to overwrite an unmanaged file already
+    /// occupying the new proxy slot.
+    pub overwrite_proxy: bool,
+    /// Global default `[Menu] ShortcutKey` applied when `new_config.shortcut_key`
+    /// is `None` (inheriting global defaults).
+    pub default_shortcut_key: Option<String>,
 }
 
 /// Result of a completed OptiScaler installation.
@@ -1362,12 +1415,13 @@ pub async fn install(
         .filter(|prev| prev.complete && prev.dir == found.dir);
 
     // Fail fast before downloading if the target proxy file is already taken
-    // by an untracked mod (updating our own existing proxy file is allowed).
+    // by an untracked mod (updating our own existing proxy file or overwriting
+    // after user confirmation is allowed).
     let proxy_name = req.config.proxy_dll.file_name();
     let replaces_own_proxy = previous_in_dir
         .as_ref()
         .is_some_and(|prev| prev.dll.eq_ignore_ascii_case(proxy_name));
-    if !replaces_own_proxy {
+    if !replaces_own_proxy && !req.overwrite_proxy {
         let proxy_path = found.dir.join(proxy_name);
         let proxy_disabled = found
             .dir
@@ -1417,6 +1471,8 @@ pub async fn install(
     step(Step::Writing);
     let version = release.version.clone();
     let config = req.config.clone();
+    let overwrite_proxy = req.overwrite_proxy;
+    let default_shortcut_key = req.default_shortcut_key.clone();
     let journal_path = req.journal.clone();
     let cache = req.cache.clone();
     let cancel_bg = cancel.clone();
@@ -1503,10 +1559,19 @@ pub async fn install(
             Some(path) => read_small_text(&path)?,
             None => String::new(),
         };
-        let patched_template_ini = patch_optiscaler_ini(&template_ini, &config);
+        let mut effective_ini_config = config.clone();
+        if effective_ini_config.shortcut_key.is_none() {
+            effective_ini_config.shortcut_key = default_shortcut_key.clone();
+        }
+        let patched_template_ini = patch_optiscaler_ini(&template_ini, &effective_ini_config);
 
+        let proxy_existing = if overwrite_proxy {
+            Existing::Overwrite
+        } else {
+            Existing::Refuse
+        };
         let mut staged = vec![
-            StagedFile::from_file(config.proxy_dll.file_name(), dll_src, Existing::Refuse),
+            StagedFile::from_file(config.proxy_dll.file_name(), dll_src, proxy_existing),
             StagedFile::from_bytes(
                 "OptiScaler.ini",
                 patched_template_ini.into_bytes(),
@@ -1579,7 +1644,7 @@ pub async fn install(
             overrides.push("nvapi64".to_string());
         }
 
-        let patch_config = config.clone();
+        let patch_config = effective_ini_config;
         let base = Manifest {
             kind: GraphicsMod::Optiscaler,
             version,
@@ -1654,8 +1719,36 @@ pub async fn install(
 #[allow(clippy::too_many_arguments)]
 pub async fn reconfigure(
     journal_path: PathBuf,
+    manifest: Manifest,
+    new_config: OptiscalerConfig,
+    cache: PathBuf,
+    endpoints: OptiscalerEndpoints,
+    step: Arc<dyn Fn(Step) + Send + Sync>,
+    progress: ProgressSink,
+    cancel: CancellationToken,
+) -> Result<Manifest> {
+    reconfigure_with(
+        journal_path,
+        manifest,
+        new_config,
+        OptiscalerReconfigureOptions::default(),
+        cache,
+        endpoints,
+        step,
+        progress,
+        cancel,
+    )
+    .await
+}
+
+/// Like [`reconfigure`], with explicit overwrite confirmation and global
+/// shortcut-key fallback options.
+#[allow(clippy::too_many_arguments)]
+pub async fn reconfigure_with(
+    journal_path: PathBuf,
     mut manifest: Manifest,
     new_config: OptiscalerConfig,
+    options: OptiscalerReconfigureOptions,
     cache: PathBuf,
     endpoints: OptiscalerEndpoints,
     step: Arc<dyn Fn(Step) + Send + Sync>,
@@ -1714,9 +1807,9 @@ pub async fn reconfigure(
 
                 let new_active = dir.join(new_dll);
                 let new_disabled = dir.join(format!("{new_dll}{}", journal::DISABLED_SUFFIX));
-                if std::fs::symlink_metadata(&new_active).is_ok()
-                    || std::fs::symlink_metadata(&new_disabled).is_ok()
-                {
+                let active_exists = std::fs::symlink_metadata(&new_active).is_ok();
+                let disabled_exists = std::fs::symlink_metadata(&new_disabled).is_ok();
+                if !options.overwrite_proxy && (active_exists || disabled_exists) {
                     bail!(ReshadeError::DllTaken {
                         name: new_dll.to_string(),
                     });
@@ -1726,6 +1819,22 @@ pub async fn reconfigure(
                         "OptiScaler's {} is no longer in the game folder",
                         manifest.dll
                     );
+                }
+                if options.overwrite_proxy {
+                    // Remove any existing destination before renaming so the
+                    // replacement succeeds on Windows as well as Unix.
+                    if std::fs::symlink_metadata(&to).is_ok() {
+                        std::fs::remove_file(&to)
+                            .with_context(|| format!("Could not replace {}", to.display()))?;
+                    }
+                    let stale = if to == new_active {
+                        &new_disabled
+                    } else {
+                        &new_active
+                    };
+                    if std::fs::symlink_metadata(stale).is_ok() {
+                        let _ = std::fs::remove_file(stale);
+                    }
                 }
                 std::fs::rename(&from, &to)
                     .with_context(|| format!("Could not rename {}", from.display()))?;
@@ -1765,6 +1874,7 @@ pub async fn reconfigure(
                 &mut manifest,
                 &old_config,
                 &new_config,
+                options.default_shortcut_key.as_deref(),
                 fakenvapi_archive.as_deref(),
                 optipatcher_file.as_deref(),
                 &cancel_bg,
@@ -1783,6 +1893,7 @@ pub async fn reconfigure(
                 &mut manifest,
                 &old_config,
                 &new_config,
+                options.default_shortcut_key.as_deref(),
                 fakenvapi_archive.as_deref(),
                 optipatcher_file.as_deref(),
                 &cancel_bg,
@@ -1804,6 +1915,7 @@ fn apply_reconfigure_companions(
     manifest: &mut Manifest,
     old_config: &OptiscalerConfig,
     new_config: &OptiscalerConfig,
+    default_shortcut_key: Option<&str>,
     fakenvapi_archive: Option<&Path>,
     optipatcher_file: Option<&Path>,
     cancel: &CancellationToken,
@@ -1940,10 +2052,16 @@ fn apply_reconfigure_companions(
         || old_config.shortcut_key != new_config.shortcut_key
     {
         let reset_shortcut = old_config.shortcut_key.is_some() && new_config.shortcut_key.is_none();
-        patch_tracked_ini_in_place(dir, manifest, Path::new("OptiScaler.ini"), |raw| {
+        let _ = patch_tracked_ini_in_place(dir, manifest, Path::new("OptiScaler.ini"), |raw| {
             let mut cfg = new_config.clone();
-            if reset_shortcut {
-                cfg.shortcut_key = Some(crate::optiscaler_keys::SHORTCUT_AUTO.to_string());
+            if cfg.shortcut_key.is_none() {
+                if let Some(default_key) = default_shortcut_key
+                    && !default_key.trim().is_empty()
+                {
+                    cfg.shortcut_key = Some(default_key.to_string());
+                } else if reset_shortcut {
+                    cfg.shortcut_key = Some(crate::optiscaler_keys::SHORTCUT_AUTO.to_string());
+                }
             }
             patch_optiscaler_ini(raw, &cfg)
         })?;
@@ -1952,20 +2070,57 @@ fn apply_reconfigure_companions(
     Ok(())
 }
 
+/// Surgically synchronize `[Menu] ShortcutKey` in `OptiScaler.ini` for an
+/// installed game whose manifest inherits the global shortcut key
+/// (`manifest.optiscaler.shortcut_key.is_none()`).
+///
+/// Returns `Ok(true)` when `OptiScaler.ini` was updated on disk, `Ok(false)`
+/// when the game overrides the shortcut per game, is incomplete, lacks
+/// `OptiScaler.ini`, or already matches. Blocking.
+pub fn sync_global_shortcut_in_manifest(
+    journal_path: &Path,
+    manifest: &mut Manifest,
+    global_shortcut: Option<&str>,
+) -> Result<bool> {
+    manifest.checked()?;
+    if !manifest.complete {
+        return Ok(false);
+    }
+    if manifest
+        .optiscaler
+        .as_ref()
+        .and_then(|c| c.shortcut_key.as_deref())
+        .is_some()
+    {
+        return Ok(false);
+    }
+    let target_key = global_shortcut
+        .and_then(crate::optiscaler_keys::normalize_shortcut_key)
+        .unwrap_or_else(|| crate::optiscaler_keys::SHORTCUT_AUTO.to_string());
+    let dir = manifest.dir.clone();
+    let changed = patch_tracked_ini_in_place(&dir, manifest, Path::new("OptiScaler.ini"), |raw| {
+        patch_ini(raw, &[("Menu", "ShortcutKey", target_key.as_str())])
+    })?;
+    if changed {
+        journal::save_manifest(journal_path, manifest)?;
+    }
+    Ok(changed)
+}
+
 fn patch_tracked_ini_in_place(
     dir: &Path,
     manifest: &mut Manifest,
     ini_rel: &Path,
     patch_fn: impl FnOnce(&str) -> String,
-) -> Result<()> {
+) -> Result<bool> {
     let ini_path = dir.join(ini_rel);
     if !ini_path.is_file() {
-        return Ok(());
+        return Ok(false);
     }
     let raw = read_small_text(&ini_path)?;
     let patched = patch_fn(&raw);
     if patched == raw {
-        return Ok(());
+        return Ok(false);
     }
     let tracked_unmodified = manifest
         .files
@@ -1985,7 +2140,7 @@ fn patch_tracked_ini_in_place(
         manifest.files[idx].sha256 = journal::sha256_bytes(&bytes);
         manifest.files[idx].size = bytes.len() as u64;
     }
-    Ok(())
+    Ok(true)
 }
 
 fn remove_unmodified_tracked(dir: &Path, manifest: &mut Manifest, rel: &Path) {

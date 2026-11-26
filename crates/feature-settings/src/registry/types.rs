@@ -248,6 +248,8 @@ pub enum PanelKind {
     Replay,
     /// Per-game Performance HUD overrides (MangoHud on Linux, Metal HUD on macOS).
     PerformanceHud,
+    /// OptiScaler upscaling bridge (global defaults in Game defaults, per-game panel in Performance).
+    Optiscaler,
     /// Sunshine: found or not, its login, syncing now, the last sync.
     Sunshine,
     /// IGDB: the user's Twitch application, saving and forgetting it.
@@ -676,6 +678,7 @@ impl FieldSpec {
                 self.path,
                 "panel.replay"
                     | "panel.performance-hud"
+                    | "panel.optiscaler"
                     | "launcherArgs"
                     | "iroriInSunshine"
                     | "iroriDiscordPresence"
