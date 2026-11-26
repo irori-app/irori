@@ -25,29 +25,36 @@ use gpui_kit::{
     App, AppContext as _, Context, Entity, Focusable as _, Hsla, IntoElement, ParentElement as _,
     Render, SharedString, Styled as _, Subscription, Task, Window, div,
 };
-use irori_core::hud::{sanitize_hex6, sanitize_hud_label};
+use irori_core::hud::{
+    DEFAULT_TOGGLE_HUD, DEFAULT_TOGGLE_PRESET, sanitize_hex6, sanitize_hud_label,
+};
 use irori_core::{
     GameHudMode, GameHudSettings, GameId, GlobalHudMode, GlobalHudSettings, HudBackend,
-    HudColorPalette, MangoHudProfile, MetalHudSettings, ResolvedHud,
+    HudColorPalette, HudOrientation, MangoHudProfile, MetalHudSettings, ResolvedHud,
 };
 use irori_runtime::hud::hardware_linux::{
     LinuxHudEnv, cached_linux_hud_env, default_gpu_short_label, default_gpu_vendor, resolve_pci_dev,
 };
-use irori_runtime::hud::mangohud_conf::{ConfRenderContext, render_mangohud_conf};
+use irori_runtime::hud::mangohud_conf::{
+    ConfRenderContext, render_mangohud_conf, render_mangohud_presets,
+};
+use irori_services::mangohud::LiveMangoHudSync;
 use irori_ui::theme::theme_hud_colors;
 use irori_ui::{backend, models};
 
+use crate::hud::color_wheel::{ColorWheelLabels, HudColorWheel};
 use crate::hud::preview::HudPreview;
 use crate::hud::shortcut_recorder::ShortcutRecorder;
 use crate::i18n::LanguageStamp;
 use crate::widgets::muted;
 
+pub(super) use self::helpers::ColorSlot;
 use self::helpers::{
     COLOR_SLOTS, CachedDisplay, DisplayInputs, HudOption, build_cached_display, build_gpu_options,
     build_position_options, custom_fps_text, effective_mangohud_profile, effective_metal_settings,
-    global_hud_on, gpu_selection_key, is_fps_preset, legacy_hud_toggle, parse_gpu_selection_key,
-    parse_position_key, read_hud_settings, resolve_hud_for_scope, slider_event_value,
-    steam_conf_path,
+    global_hud_on, gpu_selection_key, hud_conf_name, is_fps_preset, legacy_hud_toggle,
+    parse_gpu_selection_key, parse_position_key, read_hud_settings, resolve_hud_for_scope,
+    slider_event_value,
 };
 use self::labels::HudLabels;
 
@@ -89,6 +96,7 @@ pub struct HudPanel {
 
     preview: Entity<HudPreview>,
     shortcut: Entity<ShortcutRecorder>,
+    preset_shortcut: Entity<ShortcutRecorder>,
     gpu_select: Entity<SelectState<Vec<HudOption>>>,
     position_select: Entity<SelectState<Vec<HudOption>>>,
     gpu_label_input: Entity<InputState>,
@@ -99,6 +107,8 @@ pub struct HudPanel {
     bg_alpha_slider: Entity<SliderState>,
     alpha_slider: Entity<SliderState>,
     color_inputs: [Entity<InputState>; 11],
+    color_wheel: Entity<HudColorWheel>,
+    open_color_slot: Option<ColorSlot>,
     slider_debounce: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -135,12 +145,34 @@ impl HudPanel {
 
         let weak = cx.entity().downgrade();
         let shortcut = cx.new(|cx| {
-            ShortcutRecorder::new(
+            ShortcutRecorder::with_options(
+                "hud-shortcut",
+                DEFAULT_TOGGLE_HUD,
                 active_profile.toggle_hud.clone(),
+                false,
                 move |combo, window, cx| {
                     let _ = weak.update(cx, |this, cx| {
                         this.edit_mangohud(window, cx, |p| {
                             p.toggle_hud = combo.to_string();
+                        });
+                    });
+                },
+                window,
+                cx,
+            )
+        });
+
+        let weak_preset = cx.entity().downgrade();
+        let preset_shortcut = cx.new(|cx| {
+            ShortcutRecorder::with_options(
+                "hud-preset-shortcut",
+                DEFAULT_TOGGLE_PRESET,
+                active_profile.toggle_preset.clone(),
+                true,
+                move |combo, window, cx| {
+                    let _ = weak_preset.update(cx, |this, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.toggle_preset = combo.to_string();
                         });
                     });
                 },
@@ -228,6 +260,31 @@ impl HudPanel {
                 s.set_value(initial, window, cx);
                 s
             })
+        });
+
+        let initial_slot = ColorSlot::Background;
+        let initial_wheel_hex = sanitize_hex6(
+            initial_slot.get(&active_profile.custom_colors),
+            initial_slot.fallback(),
+        );
+        let weak_color = cx.entity().downgrade();
+        let color_wheel = cx.new(|cx| {
+            HudColorWheel::new(
+                initial_slot,
+                &initial_wheel_hex,
+                ColorWheelLabels {
+                    slot: labels.color_slot_labels[initial_slot as usize].clone(),
+                    brightness: labels.color_brightness.clone(),
+                    quick_swatches: labels.color_quick_swatches.clone(),
+                },
+                move |slot, hex, released, window, cx| {
+                    let _ = weak_color.update(cx, |this, cx| {
+                        this.edit_mangohud_color(slot, hex, released, window, cx);
+                    });
+                },
+                window,
+                cx,
+            )
         });
 
         let mut subscriptions = Vec::new();
@@ -364,8 +421,13 @@ impl HudPanel {
                             state.update(cx, |s, cx| s.set_value(hex.clone(), window, cx));
                         }
                         this.edit_mangohud(window, cx, |p| {
-                            slot.set(&mut p.custom_colors, hex);
+                            slot.set(&mut p.custom_colors, hex.clone());
                         });
+                        if this.open_color_slot == Some(slot) {
+                            this.color_wheel.update(cx, |w, cx| {
+                                w.set_hex_if_slot(slot, &hex, window, cx);
+                            });
+                        }
                     }
                 },
             ));
@@ -409,6 +471,7 @@ impl HudPanel {
             theme_stamp,
             preview,
             shortcut,
+            preset_shortcut,
             gpu_select,
             position_select,
             gpu_label_input,
@@ -419,6 +482,8 @@ impl HudPanel {
             bg_alpha_slider,
             alpha_slider,
             color_inputs,
+            color_wheel,
+            open_color_slot: None,
             slider_debounce: None,
             _subscriptions: subscriptions,
         };
@@ -532,9 +597,29 @@ impl HudPanel {
     }
 
     fn persist_current(&mut self, cx: &mut Context<Self>) {
+        self.persist_current_with_updates(None, None, cx);
+    }
+
+    fn persist_current_with_updates(
+        &mut self,
+        fps_limit_update: Option<Option<u32>>,
+        no_display_update: Option<bool>,
+        cx: &mut Context<Self>,
+    ) {
+        let mut sync_global_too = false;
         match &self.scope {
             HudPanelScope::Global => {
                 let mut next = self.global.clone();
+                if let Some(mut v) = next.mangohud.saved_custom.clone() {
+                    v.orientation = HudOrientation::Vertical;
+                    next.mangohud.saved_custom = Some(v.clone());
+                    next.custom_preset = Some(v);
+                }
+                if let Some(mut h) = next.mangohud.saved_custom_horizontal.clone() {
+                    h.orientation = HudOrientation::Horizontal;
+                    next.mangohud.saved_custom_horizontal = Some(h.clone());
+                    next.custom_horizontal_preset = Some(h);
+                }
                 if next.mangohud.palette == HudColorPalette::SyncIroriTheme {
                     next.cached_theme_colors = Some(theme_hud_colors(cx.theme()));
                 }
@@ -544,6 +629,33 @@ impl HudPanel {
                 });
             }
             HudPanelScope::PerGame { id, .. } => {
+                if let Some(profile) = self.game.custom_mangohud.as_mut() {
+                    if let Some(mut v) = profile.saved_custom.clone() {
+                        v.orientation = HudOrientation::Vertical;
+                        profile.saved_custom = Some(v.clone());
+                        if self.global.custom_preset.as_ref() != Some(&v) {
+                            self.global.custom_preset = Some(v);
+                            sync_global_too = true;
+                        }
+                    }
+                    if let Some(mut h) = profile.saved_custom_horizontal.clone() {
+                        h.orientation = HudOrientation::Horizontal;
+                        profile.saved_custom_horizontal = Some(h.clone());
+                        if self.global.custom_horizontal_preset.as_ref() != Some(&h) {
+                            self.global.custom_horizontal_preset = Some(h);
+                            sync_global_too = true;
+                        }
+                    }
+                }
+                if sync_global_too {
+                    let mut global_mangohud = self.global.mangohud.clone();
+                    self.global.hydrate_profile(&mut global_mangohud);
+                    self.global.mangohud = global_mangohud;
+                    let next_global = self.global.clone();
+                    backend(cx).settings.update_app(|a| {
+                        a.hud = next_global;
+                    });
+                }
                 let next = self.game.clone();
                 let value = if next == GameHudSettings::default() {
                     None
@@ -555,13 +667,25 @@ impl HudPanel {
                     .set_game_value(id, "iroriGameHud", value);
             }
         }
-        self.sync_live_mangohud_config(cx);
+        self.sync_live_mangohud_config_with_updates(fps_limit_update, no_display_update, cx);
+        if sync_global_too {
+            self.sync_global_mangohud_if_active(cx);
+        }
     }
 
-    /// Rewrite `<data>/mangohud/global.conf` or `<runner>_<app>.conf` in-place
-    /// on a background task so running games and Steam launches pick up edits
-    /// (such as FPS limit or metric changes) live via MangoHud's `inotify`.
-    fn sync_live_mangohud_config(&self, cx: &App) {
+    /// Rewrite `<data>/mangohud/<scope>_presets.conf` and `<scope>.conf` in
+    /// place and sync matching running sessions so Steam, external launchers,
+    /// gamescope and Irori-launched games pick up edits live via `inotify`.
+    pub(super) fn sync_live_mangohud_config(&self, cx: &App) {
+        self.sync_live_mangohud_config_with_updates(None, None, cx);
+    }
+
+    fn sync_live_mangohud_config_with_updates(
+        &self,
+        fps_limit_update: Option<Option<u32>>,
+        no_display_update: Option<bool>,
+        cx: &App,
+    ) {
         if self.backend != HudBackend::MangoHud {
             return;
         }
@@ -570,7 +694,41 @@ impl HudPanel {
         let ResolvedHud::MangoHudProfile(profile) = resolved else {
             return;
         };
-        let conf_path = steam_conf_path(&self.scope, &self.game);
+        let conf_name = hud_conf_name(&self.scope, &self.game);
+        self.dispatch_live_mangohud_sync(
+            conf_name,
+            &profile,
+            fps_limit_update,
+            no_display_update,
+            cx,
+        );
+    }
+
+    fn sync_global_mangohud_if_active(&self, cx: &App) {
+        if self.backend != HudBackend::MangoHud {
+            return;
+        }
+        let resolved = resolve_hud_for_scope(
+            &HudPanelScope::Global,
+            self.backend,
+            &self.global,
+            &GameHudSettings::default(),
+            cx,
+        );
+        let ResolvedHud::MangoHudProfile(profile) = resolved else {
+            return;
+        };
+        self.dispatch_live_mangohud_sync("global".to_string(), &profile, None, None, cx);
+    }
+
+    fn dispatch_live_mangohud_sync(
+        &self,
+        conf_name: String,
+        profile: &MangoHudProfile,
+        fps_limit_update: Option<Option<u32>>,
+        no_display_update: Option<bool>,
+        cx: &App,
+    ) {
         let ctx = ConfRenderContext {
             detected_gpu_label: default_gpu_short_label(&profile.gpu_selection, &self.env.gpus),
             detected_cpu_label: self.env.cpu_label.clone(),
@@ -579,13 +737,17 @@ impl HudPanel {
             pci_dev: resolve_pci_dev(&profile.gpu_selection, &self.env.gpus),
             theme_colors: Some(theme_hud_colors(cx.theme())),
         };
-        let body = render_mangohud_conf(&profile, &ctx);
+        let sync = LiveMangoHudSync {
+            conf_name: conf_name.clone(),
+            config_body: render_mangohud_conf(profile, &ctx),
+            presets_body: render_mangohud_presets(profile),
+            fps_limit_update,
+            no_display_update,
+        };
+        let backend = backend(cx).clone();
         irori_ui::run(cx, async move {
-            if let Err(err) = irori_runtime::hud::write_config_live(&conf_path, &body).await {
-                tracing::warn!(
-                    "writing live MangoHud config {}: {err:#}",
-                    conf_path.display()
-                );
+            if let Err(err) = backend.sync_live_mangohud(sync).await {
+                tracing::warn!("writing live MangoHud config {conf_name}: {err:#}");
             }
             Ok(())
         })
@@ -598,6 +760,9 @@ impl HudPanel {
         cx: &mut Context<Self>,
         f: impl FnOnce(&mut MangoHudProfile),
     ) {
+        let prev = self.active_mangohud();
+        let prev_fps_limit = prev.fps_limit;
+        let prev_no_display = prev.no_display;
         match &self.scope {
             HudPanelScope::Global => {
                 f(&mut self.global.mangohud);
@@ -609,7 +774,10 @@ impl HudPanel {
                 }
             }
         }
-        self.persist_current(cx);
+        let next = self.active_mangohud();
+        let fps_limit_update = (next.fps_limit != prev_fps_limit).then_some(next.fps_limit);
+        let no_display_update = (next.no_display != prev_no_display).then_some(next.no_display);
+        self.persist_current_with_updates(fps_limit_update, no_display_update, cx);
         self.sync_controls(window, cx);
         self.sync_preview_and_display(cx);
         cx.notify();
@@ -650,6 +818,48 @@ impl HudPanel {
                 });
             }));
         }
+    }
+
+    pub(super) fn on_color_popover_change(
+        &mut self,
+        slot: ColorSlot,
+        open: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if open {
+            self.open_color_slot = Some(slot);
+            let hex = sanitize_hex6(
+                slot.get(&self.active_mangohud().custom_colors),
+                slot.fallback(),
+            );
+            let slot_label = self.labels.color_slot_labels[slot as usize].clone();
+            self.color_wheel.update(cx, |w, cx| {
+                w.set_slot(slot, slot_label, &hex, window, cx);
+            });
+            cx.notify();
+        } else if self.open_color_slot == Some(slot) {
+            self.open_color_slot = None;
+            cx.notify();
+        }
+    }
+
+    fn edit_mangohud_color(
+        &mut self,
+        slot: ColorSlot,
+        hex: String,
+        released: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let clean = sanitize_hex6(&hex, slot.fallback());
+        let input = &self.color_inputs[slot as usize];
+        if input.read(cx).value().as_ref() != clean {
+            input.update(cx, |s, cx| s.set_value(clean.clone(), window, cx));
+        }
+        self.edit_mangohud_slider(released, window, cx, |p| {
+            slot.set(&mut p.custom_colors, clean);
+        });
     }
 
     fn edit_metal(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut MetalHudSettings)) {
@@ -715,8 +925,14 @@ impl HudPanel {
         if !matches!(self.scope, HudPanelScope::PerGame { .. }) {
             return;
         }
+        let prev = self.active_mangohud();
+        let prev_fps_limit = prev.fps_limit;
+        let prev_no_display = prev.no_display;
         self.game.restore_from_global(&self.global);
-        self.persist_current(cx);
+        let next = self.active_mangohud();
+        let fps_limit_update = (next.fps_limit != prev_fps_limit).then_some(next.fps_limit);
+        let no_display_update = (next.no_display != prev_no_display).then_some(next.no_display);
+        self.persist_current_with_updates(fps_limit_update, no_display_update, cx);
         self.sync_controls(window, cx);
         self.sync_preview_and_display(cx);
         cx.notify();
@@ -767,6 +983,8 @@ impl HudPanel {
 
         self.shortcut
             .update(cx, |s, cx| s.set_combo(profile.toggle_hud.clone(), cx));
+        self.preset_shortcut
+            .update(cx, |s, cx| s.set_combo(profile.toggle_preset.clone(), cx));
 
         let gpu_key = gpu_selection_key(&profile.gpu_selection, &self.env);
         self.gpu_select
@@ -834,6 +1052,13 @@ impl HudPanel {
                 }
             }
         }
+        if let Some(slot) = self.open_color_slot
+            && !self.color_wheel.read(cx).is_dragging()
+        {
+            let hex = sanitize_hex6(slot.get(&profile.custom_colors), slot.fallback());
+            self.color_wheel
+                .update(cx, |w, cx| w.set_hex_if_slot(slot, &hex, window, cx));
+        }
     }
 
     fn sync_preview_and_display(&mut self, cx: &mut Context<Self>) {
@@ -871,6 +1096,14 @@ impl HudPanel {
         self.position_select.update(cx, |s, cx| {
             s.set_items(pos_items, window, cx);
             s.set_selected_value(&pos_key, window, cx);
+        });
+        let brightness = self.labels.color_brightness.clone();
+        let quick_swatches = self.labels.color_quick_swatches.clone();
+        let slot_label = self
+            .open_color_slot
+            .map(|s| self.labels.color_slot_labels[s as usize].clone());
+        self.color_wheel.update(cx, |w, cx| {
+            w.set_labels(brightness, quick_swatches, slot_label, cx);
         });
         self.sync_placeholders(window, cx);
         self.sync_preview_and_display(cx);

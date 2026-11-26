@@ -40,6 +40,7 @@ pub(super) struct HudLabels {
     pub(super) preset_balanced_gaming: SharedString,
     pub(super) preset_full_diagnostics: SharedString,
     pub(super) preset_custom: SharedString,
+    pub(super) preset_custom_horizontal: SharedString,
 
     pub(super) group_hardware: SharedString,
     pub(super) gpu_selection_label: SharedString,
@@ -139,6 +140,8 @@ pub(super) struct HudLabels {
     pub(super) alpha_label: SharedString,
     pub(super) toggle_hud_label: SharedString,
     pub(super) toggle_hud_help: SharedString,
+    pub(super) toggle_preset_label: SharedString,
+    pub(super) toggle_preset_help: SharedString,
     pub(super) no_display_label: SharedString,
     pub(super) no_display_help: SharedString,
 
@@ -152,6 +155,9 @@ pub(super) struct HudLabels {
     pub(super) fps_color_change_label: SharedString,
     pub(super) fps_color_change_help: SharedString,
     pub(super) color_slot_labels: [SharedString; 11],
+    pub(super) color_brightness: SharedString,
+    pub(super) color_quick_swatches: SharedString,
+    pub(super) color_pick_tooltip: SharedString,
 
     pub(super) group_opengl: SharedString,
     pub(super) opengl_wrapper_label: SharedString,
@@ -211,6 +217,7 @@ impl HudLabels {
             preset_balanced_gaming: t("settings.hud.preset.balanced_gaming"),
             preset_full_diagnostics: t("settings.hud.preset.full_diagnostics"),
             preset_custom: t("settings.hud.preset.custom"),
+            preset_custom_horizontal: t("settings.hud.preset.custom_horizontal"),
 
             group_hardware: t("settings.hud.group.hardware"),
             gpu_selection_label: t("settings.hud.gpu_selection.label"),
@@ -391,6 +398,8 @@ impl HudLabels {
             alpha_label: t("settings.hud.alpha.label"),
             toggle_hud_label: t("settings.hud.toggle_hud.label"),
             toggle_hud_help: t("settings.hud.toggle_hud.help"),
+            toggle_preset_label: t("settings.hud.toggle_preset.label"),
+            toggle_preset_help: t("settings.hud.toggle_preset.help"),
             no_display_label: t("settings.hud.no_display.label"),
             no_display_help: t("settings.hud.no_display.help"),
 
@@ -416,6 +425,9 @@ impl HudLabels {
                 t("settings.hud.color.battery"),
                 t("settings.hud.color.accent"),
             ],
+            color_brightness: t("settings.hud.color.brightness"),
+            color_quick_swatches: t("settings.hud.color.quick_swatches"),
+            color_pick_tooltip: t("settings.hud.color.pick_tooltip"),
 
             group_opengl: t("settings.hud.group.opengl"),
             opengl_wrapper_label: t("settings.hud.opengl_wrapper.label"),

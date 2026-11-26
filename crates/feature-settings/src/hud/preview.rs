@@ -29,7 +29,7 @@ use irori_runtime::hud::hardware_linux::{
     LinuxHudEnv, default_gpu_short_label, default_gpu_vendor, resolve_pci_dev,
 };
 use irori_runtime::hud::mangohud_conf::{
-    ConfRenderContext, render_mangohud_conf, resolve_effective_colors,
+    ConfRenderContext, render_mangohud_conf, render_mangohud_presets, resolve_effective_colors,
 };
 use irori_ui::backend;
 use irori_ui::i18n::t;
@@ -231,22 +231,31 @@ impl HudPreview {
         cx.notify();
     }
 
-    /// Rewrite `<data>/mangohud/preview.conf` in-place whenever a `vkcube`
-    /// test window is already open so edits apply live via MangoHud `inotify`.
+    /// Rewrite `<data>/mangohud/preview_presets.conf` and `preview.conf` in
+    /// place whenever a `vkcube` test window is already open so edits apply
+    /// live via MangoHud `inotify`.
     pub fn sync_live_vkcube_if_running(&self, cx: &Context<Self>) {
         if self.running.is_none() || self.backend != HudBackend::MangoHud {
             return;
         }
-        let conf_path: PathBuf = Paths::get().mangohud_config_file("preview");
-        let conf_body = self.render_preview_conf(cx);
+        let paths = Paths::get();
+        let conf_path: PathBuf = paths.mangohud_config_file("preview");
+        let presets_path: PathBuf = paths.mangohud_presets_file("preview");
+        let (conf_body, presets_body) = self.render_preview_files(cx);
         backend(cx).spawn(async move {
+            if let Err(err) =
+                irori_runtime::hud::write_config_live(&presets_path, &presets_body).await
+            {
+                tracing::warn!("updating live vkcube preview presets: {err:#}");
+                return;
+            }
             if let Err(err) = irori_runtime::hud::write_config_live(&conf_path, &conf_body).await {
                 tracing::warn!("updating live vkcube preview config: {err:#}");
             }
         });
     }
 
-    fn render_preview_conf(&self, cx: &Context<Self>) -> String {
+    fn render_preview_files(&self, cx: &Context<Self>) -> (String, String) {
         let theme_colors = theme_hud_colors(cx.theme());
         let ctx = ConfRenderContext {
             detected_gpu_label: default_gpu_short_label(
@@ -259,7 +268,10 @@ impl HudPreview {
             pci_dev: resolve_pci_dev(&self.profile.gpu_selection, &self.env.gpus),
             theme_colors: Some(theme_colors),
         };
-        render_mangohud_conf(&self.profile, &ctx)
+        (
+            render_mangohud_conf(&self.profile, &ctx),
+            render_mangohud_presets(&self.profile),
+        )
     }
 
     fn rebuild_cache(&mut self, cx: &Context<Self>) {
@@ -295,13 +307,23 @@ impl HudPreview {
         self.starting = true;
         cx.notify();
 
-        let conf_path: PathBuf = Paths::get().mangohud_config_file("preview");
-        let conf_body = self.render_preview_conf(cx);
+        let paths = Paths::get();
+        let conf_path: PathBuf = paths.mangohud_config_file("preview");
+        let presets_path: PathBuf = paths.mangohud_presets_file("preview");
+        let (conf_body, presets_body) = self.render_preview_files(cx);
 
         backend(cx).spawn(async move {
             if let Some(prev_run) = prev {
                 let _ = prev_run.kill_tx.send(());
                 let _ = prev_run.done_rx.await;
+            }
+            if let Err(err) =
+                irori_runtime::hud::write_config_live(&presets_path, &presets_body).await
+            {
+                let _ = started_tx.send(Err(err.to_string()));
+                let _ = done_tx.send(());
+                let _ = exited_tx.send(());
+                return;
             }
             if let Err(err) = irori_runtime::hud::write_config_live(&conf_path, &conf_body).await {
                 let _ = started_tx.send(Err(err.to_string()));
@@ -312,6 +334,7 @@ impl HudPreview {
             let mut cmd = tokio::process::Command::new(&vkcube_path);
             cmd.env("MANGOHUD", "1")
                 .env("MANGOHUD_CONFIGFILE", &conf_path)
+                .env("MANGOHUD_PRESETSFILE", &presets_path)
                 .env_remove("MANGOHUD_CONFIG")
                 .env_remove("DISABLE_MANGOHUD")
                 .stdin(Stdio::null())

@@ -66,8 +66,8 @@ pub(super) const FPS_PRESETS: [(u32, &str, &str); 7] = [
     (240, "hud-fps-240", "240"),
 ];
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum ColorSlot {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ColorSlot {
     Background = 0,
     Text = 1,
     Gpu = 2,
@@ -112,6 +112,38 @@ impl ColorSlot {
         }
     }
 
+    pub(super) const fn popover_id(self) -> &'static str {
+        match self {
+            Self::Background => "hud-color-popover-background",
+            Self::Text => "hud-color-popover-text",
+            Self::Gpu => "hud-color-popover-gpu",
+            Self::Cpu => "hud-color-popover-cpu",
+            Self::Vram => "hud-color-popover-vram",
+            Self::Ram => "hud-color-popover-ram",
+            Self::Engine => "hud-color-popover-engine",
+            Self::Frametime => "hud-color-popover-frametime",
+            Self::Io => "hud-color-popover-io",
+            Self::Battery => "hud-color-popover-battery",
+            Self::Accent => "hud-color-popover-accent",
+        }
+    }
+
+    pub(super) const fn trigger_id(self) -> &'static str {
+        match self {
+            Self::Background => "hud-color-trigger-background",
+            Self::Text => "hud-color-trigger-text",
+            Self::Gpu => "hud-color-trigger-gpu",
+            Self::Cpu => "hud-color-trigger-cpu",
+            Self::Vram => "hud-color-trigger-vram",
+            Self::Ram => "hud-color-trigger-ram",
+            Self::Engine => "hud-color-trigger-engine",
+            Self::Frametime => "hud-color-trigger-frametime",
+            Self::Io => "hud-color-trigger-io",
+            Self::Battery => "hud-color-trigger-battery",
+            Self::Accent => "hud-color-trigger-accent",
+        }
+    }
+
     pub(super) fn get(self, c: &ThemeHudColors) -> &str {
         match self {
             Self::Background => &c.background_color,
@@ -144,7 +176,7 @@ impl ColorSlot {
         }
     }
 
-    pub(super) fn fallback(self) -> &'static str {
+    pub(crate) fn fallback(self) -> &'static str {
         match self {
             Self::Background => "020202",
             Self::Text => "FFFFFF",
@@ -372,11 +404,17 @@ pub(super) fn read_hud_settings(
     cx: &App,
 ) -> (GlobalHudSettings, GameHudSettings) {
     let settings = &backend(cx).settings;
-    let global = settings.app().hud.clone();
-    let game = match scope {
+    let mut global = settings.app().hud.clone();
+    let mut mangohud = global.mangohud.clone();
+    global.hydrate_profile(&mut mangohud);
+    global.mangohud = mangohud;
+    let mut game = match scope {
         HudPanelScope::Global => GameHudSettings::default(),
         HudPanelScope::PerGame { id, .. } => settings.game(id).game_hud.clone(),
     };
+    if let Some(profile) = game.custom_mangohud.as_mut() {
+        global.hydrate_profile(profile);
+    }
     (global, game)
 }
 
@@ -385,13 +423,15 @@ pub(super) fn effective_mangohud_profile(
     global: &GlobalHudSettings,
     game: &GameHudSettings,
 ) -> MangoHudProfile {
-    match scope {
+    let mut profile = match scope {
         HudPanelScope::Global => global.mangohud.clone(),
         HudPanelScope::PerGame { .. } => game
             .custom_mangohud
             .clone()
             .unwrap_or_else(|| global.mangohud.clone()),
-    }
+    };
+    global.hydrate_profile(&mut profile);
+    profile
 }
 
 pub(super) fn effective_metal_settings(
@@ -428,14 +468,24 @@ pub(super) fn resolve_hud_for_scope(
     resolve_effective_hud(global, game, legacy_mangohud, legacy_fps, hud_backend)
 }
 
-pub(super) fn steam_conf_path(scope: &HudPanelScope, game: &GameHudSettings) -> std::path::PathBuf {
-    let paths = Paths::get();
+pub(super) fn hud_conf_name(scope: &HudPanelScope, game: &GameHudSettings) -> String {
     match scope {
         HudPanelScope::PerGame { id, .. } if game.mode == GameHudMode::Custom => {
-            paths.mangohud_config_file(&format!("{}_{}", id.runner.id(), id.app_name))
+            format!("{}_{}", id.runner.id(), id.app_name)
         }
-        _ => paths.mangohud_config_file("global"),
+        _ => "global".to_string(),
     }
+}
+
+pub(super) fn steam_conf_path(scope: &HudPanelScope, game: &GameHudSettings) -> std::path::PathBuf {
+    Paths::get().mangohud_config_file(&hud_conf_name(scope, game))
+}
+
+pub(super) fn steam_presets_path(
+    scope: &HudPanelScope,
+    game: &GameHudSettings,
+) -> std::path::PathBuf {
+    Paths::get().mangohud_presets_file(&hud_conf_name(scope, game))
 }
 
 pub(super) fn build_gpu_options(
@@ -579,7 +629,9 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
     ) {
         let resolved = resolve_hud_for_scope(scope, hud_backend, global, game, cx);
         let conf_path = steam_conf_path(scope, game);
-        steam_launch_snippet(hud_backend, &resolved, &conf_path).map(SharedString::from)
+        let presets_path = steam_presets_path(scope, game);
+        steam_launch_snippet(hud_backend, &resolved, &conf_path, &presets_path)
+            .map(SharedString::from)
     } else {
         None
     };

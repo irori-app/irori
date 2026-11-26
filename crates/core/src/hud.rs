@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 /// Default MangoHud toggle shortcut matching MangoHud's factory default.
 pub const DEFAULT_TOGGLE_HUD: &str = "Shift_R+F12";
 
+/// Default MangoHud preset cycling shortcut matching MangoHud's factory default.
+pub const DEFAULT_TOGGLE_PRESET: &str = "Shift_R+F10";
+
 /// Active HUD backend for the host operating system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +83,29 @@ pub enum HudPreset {
     BalancedGaming,
     FullDiagnostics,
     Custom,
+    CustomHorizontal,
+}
+
+impl HudPreset {
+    /// Built-in Irori presets in their canonical in-game cycle order.
+    pub const BUILTIN: [Self; 4] = [
+        Self::MinimalFps,
+        Self::HorizontalCompact,
+        Self::BalancedGaming,
+        Self::FullDiagnostics,
+    ];
+
+    /// Stable numeric identifier written to MangoHud `presets.conf` (`[preset N]`).
+    pub const fn mangohud_preset_id(self) -> u8 {
+        match self {
+            Self::MinimalFps => 1,
+            Self::HorizontalCompact => 2,
+            Self::BalancedGaming => 3,
+            Self::FullDiagnostics => 4,
+            Self::Custom => 5,
+            Self::CustomHorizontal => 6,
+        }
+    }
 }
 
 /// Screen anchor position for MangoHud.
@@ -384,6 +410,7 @@ pub struct MangoHudProfile {
     pub background_alpha: f32,
     pub alpha: f32,
     pub toggle_hud: String,
+    pub toggle_preset: String,
     pub no_display: bool,
 
     // Frame Limiter
@@ -404,9 +431,12 @@ pub struct MangoHudProfile {
     pub opengl_legacy_wrapper: bool,
     pub mangohud_dlsym: bool,
 
-    /// Last manual selection made under [`HudPreset::Custom`].
+    /// Last manual selection made under [`HudPreset::Custom`] (vertical).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub saved_custom: Option<CustomPresetSnapshot>,
+    /// Last manual selection made under [`HudPreset::CustomHorizontal`] (horizontal).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_custom_horizontal: Option<CustomPresetSnapshot>,
 }
 
 impl Default for MangoHudProfile {
@@ -457,6 +487,7 @@ impl MangoHudProfile {
             background_alpha: 0.5,
             alpha: 1.0,
             toggle_hud: DEFAULT_TOGGLE_HUD.into(),
+            toggle_preset: DEFAULT_TOGGLE_PRESET.into(),
             no_display: false,
             fps_limit: None,
             fps_limit_method: FpsLimitMethod::Late,
@@ -469,6 +500,7 @@ impl MangoHudProfile {
             opengl_legacy_wrapper: false,
             mangohud_dlsym: true,
             saved_custom: None,
+            saved_custom_horizontal: None,
         };
         profile.apply_preset(preset);
         profile
@@ -477,48 +509,51 @@ impl MangoHudProfile {
     /// Apply a preset's metric and layout toggles while preserving the user's
     /// hotkey, GPU selection, custom labels, palette and legacy wrapper choice.
     ///
-    /// Leaving [`HudPreset::Custom`] stores the current selection, and choosing
-    /// it again restores that selection.
+    /// Leaving [`HudPreset::Custom`] or [`HudPreset::CustomHorizontal`] stores
+    /// the current selection in its dedicated slot, and choosing it again
+    /// restores that selection.
     pub fn apply_preset(&mut self, preset: HudPreset) {
+        if self.preset == HudPreset::Custom && preset != HudPreset::Custom {
+            let mut snapshot = self.custom_snapshot();
+            snapshot.orientation = HudOrientation::Vertical;
+            self.saved_custom = Some(snapshot);
+        } else if self.preset == HudPreset::CustomHorizontal
+            && preset != HudPreset::CustomHorizontal
+        {
+            let mut snapshot = self.custom_snapshot();
+            snapshot.orientation = HudOrientation::Horizontal;
+            self.saved_custom_horizontal = Some(snapshot);
+        }
+
         if preset == HudPreset::Custom {
-            self.preset = preset;
-            if let Some(snapshot) = self.saved_custom.clone() {
+            self.preset = HudPreset::Custom;
+            if let Some(mut snapshot) = self.saved_custom.clone() {
+                snapshot.orientation = HudOrientation::Vertical;
                 self.restore_custom_snapshot(&snapshot);
+                self.saved_custom = Some(snapshot);
+            } else {
+                self.orientation = HudOrientation::Vertical;
+                self.saved_custom = Some(self.custom_snapshot());
             }
             return;
         }
-        if self.preset == HudPreset::Custom {
-            self.saved_custom = Some(self.custom_snapshot());
+
+        if preset == HudPreset::CustomHorizontal {
+            self.preset = HudPreset::CustomHorizontal;
+            if let Some(mut snapshot) = self.saved_custom_horizontal.clone() {
+                snapshot.orientation = HudOrientation::Horizontal;
+                self.restore_custom_snapshot(&snapshot);
+                self.saved_custom_horizontal = Some(snapshot);
+            } else {
+                self.reset_metric_toggles();
+                self.apply_horizontal_compact_metrics();
+                self.saved_custom_horizontal = Some(self.custom_snapshot());
+            }
+            return;
         }
+
         self.preset = preset;
-        // Reset all metric toggles first.
-        self.gpu_stats = false;
-        self.gpu_temp = false;
-        self.gpu_junction_temp = false;
-        self.gpu_mem_temp = false;
-        self.gpu_core_clock = false;
-        self.gpu_mem_clock = false;
-        self.gpu_power = false;
-        self.gpu_fan = false;
-        self.vram = false;
-        self.cpu_stats = false;
-        self.cpu_temp = false;
-        self.cpu_mhz = false;
-        self.cpu_power = false;
-        self.ram = false;
-        self.fps = false;
-        self.fps_avg = false;
-        self.fps_1_low = false;
-        self.frametime = false;
-        self.frame_timing = false;
-        self.present_mode = false;
-        self.wine = false;
-        self.winesync = false;
-        self.fsr = false;
-        self.hdr = false;
-        self.gamemode = false;
-        self.throttling_status = false;
-        self.gamepad_battery = false;
+        self.reset_metric_toggles();
 
         match preset {
             HudPreset::MinimalFps => {
@@ -527,16 +562,7 @@ impl MangoHudProfile {
                 self.hud_compact = true;
             }
             HudPreset::HorizontalCompact => {
-                self.gpu_stats = true;
-                self.gpu_temp = true;
-                self.vram = true;
-                self.cpu_stats = true;
-                self.cpu_temp = true;
-                self.ram = true;
-                self.fps = true;
-                self.frametime = true;
-                self.orientation = HudOrientation::Horizontal;
-                self.hud_compact = true;
+                self.apply_horizontal_compact_metrics();
             }
             HudPreset::BalancedGaming => {
                 self.gpu_stats = true;
@@ -583,8 +609,51 @@ impl MangoHudProfile {
                 self.orientation = HudOrientation::Vertical;
                 self.hud_compact = false;
             }
-            HudPreset::Custom => {}
+            HudPreset::Custom | HudPreset::CustomHorizontal => {}
         }
+    }
+
+    fn reset_metric_toggles(&mut self) {
+        self.gpu_stats = false;
+        self.gpu_temp = false;
+        self.gpu_junction_temp = false;
+        self.gpu_mem_temp = false;
+        self.gpu_core_clock = false;
+        self.gpu_mem_clock = false;
+        self.gpu_power = false;
+        self.gpu_fan = false;
+        self.vram = false;
+        self.cpu_stats = false;
+        self.cpu_temp = false;
+        self.cpu_mhz = false;
+        self.cpu_power = false;
+        self.ram = false;
+        self.fps = false;
+        self.fps_avg = false;
+        self.fps_1_low = false;
+        self.frametime = false;
+        self.frame_timing = false;
+        self.present_mode = false;
+        self.wine = false;
+        self.winesync = false;
+        self.fsr = false;
+        self.hdr = false;
+        self.gamemode = false;
+        self.throttling_status = false;
+        self.gamepad_battery = false;
+    }
+
+    fn apply_horizontal_compact_metrics(&mut self) {
+        self.gpu_stats = true;
+        self.gpu_temp = true;
+        self.vram = true;
+        self.cpu_stats = true;
+        self.cpu_temp = true;
+        self.ram = true;
+        self.fps = true;
+        self.frametime = true;
+        self.orientation = HudOrientation::Horizontal;
+        self.hud_compact = true;
     }
 
     /// True when any GPU sub-sensor requires MangoHud's `gpu_stats` master flag.
@@ -635,11 +704,119 @@ impl MangoHudProfile {
             && !self.gamepad_battery
     }
 
-    /// Transition the preset indicator to [`HudPreset::Custom`] after a manual edit.
-    /// The current selection is saved so a later preset switch can restore it.
+    /// Transition the preset indicator to [`HudPreset::Custom`] (vertical) or
+    /// [`HudPreset::CustomHorizontal`] (horizontal) after a manual edit,
+    /// saving the updated selection to its dedicated slot.
     pub fn mark_custom(&mut self) {
-        self.preset = HudPreset::Custom;
-        self.saved_custom = Some(self.custom_snapshot());
+        if self.orientation == HudOrientation::Horizontal {
+            self.preset = HudPreset::CustomHorizontal;
+            self.saved_custom_horizontal = Some(self.custom_snapshot());
+        } else {
+            self.preset = HudPreset::Custom;
+            self.orientation = HudOrientation::Vertical;
+            self.saved_custom = Some(self.custom_snapshot());
+        }
+    }
+
+    /// Switch layout orientation via the Layout tab buttons, routing to
+    /// [`HudPreset::Custom`] (vertical) or [`HudPreset::CustomHorizontal`]
+    /// (horizontal).
+    ///
+    /// Saves the active custom slot before switching. If the target slot
+    /// already has a saved snapshot, it is restored without being overwritten;
+    /// otherwise the current metrics are copied into the target slot with the
+    /// requested orientation.
+    pub fn set_orientation(&mut self, orientation: HudOrientation) {
+        if self.preset == HudPreset::Custom {
+            let mut snapshot = self.custom_snapshot();
+            snapshot.orientation = HudOrientation::Vertical;
+            self.saved_custom = Some(snapshot);
+        } else if self.preset == HudPreset::CustomHorizontal {
+            let mut snapshot = self.custom_snapshot();
+            snapshot.orientation = HudOrientation::Horizontal;
+            self.saved_custom_horizontal = Some(snapshot);
+        }
+
+        match orientation {
+            HudOrientation::Vertical => {
+                self.preset = HudPreset::Custom;
+                if let Some(mut snapshot) = self.saved_custom.clone() {
+                    snapshot.orientation = HudOrientation::Vertical;
+                    self.restore_custom_snapshot(&snapshot);
+                    self.saved_custom = Some(snapshot);
+                } else {
+                    self.orientation = HudOrientation::Vertical;
+                    self.saved_custom = Some(self.custom_snapshot());
+                }
+            }
+            HudOrientation::Horizontal => {
+                self.preset = HudPreset::CustomHorizontal;
+                if let Some(mut snapshot) = self.saved_custom_horizontal.clone() {
+                    snapshot.orientation = HudOrientation::Horizontal;
+                    self.restore_custom_snapshot(&snapshot);
+                    self.saved_custom_horizontal = Some(snapshot);
+                } else {
+                    self.orientation = HudOrientation::Horizontal;
+                    self.saved_custom_horizontal = Some(self.custom_snapshot());
+                }
+            }
+        }
+    }
+
+    /// Hydrate this profile's custom preset slots from globally shared
+    /// snapshots, also updating the live metric toggles when the active preset
+    /// is [`HudPreset::Custom`] or [`HudPreset::CustomHorizontal`].
+    pub fn hydrate_global_customs(
+        &mut self,
+        vertical: Option<&CustomPresetSnapshot>,
+        horizontal: Option<&CustomPresetSnapshot>,
+    ) {
+        if let Some(snap) = vertical {
+            let mut snap = snap.clone();
+            snap.orientation = HudOrientation::Vertical;
+            if self.preset == HudPreset::Custom {
+                self.restore_custom_snapshot(&snap);
+            }
+            self.saved_custom = Some(snap);
+        }
+        if let Some(snap) = horizontal {
+            let mut snap = snap.clone();
+            snap.orientation = HudOrientation::Horizontal;
+            if self.preset == HudPreset::CustomHorizontal {
+                self.restore_custom_snapshot(&snap);
+            }
+            self.saved_custom_horizontal = Some(snap);
+        }
+    }
+
+    /// Whether this profile has a distinct vertical custom selection to include
+    /// in MangoHud's in-game preset cycle (`[preset 5]`).
+    pub const fn has_custom_preset(&self) -> bool {
+        matches!(self.preset, HudPreset::Custom) || self.saved_custom.is_some()
+    }
+
+    /// Whether this profile has a distinct horizontal custom selection to
+    /// include in MangoHud's in-game preset cycle (`[preset 6]`).
+    pub const fn has_custom_horizontal_preset(&self) -> bool {
+        matches!(self.preset, HudPreset::CustomHorizontal) || self.saved_custom_horizontal.is_some()
+    }
+
+    /// Ordered preset cycle starting with `self.preset` so MangoHud launches
+    /// directly into the active preset and cycles cleanly through Irori's own
+    /// presets on `toggle_preset`.
+    pub fn preset_cycle(&self) -> Vec<HudPreset> {
+        let mut cycle = Vec::with_capacity(6);
+        cycle.extend_from_slice(&HudPreset::BUILTIN);
+        if self.has_custom_preset() {
+            cycle.push(HudPreset::Custom);
+        }
+        if self.has_custom_horizontal_preset() {
+            cycle.push(HudPreset::CustomHorizontal);
+        }
+        if let Some(pos) = cycle.iter().position(|&p| p == self.preset) {
+            cycle.rotate_left(pos);
+        }
+        cycle
     }
 
     /// Capture the toggles that presets overwrite.
@@ -758,6 +935,56 @@ pub struct GlobalHudSettings {
     /// Last theme palette extracted on the UI thread so headless/CLI launches
     /// still honor `SyncIroriTheme` without depending on GPUI.
     pub cached_theme_colors: Option<ThemeHudColors>,
+    /// Globally shared vertical custom preset (`[preset 5]`), available across
+    /// global and per-game HUD profiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_preset: Option<CustomPresetSnapshot>,
+    /// Globally shared horizontal custom preset (`[preset 6]`), available
+    /// across global and per-game HUD profiles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_horizontal_preset: Option<CustomPresetSnapshot>,
+}
+
+impl GlobalHudSettings {
+    /// Shared vertical custom preset snapshot, falling back to legacy
+    /// `mangohud.saved_custom` when `custom_preset` has not been written yet.
+    pub fn effective_custom_preset(&self) -> Option<CustomPresetSnapshot> {
+        self.custom_preset
+            .clone()
+            .or_else(|| self.mangohud.saved_custom.clone())
+            .or_else(|| {
+                (self.mangohud.preset == HudPreset::Custom).then(|| self.mangohud.custom_snapshot())
+            })
+            .map(|mut snapshot| {
+                snapshot.orientation = HudOrientation::Vertical;
+                snapshot
+            })
+    }
+
+    /// Shared horizontal custom preset snapshot, falling back to
+    /// `mangohud.saved_custom_horizontal` when `custom_horizontal_preset` has
+    /// not been written yet.
+    pub fn effective_custom_horizontal_preset(&self) -> Option<CustomPresetSnapshot> {
+        self.custom_horizontal_preset
+            .clone()
+            .or_else(|| self.mangohud.saved_custom_horizontal.clone())
+            .or_else(|| {
+                (self.mangohud.preset == HudPreset::CustomHorizontal)
+                    .then(|| self.mangohud.custom_snapshot())
+            })
+            .map(|mut snapshot| {
+                snapshot.orientation = HudOrientation::Horizontal;
+                snapshot
+            })
+    }
+
+    /// Hydrate `profile` with the latest shared vertical and horizontal custom
+    /// snapshots from global settings.
+    pub fn hydrate_profile(&self, profile: &mut MangoHudProfile) {
+        let vertical = self.effective_custom_preset();
+        let horizontal = self.effective_custom_horizontal_preset();
+        profile.hydrate_global_customs(vertical.as_ref(), horizontal.as_ref());
+    }
 }
 
 /// Per-game HUD override stored in [`crate::GameSettings`].
@@ -774,7 +1001,11 @@ impl GameHudSettings {
     /// [`GameHudMode::Custom`].
     pub fn ensure_custom_from(&mut self, global: &GlobalHudSettings) {
         if self.custom_mangohud.is_none() {
-            self.custom_mangohud = Some(global.mangohud.clone());
+            let mut profile = global.mangohud.clone();
+            global.hydrate_profile(&mut profile);
+            self.custom_mangohud = Some(profile);
+        } else if let Some(profile) = self.custom_mangohud.as_mut() {
+            global.hydrate_profile(profile);
         }
         if self.custom_metal.is_none() {
             self.custom_metal = Some(global.metal.clone());
@@ -783,7 +1014,9 @@ impl GameHudSettings {
 
     /// Replace this game's custom HUD profiles with a fresh copy of `global`.
     pub fn restore_from_global(&mut self, global: &GlobalHudSettings) {
-        self.custom_mangohud = Some(global.mangohud.clone());
+        let mut profile = global.mangohud.clone();
+        global.hydrate_profile(&mut profile);
+        self.custom_mangohud = Some(profile);
         self.custom_metal = Some(global.metal.clone());
     }
 }
@@ -815,18 +1048,25 @@ pub fn resolve_effective_hud(
         HudBackend::Unsupported => ResolvedHud::Off,
         HudBackend::MangoHud => match game.mode {
             GameHudMode::Disabled => ResolvedHud::Disabled,
-            GameHudMode::Custom => ResolvedHud::MangoHudProfile(Box::new(
-                game.custom_mangohud
+            GameHudMode::Custom => {
+                let mut profile = game
+                    .custom_mangohud
                     .clone()
-                    .unwrap_or_else(|| global.mangohud.clone()),
-            )),
+                    .unwrap_or_else(|| global.mangohud.clone());
+                global.hydrate_profile(&mut profile);
+                ResolvedHud::MangoHudProfile(Box::new(profile))
+            }
             GameHudMode::InheritGlobal => match global.mode {
                 GlobalHudMode::IroriProfile => {
-                    ResolvedHud::MangoHudProfile(Box::new(global.mangohud.clone()))
+                    let mut profile = global.mangohud.clone();
+                    global.hydrate_profile(&mut profile);
+                    ResolvedHud::MangoHudProfile(Box::new(profile))
                 }
                 // The legacy `showMangohud` toggle counts as "On".
                 GlobalHudMode::Off if legacy_show_mangohud => {
-                    ResolvedHud::MangoHudProfile(Box::new(global.mangohud.clone()))
+                    let mut profile = global.mangohud.clone();
+                    global.hydrate_profile(&mut profile);
+                    ResolvedHud::MangoHudProfile(Box::new(profile))
                 }
                 GlobalHudMode::Off => ResolvedHud::Off,
             },
@@ -931,12 +1171,58 @@ mod tests {
         let global: GlobalHudSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(global.mode, GlobalHudMode::Off);
         assert_eq!(global.mangohud.toggle_hud, DEFAULT_TOGGLE_HUD);
+        assert_eq!(global.mangohud.toggle_preset, DEFAULT_TOGGLE_PRESET);
         assert_eq!(global.metal.alignment, MetalHudAlignment::TopRight);
 
         let game: GameHudSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(game.mode, GameHudMode::InheritGlobal);
         assert!(game.custom_mangohud.is_none());
         assert!(game.custom_metal.is_none());
+    }
+
+    #[test]
+    fn preset_cycle_rotates_active_preset_first_and_tracks_custom() {
+        let mut profile = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        profile.toggle_preset = "Shift_L+F9".into();
+        assert!(!profile.has_custom_preset());
+        assert_eq!(
+            profile.preset_cycle(),
+            vec![
+                HudPreset::BalancedGaming,
+                HudPreset::FullDiagnostics,
+                HudPreset::MinimalFps,
+                HudPreset::HorizontalCompact,
+            ]
+        );
+
+        profile.gpu_fan = true;
+        profile.mark_custom();
+        assert!(profile.has_custom_preset());
+        assert_eq!(
+            profile.preset_cycle(),
+            vec![
+                HudPreset::Custom,
+                HudPreset::MinimalFps,
+                HudPreset::HorizontalCompact,
+                HudPreset::BalancedGaming,
+                HudPreset::FullDiagnostics,
+            ]
+        );
+
+        // Switching back to a built-in preset keeps toggle_preset and saved_custom in the cycle.
+        profile.apply_preset(HudPreset::HorizontalCompact);
+        assert_eq!(profile.toggle_preset, "Shift_L+F9");
+        assert!(profile.has_custom_preset());
+        assert_eq!(
+            profile.preset_cycle(),
+            vec![
+                HudPreset::HorizontalCompact,
+                HudPreset::BalancedGaming,
+                HudPreset::FullDiagnostics,
+                HudPreset::Custom,
+                HudPreset::MinimalFps,
+            ]
+        );
     }
 
     #[test]
@@ -989,10 +1275,19 @@ mod tests {
         let mut profile = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
         profile.gpu_fan = true;
         profile.ram = false;
-        profile.orientation = HudOrientation::Horizontal;
         profile.hud_compact = true;
         profile.mark_custom();
-        let expected = profile.custom_snapshot();
+        assert_eq!(profile.preset, HudPreset::Custom);
+        assert_eq!(profile.orientation, HudOrientation::Vertical);
+        let expected_vertical = profile.custom_snapshot();
+
+        // Editing from a horizontal preset targets CustomHorizontal independently.
+        profile.apply_preset(HudPreset::HorizontalCompact);
+        profile.gpu_power = true;
+        profile.mark_custom();
+        assert_eq!(profile.preset, HudPreset::CustomHorizontal);
+        assert_eq!(profile.orientation, HudOrientation::Horizontal);
+        let expected_horizontal = profile.custom_snapshot();
 
         profile.apply_preset(HudPreset::BalancedGaming);
         assert!(!profile.gpu_fan);
@@ -1001,16 +1296,145 @@ mod tests {
 
         let json = serde_json::to_string(&profile).unwrap();
         assert!(json.contains("savedCustom"));
+        assert!(json.contains("savedCustomHorizontal"));
         let mut restored: MangoHudProfile = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, profile);
 
         restored.apply_preset(HudPreset::Custom);
         assert_eq!(restored.preset, HudPreset::Custom);
-        assert_eq!(restored.custom_snapshot(), expected);
+        assert_eq!(restored.custom_snapshot(), expected_vertical);
         assert!(restored.gpu_fan);
         assert!(!restored.ram);
-        assert_eq!(restored.orientation, HudOrientation::Horizontal);
+        assert_eq!(restored.orientation, HudOrientation::Vertical);
         assert!(restored.hud_compact);
+
+        restored.apply_preset(HudPreset::CustomHorizontal);
+        assert_eq!(restored.preset, HudPreset::CustomHorizontal);
+        assert_eq!(restored.custom_snapshot(), expected_horizontal);
+        assert!(restored.gpu_power);
+        assert_eq!(restored.orientation, HudOrientation::Horizontal);
+    }
+
+    #[test]
+    fn set_orientation_switches_between_custom_slots_without_clobbering() {
+        let mut profile = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        profile.gpu_fan = true;
+        profile.mark_custom();
+        assert_eq!(profile.preset, HudPreset::Custom);
+        assert!(profile.saved_custom_horizontal.is_none());
+
+        // Switching to Horizontal when CustomHorizontal is empty copies current metrics.
+        profile.set_orientation(HudOrientation::Horizontal);
+        assert_eq!(profile.preset, HudPreset::CustomHorizontal);
+        assert_eq!(profile.orientation, HudOrientation::Horizontal);
+        assert!(profile.gpu_fan);
+
+        // Customize horizontal metrics differently.
+        profile.gpu_fan = false;
+        profile.cpu_power = true;
+        profile.mark_custom();
+
+        // Switching back to Vertical restores Custom without losing CustomHorizontal.
+        profile.set_orientation(HudOrientation::Vertical);
+        assert_eq!(profile.preset, HudPreset::Custom);
+        assert_eq!(profile.orientation, HudOrientation::Vertical);
+        assert!(profile.gpu_fan);
+        assert!(!profile.cpu_power);
+
+        // Switching to Horizontal restores the saved CustomHorizontal snapshot intact.
+        profile.set_orientation(HudOrientation::Horizontal);
+        assert_eq!(profile.preset, HudPreset::CustomHorizontal);
+        assert_eq!(profile.orientation, HudOrientation::Horizontal);
+        assert!(!profile.gpu_fan);
+        assert!(profile.cpu_power);
+    }
+
+    #[test]
+    fn preset_cycle_includes_both_custom_slots_and_rotates_active() {
+        let mut profile = MangoHudProfile::from_preset(HudPreset::HorizontalCompact);
+        profile.gpu_power = true;
+        profile.mark_custom();
+        assert!(!profile.has_custom_preset());
+        assert!(profile.has_custom_horizontal_preset());
+        assert_eq!(
+            profile.preset_cycle(),
+            vec![
+                HudPreset::CustomHorizontal,
+                HudPreset::MinimalFps,
+                HudPreset::HorizontalCompact,
+                HudPreset::BalancedGaming,
+                HudPreset::FullDiagnostics,
+            ]
+        );
+
+        // Also define vertical Custom so both 5 and 6 enter the cycle.
+        profile.apply_preset(HudPreset::BalancedGaming);
+        profile.gpu_fan = true;
+        profile.mark_custom();
+        assert!(profile.has_custom_preset());
+        assert!(profile.has_custom_horizontal_preset());
+        assert_eq!(
+            profile.preset_cycle(),
+            vec![
+                HudPreset::Custom,
+                HudPreset::CustomHorizontal,
+                HudPreset::MinimalFps,
+                HudPreset::HorizontalCompact,
+                HudPreset::BalancedGaming,
+                HudPreset::FullDiagnostics,
+            ]
+        );
+    }
+
+    #[test]
+    fn global_custom_slots_propagate_to_per_game_custom_and_fallback_legacy_saved_custom() {
+        let mut global = GlobalHudSettings {
+            mode: GlobalHudMode::IroriProfile,
+            ..Default::default()
+        };
+        let mut vert = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        vert.gpu_fan = true;
+        vert.mark_custom();
+        let mut horiz = MangoHudProfile::from_preset(HudPreset::HorizontalCompact);
+        horiz.cpu_power = true;
+        horiz.mark_custom();
+        global.custom_preset = vert.saved_custom.clone();
+        global.custom_horizontal_preset = horiz.saved_custom_horizontal.clone();
+
+        let mut game_profile = MangoHudProfile::from_preset(HudPreset::CustomHorizontal);
+        game_profile.fps_limit = Some(90);
+        game_profile.saved_custom = None;
+        game_profile.saved_custom_horizontal = None;
+        let game = GameHudSettings {
+            mode: GameHudMode::Custom,
+            custom_mangohud: Some(game_profile),
+            custom_metal: None,
+        };
+
+        let ResolvedHud::MangoHudProfile(resolved) =
+            resolve_effective_hud(&global, &game, false, false, HudBackend::MangoHud)
+        else {
+            panic!("expected MangoHudProfile");
+        };
+        assert_eq!(resolved.fps_limit, Some(90));
+        assert_eq!(resolved.preset, HudPreset::CustomHorizontal);
+        assert!(resolved.cpu_power);
+        assert!(resolved.has_custom_preset());
+        assert!(resolved.has_custom_horizontal_preset());
+        assert!(resolved.saved_custom.as_ref().unwrap().gpu_fan);
+
+        // Legacy profile without GlobalHudSettings.custom_preset falls back to mangohud.saved_custom.
+        let mut legacy_global = GlobalHudSettings {
+            mode: GlobalHudMode::IroriProfile,
+            ..Default::default()
+        };
+        legacy_global.mangohud.gpu_fan = true;
+        legacy_global.mangohud.mark_custom();
+        legacy_global
+            .mangohud
+            .apply_preset(HudPreset::BalancedGaming);
+        assert!(legacy_global.custom_preset.is_none());
+        assert!(legacy_global.effective_custom_preset().unwrap().gpu_fan);
     }
 
     #[test]
@@ -1018,6 +1442,7 @@ mod tests {
         let profile = MangoHudProfile::default();
         let json = serde_json::to_string(&profile).unwrap();
         assert!(!json.contains("savedCustom"));
+        assert!(!json.contains("savedCustomHorizontal"));
         let mut profile = profile;
         let before = profile.custom_snapshot();
         profile.apply_preset(HudPreset::Custom);

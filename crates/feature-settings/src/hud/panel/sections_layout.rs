@@ -1,16 +1,18 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::select::Select;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
-    Styled as _, div, px, rems,
+    Anchor, AnyElement, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
+    Styled as _, div, rems,
 };
 use irori_core::{HudColorPalette, HudOrientation};
 
+use crate::hud::color_wheel::ColorSwatchTrigger;
 use crate::widgets::{RowState, field_row, group_heading, group_panel};
 
 use super::HudPanel;
@@ -67,8 +69,7 @@ impl HudPanel {
                                 p.orientation == HudOrientation::Vertical,
                                 cx.listener(|this, _, window, cx| {
                                     this.edit_mangohud(window, cx, |p| {
-                                        p.orientation = HudOrientation::Vertical;
-                                        p.mark_custom();
+                                        p.set_orientation(HudOrientation::Vertical);
                                     });
                                 }),
                             ))
@@ -78,8 +79,7 @@ impl HudPanel {
                                 p.orientation == HudOrientation::Horizontal,
                                 cx.listener(|this, _, window, cx| {
                                     this.edit_mangohud(window, cx, |p| {
-                                        p.orientation = HudOrientation::Horizontal;
-                                        p.mark_custom();
+                                        p.set_orientation(HudOrientation::Horizontal);
                                     });
                                 }),
                             )),
@@ -165,7 +165,7 @@ impl HudPanel {
                 }),
             ));
 
-        // Row 4: Shortcut recorder
+        // Row 4: Shortcut recorders (overlay toggle + preset cycling)
         let shortcut_row = field_row(
             RowState {
                 label: self.labels.toggle_hud_label.clone(),
@@ -175,12 +175,27 @@ impl HudPanel {
             self.shortcut.clone().into_any_element(),
             cx,
         );
+        let preset_shortcut_row = field_row(
+            RowState {
+                label: self.labels.toggle_preset_label.clone(),
+                help: self.labels.toggle_preset_help.clone(),
+                ..Default::default()
+            },
+            self.preset_shortcut.clone().into_any_element(),
+            cx,
+        );
 
         group_panel(cx)
             .child(pos_orient_row)
             .child(div().border_t_1().border_color(border).child(sliders_grid))
             .child(div().border_t_1().border_color(border).child(quick_toggles))
             .child(div().border_t_1().border_color(border).child(shortcut_row))
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(border)
+                    .child(preset_shortcut_row),
+            )
             .into_any_element()
     }
 
@@ -300,6 +315,7 @@ impl HudPanel {
                     self.labels.palette_mangohud_default.clone(),
                     p.palette == HudColorPalette::MangoHudDefault,
                     cx.listener(|this, _, window, cx| {
+                        this.open_color_slot = None;
                         this.edit_mangohud(window, cx, |p| {
                             p.palette = HudColorPalette::MangoHudDefault
                         });
@@ -313,6 +329,7 @@ impl HudPanel {
                     self.labels.palette_sync_irori_theme.clone(),
                     p.palette == HudColorPalette::SyncIroriTheme,
                     cx.listener(|this, _, window, cx| {
+                        this.open_color_slot = None;
                         this.edit_mangohud(window, cx, |p| {
                             p.palette = HudColorPalette::SyncIroriTheme
                         });
@@ -326,6 +343,7 @@ impl HudPanel {
                     self.labels.palette_monochrome.clone(),
                     p.palette == HudColorPalette::Monochrome,
                     cx.listener(|this, _, window, cx| {
+                        this.open_color_slot = None;
                         this.edit_mangohud(window, cx, |p| p.palette = HudColorPalette::Monochrome);
                     }),
                 )
@@ -360,21 +378,25 @@ impl HudPanel {
             for slot in COLOR_SLOTS {
                 let ix = slot as usize;
                 let swatch = self.display.custom_swatches[ix];
+                let wheel = self.color_wheel.clone();
+                let swatch_popover = Popover::new(slot.popover_id())
+                    .anchor(Anchor::TopLeft)
+                    .open(self.open_color_slot == Some(slot))
+                    .trigger(ColorSwatchTrigger::new(
+                        slot.trigger_id(),
+                        swatch,
+                        self.labels.color_pick_tooltip.clone(),
+                    ))
+                    .on_open_change(cx.listener(move |this, open: &bool, window, cx| {
+                        this.on_color_popover_change(slot, *open, window, cx);
+                    }))
+                    .content(move |_, _, _| wheel.clone());
                 let item = h_flex()
                     .id(slot.id())
                     .gap_2()
                     .items_center()
                     .w(rems(13.5))
-                    .child(
-                        div()
-                            .w(px(16.))
-                            .h(px(16.))
-                            .flex_shrink_0()
-                            .rounded(px(4.))
-                            .bg(swatch)
-                            .border_1()
-                            .border_color(border),
-                    )
+                    .child(swatch_popover)
                     .child(
                         div()
                             .text_xs()

@@ -435,6 +435,14 @@ impl HudPanel {
                 cx.listener(|this, _, window, cx| {
                     this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::Custom));
                 }),
+            ))
+            .child(choice_button(
+                "hud-preset-custom-horizontal",
+                self.labels.preset_custom_horizontal.clone(),
+                current_preset == HudPreset::CustomHorizontal,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::CustomHorizontal));
+                }),
             ));
 
         // Row 3: FPS limit values on top, limiter method below.
@@ -553,6 +561,7 @@ impl HudPanel {
                 active == HudTab::Metrics,
                 cx.listener(|this, _, _, cx| {
                     this.active_tab = HudTab::Metrics;
+                    this.open_color_slot = None;
                     cx.notify();
                 }),
             ))
@@ -562,6 +571,7 @@ impl HudPanel {
                 active == HudTab::Layout,
                 cx.listener(|this, _, _, cx| {
                     this.active_tab = HudTab::Layout;
+                    this.open_color_slot = None;
                     cx.notify();
                 }),
             ))

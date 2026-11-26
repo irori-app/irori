@@ -1,4 +1,5 @@
-//! Interactive keyboard shortcut recorder for MangoHud's `toggle_hud` binding.
+//! Interactive keyboard shortcut recorder for MangoHud shortcuts
+//! (`toggle_hud` and `toggle_preset`).
 //!
 //! Captures GPUI keystrokes and translates them to case-sensitive X11 keysyms
 //! via [`irori_runtime::hud::keysym`], defaulting modifier tokens to the left
@@ -50,9 +51,15 @@ impl ShortcutLabels {
 
 type ShortcutChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut App)>;
 
-/// Interactive MangoHud toggle-shortcut recorder.
+/// Interactive MangoHud shortcut recorder.
 pub struct ShortcutRecorder {
     combo: SharedString,
+    default_combo: &'static str,
+    show_wayland_note: bool,
+    id_recorder: SharedString,
+    id_record: SharedString,
+    id_side_left: SharedString,
+    id_side_right: SharedString,
     listening: bool,
     has_modifiers: bool,
     modifier_side: Option<ModifierSide>,
@@ -70,9 +77,31 @@ impl ShortcutRecorder {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::with_options(
+            "hud-shortcut",
+            DEFAULT_TOGGLE_HUD,
+            initial_combo,
+            true,
+            on_change,
+            window,
+            cx,
+        )
+    }
+
+    /// Create a shortcut recorder with a unique element ID prefix, custom reset
+    /// default combo, and optional Wayland note footer.
+    pub fn with_options(
+        id_prefix: &'static str,
+        default_combo: &'static str,
+        initial_combo: impl Into<SharedString>,
+        show_wayland_note: bool,
+        on_change: impl Fn(SharedString, &mut Window, &mut App) + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let raw = initial_combo.into();
         let combo = if raw.trim().is_empty() {
-            SharedString::new_static(DEFAULT_TOGGLE_HUD)
+            SharedString::new_static(default_combo)
         } else {
             raw
         };
@@ -87,6 +116,12 @@ impl ShortcutRecorder {
         });
         Self {
             combo,
+            default_combo,
+            show_wayland_note,
+            id_recorder: SharedString::from(format!("{id_prefix}-recorder")),
+            id_record: SharedString::from(format!("{id_prefix}-record")),
+            id_side_left: SharedString::from(format!("{id_prefix}-side-left")),
+            id_side_right: SharedString::from(format!("{id_prefix}-side-right")),
             listening: false,
             has_modifiers,
             modifier_side,
@@ -98,7 +133,7 @@ impl ShortcutRecorder {
         }
     }
 
-    /// Current recorded `toggle_hud` string.
+    /// Current recorded shortcut string.
     pub fn combo(&self) -> &SharedString {
         &self.combo
     }
@@ -112,7 +147,7 @@ impl ShortcutRecorder {
     pub fn set_combo(&mut self, combo: impl Into<SharedString>, cx: &mut Context<Self>) {
         let next = combo.into();
         let normalized = if next.trim().is_empty() {
-            SharedString::new_static(DEFAULT_TOGGLE_HUD)
+            SharedString::new_static(self.default_combo)
         } else {
             next
         };
@@ -155,7 +190,7 @@ impl ShortcutRecorder {
         }
         if key.eq_ignore_ascii_case("backspace") {
             self.listening = false;
-            self.apply_combo(SharedString::new_static(DEFAULT_TOGGLE_HUD), window, cx);
+            self.apply_combo(SharedString::new_static(self.default_combo), window, cx);
             return;
         }
         let mods = KeyModifiers {
@@ -194,14 +229,14 @@ impl Render for ShortcutRecorder {
             self.combo.clone()
         };
         let main_btn = if self.listening {
-            Button::new("hud-shortcut-record")
+            Button::new(self.id_record.clone())
                 .primary()
                 .small()
                 .icon(IconName::Keyboard)
                 .label(display_label)
                 .tooltip(self.labels.click_to_record.clone())
         } else {
-            Button::new("hud-shortcut-record")
+            Button::new(self.id_record.clone())
                 .outline()
                 .small()
                 .icon(IconName::Keyboard)
@@ -212,9 +247,11 @@ impl Render for ShortcutRecorder {
 
         let left_active = self.modifier_side == Some(ModifierSide::Left);
         let right_active = self.modifier_side == Some(ModifierSide::Right);
+        let id_left = self.id_side_left.clone();
+        let id_right = self.id_side_right.clone();
 
         v_flex()
-            .id("hud-shortcut-recorder")
+            .id(self.id_recorder.clone())
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(Self::on_key_down))
             .gap_1()
@@ -223,9 +260,9 @@ impl Render for ShortcutRecorder {
                 self.has_modifiers,
                 |row| {
                     let left_btn = if left_active {
-                        Button::new("hud-shortcut-side-left").primary()
+                        Button::new(id_left).primary()
                     } else {
-                        Button::new("hud-shortcut-side-left").outline()
+                        Button::new(id_left).outline()
                     }
                     .xsmall()
                     .label(self.labels.side_left.clone())
@@ -235,9 +272,9 @@ impl Render for ShortcutRecorder {
                     }));
 
                     let right_btn = if right_active {
-                        Button::new("hud-shortcut-side-right").primary()
+                        Button::new(id_right).primary()
                     } else {
-                        Button::new("hud-shortcut-side-right").outline()
+                        Button::new(id_right).outline()
                     }
                     .xsmall()
                     .label(self.labels.side_right.clone())
@@ -249,13 +286,15 @@ impl Render for ShortcutRecorder {
                     row.child(left_btn).child(right_btn)
                 },
             ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(muted_fg)
-                    .max_w_80()
-                    .text_right()
-                    .child(self.labels.wayland_note.clone()),
-            )
+            .when(self.show_wayland_note, |col| {
+                col.child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .max_w_80()
+                        .text_right()
+                        .child(self.labels.wayland_note.clone()),
+                )
+            })
     }
 }

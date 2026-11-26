@@ -1,7 +1,8 @@
-//! Case-sensitive X11 keysym mapping for GPUI `Keystroke` -> MangoHud `toggle_hud`.
+//! Case-sensitive X11 keysym mapping for GPUI `Keystroke` -> MangoHud shortcuts
+//! (`toggle_hud` and `toggle_preset`).
 
 use irori_core::ModifierSide;
-pub use irori_core::hud::DEFAULT_TOGGLE_HUD;
+pub use irori_core::hud::{DEFAULT_TOGGLE_HUD, DEFAULT_TOGGLE_PRESET};
 
 /// Platform-neutral modifier flags passed from a GPUI `Keystroke`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

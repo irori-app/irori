@@ -45,6 +45,9 @@ pub struct MangoState {
 
 /// The line that says another limiter applies.
 const OTHER_LIMITER: &str = "# irori: another limiter applies";
+/// Comment recording which Irori-managed HUD config file (`global` or `<runner>_<app>`)
+/// seeded this session so live Settings edits can rewrite matching running sessions.
+const SOURCE_PREFIX: &str = "# irori-source: ";
 
 /// The session's file for `id`.
 pub fn session_path(id: &GameId) -> PathBuf {
@@ -94,6 +97,13 @@ pub fn initial_state(user: &str, hidden: bool, limit: Option<u32>, limits: bool)
 /// The session's file: `user`'s configuration up to Irori's marker,
 /// without the keys Irori manages, then Irori's lines for `state`.
 pub fn session_config(user: &str, state: MangoState) -> String {
+    session_config_with_source(user, state, None)
+}
+
+/// Same as [`session_config`], additionally recording the Irori-managed source
+/// stem (`global` or `<runner>_<app>`) so live HUD settings changes can sync
+/// running sessions in place.
+pub fn session_config_with_source(user: &str, state: MangoState, source: Option<&str>) -> String {
     let mut out = format!("{HEADER}\n");
     for line in user.lines() {
         if line.trim() == MARKER {
@@ -120,7 +130,21 @@ pub fn session_config(user: &str, state: MangoState) -> String {
         out.push_str(OTHER_LIMITER);
         out.push('\n');
     }
+    if let Some(src) = source.map(str::trim).filter(|s| !s.is_empty()) {
+        out.push_str(SOURCE_PREFIX);
+        out.push_str(src);
+        out.push('\n');
+    }
     out
+}
+
+/// The Irori-managed source stem recorded in a session file, if any.
+pub fn parse_source(text: &str) -> Option<&str> {
+    let (_, ours) = text.split_once(&format!("\n{MARKER}\n"))?;
+    ours.lines()
+        .find_map(|line| line.trim().strip_prefix(SOURCE_PREFIX))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
 }
 
 /// The state in a session's file; `None` when it isn't one of Irori's.
@@ -205,6 +229,22 @@ pub struct MangoPlan {
     pub file: Option<(PathBuf, String)>,
 }
 
+/// Extract the sanitized config stem (`global` or `<runner>_<app>`) when
+/// `path` is an Irori-managed MangoHud config inside `Paths::mangohud_dir()`.
+fn managed_source_name(path: &Path) -> Option<String> {
+    let dir = irori_core::Paths::get().mangohud_dir();
+    if path.parent() != Some(dir.as_path()) {
+        return None;
+    }
+    if path.extension().and_then(|e| e.to_str()) != Some("conf") {
+        return None;
+    }
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
 /// [`prepare`]'s plan for `id`: its own file when MangoHud reads one (it
 /// may change during play), else the user's variable. Reads the user's
 /// MangoHud file, writes nothing.
@@ -229,7 +269,9 @@ pub fn plan(
             file: None,
         };
     }
-    let user = user_config_path(vars, host)
+    let user_path = user_config_path(vars, host);
+    let source = user_path.as_deref().and_then(managed_source_name);
+    let user = user_path
         .and_then(|p| std::fs::read_to_string(p).ok())
         .unwrap_or_default();
     let state = initial_state(&user, hidden, limit, limits);
@@ -240,7 +282,10 @@ pub fn plan(
             "MANGOHUD_CONFIGFILE".into(),
             path.to_string_lossy().into_owned(),
         ),
-        file: Some((path, session_config(&user, state))),
+        file: Some((
+            path,
+            session_config_with_source(&user, state, source.as_deref()),
+        )),
     }
 }
 
@@ -293,8 +338,55 @@ pub fn write_session(id: &GameId, state: MangoState) -> anyhow::Result<()> {
         parse_state(&text).is_some(),
         "MangoHud isn't running with this game"
     );
-    std::fs::write(&path, session_config(&text, state))
-        .context("MangoHud's settings couldn't be changed")
+    let source = parse_source(&text).map(str::to_owned);
+    std::fs::write(
+        &path,
+        session_config_with_source(&text, state, source.as_deref()),
+    )
+    .context("MangoHud's settings couldn't be changed")
+}
+
+/// Update the base configuration of a running session whose `# irori-source:`
+/// matches `source_name`, preserving the session's limiter ownership and inode.
+///
+/// Always rewrites in place (even when the base config bytes are unchanged) so
+/// Linux `O_TRUNC` + `write` fires MangoHud's `IN_MODIFY` watch and reloads
+/// updated `MANGOHUD_PRESETSFILE` contents immediately.
+pub fn sync_session_base(
+    id: &GameId,
+    source_name: &str,
+    base_config: &str,
+    fps_limit_update: Option<Option<u32>>,
+    no_display_update: Option<bool>,
+) -> anyhow::Result<bool> {
+    use anyhow::Context as _;
+    let path = session_path(id);
+    let existing = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => {
+            return Err(e)
+                .with_context(|| format!("reading MangoHud session file {}", path.display()));
+        }
+    };
+    if parse_source(&existing) != Some(source_name) {
+        return Ok(false);
+    }
+    let Some(mut state) = parse_state(&existing) else {
+        return Ok(false);
+    };
+    if let Some(limit) = fps_limit_update
+        && state.limits
+    {
+        state.fps_limit = limit.filter(|&v| v > 0);
+    }
+    if let Some(hidden) = no_display_update {
+        state.visible = !hidden;
+    }
+    let updated = session_config_with_source(base_config, state, Some(source_name));
+    std::fs::write(&path, updated)
+        .with_context(|| format!("updating MangoHud session file {}", path.display()))?;
+    Ok(true)
 }
 
 /// Forget the session's file once the game exited.
@@ -383,5 +475,32 @@ mod tests {
             ),
             "full"
         );
+    }
+
+    #[test]
+    fn session_source_survives_overlay_writes_and_syncs_in_place() {
+        let state = MangoState {
+            visible: true,
+            fps_limit: Some(60),
+            limits: true,
+        };
+        let seeded = session_config_with_source(
+            "legacy_layout=false\npreset=3,4,1,2\nposition=top-left\n",
+            state,
+            Some("global"),
+        );
+        assert_eq!(parse_source(&seeded), Some("global"));
+        assert_eq!(parse_state(&seeded), Some(state));
+
+        // Rewriting with the same source preserves it and updates base lines.
+        let hidden = MangoState {
+            visible: false,
+            fps_limit: Some(90),
+            limits: false,
+        };
+        let after_overlay = session_config_with_source(&seeded, hidden, parse_source(&seeded));
+        assert_eq!(parse_source(&after_overlay), Some("global"));
+        assert_eq!(parse_state(&after_overlay), Some(hidden));
+        assert!(after_overlay.contains("preset=3,4,1,2"));
     }
 }

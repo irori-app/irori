@@ -84,9 +84,11 @@ Retina mode sets `HKCU\Software\Wine\Mac Driver\RetinaMode` in the prefix before
 launch, only when it differs from what `user.reg` already holds, so Wine, CrossOver
 and Game Porting Toolkit render at the display's full resolution. In-game stats
 sets `MTL_HUD_ENABLED` and `MTL_HUD_ALIGNMENT` on macOS for both native and Wine
-games, writes managed MangoHud configs under Irori's data directory on Linux without
-touching `~/.config/MangoHud/MangoHud.conf`, applies automatically to Irori-launched
-stores and third-party launchers (Battle.net, EA app, Ubisoft Connect, Rockstar),
+games, writes managed MangoHud configs and preset files (`<scope>.conf` and `<scope>_presets.conf`)
+under Irori's data directory on Linux without touching `~/.config/MangoHud/MangoHud.conf`
+or `~/.config/MangoHud/presets.conf`, passes both `MANGOHUD_CONFIGFILE` and `MANGOHUD_PRESETSFILE`
+so `toggle_preset` (default `Shift_R+F10`) cycles Irori's own presets in-game, applies automatically
+to Irori-launched stores and third-party launchers (Battle.net, EA app, Ubisoft Connect, Rockstar),
 provides copyable Launch Options for Steam games, and is hidden on Windows. Linux
 wrappers, Fsync, GameMode, gamescope, MangoHud, Linux DXVK/VKD3D/NVAPI installation,
 umu, and Linux anticheat runtimes are not automatically applied on macOS or
@@ -891,15 +893,18 @@ A game launched with MangoHud gets a configuration file of its own for the sessi
 `<state>/mangohud/<runner>-<app>.conf`, named by `MANGOHUD_CONFIGFILE`: the user's own
 configuration (their `MANGOHUD_CONFIGFILE`, else `MangoHud/MangoHud.conf` in the
 configuration folder; per-program files aren't read) and then Irori's `fps_limit` and
-`no_display`. MangoHud watches that file, so the in-game overlay's "Show MangoHud" and
-"Frame rate limit" rows change it while the game runs; the file is rewritten in place
-(MangoHud watches the file itself) and removed when the session ends. "Start MangoHud
-hidden" (`iroriMangohudHidden`) loads it without drawing until the overlay shows it. The
-limit row shows only while MangoHud is the session's limiter or nothing limits it. A
-`MANGOHUD_CONFIG` variable without `read_cfg` keeps MangoHud from reading any file: then
-the limit and the hidden start go into that variable and can't change during play, and
-the overlay offers no MangoHud rows. In a sandboxed game the file's folder is bound
-read-only. Games Steam starts aren't covered: Irori doesn't start their MangoHud.
+`no_display` (plus `# irori-source:` when seeded from Irori's managed config). MangoHud watches that
+file, so both the in-game overlay's "Show MangoHud" and "Frame rate limit" rows and live edits in
+Settings -> In-game stats change it while the game runs; the file and `<data>/mangohud/<scope>_presets.conf`
+are rewritten in place (MangoHud watches the config file itself) and the session file is removed when
+the session ends. "Start MangoHud hidden" (`iroriMangohudHidden`) loads it without drawing until the
+overlay shows it. The limit row shows only while MangoHud is the session's limiter or nothing limits
+it. A `MANGOHUD_CONFIG` variable without `read_cfg` keeps MangoHud from reading any file: then the
+limit and the hidden start go into that variable and can't change during play, and the overlay offers
+no MangoHud rows. In a sandboxed game or Flatpak emulator both the session file's folder and the
+presets folder are bound read-only. Games Steam starts aren't covered by the Big Picture overlay,
+but Steam games launched with Irori's copyable Launch Options (`MANGOHUD_CONFIGFILE` and
+`MANGOHUD_PRESETSFILE`) reload edits and cycle Irori's presets live.
 
 ### Mods
 

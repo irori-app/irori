@@ -382,6 +382,7 @@ pub async fn prepare_hud_plan_for_paths(
     let is_native_linux_game = cfg!(target_os = "linux") && platform == InstallPlatform::Linux;
 
     let mut config_file: Option<PathBuf> = None;
+    let mut presets_file: Option<PathBuf> = None;
     let mut mangohud_dir: Option<PathBuf> = None;
     let mut mangohud_bin_path: Option<PathBuf> = None;
 
@@ -404,6 +405,7 @@ pub async fn prepare_hud_plan_for_paths(
                 "global".to_string()
             };
             let file = paths.mangohud_config_file(&conf_name);
+            let presets_path = paths.mangohud_presets_file(&conf_name);
             let ctx = hud::mangohud_conf::ConfRenderContext {
                 detected_gpu_label: hud::hardware_linux::default_gpu_short_label(
                     &profile.gpu_selection,
@@ -421,11 +423,16 @@ pub async fn prepare_hud_plan_for_paths(
                 ),
                 theme_colors: app.hud.cached_theme_colors.clone(),
             };
+            let rendered_presets = hud::mangohud_conf::render_mangohud_presets(profile);
             let rendered = hud::mangohud_conf::render_mangohud_conf(profile, &ctx);
             if write {
+                // Write presets before config so MangoHud's IN_MODIFY reload
+                // on the config file sees the fresh preset definitions at once.
+                hud::write_config_live(&presets_path, &rendered_presets).await?;
                 hud::write_config_live(&file, &rendered).await?;
             }
             config_file = Some(file);
+            presets_file = Some(presets_path);
             mangohud_dir = Some(dir);
         }
     }
@@ -435,6 +442,7 @@ pub async fn prepare_hud_plan_for_paths(
             backend,
             resolved: &resolved,
             config_file: config_file.as_deref(),
+            presets_file: presets_file.as_deref(),
             mangohud_dir: mangohud_dir.as_deref(),
             mangohud_bin_path: mangohud_bin_path.as_deref(),
             is_native_linux_game,
@@ -1105,14 +1113,17 @@ async fn sandbox_wrapper(
             tool_dirs.push(p);
         }
     }
-    // MangoHud's file for the session, which it reads and watches.
-    if let Some(dir) = vars
-        .get("MANGOHUD_CONFIGFILE")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .and_then(|p| p.parent().map(Path::to_path_buf))
-    {
-        tool_dirs.push(dir);
+    // MangoHud's session config and presets folders, which it reads and watches.
+    for key in ["MANGOHUD_CONFIGFILE", "MANGOHUD_PRESETSFILE"] {
+        if let Some(dir) = vars
+            .get(key)
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            && !tool_dirs.contains(&dir)
+        {
+            tool_dirs.push(dir);
+        }
     }
     let plan = sandbox::SandboxPlan {
         settings: settings.sandbox,
@@ -2033,6 +2044,7 @@ mod tests {
             assert!(!le.env.contains_key("MANGOHUD_CONFIG"));
             assert!(le.env_remove.contains(&"MANGOHUD_CONFIG".into()));
             assert!(le.env_remove.contains(&"MANGOHUD_CONFIGFILE".into()));
+            assert!(le.env_remove.contains(&"MANGOHUD_PRESETSFILE".into()));
         } else if cfg!(target_os = "macos") {
             assert_eq!(le.env["MTL_HUD_ENABLED"], "0");
             assert!(le.env_remove.contains(&"MTL_HUD_ALIGNMENT".into()));
