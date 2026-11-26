@@ -17,7 +17,31 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - name: Checkout PR history for path classification
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Classify changed files
+        id: filter
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            echo "code_changed=true"
+          else
+            python3 .github/scripts/ci_changes.py
+          fi
+
   check:
+    needs: [changes]
     strategy:
       fail-fast: false
       matrix:
@@ -36,44 +60,57 @@ jobs:
             platform: windows
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Skip native Rust build on docs-only pull request
+        if: needs.changes.outputs.code_changed != 'true'
+        run: |
+          echo "Docs/governance-only pull request: skipping native Rust build and packaging (verified by PR rules)."
+      - if: needs.changes.outputs.code_changed == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Rust and clang on Windows on Arm
-        if: matrix.os == 'windows-11-arm'
+        if: needs.changes.outputs.code_changed == 'true' && matrix.os == 'windows-11-arm'
         uses: ./.github/actions/windows-arm64-tools
       - name: Linux system libraries
-        if: runner.os == 'Linux'
+        if: needs.changes.outputs.code_changed == 'true' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
             libvulkan-dev libfontconfig-dev libfreetype-dev libxcb1-dev libx11-xcb-dev \
             libudev-dev libssl-dev pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev \
             libayatana-appindicator3-dev xvfb
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - if: needs.changes.outputs.code_changed == 'true'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - if: needs.changes.outputs.code_changed == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           key: native-ci-profile-v1
           cache-on-failure: true
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - if: needs.changes.outputs.code_changed == 'true'
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: Packaging regression tests
+        if: needs.changes.outputs.code_changed == 'true'
         run: python -m unittest discover -s packaging -p "test_*.py"
-      - run: cargo fmt --all --check
-      - run: cargo clippy --locked --workspace --all-targets --profile ci -- -D warnings
+      - if: needs.changes.outputs.code_changed == 'true'
+        run: cargo fmt --all --check
+      - if: needs.changes.outputs.code_changed == 'true'
+        run: cargo clippy --locked --workspace --all-targets --profile ci -- -D warnings
       - name: Tests (Linux display)
-        if: runner.os == 'Linux'
+        if: needs.changes.outputs.code_changed == 'true' && runner.os == 'Linux'
         run: xvfb-run -a cargo test --locked --workspace --no-fail-fast --profile ci
       - name: Tests
-        if: runner.os != 'Linux'
+        if: needs.changes.outputs.code_changed == 'true' && runner.os != 'Linux'
         run: cargo test --locked --workspace --no-fail-fast --profile ci
       - name: Build desktop and sign-in helper
+        if: needs.changes.outputs.code_changed == 'true'
         run: cargo build --locked --profile ci -p irori -p irori-sign-in
       - name: Package native application
+        if: needs.changes.outputs.code_changed == 'true'
         run: python packaging/package.py --platform ${{ matrix.platform }} --binary-dir target/ci --output dist
       - name: Verify per-user Windows installation
-        if: runner.os == 'Windows'
+        if: needs.changes.outputs.code_changed == 'true' && runner.os == 'Windows'
         shell: pwsh
         run: |
           $destination = Join-Path $env:RUNNER_TEMP 'Irori installation test'
@@ -110,7 +147,8 @@ jobs:
           $shell = New-Object -ComObject WScript.Shell
           $link = $shell.CreateShortcut((Join-Path $menu 'Irori.lnk'))
           if ($link.TargetPath -ne $exe) { throw 'Invalid Start menu shortcut' }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - if: needs.changes.outputs.code_changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Irori-${{ matrix.os }}-unsigned
           path: |
@@ -119,9 +157,16 @@ jobs:
           if-no-files-found: error
 
   audit:
+    needs: [changes]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: EmbarkStudios/cargo-deny-action@81891abc19297b21343b15ef67dc61e4aea74fda # v2
+      - name: Skip cargo-deny on docs-only pull request
+        if: needs.changes.outputs.code_changed != 'true'
+        run: |
+          echo "Docs/governance-only pull request: skipping cargo-deny audit."
+      - if: needs.changes.outputs.code_changed == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - if: needs.changes.outputs.code_changed == 'true'
+        uses: EmbarkStudios/cargo-deny-action@81891abc19297b21343b15ef67dc61e4aea74fda # v2
         with:
           command: check advisories licenses bans sources

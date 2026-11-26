@@ -7,6 +7,7 @@ body:
     attributes:
       value: |
         Before requesting a new feature, please read **Scope and Non-Goals** in [`CONTRIBUTING.md`](https://github.com/irori-app/irori/blob/main/CONTRIBUTING.md) so effort stays aligned with Irori's architecture as a native GPUI desktop and Big Picture launcher.
+        Describe the user problem in plain language first before suggesting any technical details.
   - type: textarea
     id: problem
     attributes:
