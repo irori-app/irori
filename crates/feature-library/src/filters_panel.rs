@@ -146,8 +146,9 @@ pub struct FiltersPanel {
 /// the panel's footer and margins, but never under half the window, where
 /// the popover is moved up to fit instead.
 fn filters_height(visible: Bounds<Pixels>, top: Option<Pixels>, rem: Pixels) -> Pixels {
-    // The footer with the reset button, the popover's padding and a margin.
-    let reserved = rem * 5.;
+    // The search field deduction (2.5rem), gaps, footer with reset button,
+    // popover padding, and a safety margin below the panel.
+    let reserved = rem * 6.;
     let most = (visible.size.height - reserved).max(rem * 8.);
     let top = top.unwrap_or(visible.origin.y + rem * 10.);
     let least = (visible.size.height * 0.5 - reserved).max(rem * 4.);
@@ -1213,13 +1214,28 @@ mod tests {
         // Room under a button near the top: the rest of the window.
         assert_eq!(
             filters_height(visible, Some(px(100.)), rem),
-            px(800. - 100. - 80.)
+            px(800. - 100. - 96.)
         );
         // Near the foot: half the window, and the popover moves up.
-        assert_eq!(filters_height(visible, Some(px(700.)), rem), px(400. - 80.));
+        assert_eq!(filters_height(visible, Some(px(700.)), rem), px(400. - 96.));
         // Never taller than the window, even before it was measured.
         let short = Bounds::new(point(px(0.), px(0.)), size(px(1000.), px(200.)));
         assert!(filters_height(short, None, rem) <= px(200.));
+    }
+
+    #[test]
+    fn filters_fit_1080p_at_100_percent_scaling() {
+        let rem = px(16.);
+        let top = px(140.);
+        for height in [px(1080.), px(1032.)] {
+            let visible = Bounds::new(point(px(0.), px(0.)), size(px(1920.), height));
+            let max_h = (filters_height(visible, Some(top), rem) - rem * 2.5).max(rem * 4.);
+            assert!(max_h > rem * 20., "unexpectedly cramped: {max_h:?}");
+            assert!(
+                top + max_h + rem * 8. <= visible.bottom(),
+                "overflows {height:?}: top={top:?} max_h={max_h:?}"
+            );
+        }
     }
 
     #[test]
