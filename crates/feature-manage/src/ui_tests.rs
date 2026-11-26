@@ -22,7 +22,7 @@ use irori_ui::models;
 use crate::onboarding::OnboardingStep;
 use crate::{AccountsView, DownloadsView, OnboardingEvent, OnboardingView, should_show_onboarding};
 
-fn setup(cx: &mut TestAppContext) {
+pub(crate) fn setup(cx: &mut TestAppContext) {
     setup_with(cx, Vec::new);
 }
 
@@ -1283,5 +1283,216 @@ fn emulators_page_opens_retroarch_cores_dialog(cx: &mut TestAppContext) {
     assert!(
         vcx.debug_bounds("retroarch-cores-dialog").is_some(),
         "clicking Manage cores opens the dedicated RetroArch cores modal"
+    );
+}
+
+#[gpui_kit::test]
+fn downloads_view_draws_irori_banner_states_and_clears_restarting_on_failure(
+    cx: &mut TestAppContext,
+) {
+    use irori_services::{
+        AppUpdateStatus, InstallKind, Release, SelfInstall, SelfUpdateChannel, SystemPackageManager,
+    };
+
+    setup(cx);
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(640.), px(720.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| DownloadsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    let release = Release {
+        version: "9.9.9".into(),
+        url: "https://github.com/irori-app/irori/releases/tag/v9.9.9".into(),
+    };
+    let draw_status = |vcx: &mut VisualTestContext, status: AppUpdateStatus| {
+        vcx.update(|window, cx| {
+            let app_update = models(cx).app_update.clone();
+            app_update.update(cx, |m, cx| {
+                m.status = status;
+                cx.notify();
+            });
+            window.refresh();
+            let _ = window.draw(cx);
+        });
+    };
+
+    // 1. Available (opt-in Install update button; header subtitle matches
+    // available state rather than contradicting with "Up to date").
+    draw_status(
+        &mut vcx,
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::Tarball),
+            available: Some(release.clone()),
+            dismissed: false,
+            announce: true,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Idle,
+        },
+    );
+    assert!(vcx.debug_bounds("irori-self-update-banner").is_some());
+    assert!(vcx.debug_bounds("irori-install-update").is_some());
+    assert!(vcx.debug_bounds("irori-update-progress").is_none());
+    let summary = vcx.read(|cx| view.read(cx).summary_for_tests(cx));
+    assert!(
+        summary.contains("1 update available"),
+        "expected Downloads header subtitle to reflect available Irori update, got: {summary}"
+    );
+
+    // 2. Downloading (visual progress bar + disabled Install button + header downloading state).
+    draw_status(
+        &mut vcx,
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::AppImage),
+            available: Some(release.clone()),
+            dismissed: false,
+            announce: true,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Downloading { percent: Some(60) },
+        },
+    );
+    assert!(vcx.debug_bounds("irori-self-update-banner").is_some());
+    assert!(vcx.debug_bounds("irori-update-progress").is_some());
+    assert!(vcx.debug_bounds("irori-install-update").is_some());
+    let summary = vcx.read(|cx| view.read(cx).summary_for_tests(cx));
+    assert!(
+        summary.contains("Downloading"),
+        "expected Downloads header subtitle to show Downloading during Irori self-update, got: {summary}"
+    );
+
+    // 3. Failed (long rate-limit error wraps below header row without clipping action buttons).
+    draw_status(
+        &mut vcx,
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::Tarball),
+            available: Some(release.clone()),
+            dismissed: false,
+            announce: true,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Failed {
+                error: "GitHub's rate limit was reached. Try again in about 42 minutes, or download it from the release page.".into(),
+            },
+        },
+    );
+    let banner = vcx
+        .debug_bounds("irori-self-update-banner")
+        .expect("banner drawn");
+    let err_bounds = vcx
+        .debug_bounds("irori-update-error")
+        .expect("error message drawn");
+    let notes_btn = vcx
+        .debug_bounds("irori-release-notes")
+        .expect("release notes button drawn");
+    let install_btn = vcx
+        .debug_bounds("irori-install-update")
+        .expect("install button drawn");
+    assert!(
+        install_btn.right() <= banner.right()
+            && notes_btn.right() <= install_btn.left()
+            && err_bounds.right() <= banner.right()
+            && err_bounds.top() >= install_btn.bottom(),
+        "long error must sit below action buttons inside banner bounds: banner={banner:?} notes={notes_btn:?} install={install_btn:?} err={err_bounds:?}"
+    );
+
+    // 4. RolledBack (warning visible alongside retry action).
+    draw_status(
+        &mut vcx,
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::Tarball),
+            available: Some(release.clone()),
+            dismissed: false,
+            announce: true,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::RolledBack {
+                version: "9.9.9".into(),
+            },
+        },
+    );
+    assert!(vcx.debug_bounds("irori-self-update-banner").is_some());
+    assert!(vcx.debug_bounds("irori-rollback-warning").is_some());
+
+    // 5. SystemPackage (manual check shows Copy command, never self-install).
+    draw_status(
+        &mut vcx,
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::SystemPackage(Some(SystemPackageManager::Pacman)),
+            self_update_channel: None,
+            available: Some(release),
+            dismissed: false,
+            announce: false,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Unavailable,
+        },
+    );
+    assert!(vcx.debug_bounds("irori-self-update-banner").is_some());
+    assert!(vcx.debug_bounds("irori-copy-command").is_some());
+    assert!(vcx.debug_bounds("irori-install-update").is_none());
+
+    // 6. Ready (prefers staged Ready version even when `available` is cleared).
+    draw_status(
+        &mut vcx,
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::Tarball),
+            available: None,
+            dismissed: false,
+            announce: false,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Ready {
+                version: "9.9.9".into(),
+            },
+        },
+    );
+    assert!(vcx.debug_bounds("irori-self-update-banner").is_some());
+    assert!(vcx.debug_bounds("irori-restart-update").is_some());
+
+    // Shared restart guard clears loading state when starting the helper fails.
+    vcx.update(|window, cx| {
+        view.update(cx, |v, cx| v.trigger_restart_irori_for_test(window, cx));
+        assert!(models(cx).app_update.read(cx).restarting);
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while vcx.read(|cx| models(cx).app_update.read(cx).restarting)
+        && std::time::Instant::now() < deadline
+    {
+        vcx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        !vcx.read(|cx| models(cx).app_update.read(cx).restarting),
+        "restarting must clear after a failed restart"
     );
 }

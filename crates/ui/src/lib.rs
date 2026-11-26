@@ -4,6 +4,7 @@
 //! notifications ([`system_notify`]) and domain components.
 
 pub mod age_rating;
+pub mod app_update;
 pub mod appearance;
 pub mod art;
 pub mod art_picker;

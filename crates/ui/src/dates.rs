@@ -3,6 +3,7 @@
 //! read alike everywhere instead of as raw ISO strings.
 
 use chrono::Datelike as _;
+use gpui_kit::SharedString;
 
 use crate::i18n::{t, t_args};
 
@@ -75,6 +76,29 @@ pub fn localized_day(rfc3339: &str) -> String {
     }
 }
 
+/// `then` relative to `now` (both Unix seconds), phrased to fit inside a
+/// sentence: "just now", "5 min ago", "3 h ago", "yesterday", "4 days ago".
+/// Future times read as "just now".
+pub fn relative_time(then: u64, now: u64) -> SharedString {
+    let secs = now.saturating_sub(then);
+    match secs {
+        0..60 => t("ui.time.just_now"),
+        60..3_600 => t_args(
+            "ui.time.minutes_ago",
+            &[("count", &(secs / 60).to_string())],
+        ),
+        3_600..86_400 => t_args(
+            "ui.time.hours_ago",
+            &[("count", &(secs / 3_600).to_string())],
+        ),
+        86_400..172_800 => t("ui.time.yesterday"),
+        _ => t_args(
+            "ui.time.days_ago",
+            &[("count", &(secs / 86_400).to_string())],
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone as _;
@@ -115,5 +139,17 @@ mod tests {
             .date_naive();
         assert_eq!(localized_day(&noon), calendar_date(local, true));
         assert_eq!(localized_day("2024-10-11"), "Oct 11, 2024");
+    }
+
+    #[test]
+    fn relative_times_in_english() {
+        crate::i18n::register(crate::i18n::CATALOGS);
+        let now = 1_000_000;
+        assert_eq!(relative_time(now, now), "just now");
+        assert_eq!(relative_time(now + 30, now), "just now");
+        assert_eq!(relative_time(now - 125, now), "2 min ago");
+        assert_eq!(relative_time(now - 7_200, now), "2 h ago");
+        assert_eq!(relative_time(now - 90_000, now), "yesterday");
+        assert_eq!(relative_time(now - 5 * 86_400, now), "5 days ago");
     }
 }

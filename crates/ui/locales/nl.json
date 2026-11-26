@@ -397,5 +397,11 @@
   "ui.month.9": "sep",
   "ui.month.10": "okt",
   "ui.month.11": "nov",
-  "ui.month.12": "dec"
+  "ui.month.12": "dec",
+  "ui.app_update.restart_failed": "Kon niet herstarten met de update",
+  "ui.time.just_now": "zojuist",
+  "ui.time.minutes_ago": "{count} min geleden",
+  "ui.time.hours_ago": "{count} uur geleden",
+  "ui.time.yesterday": "gisteren",
+  "ui.time.days_ago": "{count} dagen geleden"
 }

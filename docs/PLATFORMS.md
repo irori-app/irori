@@ -1038,13 +1038,13 @@ Factors outside 0.5 to 3 are ignored. Big Picture's own size multiplies on top.
 
 ### New versions of Irori
 
-Irori looks for its own new versions only where nothing else updates it. It works out
-how it was installed when it starts:
+Irori checks for its own new versions automatically only where nothing else updates it.
+It works out how it was installed when it starts:
 
 | Install | Recognised by | Irori |
 | --- | --- | --- |
-| Flatpak (Flathub or the bundle) | `FLATPAK_ID` or `/.flatpak-info` | Never checks |
-| apt, dnf (Irori's repository or Fedora COPR), pacman (Irori's repository or the AUR) | the program lives under `/usr` (not `/usr/local`) | Never checks |
+| Flatpak (Flathub or the bundle) | `FLATPAK_ID` or `/.flatpak-info` | Never checks automatically or pops up notices; Settings › About offers `flatpak update app.irori.Irori` and a manual "Check now" |
+| apt, dnf (Irori's repository or Fedora COPR), pacman (Irori's repository or the AUR) | the program lives under `/usr` (not `/usr/local`), package manager detected from `/etc/os-release` or `/usr/bin` | Never checks automatically or pops up notices; Settings › About offers the detected `pacman`/`apt`/`dnf` update command and a manual "Check now" |
 | Nix | the program lives under `/nix/store` | Never checks |
 | Built from source | the program lives in a Cargo `target` folder | Never checks |
 | Any build with `IRORI_UPDATE_EXPLANATION` | the variable, at build or run time | Never checks; Settings › About shows its text |
@@ -1058,13 +1058,22 @@ and pre-releases) at most once a day, only while online and only in the app, nev
 commands without a window. Only `vX.Y.Z` tags count. `state/app-update.json` keeps the
 time of the last answer, the newest version, the version the user dismissed and the
 version that ran last. A newer release shows a notice that stays until closed; closing
-it, or using its button, dismisses that version. Settings › About shows the state and
-"Check now", and Settings › General › Updates turns the check off
-(`iroriCheckForAppUpdates`). The first start of a new version says so, with a link to its
-release notes.
+it by hand dismisses that version, while starting a self-update keeps the version
+undismissed until the install succeeds. When a background download finishes, a notice
+offers "Restart to update"; if it fails, a notice offers "Try again"; if a restart rolls
+back, a warning notice says so. Available Irori updates also appear as a dedicated opt-in
+banner at the top of the Downloads page (separate from "Update all", with install,
+restart, progress and copy-command actions) and count toward the idle sidebar Downloads
+badge. Settings › About mirrors the live status with the install channel, last-checked
+time, download progress bar, release notes link and "Check now", and Settings › General ›
+Updates turns the automatic check off (`iroriCheckForAppUpdates`). The first start of a
+new version says so, with a link to its release notes.
 
 The installs no package manager updates (the last row) can also install the update:
-"Install update" in Settings › About, the notice's Install button or the palette. Irori
+"Install update" on the Downloads page, in Settings › About, the notice's Install button
+or the palette. On Linux, AppImage detection requires both `$APPIMAGE` and a matching
+`$APPDIR` containing the running executable so an unrelated parent AppImage environment
+never hijacks a tarball install. Irori
 asks GitHub for that release's assets and installs only what it can check: the release's
 `SHA256SUMS` (which `release.yml` writes over every file it publishes) must list the
 package for this install and computer (`Irori-X.Y.Z-linux.tar.gz`, `…-x86_64.AppImage`,

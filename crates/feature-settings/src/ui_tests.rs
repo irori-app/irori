@@ -1056,3 +1056,113 @@ fn downloads_settings_shortcut_opens_integrations_subtab(cx: &mut TestAppContext
         "download speed setting should be visible on the Integrations & downloads sub-tab"
     );
 }
+
+#[gpui_kit::test]
+fn app_update_panel_draws_all_states_and_clears_restarting_on_failure(cx: &mut TestAppContext) {
+    use irori_services::{
+        AppUpdateStatus, InstallKind, Release, SelfInstall, SelfUpdateChannel, SystemPackageManager,
+    };
+
+    let (handle, panel) = open(cx, |_, cx| crate::app_update::AppUpdatePanel::new(cx));
+    let release = Release {
+        version: "9.9.9".into(),
+        url: "https://github.com/irori-app/irori/releases/tag/v9.9.9".into(),
+    };
+    let cases = [
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::AppImage),
+            available: Some(release.clone()),
+            dismissed: false,
+            announce: true,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Downloading { percent: Some(45) },
+        },
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::AppImage),
+            available: Some(release.clone()),
+            dismissed: false,
+            announce: true,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::RolledBack {
+                version: "9.9.9".into(),
+            },
+        },
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::SystemPackage(Some(SystemPackageManager::Pacman)),
+            self_update_channel: None,
+            available: Some(release.clone()),
+            dismissed: false,
+            announce: false,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Unavailable,
+        },
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Flatpak,
+            self_update_channel: None,
+            available: None,
+            dismissed: false,
+            announce: false,
+            updated: false,
+            checking: false,
+            checked_at: None,
+            install: SelfInstall::Unavailable,
+        },
+        AppUpdateStatus {
+            current: "1.2.0".into(),
+            kind: InstallKind::Manual,
+            self_update_channel: Some(SelfUpdateChannel::Tarball),
+            available: Some(release),
+            dismissed: false,
+            announce: true,
+            updated: false,
+            checking: false,
+            checked_at: Some(1_700_000_000),
+            install: SelfInstall::Ready {
+                version: "9.9.9".into(),
+            },
+        },
+    ];
+    for status in cases {
+        cx.update_window(handle, |_, window, cx| {
+            let app_update = irori_ui::models(cx).app_update.clone();
+            app_update.update(cx, |m, cx| {
+                m.status = status;
+                cx.notify();
+            });
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+    }
+
+    // Triggering restart with no staged record on disk must fail and reset
+    // shared `restarting` back to false rather than staying stuck in loading state.
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| p.trigger_restart_for_test(window, cx));
+        assert!(irori_ui::models(cx).app_update.read(cx).restarting);
+    })
+    .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while cx.update(|cx| irori_ui::models(cx).app_update.read(cx).restarting)
+        && std::time::Instant::now() < deadline
+    {
+        cx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        !cx.update(|cx| irori_ui::models(cx).app_update.read(cx).restarting),
+        "restarting state must clear after a failed restart"
+    );
+}

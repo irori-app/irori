@@ -397,5 +397,11 @@
   "ui.month.9": "Eyl",
   "ui.month.10": "Eki",
   "ui.month.11": "Kas",
-  "ui.month.12": "Ara"
+  "ui.month.12": "Ara",
+  "ui.app_update.restart_failed": "Güncellemeyle yeniden başlatılamadı",
+  "ui.time.just_now": "az önce",
+  "ui.time.minutes_ago": "{count} dk önce",
+  "ui.time.hours_ago": "{count} sa önce",
+  "ui.time.yesterday": "dün",
+  "ui.time.days_ago": "{count} gün önce"
 }

@@ -397,5 +397,11 @@
   "ui.month.9": "sep.",
   "ui.month.10": "okt.",
   "ui.month.11": "nov.",
-  "ui.month.12": "dec."
+  "ui.month.12": "dec.",
+  "ui.app_update.restart_failed": "Kunde inte starta om med uppdateringen",
+  "ui.time.just_now": "nyss",
+  "ui.time.minutes_ago": "för {count} min sedan",
+  "ui.time.hours_ago": "för {count} tim sedan",
+  "ui.time.yesterday": "i går",
+  "ui.time.days_ago": "för {count} dagar sedan"
 }

@@ -8,7 +8,9 @@
 //! check the new release and put it in at the next restart
 //! ([`crate::self_update`]); the release page stays offered too. Installs
 //! that update with the system (Flatpak, distribution packages, Nix) are
-//! never checked. Packagers who
+//! never checked automatically or announced in popups; Flatpak and Linux
+//! distribution packages still allow a manual check and show the detected
+//! package manager's update command in Settings > About. Packagers who
 //! build Irori themselves turn the check off by setting
 //! `IRORI_UPDATE_EXPLANATION` when building (or in the environment); its text
 //! is shown instead of checking.
@@ -16,7 +18,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use irori_core::{json_store, util};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -27,13 +29,41 @@ const RELEASES_PAGE: &str = "https://github.com/irori-app/irori/releases/tag/v";
 /// Seconds between two automatic checks.
 const CHECK_EVERY: u64 = 24 * 60 * 60;
 
+/// The distribution package manager that updates a Linux `/usr` install.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemPackageManager {
+    Pacman,
+    Apt,
+    Dnf,
+}
+
+impl SystemPackageManager {
+    /// The command that updates Irori through this package manager.
+    pub fn update_command(self) -> &'static str {
+        match self {
+            Self::Pacman => "sudo pacman -Syu irori",
+            Self::Apt => "sudo apt update && sudo apt install irori",
+            Self::Dnf => "sudo dnf upgrade irori",
+        }
+    }
+
+    /// Short display name for the install channel indicator.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Pacman => "pacman",
+            Self::Apt => "apt",
+            Self::Dnf => "dnf",
+        }
+    }
+}
+
 /// How this copy of Irori was installed, which decides who updates it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallKind {
     Flatpak,
     /// A distribution package under `/usr`: apt, dnf (Irori's repository
     /// or Fedora COPR), pacman (Irori's repository or the AUR).
-    SystemPackage,
+    SystemPackage(Option<SystemPackageManager>),
     Nix,
     /// Run from a Cargo `target` folder.
     Source,
@@ -54,6 +84,19 @@ impl InstallKind {
             .ok()
             .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
             .unwrap_or_default();
+        let is_system_usr = exe.starts_with("/usr") && !exe.starts_with("/usr/local");
+        let system_pkg_manager = if cfg!(target_os = "linux") && is_system_usr {
+            if Path::new("/run/ostree-booted").exists() {
+                None
+            } else {
+                let os_release = std::fs::read_to_string("/etc/os-release").ok();
+                detect_system_package_manager(os_release.as_deref(), |name| {
+                    Path::new("/usr/bin").join(name).is_file()
+                })
+            }
+        } else {
+            None
+        };
         let probe = Probe {
             explanation: option_env!("IRORI_UPDATE_EXPLANATION")
                 .map(str::to_string)
@@ -75,11 +118,12 @@ impl InstallKind {
             scoop_files: exe.parent().is_some_and(|dir| {
                 dir.join("manifest.json").is_file() && dir.join("install.json").is_file()
             }),
+            system_pkg_manager,
         };
         classify(&exe, &probe)
     }
 
-    /// Whether Irori looks for new versions itself.
+    /// Whether Irori checks GitHub automatically and pops up update notices.
     pub fn checks(&self) -> bool {
         matches!(
             self,
@@ -87,14 +131,88 @@ impl InstallKind {
         )
     }
 
+    /// Whether the user can manually check GitHub for newer releases.
+    pub fn can_check_manually(&self) -> bool {
+        self.checks() || matches!(self, Self::Flatpak | Self::SystemPackage(_))
+    }
+
     /// The command that updates Irori, for package managers the user runs.
     pub fn update_command(&self) -> Option<&'static str> {
         match self {
+            Self::Flatpak => Some("flatpak update app.irori.Irori"),
+            Self::SystemPackage(Some(pm)) => Some(pm.update_command()),
             Self::Homebrew => Some("brew upgrade --cask irori"),
             Self::Scoop => Some("scoop update irori"),
             Self::Winget => Some("winget upgrade Irori.Irori"),
             _ => None,
         }
+    }
+}
+
+/// Detect the Linux distribution's package manager from `/etc/os-release`
+/// (with a fallback to checking package manager binaries under `/usr/bin`).
+fn detect_system_package_manager(
+    os_release: Option<&str>,
+    has_bin: impl Fn(&str) -> bool,
+) -> Option<SystemPackageManager> {
+    if let Some(content) = os_release {
+        let value = |key: &str| {
+            content.lines().find_map(|l| {
+                let v = l.trim().strip_prefix(key)?.strip_prefix('=')?;
+                Some(v.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+            })
+        };
+        let mut ids: Vec<String> = Vec::new();
+        for v in [value("ID"), value("ID_LIKE"), value("VARIANT_ID")]
+            .into_iter()
+            .flatten()
+        {
+            for id in v.split_whitespace() {
+                if !ids.iter().any(|i| i == id) {
+                    ids.push(id.to_string());
+                }
+            }
+        }
+        const IMAGE_BASED: &[&str] = &[
+            "steamos",
+            "bazzite",
+            "silverblue",
+            "kinoite",
+            "sericea",
+            "onyx",
+            "aurora",
+            "bluefin",
+            "nixos",
+        ];
+        if ids
+            .iter()
+            .any(|i| IMAGE_BASED.contains(&i.as_str()) || i.ends_with("-atomic"))
+        {
+            return None;
+        }
+        if let Some(pm) = ids.iter().find_map(|id| match id.as_str() {
+            "arch" | "manjaro" | "endeavouros" | "cachyos" | "garuda" => {
+                Some(SystemPackageManager::Pacman)
+            }
+            "debian" | "ubuntu" | "pop" | "linuxmint" | "elementary" | "zorin" => {
+                Some(SystemPackageManager::Apt)
+            }
+            "fedora" | "rhel" | "centos" | "rocky" | "almalinux" | "nobara" | "ultramarine" => {
+                Some(SystemPackageManager::Dnf)
+            }
+            _ => None,
+        }) {
+            return Some(pm);
+        }
+    }
+    if has_bin("pacman") {
+        Some(SystemPackageManager::Pacman)
+    } else if has_bin("apt") {
+        Some(SystemPackageManager::Apt)
+    } else if has_bin("dnf") {
+        Some(SystemPackageManager::Dnf)
+    } else {
+        None
     }
 }
 
@@ -110,6 +228,8 @@ struct Probe {
     /// Scoop's `manifest.json` and `install.json` beside the executable,
     /// which every Scoop app version folder has, wherever `SCOOP` puts it.
     scoop_files: bool,
+    /// Detected distribution package manager on Linux (`/usr` installs).
+    system_pkg_manager: Option<SystemPackageManager>,
 }
 
 fn classify(exe: &Path, probe: &Probe) -> InstallKind {
@@ -127,7 +247,7 @@ fn classify(exe: &Path, probe: &Probe) -> InstallKind {
         return InstallKind::Nix;
     }
     if path.starts_with("/usr/") && !path.starts_with("/usr/local/") {
-        return InstallKind::SystemPackage;
+        return InstallKind::SystemPackage(probe.system_pkg_manager);
     }
     if probe.homebrew_cask {
         return InstallKind::Homebrew;
@@ -196,6 +316,8 @@ pub struct AppUpdateStatus {
     /// The running version.
     pub current: String,
     pub kind: InstallKind,
+    /// Package format for self-updatable manual installs (AppImage, tarball, etc.).
+    pub self_update_channel: Option<crate::self_update::SelfUpdateChannel>,
     /// A release newer than this one, from the last check.
     pub available: Option<Release>,
     /// The user closed the notice about `available`.
@@ -210,6 +332,14 @@ pub struct AppUpdateStatus {
     pub checked_at: Option<u64>,
     /// Installing `available` from Irori.
     pub install: SelfInstall,
+}
+
+impl AppUpdateStatus {
+    /// Whether a newer release of Irori is available or staged for restart.
+    pub fn has_update(&self) -> bool {
+        (self.kind.can_check_manually() && self.available.is_some())
+            || matches!(self.install, SelfInstall::Ready { .. })
+    }
 }
 
 /// Saved in `state/app-update.json`.
@@ -230,6 +360,7 @@ pub(crate) struct AppUpdater {
     saved: RwLock<Saved>,
     updated: bool,
     checking: AtomicBool,
+    restarting: AtomicBool,
     /// How this install is laid out, when Irori can update it itself.
     layout: Option<crate::self_update::Layout>,
     install: RwLock<SelfInstall>,
@@ -296,6 +427,7 @@ impl AppUpdater {
             saved: RwLock::new(saved),
             updated,
             checking: AtomicBool::new(false),
+            restarting: AtomicBool::new(false),
             layout: None,
             install: RwLock::new(install),
             staged,
@@ -314,8 +446,23 @@ impl AppUpdater {
         &self.current
     }
 
-    pub(crate) fn install_state(&self) -> SelfInstall {
-        self.install.read().clone()
+    pub(crate) fn try_begin_install(&self) -> bool {
+        let mut guard = self.install.write();
+        if matches!(*guard, SelfInstall::Downloading { .. }) {
+            return false;
+        }
+        *guard = SelfInstall::Downloading { percent: None };
+        true
+    }
+
+    pub(crate) fn try_begin_restart(&self) -> bool {
+        self.restarting
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    pub(crate) fn finish_restart_failed(&self) {
+        self.restarting.store(false, Ordering::Release);
     }
 
     pub(crate) fn set_install(&self, state: SelfInstall) {
@@ -328,9 +475,11 @@ impl AppUpdater {
 
     pub(crate) fn status(&self, enabled: bool) -> AppUpdateStatus {
         let saved = self.saved.read();
-        let available = saved
-            .latest
-            .clone()
+        let available = self
+            .kind
+            .can_check_manually()
+            .then(|| saved.latest.clone())
+            .flatten()
             .filter(|r| newer(&r.version, &self.current));
         let dismissed = available
             .as_ref()
@@ -338,6 +487,10 @@ impl AppUpdater {
         AppUpdateStatus {
             current: self.current.clone(),
             kind: self.kind.clone(),
+            self_update_channel: self
+                .layout
+                .as_ref()
+                .map(crate::self_update::Layout::channel),
             announce: available.is_some() && !dismissed && enabled && self.kind.checks(),
             available,
             dismissed,
@@ -399,6 +552,61 @@ struct GhRelease {
     prerelease: bool,
 }
 
+/// Turn a non-success GitHub API response into a clean, user-facing error
+/// without leaking raw `reqwest` URL details.
+pub(crate) fn github_http_error(
+    status: u16,
+    headers: &reqwest::header::HeaderMap,
+    body: Option<&str>,
+    not_found: Option<&str>,
+    now_unix: u64,
+) -> anyhow::Error {
+    let header_str = |name: &str| {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(str::trim)
+    };
+    let remaining_zero = header_str("x-ratelimit-remaining") == Some("0");
+    let retry_after_raw = header_str("retry-after").filter(|s| !s.is_empty());
+    let retry_after = retry_after_raw.and_then(|s| {
+        s.parse::<u64>().ok().or_else(|| {
+            chrono::DateTime::parse_from_rfc2822(s)
+                .ok()
+                .map(|dt| (dt.timestamp().max(0) as u64).saturating_sub(now_unix))
+        })
+    });
+    let reset_secs = header_str("x-ratelimit-reset")
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(|reset| reset.saturating_sub(now_unix));
+    let body_mentions_rate_limit =
+        body.is_some_and(|b| b.to_ascii_lowercase().contains("rate limit"));
+    let is_rate_limit = status == 429
+        || (status == 403
+            && (remaining_zero || retry_after_raw.is_some() || body_mentions_rate_limit));
+    if is_rate_limit {
+        let wait_secs = retry_after
+            .filter(|&s| s > 0)
+            .or_else(|| reset_secs.filter(|&s| s > 0));
+        if let Some(secs) = wait_secs {
+            let minutes = secs.div_ceil(60).max(1);
+            let unit = if minutes == 1 { "minute" } else { "minutes" };
+            return anyhow::anyhow!(
+                "GitHub's rate limit was reached. Try again in about {minutes} {unit}, or download it from the release page."
+            );
+        }
+        return anyhow::anyhow!(
+            "GitHub's rate limit was reached. Try again later, or download it from the release page."
+        );
+    }
+    if status == 404
+        && let Some(msg) = not_found
+    {
+        return anyhow::anyhow!("{msg}");
+    }
+    anyhow::anyhow!("GitHub returned HTTP {status}")
+}
+
 /// The newest stable release, `None` while there is none.
 async fn fetch(endpoint: &str) -> Result<Option<Release>> {
     let resp = irori_core::http::client()
@@ -406,19 +614,38 @@ async fn fetch(endpoint: &str) -> Result<Option<Release>> {
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .context("Could not reach GitHub")?;
+        .map_err(|e| {
+            tracing::debug!("reaching GitHub ({endpoint}): {e:#}");
+            anyhow::anyhow!("Could not reach GitHub")
+        })?;
+    let status = resp.status().as_u16();
     // GitHub answers 404 while a repository has no published release.
-    if resp.status().as_u16() == 404 {
+    if status == 404 {
         return Ok(None);
     }
-    let body = resp
-        .error_for_status()
-        .context("GitHub refused the request")?
-        .text()
-        .await
-        .context("Unexpected answer from GitHub")?;
-    let release: GhRelease =
-        serde_json::from_str(&body).context("Unexpected answer from GitHub")?;
+    if !resp.status().is_success() {
+        let headers = resp.headers().clone();
+        let body = if status == 403 {
+            resp.text().await.ok()
+        } else {
+            None
+        };
+        return Err(github_http_error(
+            status,
+            &headers,
+            body.as_deref(),
+            None,
+            util::unix_now(),
+        ));
+    }
+    let body = resp.text().await.map_err(|e| {
+        tracing::debug!("reading GitHub release response: {e:#}");
+        anyhow::anyhow!("Unexpected answer from GitHub")
+    })?;
+    let release: GhRelease = serde_json::from_str(&body).map_err(|e| {
+        tracing::debug!("parsing GitHub release JSON: {e:#}");
+        anyhow::anyhow!("Unexpected answer from GitHub")
+    })?;
     Ok(parse(release))
 }
 
@@ -507,7 +734,20 @@ mod tests {
     fn install_kinds() {
         let none = Probe::default();
         let kind = |path: &str, probe: &Probe| classify(&exe(path), probe);
-        assert_eq!(kind("/usr/bin/irori", &none), InstallKind::SystemPackage);
+        assert_eq!(
+            kind("/usr/bin/irori", &none),
+            InstallKind::SystemPackage(None)
+        );
+        assert_eq!(
+            kind(
+                "/usr/bin/irori",
+                &Probe {
+                    system_pkg_manager: Some(SystemPackageManager::Pacman),
+                    ..Probe::default()
+                }
+            ),
+            InstallKind::SystemPackage(Some(SystemPackageManager::Pacman))
+        );
         assert_eq!(kind("/usr/local/bin/irori", &none), InstallKind::Manual);
         assert_eq!(kind("/home/a/.local/bin/irori", &none), InstallKind::Manual);
         assert_eq!(
@@ -569,23 +809,110 @@ mod tests {
         );
         assert!(InstallKind::Manual.checks() && InstallKind::Winget.checks());
         assert!(!InstallKind::Flatpak.checks() && !InstallKind::Source.checks());
+        assert!(InstallKind::Flatpak.can_check_manually());
+        assert!(
+            InstallKind::SystemPackage(Some(SystemPackageManager::Pacman)).can_check_manually()
+        );
+        assert!(!InstallKind::Source.can_check_manually());
+        assert!(!InstallKind::Nix.can_check_manually());
+        assert!(!InstallKind::Packaged("custom".into()).can_check_manually());
+    }
+
+    #[test]
+    fn system_package_manager_detection() {
+        let no_bins = |_: &str| false;
+        assert_eq!(
+            detect_system_package_manager(Some("ID=arch\n"), no_bins),
+            Some(SystemPackageManager::Pacman)
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=cachyos\nID_LIKE=arch\n"), no_bins),
+            Some(SystemPackageManager::Pacman)
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=ubuntu\nID_LIKE=debian\n"), no_bins),
+            Some(SystemPackageManager::Apt)
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=\"fedora\"\n"), no_bins),
+            Some(SystemPackageManager::Dnf)
+        );
+        // Image-based distros do not get a mutable package manager command,
+        // including Fedora Atomic variants identified via VARIANT_ID.
+        assert_eq!(
+            detect_system_package_manager(Some("ID=bazzite\nID_LIKE=fedora\n"), |b| b == "dnf"),
+            None
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=steamos\nID_LIKE=arch\n"), |b| b == "pacman"),
+            None
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=fedora\nVARIANT_ID=silverblue\n"), |b| b
+                == "dnf"),
+            None
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=fedora\nVARIANT_ID=kinoite\n"), |b| b == "dnf"),
+            None
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=fedora\nVARIANT_ID=sway-atomic\n"), |b| b
+                == "dnf"),
+            None
+        );
+        // Fallback to binary probe when os-release is missing or unknown.
+        assert_eq!(
+            detect_system_package_manager(None, |b| b == "pacman"),
+            Some(SystemPackageManager::Pacman)
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=unknown\n"), |b| b == "apt"),
+            Some(SystemPackageManager::Apt)
+        );
+        assert_eq!(
+            detect_system_package_manager(Some("ID=unknown\n"), |b| b == "dnf"),
+            Some(SystemPackageManager::Dnf)
+        );
+        assert_eq!(detect_system_package_manager(None, no_bins), None);
     }
 
     /// Each package channel Irori publishes to is told apart, and updates go
-    /// through its package manager: Irori never looks for releases of a
-    /// package the system updates, and names the command of one the user
-    /// updates.
+    /// through its package manager: Irori never checks automatically for
+    /// system-managed installs, while still providing copyable commands and
+    /// manual checks for Flatpak and detected Linux package managers.
     #[test]
     fn package_channels_defer_to_their_package_manager() {
         let none = Probe::default();
         let kind = |path: &str, probe: &Probe| classify(&exe(path), probe);
-        // Fedora COPR and the AUR install under /usr like any distribution
-        // package, and dnf or the AUR helper updates them.
+        // Unknown distro under /usr: never auto-checks, no guessed command.
         let system = kind("/usr/bin/irori", &none);
-        assert_eq!(system, InstallKind::SystemPackage);
+        assert_eq!(system, InstallKind::SystemPackage(None));
         assert!(!system.checks());
+        assert!(system.can_check_manually());
         assert_eq!(system.update_command(), None);
-        // Flathub: Flatpak updates it.
+        // Detected Linux package managers: no auto-check, copyable command.
+        for (pm, expected_cmd) in [
+            (SystemPackageManager::Pacman, "sudo pacman -Syu irori"),
+            (
+                SystemPackageManager::Apt,
+                "sudo apt update && sudo apt install irori",
+            ),
+            (SystemPackageManager::Dnf, "sudo dnf upgrade irori"),
+        ] {
+            let k = kind(
+                "/usr/bin/irori",
+                &Probe {
+                    system_pkg_manager: Some(pm),
+                    ..Probe::default()
+                },
+            );
+            assert_eq!(k, InstallKind::SystemPackage(Some(pm)));
+            assert!(!k.checks());
+            assert!(k.can_check_manually());
+            assert_eq!(k.update_command(), Some(expected_cmd));
+        }
+        // Flathub: Flatpak updates it; no auto-check, copyable command.
         let flathub = kind(
             "/app/bin/irori",
             &Probe {
@@ -595,6 +922,11 @@ mod tests {
         );
         assert_eq!(flathub, InstallKind::Flatpak);
         assert!(!flathub.checks());
+        assert!(flathub.can_check_manually());
+        assert_eq!(
+            flathub.update_command(),
+            Some("flatpak update app.irori.Irori")
+        );
         // Scoop, in its default root and in one `SCOOP` moved elsewhere
         // (`current` is resolved to the version folder).
         let scoop_files = Probe {
@@ -795,5 +1127,195 @@ mod tests {
         assert!(!cli.status(true).updated);
         let app = AppUpdater::with(RELEASES_API, file, "0.4.0", InstallKind::Manual, true);
         assert!(app.status(true).updated);
+    }
+
+    #[tokio::test]
+    async fn manual_check_on_flatpak_and_system_package_never_announces() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = release_server("v1.3.0");
+        let endpoint = server.url("/releases/latest");
+        for (name, kind) in [
+            ("flatpak.json", InstallKind::Flatpak),
+            (
+                "pacman.json",
+                InstallKind::SystemPackage(Some(SystemPackageManager::Pacman)),
+            ),
+        ] {
+            let updater = AppUpdater::with(&endpoint, dir.path().join(name), "1.2.0", kind, true);
+            updater.check().await.unwrap();
+            let status = updater.status(true);
+            assert_eq!(status.available.as_ref().unwrap().version, "1.3.0");
+            assert!(status.has_update());
+            assert!(!status.announce, "system-managed installs must not pop up");
+            assert!(status.checked_at.is_some());
+        }
+    }
+
+    #[tokio::test]
+    async fn non_checkable_installs_ignore_stale_cached_releases() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("app-update.json");
+        let server = release_server("v1.5.0");
+        let manual = AppUpdater::with(
+            &server.url("/releases/latest"),
+            file.clone(),
+            "1.2.0",
+            InstallKind::Manual,
+            true,
+        );
+        manual.check().await.unwrap();
+        assert!(manual.status(true).has_update());
+
+        for kind in [
+            InstallKind::Nix,
+            InstallKind::Source,
+            InstallKind::Packaged("Managed externally.".into()),
+        ] {
+            let updater = AppUpdater::with(RELEASES_API, file.clone(), "1.2.0", kind, true);
+            let status = updater.status(true);
+            assert!(
+                status.available.is_none(),
+                "non-checkable install must not surface cached releases"
+            );
+            assert!(!status.has_update());
+            assert!(!status.announce);
+        }
+    }
+
+    #[test]
+    fn restart_guard_blocks_concurrent_attempts_and_resets_on_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let updater = AppUpdater::with(
+            RELEASES_API,
+            dir.path().join("app-update.json"),
+            "1.2.0",
+            InstallKind::Manual,
+            false,
+        );
+        assert!(updater.try_begin_restart());
+        assert!(!updater.try_begin_restart());
+        updater.finish_restart_failed();
+        assert!(updater.try_begin_restart());
+    }
+
+    #[tokio::test]
+    async fn formats_rate_limit_errors_cleanly() {
+        let reset = util::unix_now() + 185;
+        let with_reset = TestServer::start(move |_| Resp {
+            status: 403,
+            headers: vec![
+                ("x-ratelimit-remaining".into(), "0".into()),
+                ("x-ratelimit-reset".into(), reset.to_string()),
+            ],
+            ..Default::default()
+        });
+        let err = fetch(&with_reset.url("/releases/latest"))
+            .await
+            .unwrap_err();
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("GitHub's rate limit was reached") && text.contains("minutes"),
+            "unexpected rate limit message: {text}"
+        );
+        assert!(
+            !text.contains("http://") && !text.contains("https://"),
+            "error must not leak raw request URL: {text}"
+        );
+
+        let without_reset = TestServer::start(|_| Resp {
+            status: 403,
+            headers: vec![("x-ratelimit-remaining".into(), "0".into())],
+            ..Default::default()
+        });
+        let err = fetch(&without_reset.url("/releases/latest"))
+            .await
+            .unwrap_err();
+        let text = format!("{err:#}");
+        assert_eq!(
+            text,
+            "GitHub's rate limit was reached. Try again later, or download it from the release page."
+        );
+
+        let too_many = TestServer::start(|_| Resp {
+            status: 429,
+            headers: vec![("retry-after".into(), "45".into())],
+            ..Default::default()
+        });
+        let err = fetch(&too_many.url("/releases/latest")).await.unwrap_err();
+        assert_eq!(
+            format!("{err:#}"),
+            "GitHub's rate limit was reached. Try again in about 1 minute, or download it from the release page."
+        );
+
+        let server_error = TestServer::start(|_| Resp::status(503));
+        let err = fetch(&server_error.url("/releases/latest"))
+            .await
+            .unwrap_err();
+        assert_eq!(format!("{err:#}"), "GitHub returned HTTP 503");
+
+        // 403 without rate-limit headers or body hint is reported cleanly as HTTP 403.
+        let forbidden = TestServer::start(|_| Resp {
+            status: 403,
+            headers: vec![("x-ratelimit-remaining".into(), "50".into())],
+            body: br#"{"message":"Resource not accessible"}"#.to_vec(),
+            ..Default::default()
+        });
+        let err = fetch(&forbidden.url("/releases/latest")).await.unwrap_err();
+        assert_eq!(format!("{err:#}"), "GitHub returned HTTP 403");
+
+        // 403 with retry-after: 0 must still fall through to x-ratelimit-reset.
+        let reset_five = util::unix_now() + 295;
+        let zero_retry_with_reset = TestServer::start(move |_| Resp {
+            status: 403,
+            headers: vec![
+                ("retry-after".into(), "0".into()),
+                ("x-ratelimit-reset".into(), reset_five.to_string()),
+            ],
+            ..Default::default()
+        });
+        let err = fetch(&zero_retry_with_reset.url("/releases/latest"))
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").contains("about 5 minutes"),
+            "expected x-ratelimit-reset fallback when retry-after is 0, got: {err:#}"
+        );
+
+        // 403 secondary rate limit with body message and no rate-limit headers.
+        let secondary = TestServer::start(|_| Resp {
+            status: 403,
+            body: br#"{"message":"You have exceeded a secondary rate limit."}"#.to_vec(),
+            ..Default::default()
+        });
+        let err = fetch(&secondary.url("/releases/latest")).await.unwrap_err();
+        assert_eq!(
+            format!("{err:#}"),
+            "GitHub's rate limit was reached. Try again later, or download it from the release page."
+        );
+
+        // 403 with HTTP-date Retry-After parses into minutes.
+        let retry_date = (chrono::Utc::now() + chrono::Duration::seconds(185)).to_rfc2822();
+        let http_date_retry = TestServer::start(move |_| Resp {
+            status: 403,
+            headers: vec![("retry-after".into(), retry_date.clone())],
+            ..Default::default()
+        });
+        let err = fetch(&http_date_retry.url("/releases/latest"))
+            .await
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").contains("GitHub's rate limit was reached")
+                && format!("{err:#}").contains("minutes"),
+            "unexpected HTTP-date rate limit message: {err:#}"
+        );
+
+        // Invalid JSON response stays clean without leaking serde diagnostics.
+        let bad_json = TestServer::start(|_| Resp {
+            status: 200,
+            body: b"<html>gateway error</html>".to_vec(),
+            ..Default::default()
+        });
+        let err = fetch(&bad_json.url("/releases/latest")).await.unwrap_err();
+        assert_eq!(format!("{err:#}"), "Unexpected answer from GitHub");
     }
 }

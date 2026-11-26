@@ -890,26 +890,34 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         targets.push(PaletteTarget::SyncSaves(game.id()));
     }
     let update = models(cx).app_update.read(cx).status.clone();
-    if irori_settings::app_update::can_install(&update)
-        && let Some(release) = &update.available
-    {
-        let ready = matches!(update.install, irori_services::SelfInstall::Ready { .. });
-        let label = if ready {
-            "shell.palette.restart_update"
-        } else {
-            "shell.palette.install_update"
-        };
+    if let irori_services::SelfInstall::Ready { version } = &update.install {
         items.push(
             Entry::new()
-                .label(t_args(label, &[("version", &release.version)]))
+                .label(t_args(
+                    "shell.palette.restart_update",
+                    &[("version", version)],
+                ))
                 .keywords([t("shell.palette.install_update_keywords")])
-                .icon(if ready {
-                    IconName::RotateCw
-                } else {
-                    IconName::Download
-                }),
+                .icon(IconName::RotateCw),
         );
-        targets.push(PaletteTarget::AppUpdate { ready });
+        targets.push(PaletteTarget::AppUpdate { ready: true });
+    } else if irori_ui::app_update::can_install(&update)
+        && !matches!(
+            update.install,
+            irori_services::SelfInstall::Downloading { .. }
+        )
+        && let Some(release) = &update.available
+    {
+        items.push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.install_update",
+                    &[("version", &release.version)],
+                ))
+                .keywords([t("shell.palette.install_update_keywords")])
+                .icon(IconName::Download),
+        );
+        targets.push(PaletteTarget::AppUpdate { ready: false });
     }
     if let Some(game) = with_trailer {
         items.push(
@@ -1191,11 +1199,11 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
             irori_settings::open_crash_report_sheet(path, window, cx)
         }),
         PaletteTarget::AppUpdate { ready: true } => {
-            irori_settings::app_update::restart_into_update(window, cx)
+            irori_ui::app_update::restart_into_update(window, cx).detach();
         }
         PaletteTarget::AppUpdate { ready: false } => {
-            irori_settings::app_update::install_update(cx);
-            irori_ui::navigate(Route::Settings("about".into()), cx);
+            irori_ui::app_update::install_update(cx);
+            irori_ui::navigate(Route::Downloads, cx);
         }
         PaletteTarget::SteamPlay(id) => irori_game::ops::open_steam_play(&id, cx),
         // After the palette's own dialog has closed.
