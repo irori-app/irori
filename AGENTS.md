@@ -2,7 +2,16 @@
 
 Root engineering contract for humans and coding agents working on Irori. Read this file before your first change, then load the relevant on-demand doc from the routing table below.
 
-Irori is a native Rust (edition 2024, Rust 1.95+) game launcher for Linux, macOS, and Windows built with GPUI through GPUI Kit (`gpui-kit = "0.8.0"`). Product goals, in order: correct, fast, calm, one click to play.
+Irori is a native Rust (edition 2024, Rust 1.95+) game launcher for Linux, macOS, and Windows built with GPUI through GPUI Kit (`gpui-kit = "0.8.0"`).
+
+## Product vision and UX principles
+
+Use these priorities as the tie-breaker for every feature, fix, and UI design decision:
+
+1. Lightweight and fast by default. Keep Irori a native Rust/GPUI launcher with zero idle CPU, bounded memory, instant startup, and smooth scrolling even across large libraries.
+2. Feature-rich without visual clutter. Deliver as many useful capabilities as possible (stores, emulators, Wine/Proton/umu, saves, mods, overlays, Big Picture, and controllers) while hiding technical complexity behind sensible defaults and progressive disclosure.
+3. Clean, modern visual craft. Keep layouts cohesive across light and dark themes so game artwork leads, chrome stays calm and legible, and controls feel intentional rather than cramped.
+4. Minimal user friction above all. Simplify every user workflow: reduce clicks, automate safe detection and setup (runtimes, prefixes, accounts, imports, shortcuts), explain errors in plain language with a clear next action, and never push manual configuration onto the user when Irori can handle it safely.
 
 ## Verification commands
 

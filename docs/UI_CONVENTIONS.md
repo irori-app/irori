@@ -2,6 +2,15 @@
 
 Reference for `irori-ui`, the five feature crates (`irori-library`, `irori-game`, `irori-manage`, `irori-settings`, `irori-bigpicture`), and the application shell (`crates/irori`).
 
+## UX north star
+
+Every screen should serve Irori's vision of a lightweight, fast, feature-rich, modern launcher that removes friction from the user's workflow:
+
+- Default to the simplest working path so most users never have to open advanced settings; tuck expert options behind progressive disclosure or per-game overrides.
+- Minimize clicks and manual steps by auto-detecting safe defaults (installed runtimes, prefixes, ROM folders, display modes) and offering direct actions right where the user needs them.
+- Keep surfaces visually clean and modern in both light and dark themes, letting game art carry color while labels, badges, and actions stay scannable and uncrowded.
+- Pair every failure or empty state with plain-language guidance and a concrete next action (retry, open settings, install missing component) instead of raw technical dumps.
+
 ## GPUI and GPUI Kit APIs
 
 - Use `gpui-kit = "0.8.0"` as the sole UI library: `use gpui_kit::*` for GPUI, `gpui_kit::component::*` for components, and `gpui_kit::assets::IconName` for icons (`Icon::new(IconName::...)`).

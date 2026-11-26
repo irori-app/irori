@@ -4,7 +4,7 @@ Follow [AGENTS.md](../AGENTS.md) as the authoritative engineering contract for I
 
 ## Required reading order
 
-1. Read [AGENTS.md](../AGENTS.md) for verification commands, architectural invariants, and the mandatory Code Efficiency and Transparency Contract.
+1. Read [AGENTS.md](../AGENTS.md) for the product vision and UX principles, verification commands, architectural invariants, and the mandatory Code Efficiency and Transparency Contract.
 2. Load only the domain documentation needed for the current change:
    - [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) and [docs/GRAPHS.md](../docs/GRAPHS.md) for crate boundaries, backend services, stores, launch pipelines, engines, mods, submodule splits, and Mermaid system diagrams.
    - [docs/UI_CONVENTIONS.md](../docs/UI_CONVENTIONS.md) and [docs/TRANSLATING.md](../docs/TRANSLATING.md) for GPUI / `gpui-kit = "0.8.0"` rules, themes, layout, accessibility, `en.json`-first i18n, Big Picture, and overlay behavior.

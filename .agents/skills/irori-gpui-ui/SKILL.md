@@ -9,6 +9,7 @@ Use this skill whenever changing views, sheets, dialogs, themes, layouts, contro
 
 ## Core rules
 
+- Design every screen around Irori's UX north star (`AGENTS.md` and `docs/UI_CONVENTIONS.md`): keep the interface clean, modern, and fast; hide advanced knobs behind sensible defaults and progressive disclosure; minimize clicks; automate safe detection; and pair errors or empty states with plain-language explanations and a direct next action.
 - Verify every GPUI or GPUI Kit type, trait, icon, and builder method against the actual crate sources under `~/.cargo/registry/src/index.crates.io-*/{gpui-kit-0.8.0,gpui-component-0.8.0,gpui-base-0.8.0,gpui-pre-0.3.9}` before writing code. Never guess method names from other UI frameworks.
 - Never run filesystem, SQLite, network, keyring, or subprocess calls on the GPUI UI thread, and never await a backend future directly without `irori_ui::run` or `irori_ui::run_infallible` (backend futures require the `irori-io` Tokio runtime).
 - Never call `WindowHandle::update` directly inside a dialog or sheet callback targeting that same window; wrap re-entrant window updates in `cx.defer`. Always pass `cx` as the second argument to `window.push_notification(note, cx)`, and use `.ok_variant(ButtonVariant::Danger)` with a specific `.ok_text(...)` verb when confirming destructive actions.
