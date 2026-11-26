@@ -585,6 +585,9 @@ impl LibraryView {
         }
         self.layout = layout;
         self.chosen_layout = layout;
+        if !self.compat_active() {
+            self.cancel_compat();
+        }
         if !self.save_active_tab_prefs(|p| p.layout = Some(layout), cx) {
             persist_ui(cx, move |ui| ui.library_layout = layout);
         }
@@ -658,6 +661,9 @@ impl LibraryView {
             self.layout = next_layout;
             self.chosen_layout = next_layout;
             self.auto_wide = None;
+            if !self.compat_active() {
+                self.cancel_compat();
+            }
             self.scroll_to_focused();
         }
         self.cover_shape = prefs.cover_shape.unwrap_or(self.ui_prefs.cover_shape);

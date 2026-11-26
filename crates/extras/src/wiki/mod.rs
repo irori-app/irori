@@ -169,14 +169,35 @@ fn cache_file(ids: &StoreIds) -> PathBuf {
     ))
 }
 
+fn compat_cache_file(ids: &StoreIds) -> PathBuf {
+    let part = |tag: &str, value: &Option<String>| {
+        value
+            .as_deref()
+            .map(|v| format!("-{tag}{}", irori_core::paths::sanitize(v)))
+            .unwrap_or_default()
+    };
+    let choice = format!(
+        "{}{}",
+        part("steam", &ids.steam_link),
+        part("guess", &ids.steam_guess)
+    );
+    util::cache_dir("compat").join(format!(
+        "{}-{}{choice}.json",
+        ids.runner.id(),
+        irori_core::paths::sanitize(&ids.app_name)
+    ))
+}
+
 /// Forget the cached info for a store entry (and the user's choices in
 /// `ids`), so the next lookup asks every source again.
 pub async fn forget(ids: &StoreIds) {
-    match tokio::fs::remove_file(cache_file(ids)).await {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            tracing::warn!("forgetting game information: {e}");
+    for path in [cache_file(ids), compat_cache_file(ids)] {
+        match tokio::fs::remove_file(path).await {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                tracing::warn!("forgetting game information: {e}");
+            }
+            _ => {}
         }
-        _ => {}
     }
 }
 
@@ -186,6 +207,170 @@ pub async fn cached(ids: &StoreIds) -> Option<Arc<WikiInfo>> {
         .await
         .filter(is_current)
         .map(Arc::new)
+}
+
+/// Cached ProtonDB and Steam Deck compatibility for a store entry, without
+/// network access.
+///
+/// Checks [`cached`] (`<cache>/wiki`) first, then the dedicated lightweight
+/// `<cache>/compat/{runner}-{app}.json` file (30-day TTL). Returns `None` on a
+/// cache miss, `Some(None)` on a cached negative hit (e.g. a non-Steam
+/// exclusive), and `Some(Some(compat))` on a positive hit.
+pub async fn cached_compat(ids: &StoreIds) -> Option<Option<SteamCompat>> {
+    if let Some(info) = cached(ids).await
+        && info.steam.is_some()
+    {
+        return Some(info.steam.clone());
+    }
+    util::cache_read::<Option<SteamCompat>>(&compat_cache_file(ids), WIKI_TTL).await
+}
+
+/// Whether a failed Steam AppID lookup may safely persist a negative
+/// (`None`) entry in `<cache>/compat/`.
+///
+/// Explicit `STEAM_NONE` links and definitive Steam store search misses
+/// (`steam_search_ok == true`) are cached even if an optional resolver like
+/// PCGamingWiki returned an error (for example a Cloudflare 403 challenge),
+/// preventing non-Steam exclusives from re-querying on every launch. When
+/// Steam store search itself failed transiently (offline / rate-limit), the
+/// miss is not cached so it retries next time.
+fn should_cache_missing_steam_id(explicit_none: bool, steam_search_ok: bool) -> bool {
+    explicit_none || steam_search_ok
+}
+
+/// Lightweight, persistent ProtonDB and Steam Deck compatibility lookup for
+/// library covers and list cells (never queries HowLongToBeat or umu).
+///
+/// Resolves the Steam AppID via `steam_link` → `gamesdb` / `pcgamingwiki` →
+/// `steam_guess` → Steam store title search (with edition-suffix and
+/// colon/dash subtitle fallbacks), then queries only [`sources::protondb`] and
+/// [`sources::steam_deck`]. Persists both positive and negative results to
+/// `<cache>/compat/{runner}-{app}.json` for 30 days whenever resolution
+/// completed without a transient Steam/ProtonDB error.
+pub async fn fetch_compat(title: &str, ids: &StoreIds) -> Option<SteamCompat> {
+    if let Some(hit) = cached_compat(ids).await {
+        return hit;
+    }
+
+    let mut explicit_none = false;
+    let mut explicit_link = false;
+    let mut steam_search_ok = false;
+    let steam_app_id = match ids.steam_link.as_deref().map(str::trim) {
+        Some(STEAM_NONE) => {
+            explicit_none = true;
+            None
+        }
+        Some(id) if !id.is_empty() => {
+            explicit_link = true;
+            Some(id.to_string())
+        }
+        _ if ids.runner == Runner::Steam => {
+            explicit_link = true;
+            Some(ids.app_name.clone())
+        }
+        _ => {
+            let mut found = match sources::gamesdb_steam_id(ids.runner, &ids.app_name).await {
+                Ok(id) => id,
+                Err(e) => {
+                    tracing::debug!("GamesDB compat lookup for {title} failed: {e:#}");
+                    None
+                }
+            };
+            if found.is_none() {
+                let cleaned = clean_title(title);
+                let gog_id = (ids.runner == Runner::Gog).then_some(ids.app_name.as_str());
+                match pcgamingwiki::fetch(&cleaned, gog_id).await {
+                    Ok(Some(pcgw)) if !pcgw.steam_id.trim().is_empty() => {
+                        found = Some(pcgw.steam_id);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::debug!("PCGamingWiki compat lookup for {title} failed: {e:#}");
+                    }
+                }
+            }
+            if found.is_none() {
+                found = ids
+                    .steam_guess
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+            }
+            if found.is_none() {
+                match resolve_deal_steam_app_id(title, None).await {
+                    Ok(id) => {
+                        steam_search_ok = true;
+                        found = id;
+                    }
+                    Err(e) => {
+                        tracing::debug!("Steam search compat lookup for {title} failed: {e:#}");
+                    }
+                }
+            }
+            found
+        }
+    };
+
+    let Some(steam_id) = steam_app_id else {
+        if should_cache_missing_steam_id(explicit_none, steam_search_ok)
+            && let Err(e) =
+                util::cache_write(&compat_cache_file(ids), &Option::<SteamCompat>::None).await
+        {
+            tracing::warn!("caching empty compatibility entry: {e:#}");
+        }
+        return None;
+    };
+
+    let (mut compat, mut compat_err) = fetch_steam_compat(&steam_id, title).await;
+    // If an edition/subtitle AppID had no ProtonDB or Deck entry, check base
+    // title candidates (same fallback as `resolve_protondb_batch`).
+    if compat.is_none() && !compat_err && !explicit_link {
+        for cand in base_game_candidates(title) {
+            if let Ok(Some(base_id)) = resolve_deal_steam_app_id(&cand, None).await
+                && base_id != steam_id
+            {
+                let (base_compat, base_err) = fetch_steam_compat(&base_id, title).await;
+                if base_compat.is_some() {
+                    compat = base_compat;
+                    compat_err = base_err;
+                    break;
+                }
+            }
+        }
+    }
+    if !compat_err && let Err(e) = util::cache_write(&compat_cache_file(ids), &compat).await {
+        tracing::warn!("caching compatibility entry: {e:#}");
+    }
+    compat
+}
+
+/// Query ProtonDB and Steam Deck compatibility for a resolved Steam AppID.
+/// Returns `(compat, had_transient_error)`.
+async fn fetch_steam_compat(steam_id: &str, title: &str) -> (Option<SteamCompat>, bool) {
+    let (proton, deck) = futures::join!(sources::protondb(steam_id), sources::steam_deck(steam_id));
+    let mut compat_err = false;
+    let protondb = match proton {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::debug!("ProtonDB lookup for {title} ({steam_id}) failed: {e:#}");
+            compat_err = true;
+            None
+        }
+    };
+    let steam_deck = match deck {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::debug!("Steam Deck lookup for {title} ({steam_id}) failed: {e:#}");
+            compat_err = true;
+            None
+        }
+    };
+    let compat = (protondb.is_some() || steam_deck.is_some()).then_some(SteamCompat {
+        protondb,
+        steam_deck,
+    });
+    (compat, compat_err)
 }
 
 /// Whether a cached answer has every field this version reads from the
@@ -463,31 +648,50 @@ async fn steam_storesearch_items(query: &str) -> Result<Vec<serde_json::Value>> 
         .unwrap_or_default())
 }
 
-/// Find a game's Steam app ID via Steam's public `storesearch` endpoint.
-async fn steam_search_app_id(title: &str) -> Result<Option<String>> {
-    let query = steam_search_query(title);
-    if query.is_empty() {
-        return Ok(None);
-    }
-    let mut items = steam_storesearch_items(&query).await?;
-    if items.is_empty()
-        && let Some((prefix, _)) = title.split_once(" - ").or_else(|| title.split_once(": "))
-    {
-        let prefix_query = steam_search_query(prefix);
-        if !prefix_query.is_empty() && prefix_query != query {
-            items = steam_storesearch_items(&prefix_query).await?;
+/// Lowercased alphanumeric words of `s`, preserving word boundaries so
+/// prefix matching never confuses `"Halo"` with `"Shalom"` or `"Fall"` with
+/// `"Fall Guys"`.
+fn title_words(s: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    for ch in s.chars() {
+        if ch.is_alphanumeric() {
+            for lc in ch.to_lowercase() {
+                cur.push(lc);
+            }
+        } else if !cur.is_empty() {
+            words.push(std::mem::take(&mut cur));
         }
     }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    words
+}
+
+/// Pick the best matching Steam app ID from `storesearch` `items` for `title`.
+fn pick_steam_search_match(items: &[serde_json::Value], title: &str) -> Option<String> {
     let squash = |s: &str| -> String {
         s.chars()
             .filter(|c| c.is_alphanumeric())
             .flat_map(char::to_lowercase)
             .collect()
     };
+    let is_extra = |name: &str| -> bool {
+        let lower = name.to_ascii_lowercase();
+        lower.contains("soundtrack") || lower.contains(" demo") || lower.ends_with(" ost")
+    };
     let wanted = squash(title);
     if wanted.is_empty() {
-        return Ok(None);
+        return None;
     }
+    let wanted_base = squash(&strip_edition_suffix(&clean_title(title)));
+    let base_candidates: Vec<String> = base_game_candidates(title)
+        .into_iter()
+        .map(|c| squash(&c))
+        .collect();
+    let wanted_words = title_words(title);
+
     let picked = items
         .iter()
         .find(|item| {
@@ -498,19 +702,69 @@ async fn steam_search_app_id(title: &str) -> Result<Option<String>> {
         .or_else(|| {
             items.iter().find(|item| {
                 item.get("name").and_then(|n| n.as_str()).is_some_and(|n| {
+                    if is_extra(n) {
+                        return false;
+                    }
                     let s = squash(n);
-                    let lower = n.to_ascii_lowercase();
-                    !lower.contains("soundtrack")
-                        && !lower.contains(" demo")
-                        && (s.contains(&wanted) || wanted.contains(&s))
+                    let s_base = squash(&strip_edition_suffix(&clean_title(n)));
+                    (!wanted_base.is_empty() && s_base == wanted_base)
+                        || base_candidates.contains(&s)
+                        || base_candidates.contains(&s_base)
+                })
+            })
+        })
+        .or_else(|| {
+            items.iter().find(|item| {
+                item.get("name").and_then(|n| n.as_str()).is_some_and(|n| {
+                    if is_extra(n) {
+                        return false;
+                    }
+                    let s = squash(n);
+                    let item_words = title_words(n);
+                    if item_words.is_empty() || wanted_words.is_empty() {
+                        return false;
+                    }
+                    // Steam title extends our title at a word boundary (e.g.
+                    // searching "AK-xolotl" finds "AK-xolotl: Together").
+                    let steam_extends_ours =
+                        wanted.chars().count() >= 4 && item_words.starts_with(&wanted_words);
+                    // Our title extends Steam title at a word boundary (require
+                    // multi-word match covering at least 60% of characters so
+                    // "Fall" never matches "Fall Guys" and "3 out" never
+                    // matches "3 out of 10").
+                    let ours_extends_steam = s.chars().count() >= 4
+                        && wanted_words.starts_with(&item_words)
+                        && item_words.len() >= 2
+                        && s.chars().count() * 10 >= wanted.chars().count() * 6;
+                    steam_extends_ours || ours_extends_steam
                 })
             })
         });
-    Ok(picked.and_then(|v| {
+    picked.and_then(|v| {
         v.get("id")
             .and_then(|v| v.as_u64())
             .map(|id| id.to_string())
-    }))
+    })
+}
+
+/// Find a game's Steam app ID via Steam's public `storesearch` endpoint.
+async fn steam_search_app_id(title: &str) -> Result<Option<String>> {
+    let query = steam_search_query(title);
+    if query.is_empty() {
+        return Ok(None);
+    }
+    let items = steam_storesearch_items(&query).await?;
+    if let Some(found) = pick_steam_search_match(&items, title) {
+        return Ok(Some(found));
+    }
+    if let Some(prefix) = subtitle_prefix(title) {
+        let prefix_query = steam_search_query(&prefix);
+        if !prefix_query.is_empty() && prefix_query != query {
+            let prefix_items = steam_storesearch_items(&prefix_query).await?;
+            return Ok(pick_steam_search_match(&prefix_items, &prefix));
+        }
+    }
+    Ok(None)
 }
 
 /// Resolve the hashed library capsule and hero URLs of a Steam app from
@@ -678,6 +932,19 @@ pub(crate) fn strip_edition_suffix(title: &str) -> String {
     }
 }
 
+/// Base title before a subtitle separator (`: `, ` - `, ` – `, ` — `), such as
+/// `"AK-xolotl: Together"` → `"AK-xolotl"`. Must run on the raw title before
+/// [`clean_title`] strips colons.
+fn subtitle_prefix(title: &str) -> Option<String> {
+    let (prefix, _) = title
+        .split_once(": ")
+        .or_else(|| title.split_once(" - "))
+        .or_else(|| title.split_once(" – "))
+        .or_else(|| title.split_once(" — "))?;
+    let trimmed = prefix.trim();
+    (trimmed.chars().count() >= 4).then(|| trimmed.to_string())
+}
+
 fn base_game_candidates(title: &str) -> Vec<String> {
     let cleaned = clean_title(title);
     let mut out = Vec::new();
@@ -685,10 +952,10 @@ fn base_game_candidates(title: &str) -> Vec<String> {
     if !stripped.is_empty() && stripped != cleaned {
         out.push(stripped);
     }
-    if let Some((prefix, _)) = cleaned.split_once(" - ") {
-        let p = prefix.trim();
-        if p.chars().count() >= 4 && p != cleaned && !out.iter().any(|existing| existing == p) {
-            out.push(p.to_string());
+    if let Some(prefix) = subtitle_prefix(title) {
+        let p = strip_edition_suffix(&clean_title(&prefix));
+        if p.chars().count() >= 4 && p != cleaned && !out.iter().any(|existing| existing == &p) {
+            out.push(p);
         }
     }
     out
@@ -733,9 +1000,11 @@ async fn resolve_deal_steam_app_id(title: &str, gog_id: Option<&str>) -> Result<
         let cleaned = clean_title(title);
         resolved = steam_search_app_id(&cleaned).await?;
         if resolved.is_none() {
-            let stripped = strip_edition_suffix(&cleaned);
-            if !stripped.is_empty() && stripped != cleaned {
-                resolved = steam_search_app_id(&stripped).await?;
+            for candidate in base_game_candidates(title) {
+                resolved = steam_search_app_id(&candidate).await?;
+                if resolved.is_some() {
+                    break;
+                }
             }
         }
     }
@@ -991,5 +1260,134 @@ mod tests {
         assert_eq!(matches[1].app_id, 1245620);
         assert_eq!(matches[1].name, "ELDEN RING");
         assert!(parse_steam_storesearch(&serde_json::json!({})).is_empty());
+    }
+
+    #[test]
+    fn subtitle_prefix_and_base_candidates_handle_colons_before_cleaning() {
+        assert_eq!(
+            subtitle_prefix("AK-xolotl: Together").as_deref(),
+            Some("AK-xolotl")
+        );
+        assert_eq!(
+            subtitle_prefix("Shambles - Sons of Apocalypse").as_deref(),
+            Some("Shambles")
+        );
+        // Too-short prefixes are ignored to avoid noisy matches.
+        assert_eq!(subtitle_prefix("X: Rebirth"), None);
+        assert_eq!(
+            base_game_candidates("AK-xolotl: Together"),
+            vec!["AK-xolotl".to_string()]
+        );
+        assert_eq!(
+            base_game_candidates("Fallout 4: Game of the Year Edition"),
+            vec!["Fallout 4".to_string()]
+        );
+    }
+
+    #[test]
+    fn steam_search_match_avoids_false_positives_and_matches_subtitles() {
+        let items = vec![
+            serde_json::json!({"id": 999999, "name": "3"}),
+            serde_json::json!({"id": 999998, "name": "3 out"}),
+            serde_json::json!({"id": 888888, "name": "Fall"}),
+            serde_json::json!({"id": 777777, "name": "Shalom"}),
+            serde_json::json!({"id": 2594170, "name": "AK-xolotl Soundtrack"}),
+            serde_json::json!({"id": 1479140, "name": "AK-xolotl"}),
+        ];
+        assert_eq!(pick_steam_search_match(&items, "3 out of 10"), None);
+        assert_eq!(pick_steam_search_match(&items, "Fall Guys"), None);
+        assert_eq!(pick_steam_search_match(&items, "Halo"), None);
+        assert_eq!(
+            pick_steam_search_match(&items, "AK-xolotl: Together").as_deref(),
+            Some("1479140")
+        );
+        assert_eq!(
+            pick_steam_search_match(&items, "AK-xolotl").as_deref(),
+            Some("1479140")
+        );
+        // Steam returning the subtitled title when searching by base title.
+        let subtitled = vec![
+            serde_json::json!({"id": 2594170, "name": "AK-xolotl Soundtrack"}),
+            serde_json::json!({"id": 1479140, "name": "AK-xolotl: Together"}),
+        ];
+        assert_eq!(
+            pick_steam_search_match(&subtitled, "AK-xolotl").as_deref(),
+            Some("1479140")
+        );
+        assert_eq!(
+            pick_steam_search_match(&subtitled, "AK-xolotl: Together").as_deref(),
+            Some("1479140")
+        );
+    }
+
+    #[test]
+    fn negative_compat_cache_persists_when_steam_search_confirms_miss() {
+        // Explicit STEAM_NONE always persists.
+        assert!(should_cache_missing_steam_id(true, false));
+        // Steam store search returned Ok(None) even if PCGamingWiki returned 403 -> persists.
+        assert!(should_cache_missing_steam_id(false, true));
+        // Steam store search itself failed transiently (offline/5xx) -> does not poison cache.
+        assert!(!should_cache_missing_steam_id(false, false));
+    }
+
+    #[tokio::test]
+    async fn compat_cache_persists_positive_and_negative_results() {
+        let tmp = tempfile::tempdir().unwrap();
+        irori_core::Paths::init(irori_core::Paths::under(tmp.path()));
+
+        let epic_excl = StoreIds {
+            runner: Runner::Legendary,
+            app_name: "three-out-of-ten-compat-test".into(),
+            store_url: None,
+            hltb_id: None,
+            release_year: None,
+            steam_link: Some(STEAM_NONE.into()),
+            steam_guess: None,
+        };
+        forget(&epic_excl).await;
+        assert_eq!(cached_compat(&epic_excl).await, None);
+        // Explicit STEAM_NONE resolves locally without network and writes negative cache.
+        assert_eq!(fetch_compat("3 out of 10", &epic_excl).await, None);
+        assert_eq!(cached_compat(&epic_excl).await, Some(None));
+        assert!(compat_cache_file(&epic_excl).exists());
+        forget(&epic_excl).await;
+
+        // Plain StoreIds use `compat/{runner}-{app}.json` and read back cleanly.
+        let plain = StoreIds {
+            runner: Runner::Legendary,
+            app_name: "ak-xolotl-compat-test".into(),
+            store_url: None,
+            hltb_id: None,
+            release_year: None,
+            steam_link: None,
+            steam_guess: None,
+        };
+        forget(&plain).await;
+        assert!(compat_cache_file(&plain).ends_with("compat/legendary-ak-xolotl-compat-test.json"));
+        let compat = SteamCompat {
+            protondb: Some(ProtonDbTier::Platinum),
+            steam_deck: Some(SteamDeckCompat::Verified),
+        };
+        util::cache_write(&compat_cache_file(&plain), &Some(compat.clone()))
+            .await
+            .unwrap();
+        assert_eq!(cached_compat(&plain).await, Some(Some(compat.clone())));
+        assert_eq!(
+            fetch_compat("AK-xolotl: Together", &plain).await,
+            Some(compat.clone())
+        );
+
+        // `forget` clears the dedicated compat cache file too.
+        forget(&plain).await;
+        assert_eq!(cached_compat(&plain).await, None);
+
+        // Existing `wiki::cached` steam compat is picked up without touching `compat/`.
+        let wiki = WikiInfo {
+            steam: Some(compat.clone()),
+            ..Default::default()
+        };
+        util::cache_write(&cache_file(&plain), &wiki).await.unwrap();
+        assert_eq!(cached_compat(&plain).await, Some(Some(compat)));
+        forget(&plain).await;
     }
 }

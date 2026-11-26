@@ -2318,5 +2318,7 @@
   "settings.crash.recent_help": "I rapporti delle chiusure impreviste restano qui finché non li rimuovi.",
   "settings.crash.review_action": "Esamina e segnala",
   "settings.crash.delete": "Elimina rapporto",
-  "settings.crash.delete_failed": "Impossibile eliminare il rapporto di arresto anomalo"
+  "settings.crash.delete_failed": "Impossibile eliminare il rapporto di arresto anomalo",
+  "settings.field.ui_cover_compat_badges.label": "Badge ProtonDB e Steam Deck sulle copertine",
+  "settings.field.ui_cover_compat_badges.help": "Mostra le valutazioni ProtonDB e i badge Steam Deck Verified sulle copertine dei giochi non installati."
 }

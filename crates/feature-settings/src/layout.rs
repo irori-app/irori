@@ -320,6 +320,7 @@ fn appearance_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.showAgeRatings"
         | "iroriUi.ageRatingBoard"
         | "iroriUi.trailerAutoplay"
+        | "iroriUi.coverCompatBadges"
         | "iroriUi.coverCategories"
         | "iroriUi.coverCorners"
         | "iroriUi.coverFit"

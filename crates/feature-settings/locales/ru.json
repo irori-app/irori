@@ -2318,5 +2318,7 @@
   "settings.crash.recent_help": "Отчёты о неожиданных завершениях остаются здесь, пока вы их не удалите.",
   "settings.crash.review_action": "Просмотреть и сообщить",
   "settings.crash.delete": "Удалить отчёт",
-  "settings.crash.delete_failed": "Не удалось удалить отчёт о сбое"
+  "settings.crash.delete_failed": "Не удалось удалить отчёт о сбое",
+  "settings.field.ui_cover_compat_badges.label": "Значки ProtonDB и Steam Deck на обложках",
+  "settings.field.ui_cover_compat_badges.help": "Показывать рейтинги ProtonDB и значки Steam Deck Verified на обложках неустановленных игр."
 }

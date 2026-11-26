@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "Üst verileri düzenle…",
   "library.menu.no_collections": "Henüz koleksiyon yok",
   "library.menu.manual_categories": "Manuel kategoriler",
-  "library.collection.remove_game": "Koleksiyondan kaldır"
+  "library.collection.remove_game": "Koleksiyondan kaldır",
+  "library.look.compat_badges": "ProtonDB ve Steam Deck",
+  "library.list.compat": "Linux’ta"
 }

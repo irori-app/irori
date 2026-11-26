@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "メタデータを編集…",
   "library.menu.no_collections": "コレクションはまだありません",
   "library.menu.manual_categories": "手動カテゴリ",
-  "library.collection.remove_game": "コレクションから削除"
+  "library.collection.remove_game": "コレクションから削除",
+  "library.look.compat_badges": "ProtonDB と Steam Deck",
+  "library.list.compat": "Linux 対応"
 }

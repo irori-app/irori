@@ -2318,5 +2318,7 @@
   "settings.crash.recent_help": "Zprávy o neočekávaném ukončení tu zůstanou, dokud je neodstraníte.",
   "settings.crash.review_action": "Zkontrolovat a nahlásit",
   "settings.crash.delete": "Smazat zprávu",
-  "settings.crash.delete_failed": "Zprávu o pádu se nepodařilo smazat"
+  "settings.crash.delete_failed": "Zprávu o pádu se nepodařilo smazat",
+  "settings.field.ui_cover_compat_badges.label": "Štítky ProtonDB a Steam Deck na obalech",
+  "settings.field.ui_cover_compat_badges.help": "Zobrazovat hodnocení ProtonDB a odznaky Steam Deck Verified na obalech nenainstalovaných her."
 }

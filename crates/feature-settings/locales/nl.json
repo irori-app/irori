@@ -2318,5 +2318,7 @@
   "settings.crash.recent_help": "Rapporten van onverwachte afsluitingen blijven hier totdat je ze verwijdert.",
   "settings.crash.review_action": "Bekijken en melden",
   "settings.crash.delete": "Rapport verwijderen",
-  "settings.crash.delete_failed": "Kan het crashrapport niet verwijderen"
+  "settings.crash.delete_failed": "Kan het crashrapport niet verwijderen",
+  "settings.field.ui_cover_compat_badges.label": "ProtonDB- en Steam Deck-badges op hoezen",
+  "settings.field.ui_cover_compat_badges.help": "Toon ProtonDB-beoordelingen en Steam Deck Verified-badges op hoezen van niet-geïnstalleerde games."
 }

@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "编辑元数据…",
   "library.menu.no_collections": "暂无收藏集",
   "library.menu.manual_categories": "手动分类",
-  "library.collection.remove_game": "从收藏集移除"
+  "library.collection.remove_game": "从收藏集移除",
+  "library.look.compat_badges": "ProtonDB 与 Steam Deck",
+  "library.list.compat": "Linux 兼容性"
 }

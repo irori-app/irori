@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "Editează metadatele…",
   "library.menu.no_collections": "Nicio colecție încă",
   "library.menu.manual_categories": "Categorii manuale",
-  "library.collection.remove_game": "Elimină din colecție"
+  "library.collection.remove_game": "Elimină din colecție",
+  "library.look.compat_badges": "ProtonDB și Steam Deck",
+  "library.list.compat": "Pe Linux"
 }

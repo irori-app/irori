@@ -356,6 +356,9 @@ pub struct UiPrefs {
     /// ("PEGI", as [`crate::RatingSystem::from_key`] reads it), or empty for
     /// the board of the user's region.
     pub age_rating_board: String,
+    /// ProtonDB tier and Steam Deck badge on covers of not-installed games
+    /// (`coverCompatBadges`, on by default on Linux, opt-in elsewhere).
+    pub cover_compat_badges: bool,
     /// Kinds of rows the game page's Details leave out (`hiddenDetailRows`,
     /// ids such as `publisher`); ids a later Irori adds stay as written.
     pub hidden_detail_rows: Vec<String>,
@@ -388,6 +391,8 @@ pub struct ListColumns {
     pub playtime: bool,
     pub last_played: bool,
     pub status: bool,
+    /// ProtonDB compatibility column ("On Linux").
+    pub compat: bool,
 }
 
 impl Default for ListColumns {
@@ -398,6 +403,7 @@ impl Default for ListColumns {
             playtime: true,
             last_played: true,
             status: true,
+            compat: cfg!(target_os = "linux"),
         }
     }
 }
@@ -490,6 +496,7 @@ impl Default for UiPrefs {
             store_badges_one_store: false,
             show_age_ratings: true,
             age_rating_board: String::new(),
+            cover_compat_badges: cfg!(target_os = "linux"),
             hidden_detail_rows: Vec::new(),
             library_list_columns: ListColumns::default(),
             library_list_row_size: ListRowSize::Medium,

@@ -34,17 +34,18 @@ pub const COVER_RATIO: f32 = 1.5;
 pub const MIN_TILE_REM: f32 = 7.0;
 pub const MAX_TILE_REM: f32 = 16.0;
 
-/// List column widths, in rem (store, size, playtime, last played, status, actions).
-pub const LIST_COLUMNS: [f32; 6] = [6.0, 5.5, 6.0, 7.5, 8.0, 10.0];
+/// List column widths, in rem (store, size, playtime, last played, status,
+/// compat, actions).
+pub const LIST_COLUMNS: [f32; 7] = [6.0, 5.5, 6.0, 7.5, 8.0, 7.5, 10.0];
 /// Width of a list row's thumbnail, in rem.
 pub const LIST_THUMB_REM: f32 = 2.25;
 /// Gap between list cells (`gap_4`), in rem.
 const LIST_GAP_REM: f32 = 1.0;
 /// Narrowest the title column gets before a data column is dropped, in rem.
 const LIST_TITLE_MIN_REM: f32 = 12.0;
-/// Data columns in the order narrow lists drop them: size, store, playtime,
-/// last played. Status and the actions always stay.
-const LIST_DROP_ORDER: [usize; 4] = [1, 0, 2, 3];
+/// Data columns in the order narrow lists drop them: size, compat, store,
+/// playtime, last played. Status (if enabled) and the actions always stay.
+const LIST_DROP_ORDER: [usize; 5] = [1, 5, 0, 2, 3];
 
 /// Height of one list-layout row for `size` and `density`, in rem.
 pub fn list_row_rem(size: ListRowSize, density: Density) -> f32 {
@@ -78,9 +79,9 @@ pub fn list_columns_for(
     available_rem: f32,
     chosen: ListColumns,
     row_size: ListRowSize,
-) -> [bool; 6] {
+) -> [bool; 7] {
     let thumb = list_thumb_rem(row_size);
-    let needed = |shown: &[bool; 6]| {
+    let needed = |shown: &[bool; 7]| {
         let columns: f32 = LIST_COLUMNS
             .iter()
             .zip(shown)
@@ -95,6 +96,7 @@ pub fn list_columns_for(
         chosen.playtime,
         chosen.last_played,
         chosen.status,
+        chosen.compat,
         true,
     ];
     for column in LIST_DROP_ORDER {
@@ -554,25 +556,51 @@ mod tests {
             playtime: true,
             last_played: true,
             status: true,
+            compat: true,
         };
-        assert_eq!(cols(80.0, all), [true; 6]);
-        assert_eq!(cols(60.0, all), [true, false, true, true, true, true]);
-        assert_eq!(cols(52.0, all), [false, false, true, true, true, true]);
-        assert_eq!(cols(50.0, all), [false, false, false, true, true, true]);
-        assert_eq!(cols(20.0, all), [false, false, false, false, true, true]);
+        assert_eq!(cols(90.0, all), [true; 7]);
+        assert_eq!(cols(69.0, all), [true, false, true, true, true, true, true]);
+        assert_eq!(
+            cols(60.0, all),
+            [true, false, true, true, true, false, true]
+        );
+        assert_eq!(
+            cols(52.0, all),
+            [false, false, true, true, true, false, true]
+        );
+        assert_eq!(
+            cols(50.0, all),
+            [false, false, false, true, true, false, true]
+        );
+        assert_eq!(
+            cols(20.0, all),
+            [false, false, false, false, true, false, true]
+        );
         // Respects disabled columns even on wide windows, including status.
         let default = ListColumns::default();
-        assert_eq!(cols(80.0, default), [true, false, true, true, true, true]);
+        assert_eq!(
+            cols(90.0, default),
+            [
+                true,
+                false,
+                true,
+                true,
+                true,
+                cfg!(target_os = "linux"),
+                true
+            ]
+        );
         let minimal = ListColumns {
             store: false,
             size: true,
             playtime: false,
             last_played: false,
             status: false,
+            compat: true,
         };
         assert_eq!(
-            cols(80.0, minimal),
-            [false, true, false, false, false, true]
+            cols(90.0, minimal),
+            [false, true, false, false, false, true, true]
         );
     }
 

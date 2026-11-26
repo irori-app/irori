@@ -382,7 +382,7 @@ fn corners_control(ui: &UiPrefs, cx: &App) -> AnyElement {
         .into_any_element()
 }
 
-fn on_covers_pills(ui: &UiPrefs, cx: &App) -> AnyElement {
+fn on_covers_pills(ui: &UiPrefs, include_grid_only: bool, cx: &App) -> AnyElement {
     let mut pills = vec![
         toggle_pill(
             "look-star",
@@ -405,6 +405,15 @@ fn on_covers_pills(ui: &UiPrefs, cx: &App) -> AnyElement {
             t("library.look.badges_always_short"),
             ui.store_badges_always,
             |cx| persist_ui(cx, |u| u.store_badges_always = !u.store_badges_always),
+            cx,
+        ));
+    }
+    if include_grid_only {
+        pills.push(toggle_pill(
+            "look-compat-badges",
+            t("library.look.compat_badges"),
+            ui.cover_compat_badges,
+            |cx| persist_ui(cx, |u| u.cover_compat_badges = !u.cover_compat_badges),
             cx,
         ));
     }
@@ -500,7 +509,7 @@ fn build_look_body(
 
             let details = vec![
                 caption_control(ui.cover_caption, cx),
-                on_covers_pills(ui, cx),
+                on_covers_pills(ui, true, cx),
             ];
             let page = vec![
                 top_section_control(top_section, cx),
@@ -552,7 +561,7 @@ fn build_look_body(
             ];
             let details = vec![
                 caption_control(ui.cover_caption, cx),
-                on_covers_pills(ui, cx),
+                on_covers_pills(ui, false, cx),
             ];
 
             vec![
@@ -657,6 +666,17 @@ fn build_look_body(
                     |cx| {
                         persist_ui(cx, |u| {
                             u.library_list_columns.status = !u.library_list_columns.status
+                        })
+                    },
+                    cx,
+                ))
+                .child(toggle_pill(
+                    "look-col-compat",
+                    t("library.list.compat"),
+                    cols.compat,
+                    |cx| {
+                        persist_ui(cx, |u| {
+                            u.library_list_columns.compat = !u.library_list_columns.compat
                         })
                     },
                     cx,

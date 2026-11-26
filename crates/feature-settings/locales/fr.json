@@ -2318,5 +2318,7 @@
   "settings.crash.recent_help": "Les rapports des fermetures inattendues restent ici jusqu’à leur suppression.",
   "settings.crash.review_action": "Examiner et signaler",
   "settings.crash.delete": "Supprimer le rapport",
-  "settings.crash.delete_failed": "Impossible de supprimer le rapport de plantage"
+  "settings.crash.delete_failed": "Impossible de supprimer le rapport de plantage",
+  "settings.field.ui_cover_compat_badges.label": "Badges ProtonDB et Steam Deck sur les jaquettes",
+  "settings.field.ui_cover_compat_badges.help": "Affiche les notes ProtonDB et les badges Steam Deck Verified sur les jaquettes des jeux non installés."
 }
