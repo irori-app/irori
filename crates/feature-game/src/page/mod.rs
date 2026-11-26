@@ -11,7 +11,7 @@
 
 mod achievements;
 mod age_rating;
-mod compat;
+pub(crate) mod compat;
 mod copies;
 mod details;
 mod drawer;
