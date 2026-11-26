@@ -26,6 +26,7 @@ mod overlay;
 mod pc_check;
 mod reception;
 mod related;
+mod rich_text;
 mod sandbox;
 mod screenshots;
 mod timeline;
