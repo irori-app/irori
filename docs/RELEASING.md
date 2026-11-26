@@ -32,7 +32,10 @@ channel's package manager (`irori-services::app_update` tells them apart; see
    workflow fails if the tag and the version differ.
 3. Download the draft's packages and run the checks in
    [PLATFORMS.md](PLATFORMS.md#verification-and-remaining-machine-tests) on real machines.
-4. Edit the generated notes and publish the draft. `publish.yml` takes over.
+4. Generate grouped release notes with `git-cliff` using the root `cliff.toml`
+   (`git-cliff --unreleased --tag vX.Y.Z --strip header` for draft GitHub release
+   notes, or `git-cliff --tag vX.Y.Z --output CHANGELOG.md` for a full changelog),
+   edit the draft notes, and publish the draft. `publish.yml` takes over.
 
 To publish a release again (after adding a channel, say), run **Publish** by hand
 with its tag.

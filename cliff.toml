@@ -1,0 +1,56 @@
+# git-cliff configuration for Irori release notes and changelogs.
+# Generate notes for the next release with:
+#   git-cliff --unreleased --tag vX.Y.Z --strip header
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to Irori are documented here.
+"""
+body = """
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## [Unreleased]
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{% if commit.breaking %}[breaking] {% endif %}{{ commit.message | upper_first }}
+{%- endfor %}
+{% endfor %}\n
+"""
+footer = ""
+trim = true
+postprocessors = []
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+commit_preprocessors = [
+  { pattern = '\(#([0-9]+)\)', replace = "([#${1}](https://github.com/irori-app/irori/pull/${1}))" },
+  { pattern = '\s+$', replace = "" },
+]
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^i18n", group = "<!-- 3 -->Translations" },
+  { message = "^build", group = "<!-- 4 -->Packaging and Builds" },
+  { message = "^docs", group = "<!-- 5 -->Documentation" },
+  { message = "^refactor", group = "<!-- 6 -->Refactoring" },
+  { message = "^revert", group = "<!-- 7 -->Reverts" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore: release", skip = true },
+  { message = "^chore\\(deps.*\\)", skip = true },
+  { message = "^chore", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^test", skip = true },
+]
+protect_breaking_commits = true
+filter_commits = true
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+topo_order = false
