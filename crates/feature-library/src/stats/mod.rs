@@ -21,8 +21,6 @@
 //! The overview ends with the library's achievements: completion, perfect
 //! games, points, the rarest and the latest unlocks.
 //!
-//! Below both, the storage section shows the installed games by drive.
-//!
 //! Any game on the page (top games, insights, the backlog's covers) opens
 //! its sheet: its numbers over the period shown (`sheet`, `sheet_view`).
 //!
@@ -49,8 +47,6 @@ mod overview_view;
 pub(crate) mod period;
 pub(crate) mod sheet;
 mod sheet_view;
-pub(crate) mod storage;
-mod storage_view;
 mod text;
 pub(crate) mod year;
 mod year_card;
@@ -84,7 +80,6 @@ use backlog::Backlog;
 use model::History;
 use overview::Overview;
 use period::{Period, Span};
-use storage::{DriveUsage, InstalledGame};
 
 /// Which half of the page is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,8 +152,6 @@ pub struct StatsView {
     journal_scroll: VirtualListScrollHandle,
     /// Years with play, newest first, for the Year in review.
     years: Vec<i32>,
-    /// Installed games by drive; `None` until first read.
-    storage: Option<Vec<DriveUsage>>,
     /// Every game's achievements, summed up; `None` until first read.
     achievements: Option<Arc<irori_services::AchievementIndex>>,
     /// "Check played games" is asking the stores.
@@ -193,7 +186,6 @@ impl StatsView {
                 });
                 if !same {
                     this.derive(cx);
-                    this.reload_storage(cx);
                 }
             }),
         ];
@@ -227,7 +219,6 @@ impl StatsView {
             journal_sizes: Rc::default(),
             journal_scroll: VirtualListScrollHandle::new(),
             years: Vec::new(),
-            storage: None,
             achievements: None,
             achievements_scanning: false,
             seen: None,
@@ -235,7 +226,6 @@ impl StatsView {
             _subscriptions: subscriptions,
         };
         view.reload(cx);
-        view.reload_storage(cx);
         view.load_prefs(cx);
         view
     }
@@ -506,47 +496,6 @@ impl StatsView {
         }
     }
 
-    /// Read the drives and where the installed games are (off the UI thread).
-    fn reload_storage(&mut self, cx: &mut Context<Self>) {
-        let b = backend(cx);
-        let installed: Vec<(irori_core::GameId, std::path::PathBuf, u64)> = models(cx)
-            .library
-            .read(cx)
-            .snapshot
-            .games
-            .iter()
-            .filter(|g| g.is_installed)
-            .filter_map(|g| {
-                let bytes = g.install.as_ref().map_or(0, |i| i.install_size_bytes);
-                Some((g.id(), g.install_path()?, bytes))
-            })
-            .collect();
-        let task = irori_ui::state::run_infallible(cx, async move {
-            b.spawn_blocking(move || {
-                let games: Vec<InstalledGame> = installed
-                    .into_iter()
-                    .map(|(id, path, bytes)| InstalledGame {
-                        id,
-                        path: storage::resolve(&path),
-                        bytes,
-                    })
-                    .collect();
-                storage::group(&games, &storage::read_drives())
-            })
-            .await
-            .ok()
-        });
-        cx.spawn(async move |this, cx| {
-            if let Some(Some(drives)) = task.await {
-                let _ = this.update(cx, |this, cx| {
-                    this.storage = Some(drives);
-                    cx.notify();
-                });
-            }
-        })
-        .detach();
-    }
-
     /// Whether there is nothing to show at all: no play, no statuses, no
     /// screenshots.
     fn is_blank(&self, cx: &Context<Self>) -> bool {
@@ -562,7 +511,7 @@ impl StatsView {
 impl Render for StatsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // An album with screenshots is a list of its own that scrolls the
-        // whole page; the storage section belongs to the other tabs.
+        // whole page.
         let album_page = self.tab == Tab::Album
             && self.history.is_some()
             && self.album.as_ref().is_some_and(|a| !a.shots.is_empty())
@@ -623,11 +572,6 @@ impl Render for StatsView {
                 Tab::Journal => self.render_journal(window, cx),
             }
         };
-        let storage = self
-            .storage
-            .clone()
-            .filter(|d| !d.is_empty())
-            .map(|d| self.render_storage(&d, cx));
         v_flex()
             .size_full()
             .min_h_0()
@@ -638,7 +582,7 @@ impl Render for StatsView {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scrollbar()
-                    .child(v_flex().p_6().gap_6().child(body).children(storage)),
+                    .child(v_flex().p_6().gap_6().child(body)),
             )
     }
 }

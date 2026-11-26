@@ -5531,7 +5531,6 @@ dependencies = [
  "resvg 0.46.0",
  "serde",
  "serde_json",
- "sysinfo 0.39.6",
  "tracing",
 ]
 
