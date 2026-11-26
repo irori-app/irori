@@ -25,9 +25,9 @@ jobs:
           python-version: '3.12'
       - name: Rule tests
         run: python -m unittest discover -s .github/scripts -p "test_*.py"
-      - name: Branch, title, base, and Rust diff size
+      - name: Branch, title, base, body, and Rust diff size
         # Passed through the environment, never interpolated into the script:
-        # titles, branch names, and labels are untrusted input.
+        # titles, branch names, bodies, and labels are untrusted input.
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_HEAD: ${{ github.event.pull_request.head.ref }}
@@ -35,4 +35,5 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: python .github/scripts/pr_rules.py
