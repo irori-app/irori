@@ -59,7 +59,9 @@ Load only the document or skill that matches your task:
 | [docs/TRANSLATING.md](docs/TRANSLATING.md) | `en.json`-first localization workflow, crate catalog namespaces, `{placeholder}` rules, and Hosted Weblate setup |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Virtualization, LRU GPU and disk art caches, startup budget, runtime concurrency, build profiles, profiling with `--profile profiling`, and benchmarks |
 | [docs/PLATFORMS.md](docs/PLATFORMS.md) | OS paths, desktop integration, Wayland/X11/macOS/Windows quirks, translucency matrix, sandboxing, and packaging |
+| [docs/FEATURES.md](docs/FEATURES.md) | User-facing feature catalog (update when adding, changing, or removing visible capabilities) |
 | [docs/RELEASING.md](docs/RELEASING.md) | Release workflow, `SHA256SUMS`, SLSA attestations, and package channels (AUR, Homebrew, Scoop, winget, COPR, Flathub) |
+| [docs/RELEASE_QA.md](docs/RELEASE_QA.md) | Pre-release hardware QA checklist attached to release notes |
 | [docs/PROMPTING_PLAYBOOK.md](docs/PROMPTING_PLAYBOOK.md) | Context window management, model routing, XML prompt templates, multimodal screenshot verification, and diff audit checklist |
 | [SECURITY.md](SECURITY.md) | Threat model, credential storage, `#![forbid(unsafe_code)]` crates, `fs_guard`, script consent, and external network domains |
 

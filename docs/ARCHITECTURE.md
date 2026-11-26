@@ -248,7 +248,7 @@ Key environment variables: `IRORI_HOME` (relocate config/data/cache), `IRORI_LOG
 ### Splitting large modules into submodules
 
 - Split `.rs` files before they grow past roughly 600 to 800 lines instead of letting views, forms, or schemas become monoliths.
-- Prefer the Rust 2018+ sibling facade layout (`<module>.rs` + `<module>/*.rs`) when refactoring an existing file, as used in `crates/core/src/settings.rs` + `crates/core/src/settings/`, `crates/feature-settings/src/form.rs` + `crates/feature-settings/src/form/`, `crates/feature-library/src/view.rs` + `crates/feature-library/src/view/`, and `crates/feature-settings/src/hud/panel.rs` + `crates/feature-settings/src/hud/panel/` (alongside existing directory modules such as `crates/feature-settings/src/registry/mod.rs` and `crates/extras/src/discounts/mod.rs`).
+- Prefer the Rust 2018+ sibling facade layout (`<module>.rs` + `<module>/*.rs`) when refactoring an existing file, as used in `crates/core/src/settings.rs` + `crates/core/src/settings/`, `crates/feature-settings/src/form.rs` + `crates/feature-settings/src/form/`, `crates/feature-library/src/view.rs` + `crates/feature-library/src/view/`, and `crates/feature-settings/src/hud/panel.rs` + `crates/feature-settings/src/hud/panel/` (alongside existing directory modules such as `crates/feature-settings/src/registry/mod.rs`, `crates/feature-game/src/page/mod.rs`, and `crates/extras/src/discounts/mod.rs`).
 - Keep `<module>.rs` thin (module docs, `mod` declarations, `pub` or `pub(crate)` re-exports, and core struct definitions) and move focused concerns into `<module>/{actions,render,sections,helpers,tests}.rs` using `pub(super)` or `pub(crate)` visibility so external crate paths never change.
 - Run `python3 .github/scripts/check_agent_docs.py` whenever splitting, moving, or renaming modules or crates so `docs/`, `docs/GRAPHS.md`, and `.agents/skills/` stay synchronized with the source tree.
 
@@ -257,7 +257,7 @@ Key environment variables: `IRORI_HOME` (relocate config/data/cache), `IRORI_LOG
 - Keep tests inline (`#[cfg(test)] mod tests` or `src/tests.rs`) with small inline fixtures.
 - Never reach real networks, real user configs, Heroic directories, store accounts, or OS keyrings. Isolate with `tempfile`, `Paths::init(Paths::under(tmp))`, `irori_depot::test_server::TestServer`, and store test constructors.
 - Every bug fix must add a regression test that fails without the fix.
-- Ignored (`#[ignore]`) integration tests require explicit environment opt-in (`IRORI_RELEASE_TEST_URL`, `IRORI_RUNTIME_SMOKE=1`, `IRORI_KEYRING_SMOKE=1` in throwaway `dbus-run-session`, `IRORI_SANDBOX_SMOKE=1`, `IRORI_SANDBOX_PROTON`).
+- Ignored (`#[ignore]`) integration tests require explicit environment opt-in (`IRORI_RELEASE_TEST_URL` pointing to the local mock under `tests/postman/`, `IRORI_RUNTIME_SMOKE=1`, `IRORI_KEYRING_SMOKE=1` in throwaway `dbus-run-session`, `IRORI_SANDBOX_SMOKE=1`, `IRORI_SANDBOX_PROTON`).
 - Packaging changes must pass `python3 -m unittest discover -s packaging -p "test_*.py"`; PR-rule and documentation-sync changes must pass `python3 -m unittest discover -s .github/scripts -p "test_*.py"` and `python3 .github/scripts/check_agent_docs.py`.
 
 ### Branches, commits, and pull requests

@@ -9,7 +9,7 @@ Follow [AGENTS.md](../AGENTS.md) as the authoritative engineering contract for I
    - [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) and [docs/GRAPHS.md](../docs/GRAPHS.md) for crate boundaries, backend services, stores, launch pipelines, engines, mods, submodule splits, and Mermaid system diagrams.
    - [docs/UI_CONVENTIONS.md](../docs/UI_CONVENTIONS.md) and [docs/TRANSLATING.md](../docs/TRANSLATING.md) for GPUI / `gpui-kit = "0.8.0"` rules, themes, layout, accessibility, `en.json`-first i18n, Big Picture, and overlay behavior.
    - [docs/PERFORMANCE.md](../docs/PERFORMANCE.md) for virtualization, GPU/disk cache bounds, startup budgets, and profiling.
-   - [docs/PLATFORMS.md](../docs/PLATFORMS.md) and [docs/RELEASING.md](../docs/RELEASING.md) for OS integration, packaging, and release pipelines.
+   - [docs/PLATFORMS.md](../docs/PLATFORMS.md), [docs/FEATURES.md](../docs/FEATURES.md), [docs/RELEASING.md](../docs/RELEASING.md), and [docs/RELEASE_QA.md](../docs/RELEASE_QA.md) for OS integration, user-facing feature docs, packaging, release pipelines, and release QA checklists.
    - [docs/PROMPTING_PLAYBOOK.md](../docs/PROMPTING_PLAYBOOK.md) for context-window hygiene, model routing, XML prompt templates, and diff audits.
    - [SECURITY.md](../SECURITY.md) whenever adding external domains, paths outside `Paths`, or spawned helpers.
 3. Load the matching task skill when executing common workflows:
