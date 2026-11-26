@@ -58,8 +58,13 @@ regex.workspace = true
 # Enabling GPUI's own test support exposes `TestAppContext` through `gpui_kit::*`.
 gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# `dbus_tests.rs` opens two peer connections; already in the lockfile through ashpd.
+zbus = { version = "5", default-features = false, features = ["async-io", "p2p"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
-ksni = { version = "0.3", default-features = false, features = ["tokio"] }
+# async-io, not tokio: see zbus-secret-service-keyring-store in the root manifest.
+ksni = { version = "0.3", default-features = false, features = ["async-io"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 tray-icon = "0.21"

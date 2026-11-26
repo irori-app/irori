@@ -5049,6 +5049,7 @@ dependencies = [
  "windows-registry 0.6.1",
  "windows-sys 0.61.2",
  "winresource",
+ "zbus",
 ]
 
 [[package]]
@@ -6359,11 +6360,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bcc1cb43797140f74b711f1c4a49f48a7a7429f211c5fb78264e7bcd1e99caf"
 dependencies = [
  "arc-swap",
+ "async-executor",
+ "async-io",
+ "async-lock",
  "crossbeam-queue",
+ "futures-channel",
+ "futures-lite",
  "futures-util",
  "pastey 0.2.3",
  "serde",
- "tokio",
+ "task-local",
  "zbus",
 ]
 
@@ -10907,6 +10913,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
+name = "task-local"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2972044a9e5e448a506a7ff6f0d03b566d8ef4cd6918a58fc59835a0f8666626"
+dependencies = [
+ "pin-project-lite",
+]
+
+[[package]]
 name = "tauri-winrt-notification"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11128,7 +11143,6 @@ dependencies = [
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
- "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -13442,7 +13456,6 @@ dependencies = [
  "rustix 1.1.5",
  "serde",
  "serde_repr",
- "tokio",
  "tracing",
  "uds_windows",
  "uuid 1.28.0",
