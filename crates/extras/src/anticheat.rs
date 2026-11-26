@@ -314,6 +314,22 @@ pub async fn lookup(q: &AntiCheatQuery<'_>) -> Option<AntiCheatInfo> {
     resolve(database().await.as_deref(), q)
 }
 
+/// Non-blocking check against the already-loaded AreWeAntiCheatYet cache, for
+/// deal cards that must never block or hit the network per item. Call
+/// [`database`] once in the background when opening Deals to warm [`DB`].
+pub fn cached_broken_anticheat(title: &str, steam_app_id: Option<&str>) -> bool {
+    let guard = DB.read();
+    let Some(db) = guard.as_deref() else {
+        return false;
+    };
+    let q = AntiCheatQuery {
+        title,
+        steam_app_id,
+        ..Default::default()
+    };
+    resolve(Some(db), &q).is_some_and(|info| info.status.is_broken() && info.online_only.is_none())
+}
+
 /// Result of the anticheat install check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallGate {

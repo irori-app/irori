@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::util;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
+/// Cached ProtonDB rating lifetime on disk.
+const PROTONDB_TTL: Duration = Duration::from_secs(7 * 24 * 3600);
 
 /// ProtonDB summary tier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -103,6 +105,49 @@ pub async fn protondb(steam_id: &str) -> Result<Option<ProtonDbTier>> {
         tracing::debug!("ProtonDB: no tier in response for {steam_id}");
     }
     Ok(tier)
+}
+
+/// ProtonDB tier for a Steam app, cached on disk for [`PROTONDB_TTL`].
+pub async fn protondb_cached(steam_id: &str) -> Result<Option<ProtonDbTier>> {
+    let clean = steam_id.trim();
+    if clean.is_empty() || !clean.chars().all(|c| c.is_ascii_digit()) {
+        return Ok(None);
+    }
+    let cache = util::cache_dir("protondb").join(format!("{clean}.json"));
+    if let Some(hit) = util::cache_read::<Option<ProtonDbTier>>(&cache, PROTONDB_TTL).await {
+        return Ok(hit);
+    }
+    let tier = protondb(clean).await?;
+    if let Err(e) = util::cache_write(&cache, &tier).await {
+        tracing::debug!("caching ProtonDB tier for {clean}: {e}");
+    }
+    Ok(tier)
+}
+
+/// Fetch cached or live ProtonDB tiers for a small batch of Steam app IDs
+/// with bounded concurrency. Unknown and pending entries are omitted.
+pub async fn protondb_batch(
+    steam_ids: Vec<String>,
+) -> std::collections::HashMap<String, ProtonDbTier> {
+    use futures::stream::{self, StreamExt as _};
+
+    let mut unique: Vec<String> = steam_ids
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))
+        .collect();
+    unique.sort();
+    unique.dedup();
+
+    stream::iter(unique)
+        .map(|id| async move {
+            let tier = protondb_cached(&id).await.ok().flatten()?;
+            (!matches!(tier, ProtonDbTier::Unknown | ProtonDbTier::Pending)).then_some((id, tier))
+        })
+        .buffer_unordered(4)
+        .filter_map(|item| async move { item })
+        .collect()
+        .await
 }
 
 /// Steam Deck compatibility for a Steam app.

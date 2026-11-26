@@ -790,6 +790,15 @@ fn override_of(defaults: &Map<String, Value>, key: &str, value: Value) -> Option
     }
 }
 
+/// Layout of the Stores → Deals view (`iroriDealsLayout`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DealsLayout {
+    #[default]
+    Grid,
+    List,
+}
+
 /// What the library shows above the grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -975,6 +984,18 @@ pub struct AppSettings {
     /// are neither shown nor asked for. Irori-only.
     #[serde(rename = "iroriDeals")]
     pub deals: bool,
+    /// Preferred country code (`""` = Auto from system locale) for regional
+    /// store deals (`iroriDealsRegion`). Irori-only.
+    #[serde(rename = "iroriDealsRegion")]
+    pub deals_region: String,
+    /// Grid or compact list layout on the Stores Deals tab
+    /// (`iroriDealsLayout`). Irori-only.
+    #[serde(rename = "iroriDealsLayout")]
+    pub deals_layout: DealsLayout,
+    /// Hide base games already owned in the library on the Stores Deals tab
+    /// (`iroriDealsHideOwned`). Irori-only.
+    #[serde(rename = "iroriDealsHideOwned")]
+    pub deals_hide_owned: bool,
     /// Whether Irori probes the connection, takes it as working, or works
     /// offline and never reaches the internet. Irori-only.
     #[serde(rename = "iroriNetworkMode")]
@@ -1105,6 +1126,9 @@ impl Default for AppSettings {
             auto_update_unmetered: false,
             check_for_app_updates: true,
             deals: true,
+            deals_region: String::new(),
+            deals_layout: DealsLayout::Grid,
+            deals_hide_owned: true,
             network_mode: crate::net::NetworkMode::Auto,
             network_timeout: 0,
             save_snapshots: DEFAULT_SAVE_SNAPSHOTS,
@@ -2402,8 +2426,17 @@ mod tests {
     fn deals_show_unless_turned_off() {
         let app: AppSettings = serde_json::from_str("{}").unwrap();
         assert!(app.deals);
-        let app: AppSettings = serde_json::from_str(r#"{"iroriDeals": false}"#).unwrap();
+        assert_eq!(app.deals_region, "");
+        assert_eq!(app.deals_layout, DealsLayout::Grid);
+        assert!(app.deals_hide_owned);
+        let app: AppSettings = serde_json::from_str(
+            r#"{"iroriDeals": false, "iroriDealsRegion": "BR", "iroriDealsLayout": "list", "iroriDealsHideOwned": false}"#,
+        )
+        .unwrap();
         assert!(!app.deals);
+        assert_eq!(app.deals_region, "BR");
+        assert_eq!(app.deals_layout, DealsLayout::List);
+        assert!(!app.deals_hide_owned);
     }
 
     #[test]
