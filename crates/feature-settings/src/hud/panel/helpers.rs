@@ -14,8 +14,7 @@ use gpui_kit::{
 use irori_core::hud::{resolve_effective_hud, sanitize_hex6};
 use irori_core::{
     GameHudMode, GameHudSettings, GlobalHudMode, GlobalHudSettings, GpuSelection, HudBackend,
-    HudColorPalette, HudPosition, MangoHudProfile, MetalHudSettings, Paths, ResolvedHud,
-    ThemeHudColors,
+    HudColorPalette, MangoHudProfile, MetalHudSettings, Paths, ResolvedHud, ThemeHudColors,
 };
 use irori_runtime::hud::hardware_linux::{LinuxHudEnv, default_gpu_vendor};
 use irori_runtime::hud::launch_env::steam_launch_snippet;
@@ -24,6 +23,7 @@ use irori_ui::backend;
 use irori_ui::i18n::t_args;
 use irori_ui::theme::theme_hud_colors;
 
+use crate::hud::color_wheel::wcag_contrast_ratio;
 use crate::widgets::{RowState, field_row, group_heading, group_panel};
 
 use super::HudPanelScope;
@@ -66,8 +66,8 @@ pub(super) const FPS_PRESETS: [(u32, &str, &str); 7] = [
     (240, "hud-fps-240", "240"),
 ];
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum ColorSlot {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ColorSlot {
     Background = 0,
     Text = 1,
     Gpu = 2,
@@ -112,6 +112,38 @@ impl ColorSlot {
         }
     }
 
+    pub(super) const fn popover_id(self) -> &'static str {
+        match self {
+            Self::Background => "hud-color-popover-background",
+            Self::Text => "hud-color-popover-text",
+            Self::Gpu => "hud-color-popover-gpu",
+            Self::Cpu => "hud-color-popover-cpu",
+            Self::Vram => "hud-color-popover-vram",
+            Self::Ram => "hud-color-popover-ram",
+            Self::Engine => "hud-color-popover-engine",
+            Self::Frametime => "hud-color-popover-frametime",
+            Self::Io => "hud-color-popover-io",
+            Self::Battery => "hud-color-popover-battery",
+            Self::Accent => "hud-color-popover-accent",
+        }
+    }
+
+    pub(super) const fn trigger_id(self) -> &'static str {
+        match self {
+            Self::Background => "hud-color-trigger-background",
+            Self::Text => "hud-color-trigger-text",
+            Self::Gpu => "hud-color-trigger-gpu",
+            Self::Cpu => "hud-color-trigger-cpu",
+            Self::Vram => "hud-color-trigger-vram",
+            Self::Ram => "hud-color-trigger-ram",
+            Self::Engine => "hud-color-trigger-engine",
+            Self::Frametime => "hud-color-trigger-frametime",
+            Self::Io => "hud-color-trigger-io",
+            Self::Battery => "hud-color-trigger-battery",
+            Self::Accent => "hud-color-trigger-accent",
+        }
+    }
+
     pub(super) fn get(self, c: &ThemeHudColors) -> &str {
         match self {
             Self::Background => &c.background_color,
@@ -144,7 +176,7 @@ impl ColorSlot {
         }
     }
 
-    pub(super) fn fallback(self) -> &'static str {
+    pub(crate) fn fallback(self) -> &'static str {
         match self {
             Self::Background => "020202",
             Self::Text => "FFFFFF",
@@ -171,6 +203,12 @@ pub(super) struct CachedDisplay {
     pub(super) custom_swatches: [Hsla; 11],
     /// Metric band titles with the enabled count (GPU, CPU, FPS, runtime).
     pub(super) band_titles: [SharedString; 4],
+    /// Active HUD palette color dots for each metric band header (GPU, CPU, FPS, runtime).
+    pub(super) band_dots: [Hsla; 4],
+    /// Compact summary of how many presets are in the in-game cycle (e.g. `5 in cycle`).
+    pub(super) in_cycle_summary: SharedString,
+    /// Inline contrast warning when custom Text and Background colors have low contrast.
+    pub(super) low_contrast_notice: Option<SharedString>,
     /// GPU, CPU and RAM sample colors for each palette button, in the order
     /// hardware, Irori theme, monochrome, custom.
     pub(super) palette_dots: [[Hsla; 3]; 4],
@@ -213,6 +251,7 @@ pub(super) fn locked_metric_chip(
     Button::new(id)
         .primary()
         .small()
+        .icon(IconName::Lock)
         .disabled(true)
         .label(label)
         .tooltip(reason)
@@ -372,11 +411,17 @@ pub(super) fn read_hud_settings(
     cx: &App,
 ) -> (GlobalHudSettings, GameHudSettings) {
     let settings = &backend(cx).settings;
-    let global = settings.app().hud.clone();
-    let game = match scope {
+    let mut global = settings.app().hud.clone();
+    let mut mangohud = global.mangohud.clone();
+    global.hydrate_profile(&mut mangohud);
+    global.mangohud = mangohud;
+    let mut game = match scope {
         HudPanelScope::Global => GameHudSettings::default(),
         HudPanelScope::PerGame { id, .. } => settings.game(id).game_hud.clone(),
     };
+    if let Some(profile) = game.custom_mangohud.as_mut() {
+        global.hydrate_profile(profile);
+    }
     (global, game)
 }
 
@@ -385,13 +430,15 @@ pub(super) fn effective_mangohud_profile(
     global: &GlobalHudSettings,
     game: &GameHudSettings,
 ) -> MangoHudProfile {
-    match scope {
+    let mut profile = match scope {
         HudPanelScope::Global => global.mangohud.clone(),
         HudPanelScope::PerGame { .. } => game
             .custom_mangohud
             .clone()
             .unwrap_or_else(|| global.mangohud.clone()),
-    }
+    };
+    global.hydrate_profile(&mut profile);
+    profile
 }
 
 pub(super) fn effective_metal_settings(
@@ -428,14 +475,24 @@ pub(super) fn resolve_hud_for_scope(
     resolve_effective_hud(global, game, legacy_mangohud, legacy_fps, hud_backend)
 }
 
-pub(super) fn steam_conf_path(scope: &HudPanelScope, game: &GameHudSettings) -> std::path::PathBuf {
-    let paths = Paths::get();
+pub(super) fn hud_conf_name(scope: &HudPanelScope, game: &GameHudSettings) -> String {
     match scope {
         HudPanelScope::PerGame { id, .. } if game.mode == GameHudMode::Custom => {
-            paths.mangohud_config_file(&format!("{}_{}", id.runner.id(), id.app_name))
+            format!("{}_{}", id.runner.id(), id.app_name)
         }
-        _ => paths.mangohud_config_file("global"),
+        _ => "global".to_string(),
     }
+}
+
+pub(super) fn steam_conf_path(scope: &HudPanelScope, game: &GameHudSettings) -> std::path::PathBuf {
+    Paths::get().mangohud_config_file(&hud_conf_name(scope, game))
+}
+
+pub(super) fn steam_presets_path(
+    scope: &HudPanelScope,
+    game: &GameHudSettings,
+) -> std::path::PathBuf {
+    Paths::get().mangohud_presets_file(&hud_conf_name(scope, game))
 }
 
 pub(super) fn build_gpu_options(
@@ -522,25 +579,6 @@ pub(super) fn parse_gpu_selection_key(key: &str, env: &LinuxHudEnv) -> GpuSelect
     GpuSelection::AutoDedicated
 }
 
-pub(super) fn build_position_options(labels: &HudLabels) -> Vec<HudOption> {
-    HudPosition::ALL
-        .iter()
-        .enumerate()
-        .map(|(ix, pos)| {
-            HudOption::new(
-                SharedString::new_static(pos.as_mangohud_value()),
-                labels.position_labels[ix].clone(),
-            )
-        })
-        .collect()
-}
-
-pub(super) fn parse_position_key(key: &str) -> Option<HudPosition> {
-    HudPosition::ALL
-        .into_iter()
-        .find(|p| p.as_mangohud_value() == key)
-}
-
 /// Panel state that [`build_cached_display`] reads.
 pub(super) struct DisplayInputs<'a> {
     pub(super) scope: &'a HudPanelScope,
@@ -579,7 +617,9 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
     ) {
         let resolved = resolve_hud_for_scope(scope, hud_backend, global, game, cx);
         let conf_path = steam_conf_path(scope, game);
-        steam_launch_snippet(hud_backend, &resolved, &conf_path).map(SharedString::from)
+        let presets_path = steam_presets_path(scope, game);
+        steam_launch_snippet(hud_backend, &resolved, &conf_path, &presets_path)
+            .map(SharedString::from)
     } else {
         None
     };
@@ -656,6 +696,38 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
         theme_colors: Some(theme_hud_colors(cx.theme())),
         ..Default::default()
     };
+    let active_colors = resolve_effective_colors(&profile, &ctx).unwrap_or_default();
+    let d = ThemeHudColors::default();
+    let band_dots = [
+        hex_hsla(&active_colors.gpu_color, &d.gpu_color),
+        hex_hsla(&active_colors.cpu_color, &d.cpu_color),
+        hex_hsla(&active_colors.engine_color, &d.engine_color),
+        hex_hsla(&active_colors.accent_color, &d.accent_color),
+    ];
+
+    let cycle_count = profile.preset_cycle().len().to_string();
+    let in_cycle_summary = t_args(
+        "settings.hud.presets.in_cycle",
+        &[("count", cycle_count.as_str())],
+    );
+
+    let low_contrast_notice =
+        if profile.palette == HudColorPalette::Custom && profile.background_alpha >= 0.30 {
+            let ratio = wcag_contrast_ratio(
+                &profile.custom_colors.text_color,
+                &profile.custom_colors.background_color,
+            );
+            (ratio < 4.5).then(|| {
+                let ratio_str = format!("{ratio:.1}");
+                t_args(
+                    "settings.hud.color.low_contrast",
+                    &[("ratio", ratio_str.as_str())],
+                )
+            })
+        } else {
+            None
+        };
+
     let mut sample = profile.clone();
     let palette_dots = [
         HudColorPalette::MangoHudDefault,
@@ -666,7 +738,6 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
     .map(|palette| {
         sample.palette = palette;
         let colors = resolve_effective_colors(&sample, &ctx).unwrap_or_default();
-        let d = ThemeHudColors::default();
         [
             hex_hsla(&colors.gpu_color, &d.gpu_color),
             hex_hsla(&colors.cpu_color, &d.cpu_color),
@@ -686,6 +757,9 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
         steam_snippet,
         custom_swatches,
         band_titles,
+        band_dots,
+        in_cycle_summary,
+        low_contrast_notice,
         palette_dots,
     }
 }

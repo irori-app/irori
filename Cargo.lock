@@ -5824,6 +5824,7 @@ dependencies = [
  "anyhow",
  "gpui-kit",
  "gpui-pre",
+ "image",
  "irori-bigpicture",
  "irori-core",
  "irori-emulation",

@@ -622,20 +622,64 @@ async fn fetch_cached_github_json(
         return Ok(entry.body.clone());
     }
 
-    let mut req = irori_core::http::client()
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28");
-    if let Some(etag) = cached.as_ref().and_then(|c| c.etag.as_deref()) {
-        req = req.header("If-None-Match", etag);
-    }
+    let github = irori_core::github_releases::is_github(url);
+    let cache_key = format!("optiscaler:{what}");
+    let check = if force_refresh {
+        irori_core::github_releases::CheckKind::Manual
+    } else {
+        irori_core::github_releases::CheckKind::Automatic
+    };
 
     let fetched = async {
+        // When a cached body exists on GitHub, pre-check the uncounted Atom
+        // feed first so unchanged repositories consume zero API quota.
+        let mut feed_fp = None;
+        if github
+            && cached.is_some()
+            && let Some(feed) = irori_core::github_releases::feed_url(url)
+            && let Ok(resp) = irori_core::http::client()
+                .get(&feed)
+                .header("Accept", "application/atom+xml, application/xml, text/xml")
+                .send()
+                .await
+            && resp.status().is_success()
+            && let Ok(xml) = resp.text().await
+        {
+            feed_fp = irori_core::github_releases::feed_fingerprint(&xml);
+            if feed_fp.is_some()
+                && irori_core::github_releases::read_state()
+                    .feeds
+                    .get(&cache_key)
+                    == feed_fp.as_ref()
+                && let Some(mut entry) = cached.clone()
+            {
+                entry.fetched_at_unix = now;
+                return Ok(entry);
+            }
+        }
+
+        if github {
+            irori_core::github_releases::check_budget(check)?;
+        }
+
+        let mut req = irori_core::http::client()
+            .get(url)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if let Some(etag) = cached.as_ref().and_then(|c| c.etag.as_deref()) {
+            req = req.header("If-None-Match", etag);
+        }
+
         let resp = req
             .send()
             .await
             .with_context(|| format!("Could not reach GitHub for {what}"))?;
         let status = resp.status();
+        let refused = if github {
+            irori_core::github_releases::record_response(resp.headers(), status.as_u16(), now)
+        } else {
+            None
+        };
         let new_etag = resp
             .headers()
             .get(reqwest::header::ETAG)
@@ -647,6 +691,11 @@ async fn fetch_cached_github_json(
         if status == StatusCode::NOT_MODIFIED
             && let Some(mut entry) = cached.clone()
         {
+            if github && let Some(fp) = feed_fp {
+                irori_core::github_releases::update_state(|s| {
+                    s.feeds.insert(cache_key.clone(), fp);
+                });
+            }
             entry.fetched_at_unix = now;
             if new_etag.is_some() {
                 entry.etag = new_etag;
@@ -655,6 +704,10 @@ async fn fetch_cached_github_json(
         }
 
         if !status.is_success() {
+            if let Some(limited) = refused {
+                return Err(anyhow::Error::new(limited))
+                    .with_context(|| format!("Could not check {what} releases"));
+            }
             bail!("GitHub returned HTTP {} for {what}", status.as_u16());
         }
 
@@ -665,6 +718,12 @@ async fn fetch_cached_github_json(
         // Validate JSON syntax before overwriting cache.
         serde_json::from_str::<Value>(&body)
             .with_context(|| format!("GitHub returned invalid JSON for {what}"))?;
+
+        if github && let Some(fp) = feed_fp {
+            irori_core::github_releases::update_state(|s| {
+                s.feeds.insert(cache_key.clone(), fp);
+            });
+        }
 
         Ok(CachedResponse {
             fetched_at_unix: now,

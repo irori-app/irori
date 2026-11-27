@@ -322,6 +322,14 @@
         {
           "offset": 0,
           "ascii": "WBFS"
+        },
+        {
+          "offset": 0,
+          "hex": "0000002049730000"
+        },
+        {
+          "offset": 0,
+          "hex": "0000002069620000"
         }
       ],
       "engines": [
@@ -979,6 +987,50 @@
       ],
       "engines": [
         "ryujinx"
+      ]
+    },
+    {
+      "id": "doom",
+      "name": "DOOM",
+      "short": "DOOM",
+      "maker": "id Software",
+      "year": 1993,
+      "libretro": "DOOM",
+      "colors": [
+        "#8b1a1a",
+        "#d97706"
+      ],
+      "extensions": [
+        "wad"
+      ],
+      "folders": [
+        "doom",
+        "gzdoom",
+        "uzdoom"
+      ],
+      "headers": [
+        {
+          "offset": 0,
+          "ascii": "IWAD"
+        }
+      ],
+      "notHeaders": [
+        {
+          "offset": 0,
+          "ascii": "PWAD"
+        },
+        {
+          "offset": 0,
+          "hex": "0000002049730000"
+        },
+        {
+          "offset": 0,
+          "hex": "0000002069620000"
+        }
+      ],
+      "engines": [
+        "uzdoom",
+        "gzdoom"
       ]
     }
   ]

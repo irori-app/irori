@@ -8,35 +8,69 @@ use std::path::PathBuf;
 use std::process::Stdio;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _,
+    WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    Context, Hsla, IntoElement, ParentElement as _, Render, SharedString, Styled as _, Window, div,
-    px, rems, rgb,
+    Background, Context, Hsla, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
+    Window, div, linear_color_stop, linear_gradient, px, rems, rgb,
 };
 use irori_core::hud::{sanitize_hex6, sanitize_hud_label};
 use irori_core::{
-    HardwareVendor, HudBackend, HudColorPalette, HudOrientation, HudPosition, MangoHudProfile,
-    MetalHudAlignment, MetalHudSettings, Paths, ThemeHudColors,
+    HardwareVendor, HudBackend, HudColorPalette, HudOrientation, HudPosition, HudPreset,
+    MangoHudProfile, MetalHudAlignment, MetalHudSettings, Paths, ThemeHudColors,
 };
 use irori_runtime::hud::hardware_linux::{
     LinuxHudEnv, default_gpu_short_label, default_gpu_vendor, resolve_pci_dev,
 };
 use irori_runtime::hud::mangohud_conf::{
-    ConfRenderContext, render_mangohud_conf, resolve_effective_colors,
+    ConfRenderContext, render_mangohud_conf, render_mangohud_presets, resolve_effective_colors,
 };
 use irori_ui::backend;
-use irori_ui::i18n::t;
+use irori_ui::i18n::{t, t_args};
 use irori_ui::theme::theme_hud_colors;
 use tokio::sync::oneshot;
 
 use crate::i18n::LanguageStamp;
+
+/// Simulated backdrop scene behind the HUD preview card so background opacity
+/// and text contrast can be evaluated against dark, mixed, and bright imagery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PreviewScene {
+    #[default]
+    Dark,
+    Mixed,
+    Bright,
+}
+
+impl PreviewScene {
+    const ALL: [Self; 3] = [Self::Dark, Self::Mixed, Self::Bright];
+
+    fn background(self) -> Background {
+        match self {
+            Self::Dark => linear_gradient(
+                180.0,
+                linear_color_stop(rgb(0x0D111A), 0.0),
+                linear_color_stop(rgb(0x182131), 1.0),
+            ),
+            Self::Mixed => linear_gradient(
+                135.0,
+                linear_color_stop(rgb(0x4F7AA8), 0.0),
+                linear_color_stop(rgb(0x1E2430), 1.0),
+            ),
+            Self::Bright => linear_gradient(
+                180.0,
+                linear_color_stop(rgb(0xA6CCE8), 0.0),
+                linear_color_stop(rgb(0xDCEAF5), 1.0),
+            ),
+        }
+    }
+}
 
 /// Sample Metal HUD bar heights (in pixels).
 const METAL_BARS_PX: [f32; 16] = [
@@ -58,6 +92,18 @@ struct PreviewLabels {
     test_failed: SharedString,
     metal_subtitle: SharedString,
     empty: SharedString,
+    scene_dark: SharedString,
+    scene_mixed: SharedString,
+    scene_bright: SharedString,
+    cycle: SharedString,
+    cycle_prev: SharedString,
+    cycle_next: SharedString,
+    preset_minimal: SharedString,
+    preset_horizontal: SharedString,
+    preset_balanced: SharedString,
+    preset_full: SharedString,
+    preset_custom: SharedString,
+    preset_custom_horizontal: SharedString,
 }
 
 impl PreviewLabels {
@@ -70,6 +116,29 @@ impl PreviewLabels {
             test_failed: t("settings.hud.preview.test_failed"),
             metal_subtitle: t("settings.hud.preview.metal_subtitle"),
             empty: t("settings.hud.preview.empty"),
+            scene_dark: t("settings.hud.preview.scene.dark"),
+            scene_mixed: t("settings.hud.preview.scene.mixed"),
+            scene_bright: t("settings.hud.preview.scene.bright"),
+            cycle: t("settings.hud.preview.cycle"),
+            cycle_prev: t("settings.hud.preview.cycle_prev"),
+            cycle_next: t("settings.hud.preview.cycle_next"),
+            preset_minimal: t("settings.hud.preset.minimal_fps"),
+            preset_horizontal: t("settings.hud.preset.horizontal_compact"),
+            preset_balanced: t("settings.hud.preset.balanced_gaming"),
+            preset_full: t("settings.hud.preset.full_diagnostics"),
+            preset_custom: t("settings.hud.preset.custom"),
+            preset_custom_horizontal: t("settings.hud.preset.custom_horizontal"),
+        }
+    }
+
+    fn preset_name(&self, preset: HudPreset) -> &SharedString {
+        match preset {
+            HudPreset::MinimalFps => &self.preset_minimal,
+            HudPreset::HorizontalCompact => &self.preset_horizontal,
+            HudPreset::BalancedGaming => &self.preset_balanced,
+            HudPreset::FullDiagnostics => &self.preset_full,
+            HudPreset::Custom => &self.preset_custom,
+            HudPreset::CustomHorizontal => &self.preset_custom_horizontal,
         }
     }
 }
@@ -151,6 +220,7 @@ struct CachedPreview {
     round_corners: u8,
     hud_compact: bool,
     hud_no_margin: bool,
+    font_scale: f32,
     alpha: f32,
     no_display: bool,
     metal_alignment: MetalHudAlignment,
@@ -167,6 +237,10 @@ pub struct HudPreview {
     profile: MangoHudProfile,
     metal: MetalHudSettings,
     env: LinuxHudEnv,
+    scene: PreviewScene,
+    inspect_preset: Option<HudPreset>,
+    cycle_counter: SharedString,
+    inspecting_badge: Option<SharedString>,
     cache: CachedPreview,
     labels: PreviewLabels,
     language: LanguageStamp,
@@ -197,14 +271,20 @@ impl HudPreview {
         let theme = cx.theme();
         let theme_stamp = (theme.background, theme.foreground, theme.primary);
         let theme_colors = theme_hud_colors(theme);
+        let labels = PreviewLabels::load();
         let cache = build_cache(&profile, &metal, &env, &theme_colors);
+        let (cycle_counter, inspecting_badge) = compute_cycle_display(&profile, None, &labels);
         Self {
             backend,
             profile,
             metal,
             env,
+            scene: PreviewScene::Dark,
+            inspect_preset: None,
+            cycle_counter,
+            inspecting_badge,
             cache,
-            labels: PreviewLabels::load(),
+            labels,
             language: LanguageStamp::new(),
             theme_stamp,
             running: None,
@@ -226,27 +306,62 @@ impl HudPreview {
         self.profile = profile;
         self.metal = metal;
         self.env = env;
+        self.inspect_preset = None;
         self.rebuild_cache(cx);
         self.sync_live_vkcube_if_running(cx);
         cx.notify();
     }
 
-    /// Rewrite `<data>/mangohud/preview.conf` in-place whenever a `vkcube`
-    /// test window is already open so edits apply live via MangoHud `inotify`.
+    /// Change the simulated backdrop scene behind the preview card.
+    pub fn set_scene(&mut self, scene: PreviewScene, cx: &mut Context<Self>) {
+        if self.scene == scene {
+            return;
+        }
+        self.scene = scene;
+        cx.notify();
+    }
+
+    /// Step the preview through the configured in-game preset cycle without
+    /// altering the user's saved starting preset.
+    pub fn step_cycle(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let cycle = self.profile.preset_cycle();
+        if cycle.len() <= 1 {
+            return;
+        }
+        let current = self.inspect_preset.unwrap_or(self.profile.preset);
+        let cur_ix = cycle.iter().position(|&p| p == current).unwrap_or(0);
+        let next_ix = (cur_ix as isize + delta).rem_euclid(cycle.len() as isize) as usize;
+        let target = cycle[next_ix];
+        self.inspect_preset = (target != self.profile.preset).then_some(target);
+        self.rebuild_cache(cx);
+        cx.notify();
+    }
+
+    /// Rewrite `<data>/mangohud/preview_presets.conf` and `preview.conf` in
+    /// place whenever a `vkcube` test window is already open so edits apply
+    /// live via MangoHud `inotify`.
     pub fn sync_live_vkcube_if_running(&self, cx: &Context<Self>) {
         if self.running.is_none() || self.backend != HudBackend::MangoHud {
             return;
         }
-        let conf_path: PathBuf = Paths::get().mangohud_config_file("preview");
-        let conf_body = self.render_preview_conf(cx);
+        let paths = Paths::get();
+        let conf_path: PathBuf = paths.mangohud_config_file("preview");
+        let presets_path: PathBuf = paths.mangohud_presets_file("preview");
+        let (conf_body, presets_body) = self.render_preview_files(cx);
         backend(cx).spawn(async move {
+            if let Err(err) =
+                irori_runtime::hud::write_config_live(&presets_path, &presets_body).await
+            {
+                tracing::warn!("updating live vkcube preview presets: {err:#}");
+                return;
+            }
             if let Err(err) = irori_runtime::hud::write_config_live(&conf_path, &conf_body).await {
                 tracing::warn!("updating live vkcube preview config: {err:#}");
             }
         });
     }
 
-    fn render_preview_conf(&self, cx: &Context<Self>) -> String {
+    fn render_preview_files(&self, cx: &Context<Self>) -> (String, String) {
         let theme_colors = theme_hud_colors(cx.theme());
         let ctx = ConfRenderContext {
             detected_gpu_label: default_gpu_short_label(
@@ -259,14 +374,29 @@ impl HudPreview {
             pci_dev: resolve_pci_dev(&self.profile.gpu_selection, &self.env.gpus),
             theme_colors: Some(theme_colors),
         };
-        render_mangohud_conf(&self.profile, &ctx)
+        (
+            render_mangohud_conf(&self.profile, &ctx),
+            render_mangohud_presets(&self.profile),
+        )
     }
 
     fn rebuild_cache(&mut self, cx: &Context<Self>) {
         let theme = cx.theme();
         self.theme_stamp = (theme.background, theme.foreground, theme.primary);
         let theme_colors = theme_hud_colors(theme);
-        self.cache = build_cache(&self.profile, &self.metal, &self.env, &theme_colors);
+        let effective = match self.inspect_preset {
+            Some(target) if target != self.profile.preset => {
+                let mut cloned = self.profile.clone();
+                cloned.apply_preset(target);
+                cloned
+            }
+            _ => self.profile.clone(),
+        };
+        let (cycle_counter, inspecting_badge) =
+            compute_cycle_display(&self.profile, self.inspect_preset, &self.labels);
+        self.cycle_counter = cycle_counter;
+        self.inspecting_badge = inspecting_badge;
+        self.cache = build_cache(&effective, &self.metal, &self.env, &theme_colors);
     }
 
     /// Close the open `vkcube` window. The background task still reaps the
@@ -295,13 +425,23 @@ impl HudPreview {
         self.starting = true;
         cx.notify();
 
-        let conf_path: PathBuf = Paths::get().mangohud_config_file("preview");
-        let conf_body = self.render_preview_conf(cx);
+        let paths = Paths::get();
+        let conf_path: PathBuf = paths.mangohud_config_file("preview");
+        let presets_path: PathBuf = paths.mangohud_presets_file("preview");
+        let (conf_body, presets_body) = self.render_preview_files(cx);
 
         backend(cx).spawn(async move {
             if let Some(prev_run) = prev {
                 let _ = prev_run.kill_tx.send(());
                 let _ = prev_run.done_rx.await;
+            }
+            if let Err(err) =
+                irori_runtime::hud::write_config_live(&presets_path, &presets_body).await
+            {
+                let _ = started_tx.send(Err(err.to_string()));
+                let _ = done_tx.send(());
+                let _ = exited_tx.send(());
+                return;
             }
             if let Err(err) = irori_runtime::hud::write_config_live(&conf_path, &conf_body).await {
                 let _ = started_tx.send(Err(err.to_string()));
@@ -312,6 +452,7 @@ impl HudPreview {
             let mut cmd = tokio::process::Command::new(&vkcube_path);
             cmd.env("MANGOHUD", "1")
                 .env("MANGOHUD_CONFIGFILE", &conf_path)
+                .env("MANGOHUD_PRESETSFILE", &presets_path)
                 .env_remove("MANGOHUD_CONFIG")
                 .env_remove("DISABLE_MANGOHUD")
                 .stdin(Stdio::null())
@@ -386,6 +527,7 @@ impl HudPreview {
                 .border_color(gpui_kit::hsla(0., 0., 1., 0.06));
         }
 
+        let scale = c.font_scale;
         let inner = if c.minimal_fps_only {
             render_metric_cell(
                 &PreviewCell::with_unit(
@@ -394,6 +536,7 @@ impl HudPreview {
                     c.fps_only_color,
                 ),
                 true,
+                scale,
             )
         } else if c.horizontal {
             let mut bar = h_flex().flex_wrap().items_center().gap_3();
@@ -402,9 +545,9 @@ impl HudPreview {
                 if !seg_data.label.is_empty() {
                     seg = seg.child(
                         div()
-                            .max_w(rems(11.))
+                            .max_w(rems(11. * scale))
                             .truncate()
-                            .text_size(px(13.))
+                            .text_size(px(13. * scale))
                             .font_bold()
                             .line_height(gpui_kit::relative(1.05))
                             .text_color(seg_data.label_color)
@@ -412,7 +555,7 @@ impl HudPreview {
                     );
                 }
                 for cell in &seg_data.cells {
-                    seg = seg.child(render_metric_cell(cell, false));
+                    seg = seg.child(render_metric_cell(cell, false, scale));
                 }
                 bar = bar.child(seg);
             }
@@ -421,7 +564,7 @@ impl HudPreview {
                 for chip in &c.extras {
                     extra_seg = extra_seg.child(
                         div()
-                            .text_xs()
+                            .text_size(px((11.5 * scale).max(9.)))
                             .font_semibold()
                             .text_color(chip.color)
                             .child(chip.value.clone()),
@@ -438,31 +581,31 @@ impl HudPreview {
             // primary numbers and tiny superscript units (`FPS`, `ms`, `MHz`, `W`, `GiB`, `Jnc`).
             let mut stack =
                 v_flex()
-                    .min_w(rems(19.))
+                    .min_w(rems(19. * scale))
                     .gap(if c.hud_compact { px(1.) } else { px(2.) });
             for row in &c.grid_rows {
                 let col1 = div()
-                    .w(rems(7.2))
-                    .max_w(rems(11.))
+                    .w(rems(7.2 * scale))
+                    .max_w(rems(11. * scale))
                     .truncate()
-                    .text_size(px(14.))
+                    .text_size(px(14. * scale))
                     .font_bold()
                     .line_height(gpui_kit::relative(1.05))
                     .text_color(row.label_color)
                     .child(row.label.clone());
 
                 let col2 = h_flex()
-                    .w(rems(5.6))
+                    .w(rems(5.6 * scale))
                     .justify_end()
                     .when_some(row.col2.as_ref(), |el, cell| {
-                        el.child(render_metric_cell(cell, false))
+                        el.child(render_metric_cell(cell, false, scale))
                     });
 
                 let col3 = h_flex()
-                    .w(rems(5.6))
+                    .w(rems(5.6 * scale))
                     .justify_end()
                     .when_some(row.col3.as_ref(), |el, cell| {
-                        el.child(render_metric_cell(cell, false))
+                        el.child(render_metric_cell(cell, false, scale))
                     });
 
                 stack = stack.child(
@@ -480,7 +623,7 @@ impl HudPreview {
                 for chip in &c.extras {
                     extra_row = extra_row.child(
                         div()
-                            .text_xs()
+                            .text_size(px((11.5 * scale).max(9.)))
                             .font_semibold()
                             .text_color(chip.color)
                             .child(chip.value.clone()),
@@ -494,6 +637,7 @@ impl HudPreview {
                     c.palette.text,
                     c.palette.frametime,
                     c.frametime_minmax.clone(),
+                    scale,
                 ));
             }
             stack
@@ -565,6 +709,10 @@ impl Render for HudPreview {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.language.changed() {
             self.labels = PreviewLabels::load();
+            let (cycle_counter, inspecting_badge) =
+                compute_cycle_display(&self.profile, self.inspect_preset, &self.labels);
+            self.cycle_counter = cycle_counter;
+            self.inspecting_badge = inspecting_badge;
         }
         let theme = cx.theme();
         let current_stamp = (theme.background, theme.foreground, theme.primary);
@@ -580,14 +728,82 @@ impl Render for HudPreview {
         let radius = theme.radius_lg;
         let surface = theme.secondary;
         let muted_fg = theme.muted_foreground;
-        let stage_bg = gpui_kit::hsla(0.62, 0.16, 0.08, 1.0);
+        let mono_font = theme.mono_font_family.clone();
         let stage_border = gpui_kit::hsla(0., 0., 1., 0.08);
-        let can_test_vkcube =
-            self.backend == HudBackend::MangoHud && self.env.vkcube_bin_path.is_some();
+        let is_mangohud = self.backend == HudBackend::MangoHud;
+        let can_test_vkcube = is_mangohud && self.env.vkcube_bin_path.is_some();
         let is_running = self.running.is_some();
+
+        let scene_group = ButtonGroup::new("hud-preview-scene")
+            .outline()
+            .xsmall()
+            .child(
+                Button::new("hud-scene-dark")
+                    .label(self.labels.scene_dark.clone())
+                    .selected(self.scene == PreviewScene::Dark),
+            )
+            .child(
+                Button::new("hud-scene-mixed")
+                    .label(self.labels.scene_mixed.clone())
+                    .selected(self.scene == PreviewScene::Mixed),
+            )
+            .child(
+                Button::new("hud-scene-bright")
+                    .label(self.labels.scene_bright.clone())
+                    .selected(self.scene == PreviewScene::Bright),
+            )
+            .on_click(cx.listener(|this, clicked: &Vec<usize>, _, cx| {
+                if let Some(&ix) = clicked.first()
+                    && let Some(&scene) = PreviewScene::ALL.get(ix)
+                {
+                    this.set_scene(scene, cx);
+                }
+            }));
+
+        let cycle_stepper = h_flex()
+            .items_center()
+            .rounded(theme.radius)
+            .border_1()
+            .border_color(border)
+            .overflow_hidden()
+            .child(
+                Button::new("hud-preview-cycle-prev")
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::ChevronLeft)
+                    .accessibility_label(self.labels.cycle_prev.clone())
+                    .tooltip(self.labels.cycle_prev.clone())
+                    .on_click(cx.listener(|this, _, _, cx| this.step_cycle(-1, cx))),
+            )
+            .child(
+                Button::new("hud-preview-cycle-next")
+                    .ghost()
+                    .xsmall()
+                    .tooltip(self.labels.cycle_next.clone())
+                    .on_click(cx.listener(|this, _, _, cx| this.step_cycle(1, cx)))
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted_fg)
+                                    .child(self.labels.cycle.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_semibold()
+                                    .font_family(mono_font)
+                                    .child(self.cycle_counter.clone()),
+                            ),
+                    ),
+            );
 
         let header = h_flex()
             .w_full()
+            .flex_wrap()
             .justify_between()
             .items_center()
             .gap_2()
@@ -604,16 +820,17 @@ impl Render for HudPreview {
                             .truncate()
                             .child(self.labels.title.clone()),
                     )
-                    .when(
-                        self.backend == HudBackend::MangoHud && self.cache.no_display,
-                        |row| {
-                            row.child(
-                                Tag::secondary()
-                                    .xsmall()
-                                    .outline()
-                                    .child(self.labels.hidden_badge.clone()),
-                            )
-                        },
+                    .when(is_mangohud && self.cache.no_display, |row| {
+                        row.child(
+                            Tag::secondary()
+                                .xsmall()
+                                .outline()
+                                .child(self.labels.hidden_badge.clone()),
+                        )
+                    })
+                    .when_some(
+                        is_mangohud.then(|| self.inspecting_badge.clone()).flatten(),
+                        |row, badge| row.child(Tag::secondary().xsmall().child(badge)),
                     )
                     .when(self.backend == HudBackend::MetalHud, |row| {
                         row.child(
@@ -625,43 +842,50 @@ impl Render for HudPreview {
                         )
                     }),
             )
-            .when(can_test_vkcube, |row| {
-                row.child(
-                    div().flex_shrink_0().child(
-                        Button::new("hud-test-vkcube")
-                            .outline()
-                            .small()
-                            .icon(if is_running {
-                                IconName::X
-                            } else {
-                                IconName::Play
-                            })
-                            .loading(self.starting)
-                            .disabled(self.starting)
-                            .label(if is_running {
-                                self.labels.close_vulkan.clone()
-                            } else {
-                                self.labels.test_vulkan.clone()
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if this.running.is_some() {
-                                    this.close_vkcube_test(cx);
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_1p5()
+                    .flex_shrink_0()
+                    .child(scene_group)
+                    .when(is_mangohud, |row| row.child(cycle_stepper))
+                    .when(can_test_vkcube, |row| {
+                        row.child(
+                            Button::new("hud-test-vkcube")
+                                .outline()
+                                .small()
+                                .icon(if is_running {
+                                    IconName::X
                                 } else {
-                                    this.launch_vkcube_test(window, cx);
-                                }
-                            })),
-                    ),
-                )
-            });
+                                    IconName::Play
+                                })
+                                .loading(self.starting)
+                                .disabled(self.starting)
+                                .label(if is_running {
+                                    self.labels.close_vulkan.clone()
+                                } else {
+                                    self.labels.test_vulkan.clone()
+                                })
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    if this.running.is_some() {
+                                        this.close_vkcube_test(cx);
+                                    } else {
+                                        this.launch_vkcube_test(window, cx);
+                                    }
+                                })),
+                        )
+                    }),
+            );
 
         // The stage hugs the HUD card; the minimum keeps corner and center
         // positions readable when only a line or two is enabled.
         let mut stage = v_flex()
             .w_full()
             .flex_1()
-            .min_h(rems(6.))
+            .min_h(rems(7.))
             .rounded(theme.radius)
-            .bg(stage_bg)
+            .bg(self.scene.background())
             .border_1()
             .border_color(stage_border)
             .overflow_hidden();
@@ -702,9 +926,32 @@ impl Render for HudPreview {
     }
 }
 
-fn render_metric_cell(cell: &PreviewCell, large: bool) -> gpui_kit::Div {
-    let val_px = if large { 18.0 } else { 14.0 };
-    let unit_px = if large { 10.0 } else { 8.5 };
+fn compute_cycle_display(
+    profile: &MangoHudProfile,
+    inspect_preset: Option<HudPreset>,
+    labels: &PreviewLabels,
+) -> (SharedString, Option<SharedString>) {
+    let cycle = profile.preset_cycle();
+    let total = cycle.len().max(1);
+    let shown = inspect_preset.unwrap_or(profile.preset);
+    let idx = cycle.iter().position(|&p| p == shown).unwrap_or(0);
+    let counter = SharedString::from(format!("{}/{total}", idx + 1));
+    let inspecting = inspect_preset
+        .filter(|&p| p != profile.preset)
+        .map(|preset| {
+            let num = preset.mangohud_preset_id().to_string();
+            let name = labels.preset_name(preset);
+            t_args(
+                "settings.hud.preview.inspecting",
+                &[("num", num.as_str()), ("preset", name.as_ref())],
+            )
+        });
+    (counter, inspecting)
+}
+
+fn render_metric_cell(cell: &PreviewCell, large: bool, scale: f32) -> gpui_kit::Div {
+    let val_px = (if large { 18.0 } else { 14.0 }) * scale;
+    let unit_px = ((if large { 10.0 } else { 8.5 }) * scale).max(7.5);
     h_flex()
         .items_start()
         .gap(px(1.))
@@ -755,7 +1002,9 @@ fn render_frametime_graph_block(
     text_color: Hsla,
     line_color: Hsla,
     minmax: SharedString,
+    scale: f32,
 ) -> impl IntoElement {
+    let caption_px = (10.0 * scale).max(8.5);
     v_flex()
         .w_full()
         .pt_1()
@@ -768,7 +1017,7 @@ fn render_frametime_graph_block(
                 .gap_3()
                 .child(
                     div()
-                        .text_size(px(10.))
+                        .text_size(px(caption_px))
                         .font_bold()
                         .line_height(gpui_kit::relative(1.05))
                         .text_color(engine_color)
@@ -776,7 +1025,7 @@ fn render_frametime_graph_block(
                 )
                 .child(
                     div()
-                        .text_size(px(10.))
+                        .text_size(px(caption_px))
                         .font_semibold()
                         .line_height(gpui_kit::relative(1.05))
                         .text_color(text_color)
@@ -1283,6 +1532,7 @@ fn build_cache(
         round_corners: profile.round_corners,
         hud_compact: profile.hud_compact,
         hud_no_margin: profile.hud_no_margin,
+        font_scale: profile.font_scale.clamp(0.68, 1.55),
         alpha: profile.alpha.clamp(0.1, 1.0),
         no_display: profile.no_display,
         metal_alignment: metal.alignment,
@@ -1404,5 +1654,38 @@ mod tests {
         assert_eq!(clk_row.label.as_ref(), "");
         assert_eq!(clk_row.col2.as_ref().unwrap().value.as_ref(), "1324");
         assert_eq!(clk_row.col2.as_ref().unwrap().unit.as_deref(), Some("MHz"));
+    }
+
+    #[test]
+    fn preview_clamps_font_scale_for_live_display() {
+        let mut profile = MangoHudProfile {
+            font_scale: 0.5,
+            ..Default::default()
+        };
+        let small = build_cache(
+            &profile,
+            &MetalHudSettings::default(),
+            &LinuxHudEnv::default(),
+            &irori_core::ThemeHudColors::default(),
+        );
+        assert!((small.font_scale - 0.68).abs() < 1e-4);
+
+        profile.font_scale = 1.4;
+        let medium = build_cache(
+            &profile,
+            &MetalHudSettings::default(),
+            &LinuxHudEnv::default(),
+            &irori_core::ThemeHudColors::default(),
+        );
+        assert!((medium.font_scale - 1.4).abs() < 1e-4);
+
+        profile.font_scale = 2.0;
+        let large = build_cache(
+            &profile,
+            &MetalHudSettings::default(),
+            &LinuxHudEnv::default(),
+            &irori_core::ThemeHudColors::default(),
+        );
+        assert!((large.font_scale - 1.55).abs() < 1e-4);
     }
 }

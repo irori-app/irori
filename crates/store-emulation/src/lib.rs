@@ -1037,12 +1037,17 @@ fn apply_hud_to_flatpak_launch(
     }
 
     let mut injected: Vec<std::ffi::OsString> = Vec::new();
-    if let Some(cfg_file) = env.env.get("MANGOHUD_CONFIGFILE")
-        && let Some(dir) = Path::new(cfg_file)
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-    {
-        injected.push(format!("--filesystem={}:ro", dir.display()).into());
+    let mut ro_dirs: Vec<PathBuf> = Vec::new();
+    for key in ["MANGOHUD_CONFIGFILE", "MANGOHUD_PRESETSFILE"] {
+        if let Some(file) = env.env.get(key)
+            && let Some(dir) = Path::new(file)
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+            && !ro_dirs.iter().any(|existing| existing == dir)
+        {
+            ro_dirs.push(dir.to_path_buf());
+            injected.push(format!("--filesystem={}:ro", dir.display()).into());
+        }
     }
     for key in &env.env_remove {
         if is_flatpak_hud_var(key) {
@@ -1077,7 +1082,11 @@ mod flatpak_hud_tests {
         env.env.insert("MANGOHUD".into(), "1".into());
         env.env.insert(
             "MANGOHUD_CONFIGFILE".into(),
-            "/home/u/.local/share/irori/mangohud/global.conf".into(),
+            "/home/u/.local/state/irori/mangohud/emulation-snes.conf".into(),
+        );
+        env.env.insert(
+            "MANGOHUD_PRESETSFILE".into(),
+            "/home/u/.local/share/irori/mangohud/global_presets.conf".into(),
         );
         env.env_remove.push("MANGOHUD_CONFIG".into());
         env.env_remove.push("DISABLE_MANGOHUD".into());
@@ -1110,7 +1119,11 @@ mod flatpak_hud_tests {
             .iter()
             .position(|a| a == "org.libretro.RetroArch")
             .unwrap();
-        let fs_idx = args
+        let state_fs_idx = args
+            .iter()
+            .position(|a| a == "--filesystem=/home/u/.local/state/irori/mangohud:ro")
+            .unwrap();
+        let data_fs_idx = args
             .iter()
             .position(|a| a == "--filesystem=/home/u/.local/share/irori/mangohud:ro")
             .unwrap();
@@ -1118,7 +1131,13 @@ mod flatpak_hud_tests {
         let cfg_idx = args
             .iter()
             .position(|a| {
-                a == "--env=MANGOHUD_CONFIGFILE=/home/u/.local/share/irori/mangohud/global.conf"
+                a == "--env=MANGOHUD_CONFIGFILE=/home/u/.local/state/irori/mangohud/emulation-snes.conf"
+            })
+            .unwrap();
+        let presets_idx = args
+            .iter()
+            .position(|a| {
+                a == "--env=MANGOHUD_PRESETSFILE=/home/u/.local/share/irori/mangohud/global_presets.conf"
             })
             .unwrap();
         let unset_idx = args
@@ -1126,9 +1145,11 @@ mod flatpak_hud_tests {
             .position(|a| a == "--unset-env=DISABLE_MANGOHUD")
             .unwrap();
 
-        assert!(run_idx < fs_idx && fs_idx < app_idx);
+        assert!(run_idx < state_fs_idx && state_fs_idx < app_idx);
+        assert!(run_idx < data_fs_idx && data_fs_idx < app_idx);
         assert!(run_idx < env_idx && env_idx < app_idx);
         assert!(run_idx < cfg_idx && cfg_idx < app_idx);
+        assert!(run_idx < presets_idx && presets_idx < app_idx);
         assert!(run_idx < unset_idx && unset_idx < app_idx);
     }
 }

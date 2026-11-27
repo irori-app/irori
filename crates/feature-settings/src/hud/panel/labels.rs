@@ -1,4 +1,5 @@
 use gpui_kit::SharedString;
+use irori_core::HudPreset;
 use irori_ui::i18n::t;
 
 pub(super) struct HudLabels {
@@ -40,6 +41,7 @@ pub(super) struct HudLabels {
     pub(super) preset_balanced_gaming: SharedString,
     pub(super) preset_full_diagnostics: SharedString,
     pub(super) preset_custom: SharedString,
+    pub(super) preset_custom_horizontal: SharedString,
 
     pub(super) group_hardware: SharedString,
     pub(super) gpu_selection_label: SharedString,
@@ -115,6 +117,8 @@ pub(super) struct HudLabels {
     pub(super) metric_throttling_status_help: SharedString,
     pub(super) metric_gamepad_battery: SharedString,
     pub(super) metric_gamepad_battery_help: SharedString,
+    pub(super) metrics_all: SharedString,
+    pub(super) metrics_clear: SharedString,
 
     pub(super) fps_limit_label: SharedString,
     pub(super) fps_limit_help: SharedString,
@@ -123,6 +127,7 @@ pub(super) struct HudLabels {
     pub(super) fps_limit_method_help: SharedString,
     pub(super) fps_limit_method_late: SharedString,
     pub(super) fps_limit_method_early: SharedString,
+    pub(super) fps_limit_method_pacing: SharedString,
 
     pub(super) position_label: SharedString,
     pub(super) position_labels: [SharedString; 8],
@@ -139,6 +144,10 @@ pub(super) struct HudLabels {
     pub(super) alpha_label: SharedString,
     pub(super) toggle_hud_label: SharedString,
     pub(super) toggle_hud_help: SharedString,
+    pub(super) toggle_preset_label: SharedString,
+    pub(super) toggle_preset_help: SharedString,
+    pub(super) shortcut_conflict: SharedString,
+    pub(super) cycle_order_label: SharedString,
     pub(super) no_display_label: SharedString,
     pub(super) no_display_help: SharedString,
 
@@ -152,6 +161,15 @@ pub(super) struct HudLabels {
     pub(super) fps_color_change_label: SharedString,
     pub(super) fps_color_change_help: SharedString,
     pub(super) color_slot_labels: [SharedString; 11],
+    pub(super) color_group_surface: SharedString,
+    pub(super) color_group_metrics: SharedString,
+    pub(super) color_reset_all: SharedString,
+    pub(super) color_reset_slot: SharedString,
+    pub(super) color_copy_hex: SharedString,
+    pub(super) color_copied_hex: SharedString,
+    pub(super) color_brightness: SharedString,
+    pub(super) color_quick_swatches: SharedString,
+    pub(super) color_pick_tooltip: SharedString,
 
     pub(super) group_opengl: SharedString,
     pub(super) opengl_wrapper_label: SharedString,
@@ -211,6 +229,7 @@ impl HudLabels {
             preset_balanced_gaming: t("settings.hud.preset.balanced_gaming"),
             preset_full_diagnostics: t("settings.hud.preset.full_diagnostics"),
             preset_custom: t("settings.hud.preset.custom"),
+            preset_custom_horizontal: t("settings.hud.preset.custom_horizontal"),
 
             group_hardware: t("settings.hud.group.hardware"),
             gpu_selection_label: t("settings.hud.gpu_selection.label"),
@@ -358,6 +377,8 @@ impl HudLabels {
                 "settings.hud.metric.gamepad_battery",
                 "settings.hud.metric.gamepad_battery_help",
             ),
+            metrics_all: t("settings.hud.metrics.all"),
+            metrics_clear: t("settings.hud.metrics.clear"),
 
             fps_limit_label: t("settings.hud.fps_limit.label"),
             fps_limit_help: t("settings.hud.fps_limit.help"),
@@ -366,6 +387,7 @@ impl HudLabels {
             fps_limit_method_help: t("settings.hud.fps_limit_method.help"),
             fps_limit_method_late: t("settings.hud.fps_limit_method.late"),
             fps_limit_method_early: t("settings.hud.fps_limit_method.early"),
+            fps_limit_method_pacing: t("settings.hud.fps_limit_method.pacing"),
 
             position_label: t("settings.hud.position.label"),
             position_labels: [
@@ -391,6 +413,10 @@ impl HudLabels {
             alpha_label: t("settings.hud.alpha.label"),
             toggle_hud_label: t("settings.hud.toggle_hud.label"),
             toggle_hud_help: t("settings.hud.toggle_hud.help"),
+            toggle_preset_label: t("settings.hud.toggle_preset.label"),
+            toggle_preset_help: t("settings.hud.toggle_preset.help"),
+            shortcut_conflict: t("settings.hud.shortcut.conflict"),
+            cycle_order_label: t("settings.hud.cycle_order.label"),
             no_display_label: t("settings.hud.no_display.label"),
             no_display_help: t("settings.hud.no_display.help"),
 
@@ -416,6 +442,15 @@ impl HudLabels {
                 t("settings.hud.color.battery"),
                 t("settings.hud.color.accent"),
             ],
+            color_group_surface: t("settings.hud.color.group_surface"),
+            color_group_metrics: t("settings.hud.color.group_metrics"),
+            color_reset_all: t("settings.hud.color.reset_all"),
+            color_reset_slot: t("settings.hud.color.reset_slot"),
+            color_copy_hex: t("settings.hud.color.copy_hex"),
+            color_copied_hex: t("settings.hud.color.copied_hex"),
+            color_brightness: t("settings.hud.color.brightness"),
+            color_quick_swatches: t("settings.hud.color.quick_swatches"),
+            color_pick_tooltip: t("settings.hud.color.pick_tooltip"),
 
             group_opengl: t("settings.hud.group.opengl"),
             opengl_wrapper_label: t("settings.hud.opengl_wrapper.label"),
@@ -427,6 +462,17 @@ impl HudLabels {
             metal_alignment_label: t("settings.hud.metal.alignment.label"),
             metal_alignment_help: t("settings.hud.metal.alignment.help"),
             metal_note: t("settings.hud.metal.note"),
+        }
+    }
+
+    pub(super) fn preset_name(&self, preset: HudPreset) -> &SharedString {
+        match preset {
+            HudPreset::MinimalFps => &self.preset_minimal_fps,
+            HudPreset::HorizontalCompact => &self.preset_horizontal_compact,
+            HudPreset::BalancedGaming => &self.preset_balanced_gaming,
+            HudPreset::FullDiagnostics => &self.preset_full_diagnostics,
+            HudPreset::Custom => &self.preset_custom,
+            HudPreset::CustomHorizontal => &self.preset_custom_horizontal,
         }
     }
 }

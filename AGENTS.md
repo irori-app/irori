@@ -2,7 +2,32 @@
 
 Root engineering contract for humans and coding agents working on Irori. Read this file before your first change, then load the relevant on-demand doc from the routing table below.
 
-Irori is a native Rust (edition 2024, Rust 1.95+) game launcher for Linux, macOS, and Windows built with GPUI through GPUI Kit (`gpui-kit = "0.8.0"`). Product goals, in order: correct, fast, calm, one click to play.
+Irori is a native Rust (edition 2024, Rust 1.95+) game launcher for Linux, macOS, and Windows built with GPUI through GPUI Kit (`gpui-kit = "0.8.0"`).
+
+## Product vision: Click-and-Play first
+
+Irori's goal is a lightweight, fast, modern, feature-rich native launcher built around 1-click play and 1-click recovery.
+
+When goals compete, apply this tie-breaker order: correctness and user-data safety > lightweight speed > 1-click simplicity (sensible defaults) > maximum features under progressive disclosure.
+
+Core pillars:
+
+1. Click-and-Play by default. Take the user from opening Irori to playing in the fewest clicks possible, ideally one click. Auto-detect safe defaults (installed Proton, Wine, or umu runtime, default prefix path, connected controllers, emulators, ROMs, and an install drive with free space) instead of asking for manual setup. When something is missing or fails, explain it in plain language and offer a direct 1-click recovery button right where the user sees the message.
+2. Maximum features without visual clutter. Deliver broad capabilities (stores, emulators, Wine/Proton/umu, cloud and Ludusavi saves, mods, ReShade/MangoHud, overlay, Big Picture, Sunshine/Steam shortcuts, and controller tools) so most users never need advanced settings while power users find every knob under progressive disclosure, settings search, and per-game overrides with 1-click reset.
+3. Lightweight, native, instant speed as UX. Keep startup fast, scrolling smooth across large libraries, idle CPU at zero, and memory bounded. No feature justifies embedding a web engine, running polling loops, or blocking the UI thread.
+4. Clean, modern craft. Make Irori feel like a contemporary native app across light and dark themes, desktop windows, and Big Picture with controllers. Let game artwork carry the color while surrounding chrome stays calm, legible, and clean in narrow windows and long translations.
+
+Automation safety boundary:
+
+- Automate silently by default: picking the best already-installed runtime, choosing the default prefix path, detecting controllers, emulators, and ROMs, applying safe known game fixes, and pre-selecting a drive with free space.
+- Require an explicit 1-click user action (never silent): destructive actions (uninstall, delete prefix, overwrite saves), third-party install scripts (Lutris `Approvals` consent plan), and heavy downloads (show a direct 1-click button such as "Install Proton" rather than downloading hundreds of megabytes in the background).
+
+1-Click UX Litmus Test (apply before designing or implementing any feature, dialog, setting, or error state):
+
+1. Can we cut clicks or manual steps between the user and playing?
+2. Can Irori auto-detect or pick a safe default instead of asking the user?
+3. If something is missing or fails, does the message give a plain-language explanation and a direct 1-click fix?
+4. Does the screen stay clean, modern, and fast, with expert controls tucked under progressive disclosure?
 
 ## Verification commands
 

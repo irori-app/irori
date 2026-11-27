@@ -515,11 +515,14 @@ impl AppUpdater {
     }
 
     /// Ask GitHub for the newest release and save the answer.
-    pub(crate) async fn check(&self) -> Result<()> {
-        let latest = fetch(&self.endpoint).await?;
+    pub(crate) async fn check(&self, check: irori_core::github_releases::CheckKind) -> Result<()> {
+        let has_cached = self.saved.read().latest.is_some();
+        let fetched = fetch(&self.endpoint, has_cached, check).await?;
         let mut saved = self.saved.read().clone();
         saved.checked_at = util::unix_now();
-        saved.latest = latest;
+        if let Some(latest) = fetched {
+            saved.latest = latest;
+        }
         if let Err(e) = json_store::write(&self.file, &saved) {
             tracing::warn!("saving the update state: {e:#}");
         }
@@ -607,46 +610,77 @@ pub(crate) fn github_http_error(
     anyhow::anyhow!("GitHub returned HTTP {status}")
 }
 
-/// The newest stable release, `None` while there is none.
-async fn fetch(endpoint: &str) -> Result<Option<Release>> {
-    let resp = irori_core::http::client()
-        .get(endpoint)
-        .header("Accept", "application/vnd.github+json")
-        .send()
+/// The newest stable release: `Ok(None)` when the shared Atom feed or ETag
+/// confirmed nothing changed since the cached check, `Ok(Some(None))` while
+/// there is no published release, or `Ok(Some(Some(release)))` when updated.
+async fn fetch(
+    endpoint: &str,
+    has_cached: bool,
+    check: irori_core::github_releases::CheckKind,
+) -> Result<Option<Option<Release>>> {
+    let body = if irori_core::github_releases::is_github(endpoint) {
+        match irori_core::github_releases::fetch_guarded_json(
+            endpoint,
+            "app-update:irori",
+            has_cached,
+            check,
+        )
         .await
-        .map_err(|e| {
-            tracing::debug!("reaching GitHub ({endpoint}): {e:#}");
-            anyhow::anyhow!("Could not reach GitHub")
-        })?;
-    let status = resp.status().as_u16();
-    // GitHub answers 404 while a repository has no published release.
-    if status == 404 {
-        return Ok(None);
-    }
-    if !resp.status().is_success() {
-        let headers = resp.headers().clone();
-        let body = if status == 403 {
-            resp.text().await.ok()
-        } else {
-            None
-        };
-        return Err(github_http_error(
-            status,
-            &headers,
-            body.as_deref(),
-            None,
-            util::unix_now(),
-        ));
-    }
-    let body = resp.text().await.map_err(|e| {
-        tracing::debug!("reading GitHub release response: {e:#}");
-        anyhow::anyhow!("Unexpected answer from GitHub")
-    })?;
+        {
+            Ok(irori_core::github_releases::GuardedFetch::Unchanged) => return Ok(None),
+            Ok(irori_core::github_releases::GuardedFetch::NotFound) => return Ok(Some(None)),
+            Ok(irori_core::github_releases::GuardedFetch::Updated(body)) => body,
+            Err(e) if irori_core::github_releases::rate_limited(&e).is_some() => return Err(e),
+            Err(e) => {
+                tracing::debug!("reaching GitHub ({endpoint}): {e:#}");
+                if e.chain()
+                    .any(|c| c.downcast_ref::<reqwest::Error>().is_some())
+                {
+                    return Err(anyhow::anyhow!("Could not reach GitHub"));
+                }
+                return Err(e);
+            }
+        }
+    } else {
+        let resp = irori_core::http::client()
+            .get(endpoint)
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::debug!("reaching GitHub ({endpoint}): {e:#}");
+                anyhow::anyhow!("Could not reach GitHub")
+            })?;
+        let status = resp.status().as_u16();
+        // GitHub answers 404 while a repository has no published release.
+        if status == 404 {
+            return Ok(Some(None));
+        }
+        if !resp.status().is_success() {
+            let headers = resp.headers().clone();
+            let body = if status == 403 {
+                resp.text().await.ok()
+            } else {
+                None
+            };
+            return Err(github_http_error(
+                status,
+                &headers,
+                body.as_deref(),
+                None,
+                util::unix_now(),
+            ));
+        }
+        resp.text().await.map_err(|e| {
+            tracing::debug!("reading GitHub release response: {e:#}");
+            anyhow::anyhow!("Unexpected answer from GitHub")
+        })?
+    };
     let release: GhRelease = serde_json::from_str(&body).map_err(|e| {
         tracing::debug!("parsing GitHub release JSON: {e:#}");
         anyhow::anyhow!("Unexpected answer from GitHub")
     })?;
-    Ok(parse(release))
+    Ok(Some(parse(release)))
 }
 
 fn parse(release: GhRelease) -> Option<Release> {
@@ -1014,7 +1048,10 @@ mod tests {
         let endpoint = server.url("/releases/latest");
         let updater = AppUpdater::with(&endpoint, file.clone(), "0.2.0", InstallKind::Manual, true);
         assert!(updater.due(util::unix_now()));
-        updater.check().await.unwrap();
+        updater
+            .check(irori_core::github_releases::CheckKind::Manual)
+            .await
+            .unwrap();
         assert!(!updater.due(util::unix_now()));
         let status = updater.status(true);
         assert_eq!(status.available.as_ref().unwrap().version, "0.3.0");
@@ -1045,7 +1082,10 @@ mod tests {
             InstallKind::Manual,
             true,
         );
-        updater.check().await.unwrap();
+        updater
+            .check(irori_core::github_releases::CheckKind::Manual)
+            .await
+            .unwrap();
         let status = updater.status(true);
         assert!(status.available.is_none() && !status.announce);
         assert!(status.checked_at.is_some());
@@ -1062,7 +1102,10 @@ mod tests {
             InstallKind::Manual,
             true,
         );
-        updater.check().await.unwrap();
+        updater
+            .check(irori_core::github_releases::CheckKind::Manual)
+            .await
+            .unwrap();
         assert!(updater.status(true).available.is_none());
 
         let broken = TestServer::start(|_| Resp::status(503));
@@ -1073,7 +1116,12 @@ mod tests {
             InstallKind::Manual,
             true,
         );
-        assert!(updater.check().await.is_err());
+        assert!(
+            updater
+                .check(irori_core::github_releases::CheckKind::Manual)
+                .await
+                .is_err()
+        );
         assert!(
             updater.due(util::unix_now()),
             "a failed check doesn't count"
@@ -1142,7 +1190,10 @@ mod tests {
             ),
         ] {
             let updater = AppUpdater::with(&endpoint, dir.path().join(name), "1.2.0", kind, true);
-            updater.check().await.unwrap();
+            updater
+                .check(irori_core::github_releases::CheckKind::Manual)
+                .await
+                .unwrap();
             let status = updater.status(true);
             assert_eq!(status.available.as_ref().unwrap().version, "1.3.0");
             assert!(status.has_update());
@@ -1163,7 +1214,10 @@ mod tests {
             InstallKind::Manual,
             true,
         );
-        manual.check().await.unwrap();
+        manual
+            .check(irori_core::github_releases::CheckKind::Manual)
+            .await
+            .unwrap();
         assert!(manual.status(true).has_update());
 
         for kind in [
@@ -1200,6 +1254,7 @@ mod tests {
 
     #[tokio::test]
     async fn formats_rate_limit_errors_cleanly() {
+        let manual = irori_core::github_releases::CheckKind::Manual;
         let reset = util::unix_now() + 185;
         let with_reset = TestServer::start(move |_| Resp {
             status: 403,
@@ -1209,7 +1264,7 @@ mod tests {
             ],
             ..Default::default()
         });
-        let err = fetch(&with_reset.url("/releases/latest"))
+        let err = fetch(&with_reset.url("/releases/latest"), false, manual)
             .await
             .unwrap_err();
         let text = format!("{err:#}");
@@ -1227,7 +1282,7 @@ mod tests {
             headers: vec![("x-ratelimit-remaining".into(), "0".into())],
             ..Default::default()
         });
-        let err = fetch(&without_reset.url("/releases/latest"))
+        let err = fetch(&without_reset.url("/releases/latest"), false, manual)
             .await
             .unwrap_err();
         let text = format!("{err:#}");
@@ -1241,14 +1296,16 @@ mod tests {
             headers: vec![("retry-after".into(), "45".into())],
             ..Default::default()
         });
-        let err = fetch(&too_many.url("/releases/latest")).await.unwrap_err();
+        let err = fetch(&too_many.url("/releases/latest"), false, manual)
+            .await
+            .unwrap_err();
         assert_eq!(
             format!("{err:#}"),
             "GitHub's rate limit was reached. Try again in about 1 minute, or download it from the release page."
         );
 
         let server_error = TestServer::start(|_| Resp::status(503));
-        let err = fetch(&server_error.url("/releases/latest"))
+        let err = fetch(&server_error.url("/releases/latest"), false, manual)
             .await
             .unwrap_err();
         assert_eq!(format!("{err:#}"), "GitHub returned HTTP 503");
@@ -1260,7 +1317,9 @@ mod tests {
             body: br#"{"message":"Resource not accessible"}"#.to_vec(),
             ..Default::default()
         });
-        let err = fetch(&forbidden.url("/releases/latest")).await.unwrap_err();
+        let err = fetch(&forbidden.url("/releases/latest"), false, manual)
+            .await
+            .unwrap_err();
         assert_eq!(format!("{err:#}"), "GitHub returned HTTP 403");
 
         // 403 with retry-after: 0 must still fall through to x-ratelimit-reset.
@@ -1273,9 +1332,13 @@ mod tests {
             ],
             ..Default::default()
         });
-        let err = fetch(&zero_retry_with_reset.url("/releases/latest"))
-            .await
-            .unwrap_err();
+        let err = fetch(
+            &zero_retry_with_reset.url("/releases/latest"),
+            false,
+            manual,
+        )
+        .await
+        .unwrap_err();
         assert!(
             format!("{err:#}").contains("about 5 minutes"),
             "expected x-ratelimit-reset fallback when retry-after is 0, got: {err:#}"
@@ -1287,7 +1350,9 @@ mod tests {
             body: br#"{"message":"You have exceeded a secondary rate limit."}"#.to_vec(),
             ..Default::default()
         });
-        let err = fetch(&secondary.url("/releases/latest")).await.unwrap_err();
+        let err = fetch(&secondary.url("/releases/latest"), false, manual)
+            .await
+            .unwrap_err();
         assert_eq!(
             format!("{err:#}"),
             "GitHub's rate limit was reached. Try again later, or download it from the release page."
@@ -1300,7 +1365,7 @@ mod tests {
             headers: vec![("retry-after".into(), retry_date.clone())],
             ..Default::default()
         });
-        let err = fetch(&http_date_retry.url("/releases/latest"))
+        let err = fetch(&http_date_retry.url("/releases/latest"), false, manual)
             .await
             .unwrap_err();
         assert!(
@@ -1315,7 +1380,9 @@ mod tests {
             body: b"<html>gateway error</html>".to_vec(),
             ..Default::default()
         });
-        let err = fetch(&bad_json.url("/releases/latest")).await.unwrap_err();
+        let err = fetch(&bad_json.url("/releases/latest"), false, manual)
+            .await
+            .unwrap_err();
         assert_eq!(format!("{err:#}"), "Unexpected answer from GitHub");
     }
 }

@@ -197,6 +197,21 @@ impl DownloadsView {
                 .into_any_element(),
             );
         }
+        if let Some(reset) = report.rate_limited_until {
+            let minutes = irori_core::github_releases::RateLimited { reset }
+                .minutes_left(irori_core::util::unix_now());
+            alerts.push(
+                Alert::warning(
+                    "component-rate-limit",
+                    t_args(
+                        "manage.wine.rate_limited",
+                        &[("minutes", &minutes.to_string())],
+                    ),
+                )
+                .title(t("manage.updates.component_check_failed"))
+                .into_any_element(),
+            );
+        }
         if let Some(err) = report.check_errors.first() {
             alerts.push(
                 Alert::warning("component-check", err.clone())

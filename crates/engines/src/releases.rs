@@ -11,6 +11,7 @@ use std::cmp::Ordering;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, bail};
+use irori_core::github_releases::{self, CheckKind, GuardedFetch};
 use irori_core::json_store;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -95,6 +96,21 @@ pub fn cached(id: &str) -> Option<Vec<Release>> {
 /// the source even when the cached list is fresh. Offline, a cached list is
 /// returned as it is.
 pub async fn list(manifest: &EngineManifest, refresh: bool) -> Result<Vec<Release>> {
+    let check = if refresh {
+        CheckKind::Manual
+    } else {
+        CheckKind::Automatic
+    };
+    list_with_kind(manifest, refresh, check).await
+}
+
+/// Like [`list`], with an explicit [`CheckKind`] for GitHub's shared API
+/// budget.
+pub async fn list_with_kind(
+    manifest: &EngineManifest,
+    refresh: bool,
+    check: CheckKind,
+) -> Result<Vec<Release>> {
     let host = Host::current();
     let file = cache_file(&manifest.id);
     let cached: Option<CachedList> = json_store::read(&file).ok().flatten();
@@ -105,8 +121,22 @@ pub async fn list(manifest: &EngineManifest, refresh: bool) -> Result<Vec<Releas
     {
         return Ok(c.releases.clone());
     }
-    match fetch(manifest, host).await {
-        Ok(releases) => {
+    match fetch_checked(manifest, host, cached.is_some(), check).await {
+        Ok(Some(releases)) => {
+            let list = CachedList {
+                fetched_at: now(),
+                host: host.key(),
+                releases: releases.clone(),
+            };
+            if let Err(e) = json_store::write(&file, &list) {
+                tracing::warn!("caching {} releases: {e:#}", manifest.id);
+            }
+            Ok(releases)
+        }
+        Ok(None) => {
+            // Atom feed or ETag confirmed no new release: bump `fetched_at` so
+            // repeated checks stay fresh without spending API calls.
+            let releases = cached.map(|c| c.releases).unwrap_or_default();
             let list = CachedList {
                 fetched_at: now(),
                 host: host.key(),
@@ -118,20 +148,34 @@ pub async fn list(manifest: &EngineManifest, refresh: bool) -> Result<Vec<Releas
             Ok(releases)
         }
         Err(e) => match cached {
-            Some(c) => {
+            Some(c) if !refresh => {
                 tracing::warn!(
                     "listing {} releases: {e:#}; using the saved list",
                     manifest.id
                 );
                 Ok(c.releases)
             }
-            None => Err(e),
+            _ => Err(e),
         },
     }
 }
 
 /// Ask the first managed source with a build for `host`.
 pub async fn fetch(manifest: &EngineManifest, host: Host) -> Result<Vec<Release>> {
+    fetch_checked(manifest, host, false, CheckKind::Manual)
+        .await?
+        .with_context(|| format!("{} lists no download for {host} right now", manifest.name))
+}
+
+/// Ask the first managed source with a build for `host`. Returns `Ok(None)`
+/// when a cached list exists and GitHub's Atom feed or ETag confirms nothing
+/// changed (consuming zero API quota).
+async fn fetch_checked(
+    manifest: &EngineManifest,
+    host: Host,
+    has_cached: bool,
+    check: CheckKind,
+) -> Result<Option<Vec<Release>>> {
     let Some(source) = manifest
         .sources
         .iter()
@@ -146,15 +190,31 @@ pub async fn fetch(manifest: &EngineManifest, host: Host) -> Result<Vec<Release>
             repo, checksums, ..
         } => {
             let url = format!("https://api.github.com/repos/{repo}/releases?per_page=100");
-            let body = get_text(&url).await?;
+            let cache_key = format!("engine:{}:{}", manifest.id, host.key());
+            let body =
+                match github_releases::fetch_guarded_json(&url, &cache_key, has_cached, check)
+                    .await
+                    .with_context(|| format!("listing {} releases", manifest.name))?
+                {
+                    GuardedFetch::Unchanged => return Ok(None),
+                    GuardedFetch::NotFound => "[]".to_string(),
+                    GuardedFetch::Updated(body) => body,
+                };
             let mut found = from_github(&body, pattern, extras, checksums.as_deref())?;
             // Projects publishing nightly pre-releases (PCSX2) can push every
             // stable release off the list; GitHub's "latest" is the newest
             // stable one.
             if found.is_empty() {
                 let latest = format!("https://api.github.com/repos/{repo}/releases/latest");
-                let body = get_text(&latest).await?;
-                found = from_github(&format!("[{body}]"), pattern, extras, checksums.as_deref())?;
+                let latest_key = format!("engine-latest:{}:{}", manifest.id, host.key());
+                if let GuardedFetch::Updated(body) =
+                    github_releases::fetch_guarded_json(&latest, &latest_key, false, check)
+                        .await
+                        .with_context(|| format!("listing {} latest release", manifest.name))?
+                {
+                    found =
+                        from_github(&format!("[{body}]"), pattern, extras, checksums.as_deref())?;
+                }
             }
             found
         }
@@ -178,7 +238,7 @@ pub async fn fetch(manifest: &EngineManifest, host: Host) -> Result<Vec<Release>
     if releases.is_empty() {
         bail!("{} lists no download for {host} right now", manifest.name);
     }
-    Ok(releases)
+    Ok(Some(releases))
 }
 
 async fn get_text(url: &str) -> Result<String> {
@@ -458,5 +518,79 @@ mod tests {
             r[0].url,
             "https://www.ppsspp.org/files/1_19_3/ppsspp_win.zip"
         );
+    }
+
+    #[test]
+    fn uzdoom_and_gzdoom_manifests_match_official_github_assets() {
+        let uzdoom_body = serde_json::json!([
+            {"tag_name": "5.0.3", "assets": [
+                {"name": "Linux-UZDoom-Release-x86_64.AppImage", "browser_download_url": "https://x/uz-linux"},
+                {"name": "MacOS-UZDoom-Release-ARM64.dmg", "browser_download_url": "https://x/uz-mac"},
+                {"name": "Windows-UZDoom-Release-x86_64.zip", "browser_download_url": "https://x/uz-win"}
+            ]}
+        ])
+        .to_string();
+        let uzdoom = crate::engine("uzdoom").unwrap();
+        let uz_source = uzdoom.sources.iter().find(|s| s.is_managed()).unwrap();
+        for (host, expected_file) in [
+            (
+                Host {
+                    os: crate::host::Os::Linux,
+                    arch: "x86_64",
+                },
+                "Linux-UZDoom-Release-x86_64.AppImage",
+            ),
+            (
+                Host {
+                    os: crate::host::Os::Macos,
+                    arch: "aarch64",
+                },
+                "MacOS-UZDoom-Release-ARM64.dmg",
+            ),
+            (
+                Host {
+                    os: crate::host::Os::Windows,
+                    arch: "x86_64",
+                },
+                "Windows-UZDoom-Release-x86_64.zip",
+            ),
+        ] {
+            let pattern = uz_source.asset_for(host).unwrap();
+            let list = from_github(&uzdoom_body, pattern, &[], None).unwrap();
+            assert_eq!(list.len(), 1);
+            assert_eq!(list[0].version, "5.0.3");
+            assert_eq!(list[0].file_name, expected_file);
+        }
+
+        let gzdoom_body = serde_json::json!([
+            {"tag_name": "g4.14.2", "assets": [
+                {"name": "gzdoom-4-14-2-macos.zip", "browser_download_url": "https://x/gz-mac"},
+                {"name": "gzdoom-4-14-2-windows.zip", "browser_download_url": "https://x/gz-win"}
+            ]}
+        ])
+        .to_string();
+        let gzdoom = crate::engine("gzdoom").unwrap();
+        let gz_source = gzdoom.sources.iter().find(|s| s.is_managed()).unwrap();
+        for (host, expected_file) in [
+            (
+                Host {
+                    os: crate::host::Os::Macos,
+                    arch: "aarch64",
+                },
+                "gzdoom-4-14-2-macos.zip",
+            ),
+            (
+                Host {
+                    os: crate::host::Os::Windows,
+                    arch: "x86_64",
+                },
+                "gzdoom-4-14-2-windows.zip",
+            ),
+        ] {
+            let pattern = gz_source.asset_for(host).unwrap();
+            let list = from_github(&gzdoom_body, pattern, &[], None).unwrap();
+            assert_eq!(list.len(), 1);
+            assert_eq!(list[0].file_name, expected_file);
+        }
     }
 }

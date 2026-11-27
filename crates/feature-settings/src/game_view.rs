@@ -889,20 +889,23 @@ impl Render for GameSettingsView {
                 && !self.uses_wine(cx)
                 && steam_compat.is_none())
             .then(|| info_alert("native-note", t("settings.game.native_note")));
-            // Steam starts its games itself: explain on Launch why most launch
-            // controls are omitted. Performance handles Steam's launch snippet
-            // directly beside the Live preview instead of stacking a second banner.
+            // Steam starts its games itself: say why most sections are gone.
+            // On Performance, HudPanel handles Steam's launch snippet directly
+            // beside the Live preview whenever the HUD is supported.
             let steam_note = (!searching
-                && self.id.runner == Runner::Steam
-                && self.section == GameSection::Launch)
-                .then(|| {
-                    let text = if cfg!(target_os = "linux") {
-                        t("settings.game.steam_note_linux")
-                    } else {
-                        t("settings.game.steam_note")
-                    };
-                    info_alert("steam-note", text)
-                });
+                && show_steam_note(
+                    self.id.runner,
+                    self.section,
+                    irori_core::HudBackend::current().is_supported(),
+                ))
+            .then(|| {
+                let text = if cfg!(target_os = "linux") {
+                    t("settings.game.steam_note_linux")
+                } else {
+                    t("settings.game.steam_note")
+                };
+                info_alert("steam-note", text)
+            });
             let performance_tabs = (!searching && self.section == GameSection::Performance)
                 .then(|| self.render_performance_tabs(cx))
                 .flatten();
@@ -981,9 +984,36 @@ impl Render for GameSettingsView {
     }
 }
 
+fn show_steam_note(runner: Runner, section: GameSection, hud_supported: bool) -> bool {
+    runner == Runner::Steam
+        && (section == GameSection::Launch
+            || (section == GameSection::Performance && !hud_supported))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn steam_note_avoids_duplicating_hud_notice_on_performance() {
+        assert!(show_steam_note(Runner::Steam, GameSection::Launch, true));
+        assert!(show_steam_note(Runner::Steam, GameSection::Launch, false));
+        assert!(!show_steam_note(
+            Runner::Steam,
+            GameSection::Performance,
+            true
+        ));
+        assert!(show_steam_note(
+            Runner::Steam,
+            GameSection::Performance,
+            false
+        ));
+        assert!(!show_steam_note(
+            Runner::Legendary,
+            GameSection::Launch,
+            true
+        ));
+    }
 
     #[test]
     fn section_ids_round_trip() {

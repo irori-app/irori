@@ -67,7 +67,7 @@ use crate::{
 };
 
 pub use achievements::AchievementFilter;
-pub use menu::game_menu;
+pub use menu::{game_menu, recent_game_menu};
 use overlay::EosOverlayPanel;
 
 /// Key context of the game page; bindings are registered by [`crate::init`].

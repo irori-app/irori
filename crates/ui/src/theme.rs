@@ -925,6 +925,7 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
         ThemeMode::Light
     };
     Theme::change(mode, window, cx);
+    sync_scrollbar_mode(cx);
     Theme::update(cx, hold_status_colors);
     if cx
         .try_global::<SystemLook>()
@@ -942,6 +943,35 @@ pub fn apply(prefs: &UiPrefs, window: Option<&mut Window>, cx: &mut App) {
             a.hud.cached_theme_colors = Some(hud_colors);
         });
     }
+}
+
+/// Map Windows' "Automatically hide scroll bars" accessibility setting to a
+/// gpui-kit scrollbar mode. Windows enables auto-hide by default, expecting
+/// scrollbars to reveal when the pointer hovers the right edge (not only while
+/// scrolling); turning auto-hide off means scrollbars stay always visible.
+#[cfg(any(target_os = "windows", test))]
+fn windows_scrollbar_mode(auto_hide: bool) -> gpui_kit::component::scroll::ScrollbarMode {
+    use gpui_kit::component::scroll::ScrollbarMode;
+    if auto_hide {
+        ScrollbarMode::Hover
+    } else {
+        ScrollbarMode::Always
+    }
+}
+
+/// Keep gpui-kit's scrollbar mode aligned with Windows expectations so
+/// scrollbars reveal on hover when Windows auto-hide is enabled and stay
+/// visible when Windows "Always show scrollbars" is enabled.
+fn sync_scrollbar_mode(cx: &mut App) {
+    #[cfg(target_os = "windows")]
+    {
+        let mode = windows_scrollbar_mode(cx.should_auto_hide_scrollbars());
+        if Theme::global(cx).scrollbar_mode != mode {
+            Theme::set_scrollbar_mode(mode, cx);
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = cx;
 }
 
 /// Convert a GPUI [`Hsla`] color into 6 uppercase RGB hex digits (`RRGGBB`)
@@ -2297,5 +2327,12 @@ mod tests {
                 "expected uppercase hex in {hex}"
             );
         }
+    }
+
+    #[test]
+    fn windows_scrollbar_mode_reveals_on_hover_when_auto_hide_is_enabled() {
+        use gpui_kit::component::scroll::ScrollbarMode;
+        assert_eq!(windows_scrollbar_mode(true), ScrollbarMode::Hover);
+        assert_eq!(windows_scrollbar_mode(false), ScrollbarMode::Always);
     }
 }

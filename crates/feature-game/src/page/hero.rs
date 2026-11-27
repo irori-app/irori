@@ -133,9 +133,12 @@ impl GamePage {
                 let menu = super::menu::build_menu(
                     menu,
                     &menu_id,
-                    shortcuts,
-                    store_url.clone(),
-                    Some(page.clone()),
+                    super::menu::MenuOptions {
+                        shortcuts_exist: shortcuts,
+                        store_url: store_url.clone(),
+                        page: Some(page.clone()),
+                        in_recent: false,
+                    },
                     window,
                     cx,
                 );
@@ -508,9 +511,12 @@ impl GamePage {
                         let menu = super::menu::build_menu(
                             menu,
                             &menu_id,
-                            shortcuts,
-                            store_url.clone(),
-                            Some(page.clone()),
+                            super::menu::MenuOptions {
+                                shortcuts_exist: shortcuts,
+                                store_url: store_url.clone(),
+                                page: Some(page.clone()),
+                                in_recent: false,
+                            },
                             window,
                             cx,
                         );

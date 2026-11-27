@@ -192,6 +192,14 @@ impl Paths {
         ))
     }
 
+    /// Path to an Irori-generated MangoHud presets file (`<name>_presets.conf`).
+    pub fn mangohud_presets_file(&self, name: &str) -> PathBuf {
+        self.mangohud_dir().join(format!(
+            "{}_presets.conf",
+            crate::hud::sanitize_game_id_for_filename(name)
+        ))
+    }
+
     pub fn game_log_file(&self, id: &GameId) -> PathBuf {
         self.logs_dir().join("games").join(format!(
             "{}-{}.log",

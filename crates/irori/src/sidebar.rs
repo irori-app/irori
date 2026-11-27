@@ -110,18 +110,8 @@ pub(crate) fn nav_item(item: NavItem, collapsed: bool, cx: &App) -> AnyElement {
 pub(crate) fn recent_games(cx: &App) -> Vec<Arc<GameInfo>> {
     let library = models(cx).library.read(cx);
     let user = &library.user;
-    let keys: Vec<String> = if user.recent.is_empty() {
-        let mut played: Vec<(&String, &str)> = user
-            .playtime
-            .iter()
-            .filter_map(|(k, r)| Some((k, r.last_played.as_deref()?)))
-            .collect();
-        played.sort_by(|a, b| b.1.cmp(a.1));
-        played.into_iter().map(|(k, _)| k.clone()).collect()
-    } else {
-        user.recent.clone()
-    };
-    keys.iter()
+    user.recent_keys()
+        .iter()
         .filter(|k| !user.hidden.contains(*k))
         .filter_map(|k| {
             let (runner, app) = k.split_once(':')?;
@@ -214,9 +204,9 @@ impl Render for RecentGames {
                             .child(game.title.clone()),
                     )
                     .on_click(move |_, _, cx| nav::navigate(Route::Game(id.clone()), cx))
-                    // The game's commands, as its cover's menu in the library.
+                    // The game's commands, plus removing it from Recent.
                     .context_menu(move |menu, window, cx| {
-                        irori_game::game_menu(menu, &menu_id, window, cx)
+                        irori_game::recent_game_menu(menu, &menu_id, window, cx)
                     })
                     .into_any_element()
             })

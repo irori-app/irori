@@ -31,7 +31,9 @@
   </picture>
 </p>
 
-Irori is a native Rust game launcher rendered on your GPU with GPUI for Linux, macOS, and Windows. It gathers your Epic Games, GOG, Amazon Games, ZOOM Platform, itch.io, Steam, emulated, and sideloaded games into one library without bundling an embedded browser.
+Irori is a native Rust game launcher rendered on your GPU with GPUI for Linux, macOS, and Windows. It gathers your Epic Games, GOG, Amazon Games, ZOOM Platform, itch.io, Steam, emulated, and sideloaded games into one lightweight, fast library without bundling an embedded browser.
+
+Designed around Click-and-Play UX, Irori auto-detects safe defaults so launching a game takes one click while keeping power-user options (Wine/Proton/umu tuning, saves, mods, overlays, emulators, and Big Picture) tucked neatly out of the way until you want them.
 
 Security and privacy guarantees: Irori collects zero telemetry, analytics, or remote crash reports. See [SECURITY.md](SECURITY.md) for the exact network endpoints, encrypted credential storage (`AES-256-GCM`), and how to report vulnerabilities. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for protocol ports, vendored crates, and behavioral references.
 

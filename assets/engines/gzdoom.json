@@ -1,0 +1,81 @@
+{
+  "id": "gzdoom",
+  "name": "GZDoom",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://zdoom.org",
+  "kind": "standalone",
+  "systems": [
+    "doom"
+  ],
+  "sources": [
+    {
+      "type": "github",
+      "repo": "ZDoom/gzdoom",
+      "assets": {
+        "macos-aarch64": "^gzdoom-[\\d-]+-macos\\.zip$",
+        "macos-x86_64": "^gzdoom-[\\d-]+-macos\\.zip$",
+        "windows-x86_64": "^gzdoom-[\\d-]+-windows\\.zip$"
+      }
+    },
+    {
+      "type": "flatpak",
+      "id": "org.zdoom.GZDoom"
+    },
+    {
+      "type": "path",
+      "names": [
+        "gzdoom"
+      ]
+    },
+    {
+      "type": "macApp",
+      "bundle": "GZDoom.app"
+    },
+    {
+      "type": "windows",
+      "paths": [
+        "%ProgramFiles%\\GZDoom\\gzdoom.exe",
+        "%LOCALAPPDATA%\\Programs\\GZDoom\\gzdoom.exe"
+      ]
+    }
+  ],
+  "binaries": {
+    "linux": [
+      "gzdoom"
+    ],
+    "macos": [
+      "GZDoom.app"
+    ],
+    "windows": [
+      "gzdoom.exe"
+    ]
+  },
+  "launch": {
+    "args": [
+      {
+        "if": "fullscreen",
+        "args": [
+          "+fullscreen",
+          "1"
+        ]
+      },
+      {
+        "unless": "fullscreen",
+        "args": [
+          "+fullscreen",
+          "0"
+        ]
+      },
+      "-iwad",
+      "{rom}"
+    ]
+  },
+  "options": [
+    {
+      "id": "fullscreen",
+      "kind": "toggle",
+      "default": true
+    }
+  ],
+  "exitHotkey": "F10"
+}

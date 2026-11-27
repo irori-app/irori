@@ -34,6 +34,10 @@ pub struct UserData {
     pub hidden: BTreeSet<String>,
     /// Most recent first.
     pub recent: Vec<String>,
+    /// Games the user explicitly removed from Recent / Continue playing so the
+    /// `playtime` fallback does not put them back until they are launched again.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub recent_dismissed: BTreeSet<String>,
     /// Category name → game keys.
     pub categories: BTreeMap<String, BTreeSet<String>>,
     pub playtime: BTreeMap<String, PlaytimeRecord>,
@@ -156,6 +160,28 @@ impl BulkSnapshot {
 }
 
 impl UserData {
+    /// Recently played game keys, newest first: Irori's own history, or
+    /// recorded playtime when that history is empty (such as right after
+    /// importing from Heroic). Games explicitly removed by the user stay out
+    /// until launched again.
+    pub fn recent_keys(&self) -> Vec<String> {
+        let keys: Vec<String> = if self.recent.is_empty() {
+            let mut played: Vec<(&String, &str)> = self
+                .playtime
+                .iter()
+                .filter_map(|(k, r)| Some((k, r.last_played.as_deref()?)))
+                .collect();
+            // RFC 3339 timestamps in one offset sort chronologically as text.
+            played.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+            played.into_iter().map(|(k, _)| k.clone()).collect()
+        } else {
+            self.recent.clone()
+        };
+        keys.into_iter()
+            .filter(|k| !self.recent_dismissed.contains(k))
+            .collect()
+    }
+
     /// Move what the user keeps about the game `from` to the game `to`, for
     /// one game that now has another library entry (a ROM played as a PC
     /// game): favourite, hidden, recents, categories, playtime, title and
@@ -166,7 +192,11 @@ impl UserData {
         if from == to {
             return;
         }
-        for set in [&mut self.favourites, &mut self.hidden] {
+        for set in [
+            &mut self.favourites,
+            &mut self.hidden,
+            &mut self.recent_dismissed,
+        ] {
             if set.remove(from) {
                 set.insert(to.to_string());
             }
@@ -990,14 +1020,27 @@ impl UserDataService {
         });
     }
 
-    /// Drop one game from the recently played list.
+    /// Drop one game (every copy of its entry) from the recently played list
+    /// and keep it out of the playtime fallback until it is launched again.
     pub fn remove_recent(&self, id: &GameId) {
-        let key = id.key();
-        self.update(Some(id), |d| d.recent.retain(|k| *k != key));
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| {
+            d.recent.retain(|k| !keys.contains(k));
+            d.recent_dismissed.extend(keys);
+        });
     }
 
     pub fn clear_recent(&self) {
-        self.update(None, |d| d.recent.clear());
+        self.update(None, |d| {
+            d.recent.clear();
+            let played: Vec<String> = d
+                .playtime
+                .iter()
+                .filter(|(_, r)| r.last_played.is_some())
+                .map(|(k, _)| k.clone())
+                .collect();
+            d.recent_dismissed.extend(played);
+        });
     }
 
     /// Replace a game's title, art and game modes. How it joins other
@@ -1143,8 +1186,12 @@ impl UserDataService {
     /// Record a session start: recent list and first/last played.
     pub fn record_launch(&self, id: &GameId, max_recent: usize) {
         let now = util::now_rfc3339();
+        let copy_keys = self.keys_with_copies(std::slice::from_ref(id));
         self.update(Some(id), |d| {
             let key = id.key();
+            for k in &copy_keys {
+                d.recent_dismissed.remove(k);
+            }
             d.recent.retain(|k| k != &key);
             d.recent.insert(0, key.clone());
             d.recent.truncate(max_recent.max(1) * 4);
@@ -1316,6 +1363,36 @@ mod tests {
         // What the new entry already had wins.
         assert_eq!(d.ratings.get(pc), Some(&2));
         assert!(!d.ratings.contains_key(rom));
+    }
+
+    #[test]
+    fn recent_keys_respects_dismissed_even_when_recent_falls_back_to_playtime() {
+        let played = |when: &str| PlaytimeRecord {
+            total_minutes: 30,
+            last_played: Some(when.into()),
+            ..Default::default()
+        };
+        let mut d = UserData::default();
+        d.playtime
+            .insert("gog:1".into(), played("2026-10-01T10:00:00Z"));
+        d.playtime
+            .insert("legendary:a".into(), played("2026-10-20T10:00:00Z"));
+
+        // Empty `recent` falls back to `playtime` sorted newest-first.
+        assert_eq!(d.recent_keys(), vec!["legendary:a", "gog:1"]);
+
+        // Dismissing a game removes it from the playtime fallback too.
+        d.recent_dismissed.insert("legendary:a".into());
+        assert_eq!(d.recent_keys(), vec!["gog:1"]);
+
+        // Dismissing the remaining game leaves the list empty instead of resurrecting it.
+        d.recent_dismissed.insert("gog:1".into());
+        assert!(d.recent_keys().is_empty());
+
+        // Launching a dismissed game again removes it from `recent_dismissed`.
+        d.recent_dismissed.remove("gog:1");
+        d.recent.insert(0, "gog:1".into());
+        assert_eq!(d.recent_keys(), vec!["gog:1"]);
     }
 
     #[test]

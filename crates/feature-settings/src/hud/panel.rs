@@ -8,6 +8,7 @@
 
 mod helpers;
 mod labels;
+mod position_grid;
 mod sections;
 mod sections_layout;
 mod sections_metrics;
@@ -17,39 +18,62 @@ mod tests;
 use std::time::Duration;
 
 use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::component::slider::{SliderEvent, SliderState};
 use gpui_kit::component::{ActiveTheme as _, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, Focusable as _, Hsla, IntoElement, ParentElement as _,
-    Render, SharedString, Styled as _, Subscription, Task, Window, div,
+    App, AppContext as _, Context, Entity, Focusable as _, Hsla, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Task, Window,
+    div,
 };
-use irori_core::hud::{sanitize_hex6, sanitize_hud_label};
+use irori_core::hud::{
+    DEFAULT_TOGGLE_HUD, DEFAULT_TOGGLE_PRESET, sanitize_hex6, sanitize_hud_label,
+};
 use irori_core::{
     GameHudMode, GameHudSettings, GameId, GlobalHudMode, GlobalHudSettings, HudBackend,
-    HudColorPalette, MangoHudProfile, MetalHudSettings, ResolvedHud,
+    HudColorPalette, HudOrientation, MangoHudProfile, MetalHudSettings, ResolvedHud,
+    ThemeHudColors,
 };
 use irori_runtime::hud::hardware_linux::{
     LinuxHudEnv, cached_linux_hud_env, default_gpu_short_label, default_gpu_vendor, resolve_pci_dev,
 };
-use irori_runtime::hud::mangohud_conf::{ConfRenderContext, render_mangohud_conf};
+use irori_runtime::hud::mangohud_conf::{
+    ConfRenderContext, render_mangohud_conf, render_mangohud_presets,
+};
+use irori_services::mangohud::LiveMangoHudSync;
 use irori_ui::theme::theme_hud_colors;
 use irori_ui::{backend, models};
 
+use crate::hud::color_wheel::{ColorWheelLabels, HudColorWheel};
 use crate::hud::preview::HudPreview;
 use crate::hud::shortcut_recorder::ShortcutRecorder;
 use crate::i18n::LanguageStamp;
 use crate::widgets::muted;
 
+pub(super) use self::helpers::ColorSlot;
 use self::helpers::{
     COLOR_SLOTS, CachedDisplay, DisplayInputs, HudOption, build_cached_display, build_gpu_options,
-    build_position_options, custom_fps_text, effective_mangohud_profile, effective_metal_settings,
-    global_hud_on, gpu_selection_key, is_fps_preset, legacy_hud_toggle, parse_gpu_selection_key,
-    parse_position_key, read_hud_settings, resolve_hud_for_scope, slider_event_value,
-    steam_conf_path,
+    custom_fps_text, effective_mangohud_profile, effective_metal_settings, global_hud_on,
+    gpu_selection_key, hud_conf_name, is_fps_preset, legacy_hud_toggle, parse_gpu_selection_key,
+    read_hud_settings, resolve_hud_for_scope, slider_event_value,
 };
 use self::labels::HudLabels;
+
+fn color_pair_hex(slot: ColorSlot, colors: &ThemeHudColors) -> Option<String> {
+    match slot {
+        ColorSlot::Background => Some(sanitize_hex6(
+            ColorSlot::Text.get(colors),
+            ColorSlot::Text.fallback(),
+        )),
+        ColorSlot::Text => Some(sanitize_hex6(
+            ColorSlot::Background.get(colors),
+            ColorSlot::Background.fallback(),
+        )),
+        _ => None,
+    }
+}
 
 /// Where [`HudPanel`] is mounted and which capabilities apply.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +98,7 @@ enum HudTab {
 pub struct HudPanel {
     scope: HudPanelScope,
     backend: HudBackend,
+    pinned_preview: bool,
     active_tab: HudTab,
     global: GlobalHudSettings,
     game: GameHudSettings,
@@ -89,8 +114,8 @@ pub struct HudPanel {
 
     preview: Entity<HudPreview>,
     shortcut: Entity<ShortcutRecorder>,
+    preset_shortcut: Entity<ShortcutRecorder>,
     gpu_select: Entity<SelectState<Vec<HudOption>>>,
-    position_select: Entity<SelectState<Vec<HudOption>>>,
     gpu_label_input: Entity<InputState>,
     cpu_label_input: Entity<InputState>,
     fps_limit_input: Entity<InputState>,
@@ -99,6 +124,8 @@ pub struct HudPanel {
     bg_alpha_slider: Entity<SliderState>,
     alpha_slider: Entity<SliderState>,
     color_inputs: [Entity<InputState>; 11],
+    color_wheel: Entity<HudColorWheel>,
+    open_color_slot: Option<ColorSlot>,
     slider_debounce: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -135,12 +162,34 @@ impl HudPanel {
 
         let weak = cx.entity().downgrade();
         let shortcut = cx.new(|cx| {
-            ShortcutRecorder::new(
+            ShortcutRecorder::with_options(
+                "hud-shortcut",
+                DEFAULT_TOGGLE_HUD,
                 active_profile.toggle_hud.clone(),
+                false,
                 move |combo, window, cx| {
                     let _ = weak.update(cx, |this, cx| {
                         this.edit_mangohud(window, cx, |p| {
                             p.toggle_hud = combo.to_string();
+                        });
+                    });
+                },
+                window,
+                cx,
+            )
+        });
+
+        let weak_preset = cx.entity().downgrade();
+        let preset_shortcut = cx.new(|cx| {
+            ShortcutRecorder::with_options(
+                "hud-preset-shortcut",
+                DEFAULT_TOGGLE_PRESET,
+                active_profile.toggle_preset.clone(),
+                true,
+                move |combo, window, cx| {
+                    let _ = weak_preset.update(cx, |this, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.toggle_preset = combo.to_string();
                         });
                     });
                 },
@@ -154,14 +203,6 @@ impl HudPanel {
         let gpu_select = cx.new(|cx| {
             let mut s = SelectState::new(gpu_items, None, window, cx);
             s.set_selected_value(&gpu_key, window, cx);
-            s
-        });
-
-        let pos_items = build_position_options(&labels);
-        let pos_key = SharedString::new_static(active_profile.position.as_mangohud_value());
-        let position_select = cx.new(|cx| {
-            let mut s = SelectState::new(pos_items, None, window, cx);
-            s.set_selected_value(&pos_key, window, cx);
             s
         });
 
@@ -230,6 +271,36 @@ impl HudPanel {
             })
         });
 
+        let initial_slot = ColorSlot::Background;
+        let initial_wheel_hex = sanitize_hex6(
+            initial_slot.get(&active_profile.custom_colors),
+            initial_slot.fallback(),
+        );
+        let initial_pair_hex = color_pair_hex(initial_slot, &active_profile.custom_colors);
+        let weak_color = cx.entity().downgrade();
+        let color_wheel = cx.new(|cx| {
+            HudColorWheel::new(
+                initial_slot,
+                &initial_wheel_hex,
+                initial_pair_hex.as_deref(),
+                ColorWheelLabels {
+                    slot: labels.color_slot_labels[initial_slot as usize].clone(),
+                    brightness: labels.color_brightness.clone(),
+                    quick_swatches: labels.color_quick_swatches.clone(),
+                    reset_slot: labels.color_reset_slot.clone(),
+                    copy_hex: labels.color_copy_hex.clone(),
+                    copied_hex: labels.color_copied_hex.clone(),
+                },
+                move |slot, hex, released, window, cx| {
+                    let _ = weak_color.update(cx, |this, cx| {
+                        this.edit_mangohud_color(slot, hex, released, window, cx);
+                    });
+                },
+                window,
+                cx,
+            )
+        });
+
         let mut subscriptions = Vec::new();
 
         subscriptions.push(cx.subscribe_in(
@@ -240,18 +311,6 @@ impl HudPanel {
                     let selection = parse_gpu_selection_key(key, &this.env);
                     this.edit_mangohud(window, cx, |p| p.gpu_selection = selection);
                     this.sync_placeholders(window, cx);
-                }
-            },
-        ));
-
-        subscriptions.push(cx.subscribe_in(
-            &position_select,
-            window,
-            |this, _, event: &SelectEvent<Vec<HudOption>>, window, cx| {
-                if let SelectEvent::Confirm(Some(key)) = event
-                    && let Some(pos) = parse_position_key(key)
-                {
-                    this.edit_mangohud(window, cx, |p| p.position = pos);
                 }
             },
         ));
@@ -364,8 +423,14 @@ impl HudPanel {
                             state.update(cx, |s, cx| s.set_value(hex.clone(), window, cx));
                         }
                         this.edit_mangohud(window, cx, |p| {
-                            slot.set(&mut p.custom_colors, hex);
+                            slot.set(&mut p.custom_colors, hex.clone());
                         });
+                        if this.open_color_slot == Some(slot) {
+                            let pair = color_pair_hex(slot, &this.active_mangohud().custom_colors);
+                            this.color_wheel.update(cx, |w, cx| {
+                                w.set_hex_if_slot(slot, &hex, pair.as_deref(), window, cx);
+                            });
+                        }
                     }
                 },
             ));
@@ -397,6 +462,7 @@ impl HudPanel {
         let panel = Self {
             scope,
             backend: hud_backend,
+            pinned_preview: false,
             active_tab: HudTab::Metrics,
             global,
             game,
@@ -409,8 +475,8 @@ impl HudPanel {
             theme_stamp,
             preview,
             shortcut,
+            preset_shortcut,
             gpu_select,
-            position_select,
             gpu_label_input,
             cpu_label_input,
             fps_limit_input,
@@ -419,6 +485,8 @@ impl HudPanel {
             bg_alpha_slider,
             alpha_slider,
             color_inputs,
+            color_wheel,
+            open_color_slot: None,
             slider_debounce: None,
             _subscriptions: subscriptions,
         };
@@ -458,6 +526,13 @@ impl HudPanel {
     /// Active backend rendered by this panel.
     pub fn backend(&self) -> HudBackend {
         self.backend
+    }
+
+    /// Pin the HUD preview at the top of the panel with an inner scrollable
+    /// body below (used by the standalone Global settings page).
+    pub fn with_pinned_preview(mut self, pinned: bool) -> Self {
+        self.pinned_preview = pinned;
+        self
     }
 
     fn is_steam(&self) -> bool {
@@ -532,9 +607,29 @@ impl HudPanel {
     }
 
     fn persist_current(&mut self, cx: &mut Context<Self>) {
+        self.persist_current_with_updates(None, None, cx);
+    }
+
+    fn persist_current_with_updates(
+        &mut self,
+        fps_limit_update: Option<Option<u32>>,
+        no_display_update: Option<bool>,
+        cx: &mut Context<Self>,
+    ) {
+        let mut sync_global_too = false;
         match &self.scope {
             HudPanelScope::Global => {
                 let mut next = self.global.clone();
+                if let Some(mut v) = next.mangohud.saved_custom.clone() {
+                    v.orientation = HudOrientation::Vertical;
+                    next.mangohud.saved_custom = Some(v.clone());
+                    next.custom_preset = Some(v);
+                }
+                if let Some(mut h) = next.mangohud.saved_custom_horizontal.clone() {
+                    h.orientation = HudOrientation::Horizontal;
+                    next.mangohud.saved_custom_horizontal = Some(h.clone());
+                    next.custom_horizontal_preset = Some(h);
+                }
                 if next.mangohud.palette == HudColorPalette::SyncIroriTheme {
                     next.cached_theme_colors = Some(theme_hud_colors(cx.theme()));
                 }
@@ -544,6 +639,33 @@ impl HudPanel {
                 });
             }
             HudPanelScope::PerGame { id, .. } => {
+                if let Some(profile) = self.game.custom_mangohud.as_mut() {
+                    if let Some(mut v) = profile.saved_custom.clone() {
+                        v.orientation = HudOrientation::Vertical;
+                        profile.saved_custom = Some(v.clone());
+                        if self.global.custom_preset.as_ref() != Some(&v) {
+                            self.global.custom_preset = Some(v);
+                            sync_global_too = true;
+                        }
+                    }
+                    if let Some(mut h) = profile.saved_custom_horizontal.clone() {
+                        h.orientation = HudOrientation::Horizontal;
+                        profile.saved_custom_horizontal = Some(h.clone());
+                        if self.global.custom_horizontal_preset.as_ref() != Some(&h) {
+                            self.global.custom_horizontal_preset = Some(h);
+                            sync_global_too = true;
+                        }
+                    }
+                }
+                if sync_global_too {
+                    let mut global_mangohud = self.global.mangohud.clone();
+                    self.global.hydrate_profile(&mut global_mangohud);
+                    self.global.mangohud = global_mangohud;
+                    let next_global = self.global.clone();
+                    backend(cx).settings.update_app(|a| {
+                        a.hud = next_global;
+                    });
+                }
                 let next = self.game.clone();
                 let value = if next == GameHudSettings::default() {
                     None
@@ -555,13 +677,25 @@ impl HudPanel {
                     .set_game_value(id, "iroriGameHud", value);
             }
         }
-        self.sync_live_mangohud_config(cx);
+        self.sync_live_mangohud_config_with_updates(fps_limit_update, no_display_update, cx);
+        if sync_global_too {
+            self.sync_global_mangohud_if_active(cx);
+        }
     }
 
-    /// Rewrite `<data>/mangohud/global.conf` or `<runner>_<app>.conf` in-place
-    /// on a background task so running games and Steam launches pick up edits
-    /// (such as FPS limit or metric changes) live via MangoHud's `inotify`.
+    /// Rewrite `<data>/mangohud/<scope>_presets.conf` and `<scope>.conf` in
+    /// place and sync matching running sessions so Steam, external launchers,
+    /// gamescope and Irori-launched games pick up edits live via `inotify`.
     pub(super) fn sync_live_mangohud_config(&self, cx: &App) {
+        self.sync_live_mangohud_config_with_updates(None, None, cx);
+    }
+
+    fn sync_live_mangohud_config_with_updates(
+        &self,
+        fps_limit_update: Option<Option<u32>>,
+        no_display_update: Option<bool>,
+        cx: &App,
+    ) {
         if self.backend != HudBackend::MangoHud {
             return;
         }
@@ -570,7 +704,41 @@ impl HudPanel {
         let ResolvedHud::MangoHudProfile(profile) = resolved else {
             return;
         };
-        let conf_path = steam_conf_path(&self.scope, &self.game);
+        let conf_name = hud_conf_name(&self.scope, &self.game);
+        self.dispatch_live_mangohud_sync(
+            conf_name,
+            &profile,
+            fps_limit_update,
+            no_display_update,
+            cx,
+        );
+    }
+
+    fn sync_global_mangohud_if_active(&self, cx: &App) {
+        if self.backend != HudBackend::MangoHud {
+            return;
+        }
+        let resolved = resolve_hud_for_scope(
+            &HudPanelScope::Global,
+            self.backend,
+            &self.global,
+            &GameHudSettings::default(),
+            cx,
+        );
+        let ResolvedHud::MangoHudProfile(profile) = resolved else {
+            return;
+        };
+        self.dispatch_live_mangohud_sync("global".to_string(), &profile, None, None, cx);
+    }
+
+    fn dispatch_live_mangohud_sync(
+        &self,
+        conf_name: String,
+        profile: &MangoHudProfile,
+        fps_limit_update: Option<Option<u32>>,
+        no_display_update: Option<bool>,
+        cx: &App,
+    ) {
         let ctx = ConfRenderContext {
             detected_gpu_label: default_gpu_short_label(&profile.gpu_selection, &self.env.gpus),
             detected_cpu_label: self.env.cpu_label.clone(),
@@ -579,13 +747,17 @@ impl HudPanel {
             pci_dev: resolve_pci_dev(&profile.gpu_selection, &self.env.gpus),
             theme_colors: Some(theme_hud_colors(cx.theme())),
         };
-        let body = render_mangohud_conf(&profile, &ctx);
+        let sync = LiveMangoHudSync {
+            conf_name: conf_name.clone(),
+            config_body: render_mangohud_conf(profile, &ctx),
+            presets_body: render_mangohud_presets(profile),
+            fps_limit_update,
+            no_display_update,
+        };
+        let backend = backend(cx).clone();
         irori_ui::run(cx, async move {
-            if let Err(err) = irori_runtime::hud::write_config_live(&conf_path, &body).await {
-                tracing::warn!(
-                    "writing live MangoHud config {}: {err:#}",
-                    conf_path.display()
-                );
+            if let Err(err) = backend.sync_live_mangohud(sync).await {
+                tracing::warn!("writing live MangoHud config {conf_name}: {err:#}");
             }
             Ok(())
         })
@@ -598,6 +770,9 @@ impl HudPanel {
         cx: &mut Context<Self>,
         f: impl FnOnce(&mut MangoHudProfile),
     ) {
+        let prev = self.active_mangohud();
+        let prev_fps_limit = prev.fps_limit;
+        let prev_no_display = prev.no_display;
         match &self.scope {
             HudPanelScope::Global => {
                 f(&mut self.global.mangohud);
@@ -609,7 +784,10 @@ impl HudPanel {
                 }
             }
         }
-        self.persist_current(cx);
+        let next = self.active_mangohud();
+        let fps_limit_update = (next.fps_limit != prev_fps_limit).then_some(next.fps_limit);
+        let no_display_update = (next.no_display != prev_no_display).then_some(next.no_display);
+        self.persist_current_with_updates(fps_limit_update, no_display_update, cx);
         self.sync_controls(window, cx);
         self.sync_preview_and_display(cx);
         cx.notify();
@@ -650,6 +828,53 @@ impl HudPanel {
                 });
             }));
         }
+    }
+
+    pub(super) fn on_color_popover_change(
+        &mut self,
+        slot: ColorSlot,
+        open: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if open {
+            self.open_color_slot = Some(slot);
+            let colors = &self.active_mangohud().custom_colors;
+            let hex = sanitize_hex6(slot.get(colors), slot.fallback());
+            let pair = color_pair_hex(slot, colors);
+            let slot_label = self.labels.color_slot_labels[slot as usize].clone();
+            self.color_wheel.update(cx, |w, cx| {
+                w.set_slot(slot, slot_label, &hex, pair.as_deref(), window, cx);
+            });
+            cx.notify();
+        } else if self.open_color_slot == Some(slot) {
+            self.open_color_slot = None;
+            cx.notify();
+        }
+    }
+
+    pub(super) fn reset_custom_colors(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.edit_mangohud(window, cx, |p| {
+            p.custom_colors = ThemeHudColors::default();
+        });
+    }
+
+    fn edit_mangohud_color(
+        &mut self,
+        slot: ColorSlot,
+        hex: String,
+        released: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let clean = sanitize_hex6(&hex, slot.fallback());
+        let input = &self.color_inputs[slot as usize];
+        if input.read(cx).value().as_ref() != clean {
+            input.update(cx, |s, cx| s.set_value(clean.clone(), window, cx));
+        }
+        self.edit_mangohud_slider(released, window, cx, |p| {
+            slot.set(&mut p.custom_colors, clean);
+        });
     }
 
     fn edit_metal(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut MetalHudSettings)) {
@@ -715,8 +940,14 @@ impl HudPanel {
         if !matches!(self.scope, HudPanelScope::PerGame { .. }) {
             return;
         }
+        let prev = self.active_mangohud();
+        let prev_fps_limit = prev.fps_limit;
+        let prev_no_display = prev.no_display;
         self.game.restore_from_global(&self.global);
-        self.persist_current(cx);
+        let next = self.active_mangohud();
+        let fps_limit_update = (next.fps_limit != prev_fps_limit).then_some(next.fps_limit);
+        let no_display_update = (next.no_display != prev_no_display).then_some(next.no_display);
+        self.persist_current_with_updates(fps_limit_update, no_display_update, cx);
         self.sync_controls(window, cx);
         self.sync_preview_and_display(cx);
         cx.notify();
@@ -767,14 +998,12 @@ impl HudPanel {
 
         self.shortcut
             .update(cx, |s, cx| s.set_combo(profile.toggle_hud.clone(), cx));
+        self.preset_shortcut
+            .update(cx, |s, cx| s.set_combo(profile.toggle_preset.clone(), cx));
 
         let gpu_key = gpu_selection_key(&profile.gpu_selection, &self.env);
         self.gpu_select
             .update(cx, |s, cx| s.set_selected_value(&gpu_key, window, cx));
-
-        let pos_key = SharedString::new_static(profile.position.as_mangohud_value());
-        self.position_select
-            .update(cx, |s, cx| s.set_selected_value(&pos_key, window, cx));
 
         if !self
             .gpu_label_input
@@ -834,6 +1063,15 @@ impl HudPanel {
                 }
             }
         }
+        if let Some(slot) = self.open_color_slot
+            && !self.color_wheel.read(cx).is_dragging()
+        {
+            let hex = sanitize_hex6(slot.get(&profile.custom_colors), slot.fallback());
+            let pair = color_pair_hex(slot, &profile.custom_colors);
+            self.color_wheel.update(cx, |w, cx| {
+                w.set_hex_if_slot(slot, &hex, pair.as_deref(), window, cx);
+            });
+        }
     }
 
     fn sync_preview_and_display(&mut self, cx: &mut Context<Self>) {
@@ -866,11 +1104,19 @@ impl HudPanel {
     fn retranslate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.labels = HudLabels::load();
         self.rebuild_gpu_options(window, cx);
-        let pos_items = build_position_options(&self.labels);
-        let pos_key = SharedString::new_static(self.active_mangohud().position.as_mangohud_value());
-        self.position_select.update(cx, |s, cx| {
-            s.set_items(pos_items, window, cx);
-            s.set_selected_value(&pos_key, window, cx);
+        let slot_label = self
+            .open_color_slot
+            .map(|s| self.labels.color_slot_labels[s as usize].clone());
+        let wheel_labels = ColorWheelLabels {
+            slot: slot_label.clone().unwrap_or_default(),
+            brightness: self.labels.color_brightness.clone(),
+            quick_swatches: self.labels.color_quick_swatches.clone(),
+            reset_slot: self.labels.color_reset_slot.clone(),
+            copy_hex: self.labels.color_copy_hex.clone(),
+            copied_hex: self.labels.color_copied_hex.clone(),
+        };
+        self.color_wheel.update(cx, |w, cx| {
+            w.set_labels(wheel_labels, slot_label.is_some(), cx);
         });
         self.sync_placeholders(window, cx);
         self.sync_preview_and_display(cx);
@@ -903,6 +1149,101 @@ impl Render for HudPanel {
             .then(|| self.display.steam_snippet.clone())
             .flatten();
 
+        let render_mangohud_tab_body = |this: &Self, cx: &mut Context<Self>| match this.active_tab {
+            HudTab::Metrics => this.render_metrics_tab(cx),
+            HudTab::Layout => this.render_layout_tab(cx),
+            HudTab::Appearance => v_flex()
+                .w_full()
+                .gap_2()
+                .child(this.render_colors_section(cx))
+                .child(this.render_hardware_section(cx))
+                .children(this.render_opengl_section(cx))
+                .into_any_element(),
+        };
+
+        if self.pinned_preview {
+            return match self.backend {
+                HudBackend::MangoHud if editing => {
+                    let tab_body = render_mangohud_tab_body(self, cx);
+                    v_flex()
+                        .size_full()
+                        .min_h_0()
+                        .gap_2()
+                        .child(
+                            v_flex()
+                                .w_full()
+                                .flex_shrink_0()
+                                .gap_2()
+                                .children(self.render_missing_mangohud())
+                                .child(self.render_preview_row(cx)),
+                        )
+                        .child(
+                            div()
+                                .id("hud-panel-scroll")
+                                .flex_1()
+                                .min_h_0()
+                                .overflow_y_scrollbar()
+                                .child(
+                                    v_flex()
+                                        .w_full()
+                                        .pb_8()
+                                        .gap_2()
+                                        .children(self.render_scope_notice(cx))
+                                        .children(self.render_steam_empty_notice(cx))
+                                        .child(self.render_top_quick_card(cx))
+                                        .child(self.render_tab_bar(cx))
+                                        .child(tab_body),
+                                ),
+                        )
+                        .into_any_element()
+                }
+                HudBackend::MangoHud => div()
+                    .id("hud-panel-scroll")
+                    .size_full()
+                    .min_h_0()
+                    .overflow_y_scrollbar()
+                    .child(
+                        v_flex()
+                            .w_full()
+                            .pb_8()
+                            .gap_2()
+                            .children(self.render_missing_mangohud())
+                            .children(self.render_scope_notice(cx))
+                            .children(self.render_steam_empty_notice(cx))
+                            .when(steam_preview, |v| v.child(self.render_preview_row(cx)))
+                            .when_some(steam_disabled_snippet.clone(), |v, snippet| {
+                                v.child(self.render_steam_launch_card(snippet, cx))
+                            })
+                            .child(self.render_mode_section(cx))
+                            .children(self.render_opengl_section(cx)),
+                    )
+                    .into_any_element(),
+                HudBackend::MetalHud => div()
+                    .id("hud-panel-scroll")
+                    .size_full()
+                    .min_h_0()
+                    .overflow_y_scrollbar()
+                    .child(
+                        v_flex()
+                            .w_full()
+                            .pb_8()
+                            .gap_2()
+                            .children(self.render_scope_notice(cx))
+                            .children(self.render_steam_empty_notice(cx))
+                            .when(editing || steam_preview, |v| {
+                                v.child(self.render_preview_row(cx))
+                            })
+                            .when_some(steam_disabled_snippet, |v, snippet| {
+                                v.child(self.render_steam_launch_card(snippet, cx))
+                            })
+                            .child(self.render_mode_section(cx))
+                            .child(self.render_metal_section(cx)),
+                    )
+                    .into_any_element(),
+                HudBackend::Unsupported => div().into_any_element(),
+            };
+        }
+
         match self.backend {
             HudBackend::MangoHud => v_flex()
                 .w_full()
@@ -919,17 +1260,7 @@ impl Render for HudPanel {
                         .children(self.render_opengl_section(cx))
                 })
                 .when(editing, |v| {
-                    let tab_body = match self.active_tab {
-                        HudTab::Metrics => self.render_metrics_tab(cx),
-                        HudTab::Layout => self.render_layout_tab(cx),
-                        HudTab::Appearance => v_flex()
-                            .w_full()
-                            .gap_2()
-                            .child(self.render_colors_section(cx))
-                            .child(self.render_hardware_section(cx))
-                            .children(self.render_opengl_section(cx))
-                            .into_any_element(),
-                    };
+                    let tab_body = render_mangohud_tab_body(self, cx);
                     v.child(self.render_preview_row(cx))
                         .child(self.render_top_quick_card(cx))
                         .child(self.render_tab_bar(cx))

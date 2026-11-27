@@ -488,6 +488,7 @@
   "game.menu.play_verbose": "Play with verbose logs",
   "game.menu.redmod": "REDmod mods…",
   "game.menu.mods": "Mods…",
+  "game.menu.remove_from_recent": "Remove from Recent",
   "game.menu.remove_shortcuts": "Remove shortcuts",
   "game.menu.run_exe": "Run executable in prefix…",
   "game.menu.show_in_library": "Show in library",
