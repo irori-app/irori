@@ -19,6 +19,7 @@ irori-steam.workspace = true
 irori-emulation.workspace = true
 irori-bigpicture.workspace = true
 gpui-kit.workspace = true
+image.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 serde.workspace = true

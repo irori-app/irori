@@ -2159,9 +2159,11 @@ fi
         assert!(!off_spec.env.contains_key("MANGOHUD"));
         assert!(!off_spec.env.contains_key("DISABLE_MANGOHUD"));
         assert!(!off_spec.env.contains_key("MANGOHUD_CONFIGFILE"));
+        assert!(!off_spec.env.contains_key("MANGOHUD_PRESETSFILE"));
         assert!(!paths.mangohud_config_file("global").exists());
+        assert!(!paths.mangohud_presets_file("global").exists());
 
-        // Global On + InheritGlobal (and direct `open` with None) uses global.conf.
+        // Global On + InheritGlobal (and direct `open` with None) uses global.conf + global_presets.conf.
         let on_store = make_store(GlobalHudMode::IroriProfile);
         let mut open_spec = on_store
             .command(Launcher::BattleNet, Some(&setup), &exe, Vec::new())
@@ -2171,16 +2173,22 @@ fi
             .await
             .unwrap();
         let expected_global = paths.mangohud_config_file("global");
+        let expected_global_presets = paths.mangohud_presets_file("global");
         assert!(expected_global.is_file());
+        assert!(expected_global_presets.is_file());
         assert_eq!(open_spec.env.get("MANGOHUD").map(String::as_str), Some("1"));
         assert_eq!(
             open_spec.env.get("MANGOHUD_CONFIGFILE").map(PathBuf::from),
             Some(expected_global)
         );
+        assert_eq!(
+            open_spec.env.get("MANGOHUD_PRESETSFILE").map(PathBuf::from),
+            Some(expected_global_presets)
+        );
         assert!(open_spec.env_remove.iter().any(|k| k == "MANGOHUD_CONFIG"));
         assert!(open_spec.env_remove.iter().any(|k| k == "DISABLE_MANGOHUD"));
 
-        // Per-game Custom writes sanitized launchers_battlenet_fenris.conf.
+        // Per-game Custom writes sanitized launchers_battlenet_fenris.conf and _presets.conf.
         let mut custom_spec = on_store
             .command(Launcher::BattleNet, Some(&setup), &exe, Vec::new())
             .unwrap();
@@ -2200,17 +2208,30 @@ fi
             .await
             .unwrap();
         let expected_custom = paths.mangohud_config_file("launchers_battlenet:fenris");
+        let expected_custom_presets = paths.mangohud_presets_file("launchers_battlenet:fenris");
         assert_eq!(
             expected_custom.file_name().and_then(|n| n.to_str()),
             Some("launchers_battlenet_fenris.conf")
         );
+        assert_eq!(
+            expected_custom_presets.file_name().and_then(|n| n.to_str()),
+            Some("launchers_battlenet_fenris_presets.conf")
+        );
         assert!(expected_custom.is_file());
+        assert!(expected_custom_presets.is_file());
         assert_eq!(
             custom_spec
                 .env
                 .get("MANGOHUD_CONFIGFILE")
                 .map(PathBuf::from),
             Some(expected_custom)
+        );
+        assert_eq!(
+            custom_spec
+                .env
+                .get("MANGOHUD_PRESETSFILE")
+                .map(PathBuf::from),
+            Some(expected_custom_presets)
         );
 
         // Per-game Disabled forces MangoHud off even when global HUD is enabled.
@@ -2244,11 +2265,18 @@ fi
             Some("0")
         );
         assert!(!disabled_spec.env.contains_key("MANGOHUD_CONFIGFILE"));
+        assert!(!disabled_spec.env.contains_key("MANGOHUD_PRESETSFILE"));
         assert!(
             disabled_spec
                 .env_remove
                 .iter()
                 .any(|k| k == "MANGOHUD_CONFIGFILE")
+        );
+        assert!(
+            disabled_spec
+                .env_remove
+                .iter()
+                .any(|k| k == "MANGOHUD_PRESETSFILE")
         );
         assert!(
             disabled_spec

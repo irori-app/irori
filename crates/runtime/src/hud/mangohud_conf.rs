@@ -1,10 +1,12 @@
-//! Pure, cross-platform `MangoHud.conf` serializer.
+//! Pure, cross-platform `MangoHud.conf` and `presets.conf` serializer.
 
 use std::fmt::Write as _;
 
-use irori_core::hud::{DEFAULT_TOGGLE_HUD, sanitize_hex6, sanitize_hud_label};
+use irori_core::hud::{
+    DEFAULT_TOGGLE_HUD, DEFAULT_TOGGLE_PRESET, sanitize_hex6, sanitize_hud_label,
+};
 use irori_core::{
-    HardwareVendor, HudColorPalette, HudOrientation, MangoHudProfile, ThemeHudColors,
+    HardwareVendor, HudColorPalette, HudOrientation, HudPreset, MangoHudProfile, ThemeHudColors,
 };
 
 /// Runtime context supplied when rendering a `MangoHud.conf` file.
@@ -53,30 +55,44 @@ pub fn resolve_effective_colors(
     }
 }
 
-/// Serialize `profile` and `ctx` into a deterministic `MangoHud.conf` string.
+fn sanitize_shortcut(raw: &str, fallback: &'static str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .filter(|&c| !matches!(c, '\r' | '\n' | '#' | '=' | ',' | ';'))
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if cleaned.is_empty() {
+        fallback.to_string()
+    } else {
+        cleaned
+    }
+}
+
+/// Serialize shared `MangoHud.conf` settings for `MANGOHUD_CONFIGFILE`.
+///
+/// Metric toggles and per-preset layout flags (`fps_only`, `horizontal`,
+/// `hud_compact`, `hud_no_margin`) live exclusively in
+/// [`render_mangohud_presets`] (`MANGOHUD_PRESETSFILE`). MangoHud parses
+/// `MANGOHUD_CONFIGFILE` after `[preset N]`, so keeping display elements out of
+/// this file prevents duplicated metrics and clipped layouts when cycling
+/// presets in-game.
 pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) -> String {
     let mut out = String::with_capacity(512);
-    let minimal = profile.is_minimal_fps_only();
 
-    // (a) Layout, window, scaling, toggle, GPU selector and frame limiter
+    // (a) Shared layout, preset cycle order, scaling, shortcuts, GPU selector and frame limiter
     out.push_str("legacy_layout=false\n");
-    if minimal {
-        out.push_str("fps_only=1\n");
+    out.push_str("preset=");
+    for (ix, preset) in profile.preset_cycle().into_iter().enumerate() {
+        if ix > 0 {
+            out.push(',');
+        }
+        let _ = write!(out, "{}", preset.mangohud_preset_id());
     }
+    out.push('\n');
+
     let _ = writeln!(out, "position={}", profile.position.as_mangohud_value());
-    if !minimal && profile.orientation == HudOrientation::Horizontal {
-        out.push_str("horizontal\n");
-        out.push_str("horizontal_stretch=0\n");
-    }
     let _ = writeln!(out, "round_corners={}", profile.round_corners);
-    if !minimal {
-        if profile.hud_compact {
-            out.push_str("hud_compact\n");
-        }
-        if profile.hud_no_margin {
-            out.push_str("hud_no_margin\n");
-        }
-    }
     let font_scale = profile.font_scale.clamp(0.5, 3.0);
     let bg_alpha = profile.background_alpha.clamp(0.0, 1.0);
     let alpha = profile.alpha.clamp(0.0, 1.0);
@@ -84,19 +100,10 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
     let _ = writeln!(out, "background_alpha={bg_alpha:.2}");
     let _ = writeln!(out, "alpha={alpha:.2}");
 
-    let toggle: String = profile
-        .toggle_hud
-        .chars()
-        .filter(|&c| !matches!(c, '\r' | '\n' | '#' | '=' | ',' | ';'))
-        .collect::<String>()
-        .trim()
-        .to_string();
-    let toggle = if toggle.is_empty() {
-        DEFAULT_TOGGLE_HUD
-    } else {
-        toggle.as_str()
-    };
-    let _ = writeln!(out, "toggle_hud={toggle}");
+    let toggle_hud = sanitize_shortcut(&profile.toggle_hud, DEFAULT_TOGGLE_HUD);
+    let toggle_preset = sanitize_shortcut(&profile.toggle_preset, DEFAULT_TOGGLE_PRESET);
+    let _ = writeln!(out, "toggle_hud={toggle_hud}");
+    let _ = writeln!(out, "toggle_preset={toggle_preset}");
 
     if profile.no_display {
         out.push_str("no_display\n");
@@ -178,21 +185,103 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
         out.push_str("fps_color=B22222,FDFD09,39F900\n");
     }
 
-    if minimal {
-        return out;
+    // (c) Labels (parameter values only; never add display elements on their own)
+    let gpu_label = if profile.gpu_label_override.trim().is_empty() {
+        sanitize_hud_label(&ctx.detected_gpu_label)
+    } else {
+        sanitize_hud_label(&profile.gpu_label_override)
+    };
+    if !gpu_label.is_empty() {
+        let _ = writeln!(out, "gpu_text={gpu_label}");
+    }
+    let cpu_label = if profile.cpu_label_override.trim().is_empty() {
+        sanitize_hud_label(&ctx.detected_cpu_label)
+    } else {
+        sanitize_hud_label(&profile.cpu_label_override)
+    };
+    if !cpu_label.is_empty() {
+        let _ = writeln!(out, "cpu_text={cpu_label}");
+    }
+    if profile.fps_use_label {
+        out.push_str("fps_text=FPS\n");
     }
 
-    // (c) GPU block
+    out
+}
+
+/// Serialize Irori's MangoHud preset definitions for `MANGOHUD_PRESETSFILE`.
+///
+/// Always emits `[preset 1]` through `[preset 4]` (Minimal, Horizontal Compact,
+/// Balanced Gaming, Full Diagnostics), appends `[preset 5]` whenever the
+/// profile has a vertical custom selection (`Custom` active or `saved_custom`
+/// present), and appends `[preset 6]` whenever it has a horizontal custom
+/// selection (`CustomHorizontal` active or `saved_custom_horizontal` present).
+pub fn render_mangohud_presets(profile: &MangoHudProfile) -> String {
+    let mut out = String::with_capacity(1280);
+    for (ix, preset) in HudPreset::BUILTIN.into_iter().enumerate() {
+        if ix > 0 {
+            out.push('\n');
+        }
+        let mut effective = profile.clone();
+        effective.apply_preset(preset);
+        let _ = writeln!(out, "[preset {}]", preset.mangohud_preset_id());
+        render_preset_body(&mut out, &effective);
+    }
+    if profile.has_custom_preset() {
+        out.push('\n');
+        let mut custom = profile.clone();
+        if custom.preset != HudPreset::Custom
+            && let Some(snapshot) = custom.saved_custom.clone()
+        {
+            custom.preset = HudPreset::Custom;
+            custom.restore_custom_snapshot(&snapshot);
+        }
+        custom.orientation = HudOrientation::Vertical;
+        let _ = writeln!(out, "[preset {}]", HudPreset::Custom.mangohud_preset_id());
+        render_preset_body(&mut out, &custom);
+    }
+    if profile.has_custom_horizontal_preset() {
+        out.push('\n');
+        let mut custom_h = profile.clone();
+        if custom_h.preset != HudPreset::CustomHorizontal
+            && let Some(snapshot) = custom_h.saved_custom_horizontal.clone()
+        {
+            custom_h.preset = HudPreset::CustomHorizontal;
+            custom_h.restore_custom_snapshot(&snapshot);
+        }
+        custom_h.orientation = HudOrientation::Horizontal;
+        let _ = writeln!(
+            out,
+            "[preset {}]",
+            HudPreset::CustomHorizontal.mangohud_preset_id()
+        );
+        render_preset_body(&mut out, &custom_h);
+    }
+    out
+}
+
+fn render_preset_body(out: &mut String, profile: &MangoHudProfile) {
+    if profile.is_minimal_fps_only() {
+        out.push_str("fps_only=1\n");
+        out.push_str("frametime=0\n");
+        return;
+    }
+
+    // Per-preset layout flags
+    if profile.orientation == HudOrientation::Horizontal {
+        out.push_str("horizontal\n");
+        out.push_str("horizontal_stretch=0\n");
+    }
+    if profile.hud_compact {
+        out.push_str("hud_compact\n");
+    }
+    if profile.hud_no_margin {
+        out.push_str("hud_no_margin\n");
+    }
+
+    // GPU block
     if profile.effective_gpu_stats() {
         out.push_str("gpu_stats\n");
-        let gpu_label = if profile.gpu_label_override.trim().is_empty() {
-            sanitize_hud_label(&ctx.detected_gpu_label)
-        } else {
-            sanitize_hud_label(&profile.gpu_label_override)
-        };
-        if !gpu_label.is_empty() {
-            let _ = writeln!(out, "gpu_text={gpu_label}");
-        }
         if profile.gpu_temp {
             out.push_str("gpu_temp\n");
         }
@@ -219,17 +308,9 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
         out.push_str("vram\n");
     }
 
-    // (d) CPU & RAM block
+    // CPU & RAM block
     if profile.effective_cpu_stats() {
         out.push_str("cpu_stats\n");
-        let cpu_label = if profile.cpu_label_override.trim().is_empty() {
-            sanitize_hud_label(&ctx.detected_cpu_label)
-        } else {
-            sanitize_hud_label(&profile.cpu_label_override)
-        };
-        if !cpu_label.is_empty() {
-            let _ = writeln!(out, "cpu_text={cpu_label}");
-        }
         if profile.cpu_temp {
             out.push_str("cpu_temp\n");
         }
@@ -244,12 +325,9 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
         out.push_str("ram\n");
     }
 
-    // (e) FPS & Frame Pacing block
+    // FPS & Frame Pacing block
     if profile.fps {
         out.push_str("fps\n");
-        if profile.fps_use_label {
-            out.push_str("fps_text=FPS\n");
-        }
     }
     match (profile.fps_avg, profile.fps_1_low) {
         (true, true) => out.push_str("fps_metrics=avg,0.01\n"),
@@ -257,8 +335,11 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
         (false, true) => out.push_str("fps_metrics=0.01\n"),
         (false, false) => {}
     }
+    // MangoHud defaults `frametime=true`; emit `frametime=0` explicitly when off.
     if profile.frametime {
         out.push_str("frametime\n");
+    } else {
+        out.push_str("frametime=0\n");
     }
     if profile.frame_timing {
         out.push_str("frame_timing\n");
@@ -267,7 +348,7 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
         out.push_str("present_mode\n");
     }
 
-    // (f) Runtime block
+    // Runtime block
     if profile.wine {
         out.push_str("wine\n");
     }
@@ -289,8 +370,6 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
     if profile.gamepad_battery {
         out.push_str("device_battery=gamepad\n");
     }
-
-    out
 }
 
 #[cfg(test)]
@@ -303,27 +382,99 @@ mod tests {
         s.lines().collect()
     }
 
+    fn preset_section(presets_text: &str, id: u8) -> Vec<&str> {
+        let header = format!("[preset {id}]");
+        let mut inside = false;
+        let mut section = Vec::new();
+        for line in presets_text.lines() {
+            let trimmed = line.trim();
+            if trimmed == header {
+                inside = true;
+                continue;
+            }
+            if inside {
+                if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                    break;
+                }
+                if !trimmed.is_empty() {
+                    section.push(trimmed);
+                }
+            }
+        }
+        section
+    }
+
     #[test]
-    fn minimal_fps_only_emits_fps_only_and_skips_blocks() {
+    fn shared_conf_omits_per_preset_metrics_and_emits_cycle_and_shortcuts() {
         let mut p = MangoHudProfile::from_preset(HudPreset::MinimalFps);
         p.fps_color_change = true;
         p.palette = HudColorPalette::Monochrome;
-        let out = render_mangohud_conf(&p, &ConfRenderContext::default());
-        let l = lines(&out);
+        let conf = render_mangohud_conf(&p, &ConfRenderContext::default());
+        let l = lines(&conf);
         assert_eq!(l[0], "legacy_layout=false");
-        assert_eq!(l[1], "fps_only=1");
+        assert_eq!(l[1], "preset=1,2,3,4");
+        assert!(l.contains(&"toggle_hud=Shift_R+F12"));
+        assert!(l.contains(&"toggle_preset=Shift_R+F10"));
         assert!(l.contains(&"fps_color_change"));
         assert!(l.contains(&"fps_value=30,60"));
         assert!(l.contains(&"fps_color=B22222,FDFD09,39F900"));
         assert!(l.contains(&"background_color=0B0B0C"));
-        assert!(!l.contains(&"fps"));
-        assert!(!l.contains(&"gpu_stats"));
-        assert!(!out.contains("table_columns"));
-        assert!(!out.contains("fps_limit"));
+        // Display elements and preset-specific layout toggles must not appear in
+        // MANGOHUD_CONFIGFILE, otherwise MangoHud duplicates them on preset cycle.
+        for forbidden in [
+            "fps_only=1",
+            "fps",
+            "gpu_stats",
+            "cpu_stats",
+            "vram",
+            "ram",
+            "horizontal",
+            "hud_compact",
+            "frame_timing",
+        ] {
+            assert!(
+                !l.contains(&forbidden),
+                "shared conf must not contain {forbidden}"
+            );
+        }
+        assert!(!conf.contains("table_columns"));
+        assert!(!conf.contains("fps_limit"));
+
+        let presets = render_mangohud_presets(&p);
+        let p1 = preset_section(&presets, 1);
+        assert_eq!(p1, vec!["fps_only=1", "frametime=0"]);
+        assert!(preset_section(&presets, 5).is_empty());
+        assert!(preset_section(&presets, 6).is_empty());
     }
 
     #[test]
-    fn gpu_and_cpu_master_locks_and_vram_ram_independence() {
+    fn vertical_and_horizontal_custom_presets_coexist_as_preset_5_and_6() {
+        let mut p = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        p.gpu_fan = true;
+        p.mark_custom();
+
+        p.apply_preset(HudPreset::HorizontalCompact);
+        p.cpu_power = true;
+        p.mark_custom();
+
+        let conf = render_mangohud_conf(&p, &ConfRenderContext::default());
+        assert!(lines(&conf).contains(&"preset=6,1,2,3,4,5"));
+
+        let presets = render_mangohud_presets(&p);
+        let p5 = preset_section(&presets, 5);
+        assert!(p5.contains(&"gpu_fan"));
+        assert!(!p5.contains(&"horizontal"));
+        assert!(!p5.contains(&"cpu_power"));
+
+        let p6 = preset_section(&presets, 6);
+        assert!(p6.contains(&"horizontal"));
+        assert!(p6.contains(&"horizontal_stretch=0"));
+        assert!(p6.contains(&"cpu_power"));
+        assert!(!p6.contains(&"gpu_fan"));
+    }
+
+    #[test]
+    fn custom_preset_and_gpu_cpu_master_locks_and_labels() {
         let mut p = MangoHudProfile::from_preset(HudPreset::Custom);
         p.gpu_stats = false;
         p.gpu_junction_temp = true;
@@ -333,22 +484,41 @@ mod tests {
         p.cpu_temp = true;
         p.ram = false;
         p.fps = true;
+        p.frametime = false;
+        p.toggle_preset = "Shift_L+F9\n=bad".into();
 
         let ctx = ConfRenderContext {
             detected_gpu_label: "RX 9070 XT #1=fast,ok;+yes\n".into(),
             detected_cpu_label: "Ryzen 7=7800X3D".into(),
             ..Default::default()
         };
-        let out = render_mangohud_conf(&p, &ctx);
-        let l = lines(&out);
-        assert!(!l.contains(&"fps_only=1"));
-        assert!(l.contains(&"gpu_stats"));
+        let conf = render_mangohud_conf(&p, &ctx);
+        let l = lines(&conf);
+        assert!(l.contains(&"preset=5,1,2,3,4"));
+        assert!(l.contains(&"toggle_preset=Shift_L+F9bad"));
         assert!(l.contains(&"gpu_text=RX 9070 XT 1fastokyes"));
-        assert!(l.contains(&"gpu_junction_temp"));
-        assert!(l.contains(&"gpu_mem_temp"));
-        assert!(l.contains(&"cpu_stats"));
         assert!(l.contains(&"cpu_text=Ryzen 77800X3D"));
-        assert!(l.contains(&"cpu_temp"));
+
+        let presets = render_mangohud_presets(&p);
+        let p5 = preset_section(&presets, 5);
+        assert!(!p5.contains(&"fps_only=1"));
+        assert!(p5.contains(&"gpu_stats"));
+        assert!(p5.contains(&"gpu_junction_temp"));
+        assert!(p5.contains(&"gpu_mem_temp"));
+        assert!(p5.contains(&"cpu_stats"));
+        assert!(p5.contains(&"cpu_temp"));
+        assert!(p5.contains(&"fps"));
+        assert!(p5.contains(&"frametime=0"));
+
+        // Switching to a built-in preset preserves saved_custom in [preset 5].
+        p.mark_custom();
+        p.apply_preset(HudPreset::BalancedGaming);
+        let conf_after = render_mangohud_conf(&p, &ctx);
+        assert!(lines(&conf_after).contains(&"preset=3,4,5,1,2"));
+        let presets_after = render_mangohud_presets(&p);
+        let p5_after = preset_section(&presets_after, 5);
+        assert!(p5_after.contains(&"gpu_junction_temp"));
+        assert!(p5_after.contains(&"frametime=0"));
 
         // VRAM and RAM work independently even when gpu_stats and cpu_stats are off.
         let mut p2 = MangoHudProfile::from_preset(HudPreset::Custom);
@@ -357,8 +527,8 @@ mod tests {
         p2.vram = true;
         p2.ram = true;
         p2.fps = true;
-        let out2 = render_mangohud_conf(&p2, &ConfRenderContext::default());
-        let l2 = lines(&out2);
+        let presets2 = render_mangohud_presets(&p2);
+        let l2 = preset_section(&presets2, 5);
         assert!(!l2.contains(&"gpu_stats"));
         assert!(!l2.contains(&"cpu_stats"));
         assert!(l2.contains(&"vram"));
@@ -369,22 +539,27 @@ mod tests {
     fn horizontal_mode_fps_limit_omission_and_device_battery_key() {
         let mut p = MangoHudProfile::from_preset(HudPreset::HorizontalCompact);
         p.fps_limit = Some(0);
-        p.gamepad_battery = true;
         p.position = HudPosition::BottomRight;
-        let out = render_mangohud_conf(&p, &ConfRenderContext::default());
-        let l = lines(&out);
+        let conf = render_mangohud_conf(&p, &ConfRenderContext::default());
+        let l = lines(&conf);
         assert_eq!(l[0], "legacy_layout=false");
+        assert_eq!(l[1], "preset=2,3,4,1");
         assert!(l.contains(&"position=bottom-right"));
-        assert!(l.contains(&"horizontal"));
-        assert!(l.contains(&"horizontal_stretch=0"));
-        assert!(!out.contains("fps_limit"));
-        assert!(l.contains(&"device_battery=gamepad"));
-        assert!(!out.contains("gamepad_battery"));
+        assert!(!conf.contains("fps_limit"));
+
+        let presets = render_mangohud_presets(&p);
+        let p2 = preset_section(&presets, 2);
+        assert!(p2.contains(&"horizontal"));
+        assert!(p2.contains(&"horizontal_stretch=0"));
+        assert!(p2.contains(&"hud_compact"));
+        let p4 = preset_section(&presets, 4);
+        assert!(p4.contains(&"device_battery=gamepad"));
+        assert!(!presets.contains("gamepad_battery"));
 
         p.fps_limit = Some(120);
         p.fps_limit_method = FpsLimitMethod::Early;
-        let out_lim = render_mangohud_conf(&p, &ConfRenderContext::default());
-        let l_lim = lines(&out_lim);
+        let conf_lim = render_mangohud_conf(&p, &ConfRenderContext::default());
+        let l_lim = lines(&conf_lim);
         assert!(l_lim.contains(&"fps_limit=120"));
         assert!(l_lim.contains(&"fps_limit_method=early"));
     }
@@ -404,17 +579,22 @@ mod tests {
             theme_colors: None,
             ..Default::default()
         };
-        let out = render_mangohud_conf(&p, &ctx);
-        let l = lines(&out);
-        assert!(l.contains(&"background_color=112233"));
-        assert!(l.contains(&"gpu_color=2E9762"));
-        assert!(l.contains(&"background_alpha=0.65"));
-        assert!(l.contains(&"alpha=0.90"));
-        assert!(l.contains(&"pci_dev=0000:03:00.0"));
+        let conf = render_mangohud_conf(&p, &ctx);
+        let cl = lines(&conf);
+        assert!(cl.contains(&"preset=4,1,2,3"));
+        assert!(cl.contains(&"background_color=112233"));
+        assert!(cl.contains(&"gpu_color=2E9762"));
+        assert!(cl.contains(&"background_alpha=0.65"));
+        assert!(cl.contains(&"alpha=0.90"));
+        assert!(cl.contains(&"pci_dev=0000:03:00.0"));
 
-        let pos = |k: &str| l.iter().position(|&x| x == k).unwrap();
-        assert!(pos("legacy_layout=false") < pos("background_color=112233"));
-        assert!(pos("background_color=112233") < pos("gpu_stats"));
+        let cpos = |k: &str| cl.iter().position(|&x| x == k).unwrap();
+        assert!(cpos("legacy_layout=false") < cpos("background_color=112233"));
+        assert!(cpos("background_color=112233") < cpos("gpu_text=RX 9070 XT"));
+
+        let presets = render_mangohud_presets(&p);
+        let p4 = preset_section(&presets, 4);
+        let pos = |k: &str| p4.iter().position(|&x| x == k).unwrap();
         assert!(pos("gpu_stats") < pos("vram"));
         assert!(pos("vram") < pos("cpu_stats"));
         assert!(pos("cpu_stats") < pos("ram"));
@@ -425,36 +605,37 @@ mod tests {
 
     #[test]
     fn emits_fps_label_and_fps_metrics_combinations() {
-        let mut p = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        let mut p = MangoHudProfile::from_preset(HudPreset::Custom);
         p.fps_use_label = true;
         p.fps_avg = true;
         p.fps_1_low = true;
-        let out = render_mangohud_conf(&p, &ConfRenderContext::default());
-        let l = lines(&out);
-        assert!(l.contains(&"fps_text=FPS"));
-        assert!(l.contains(&"fps_metrics=avg,0.01"));
+        let conf = render_mangohud_conf(&p, &ConfRenderContext::default());
+        assert!(lines(&conf).contains(&"fps_text=FPS"));
+        let presets = render_mangohud_presets(&p);
+        assert!(preset_section(&presets, 5).contains(&"fps_metrics=avg,0.01"));
         assert!(
-            crate::hud::launch_env::format_mangohud_inline_config(&out)
+            crate::hud::launch_env::format_mangohud_inline_config(&presets)
                 .contains("fps_metrics=avg+0.01")
         );
 
         p.fps_1_low = false;
-        let out_avg = render_mangohud_conf(&p, &ConfRenderContext::default());
-        assert!(lines(&out_avg).contains(&"fps_metrics=avg"));
+        let presets_avg = render_mangohud_presets(&p);
+        assert!(preset_section(&presets_avg, 5).contains(&"fps_metrics=avg"));
 
         p.fps_avg = false;
         p.fps_1_low = true;
         p.fps_use_label = false;
-        let out_low = render_mangohud_conf(&p, &ConfRenderContext::default());
-        let l_low = lines(&out_low);
-        assert!(!l_low.contains(&"fps_text=FPS"));
-        assert!(l_low.contains(&"fps_metrics=0.01"));
+        let conf_low = render_mangohud_conf(&p, &ConfRenderContext::default());
+        assert!(!lines(&conf_low).contains(&"fps_text=FPS"));
+        let presets_low = render_mangohud_presets(&p);
+        assert!(preset_section(&presets_low, 5).contains(&"fps_metrics=0.01"));
     }
 
     #[test]
     fn default_palette_applies_hardware_vendor_colors_and_emits_gpu_mem_clock() {
         let mut p = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
         p.gpu_mem_clock = true;
+        p.mark_custom();
         let ctx = ConfRenderContext {
             detected_gpu_label: "RX 9070 XT".into(),
             detected_cpu_label: "i5-14600K".into(),
@@ -462,22 +643,23 @@ mod tests {
             cpu_vendor: HardwareVendor::Intel,
             ..Default::default()
         };
-        let out = render_mangohud_conf(&p, &ctx);
-        let l = lines(&out);
+        let conf = render_mangohud_conf(&p, &ctx);
+        let l = lines(&conf);
         assert!(l.contains(&"gpu_color=ED1C24"));
         assert!(l.contains(&"vram_color=ED1C24"));
         assert!(l.contains(&"cpu_color=0095FF"));
         assert!(l.contains(&"ram_color=00C23D"));
         assert!(l.contains(&"engine_color=FFFFFF"));
-        assert!(l.contains(&"gpu_mem_clock"));
+        let presets = render_mangohud_presets(&p);
+        assert!(preset_section(&presets, 5).contains(&"gpu_mem_clock"));
 
         let ctx_nv = ConfRenderContext {
             gpu_vendor: HardwareVendor::Nvidia,
             cpu_vendor: HardwareVendor::Amd,
             ..Default::default()
         };
-        let out_nv = render_mangohud_conf(&p, &ctx_nv);
-        let l_nv = lines(&out_nv);
+        let conf_nv = render_mangohud_conf(&p, &ctx_nv);
+        let l_nv = lines(&conf_nv);
         assert!(l_nv.contains(&"gpu_color=76B900"));
         assert!(l_nv.contains(&"vram_color=76B900"));
         assert!(l_nv.contains(&"cpu_color=ED1C24"));

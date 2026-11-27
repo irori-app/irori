@@ -1,27 +1,28 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _,
+    WindowExt as _, h_flex, v_flex,
 };
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, ClipboardItem, Context, InteractiveElement as _, IntoElement as _,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div, px,
 };
-use irori_core::{
-    FpsLimitMethod, GameHudMode, GlobalHudMode, HudBackend, HudPreset, MetalHudAlignment,
-};
+use irori_core::{FpsLimitMethod, GameHudMode, GlobalHudMode, HudBackend, HudPreset};
 
 use crate::widgets::{RowState, field_row, group_heading, group_panel, muted};
 
 use super::helpers::{
     FPS_PRESETS, choice_button, info_button, metric_switch_row, render_divided_group,
 };
+use super::position_grid::render_metal_position_grid;
 use super::{HudPanel, HudPanelScope, HudTab};
 
 impl HudPanel {
@@ -187,64 +188,70 @@ impl HudPanel {
         )
     }
 
-    pub(super) fn render_mode_section(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let mode_control: AnyElement = match &self.scope {
+    fn render_mode_group(&self, id: &'static str, cx: &mut Context<Self>) -> AnyElement {
+        match &self.scope {
             HudPanelScope::Global => {
                 let on = self.global_on();
-                h_flex()
-                    .flex_wrap()
-                    .gap_1p5()
-                    .child(choice_button(
-                        "hud-mode-off",
-                        self.labels.mode_off.clone(),
-                        !on,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_global_mode(GlobalHudMode::Off, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-mode-irori",
-                        self.labels.mode_irori_profile.clone(),
-                        on,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
-                        }),
-                    ))
+                ButtonGroup::new(id)
+                    .outline()
+                    .small()
+                    .child(
+                        Button::new("hud-mode-off")
+                            .label(self.labels.mode_off.clone())
+                            .selected(!on),
+                    )
+                    .child(
+                        Button::new("hud-mode-irori")
+                            .label(self.labels.mode_irori_profile.clone())
+                            .selected(on),
+                    )
+                    .on_click(cx.listener(|this, clicked: &Vec<usize>, window, cx| {
+                        match clicked.first().copied() {
+                            Some(0) => this.set_global_mode(GlobalHudMode::Off, window, cx),
+                            Some(1) => {
+                                this.set_global_mode(GlobalHudMode::IroriProfile, window, cx)
+                            }
+                            _ => {}
+                        }
+                    }))
                     .into_any_element()
             }
             HudPanelScope::PerGame { .. } => {
                 let current = self.game.mode;
-                h_flex()
-                    .flex_wrap()
-                    .gap_1p5()
-                    .child(choice_button(
-                        "hud-game-mode-inherit",
-                        self.labels.mode_inherit_global.clone(),
-                        current == GameHudMode::InheritGlobal,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::InheritGlobal, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-game-mode-custom",
-                        self.labels.mode_custom.clone(),
-                        current == GameHudMode::Custom,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::Custom, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-game-mode-disabled",
-                        self.labels.mode_disabled.clone(),
-                        current == GameHudMode::Disabled,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::Disabled, window, cx);
-                        }),
-                    ))
+                ButtonGroup::new(id)
+                    .outline()
+                    .small()
+                    .child(
+                        Button::new("hud-game-mode-inherit")
+                            .label(self.labels.mode_inherit_global.clone())
+                            .selected(current == GameHudMode::InheritGlobal),
+                    )
+                    .child(
+                        Button::new("hud-game-mode-custom")
+                            .label(self.labels.mode_custom.clone())
+                            .selected(current == GameHudMode::Custom),
+                    )
+                    .child(
+                        Button::new("hud-game-mode-disabled")
+                            .label(self.labels.mode_disabled.clone())
+                            .selected(current == GameHudMode::Disabled),
+                    )
+                    .on_click(cx.listener(|this, clicked: &Vec<usize>, window, cx| {
+                        match clicked.first().copied() {
+                            Some(0) => this.set_game_mode(GameHudMode::InheritGlobal, window, cx),
+                            Some(1) => this.set_game_mode(GameHudMode::Custom, window, cx),
+                            Some(2) => this.set_game_mode(GameHudMode::Disabled, window, cx),
+                            _ => {}
+                        }
+                    }))
                     .into_any_element()
             }
-        };
+        }
+    }
+
+    pub(super) fn render_mode_section(&self, cx: &mut Context<Self>) -> AnyElement {
+        let border = cx.theme().border;
+        let mode_control = self.render_mode_group("hud-mode-section-group", cx);
 
         let help = match &self.scope {
             HudPanelScope::Global => self.labels.mode_global_help.clone(),
@@ -314,66 +321,59 @@ impl HudPanel {
     }
 
     pub(super) fn render_top_quick_card(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
+        let (border, muted_fg, primary, primary_fg) = {
+            let theme = cx.theme();
+            (
+                theme.border,
+                theme.muted_foreground,
+                theme.primary,
+                theme.primary_foreground,
+            )
+        };
         let p = self.active_mangohud();
 
-        // Row 1: Mode buttons (+ inline Restore button when PerGame::Custom)
-        let mode_buttons: AnyElement = match &self.scope {
-            HudPanelScope::Global => {
-                let on = self.global_on();
+        // Row 1: Mode segmented ButtonGroup (+ inline Restore button when PerGame::Custom)
+        let mode_group = self.render_mode_group("hud-mode-quick-group", cx);
+        let mode_row = h_flex()
+            .w_full()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_4()
+            .py_2p5()
+            .child(
                 h_flex()
                     .flex_wrap()
-                    .gap_1p5()
-                    .child(choice_button(
-                        "hud-mode-off",
-                        self.labels.mode_off.clone(),
-                        !on,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_global_mode(GlobalHudMode::Off, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-mode-irori",
-                        self.labels.mode_irori_profile.clone(),
-                        on,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
-                        }),
-                    ))
-                    .into_any_element()
-            }
-            HudPanelScope::PerGame { .. } => {
-                let current = self.game.mode;
-                let mut row = h_flex()
-                    .flex_wrap()
-                    .gap_1p5()
                     .items_center()
-                    .child(choice_button(
-                        "hud-game-mode-inherit",
-                        self.labels.mode_inherit_global.clone(),
-                        current == GameHudMode::InheritGlobal,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::InheritGlobal, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-game-mode-custom",
-                        self.labels.mode_custom.clone(),
-                        current == GameHudMode::Custom,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::Custom, window, cx);
-                        }),
-                    ))
-                    .child(choice_button(
-                        "hud-game-mode-disabled",
-                        self.labels.mode_disabled.clone(),
-                        current == GameHudMode::Disabled,
-                        cx.listener(|this, _, window, cx| {
-                            this.set_game_mode(GameHudMode::Disabled, window, cx);
-                        }),
-                    ));
-                if current == GameHudMode::Custom {
-                    row = row.child(
+                    .gap_2p5()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_semibold()
+                                    .child(self.labels.mode_label.clone()),
+                            )
+                            .child(info_button(
+                                "hud-mode-info",
+                                match &self.scope {
+                                    HudPanelScope::Global => self.labels.mode_global_help.clone(),
+                                    HudPanelScope::PerGame { .. } => {
+                                        self.labels.mode_game_help.clone()
+                                    }
+                                },
+                            )),
+                    )
+                    .child(mode_group),
+            )
+            .when(
+                matches!(self.scope, HudPanelScope::PerGame { .. })
+                    && self.game.mode == GameHudMode::Custom,
+                |row| {
+                    row.child(
                         Button::new("hud-restore-from-global")
                             .ghost()
                             .small()
@@ -383,61 +383,126 @@ impl HudPanel {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.restore_game_from_global(window, cx);
                             })),
-                    );
-                }
-                row.into_any_element()
-            }
+                    )
+                },
+            );
+
+        // Row 2: 6 Quick Presets with semantic Lucide icons + saved-slot indicator dot
+        let current_preset = p.preset;
+        let has_custom_v = p.has_custom_preset();
+        let has_custom_h = p.has_custom_horizontal_preset();
+        let preset_btn = |id: &'static str,
+                          icon: IconName,
+                          label: SharedString,
+                          preset: HudPreset,
+                          saved_dot: bool,
+                          cx: &mut Context<Self>| {
+            let active = current_preset == preset;
+            let dot_color = if active { primary_fg } else { primary };
+            let btn = if active {
+                Button::new(id).primary()
+            } else {
+                Button::new(id).outline()
+            };
+            btn.small()
+                .icon(icon)
+                .label(label)
+                .when(saved_dot, |b| {
+                    b.child(div().size(px(6.)).rounded_full().bg(dot_color))
+                })
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| p.apply_preset(preset));
+                }))
         };
 
-        // Row 2: 5 quick Presets
-        let current_preset = p.preset;
         let preset_buttons = h_flex()
             .flex_wrap()
             .gap_1p5()
-            .child(choice_button(
+            .child(preset_btn(
                 "hud-preset-minimal",
+                IconName::Gauge,
                 self.labels.preset_minimal_fps.clone(),
-                current_preset == HudPreset::MinimalFps,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::MinimalFps));
-                }),
+                HudPreset::MinimalFps,
+                false,
+                cx,
             ))
-            .child(choice_button(
+            .child(preset_btn(
                 "hud-preset-horizontal",
+                IconName::PanelTop,
                 self.labels.preset_horizontal_compact.clone(),
-                current_preset == HudPreset::HorizontalCompact,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.apply_preset(HudPreset::HorizontalCompact)
-                    });
-                }),
+                HudPreset::HorizontalCompact,
+                false,
+                cx,
             ))
-            .child(choice_button(
+            .child(preset_btn(
                 "hud-preset-balanced",
+                IconName::Gamepad2,
                 self.labels.preset_balanced_gaming.clone(),
-                current_preset == HudPreset::BalancedGaming,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::BalancedGaming));
-                }),
+                HudPreset::BalancedGaming,
+                false,
+                cx,
             ))
-            .child(choice_button(
+            .child(preset_btn(
                 "hud-preset-full",
+                IconName::Activity,
                 self.labels.preset_full_diagnostics.clone(),
-                current_preset == HudPreset::FullDiagnostics,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::FullDiagnostics));
-                }),
+                HudPreset::FullDiagnostics,
+                false,
+                cx,
             ))
-            .child(choice_button(
+            .child(preset_btn(
                 "hud-preset-custom",
+                IconName::SlidersVertical,
                 self.labels.preset_custom.clone(),
-                current_preset == HudPreset::Custom,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.apply_preset(HudPreset::Custom));
-                }),
+                HudPreset::Custom,
+                has_custom_v,
+                cx,
+            ))
+            .child(preset_btn(
+                "hud-preset-custom-horizontal",
+                IconName::SlidersHorizontal,
+                self.labels.preset_custom_horizontal.clone(),
+                HudPreset::CustomHorizontal,
+                has_custom_h,
+                cx,
             ));
 
-        // Row 3: FPS limit values on top, limiter method below.
+        let preset_section = v_flex()
+            .w_full()
+            .px_4()
+            .py_2p5()
+            .gap_1p5()
+            .child(
+                h_flex()
+                    .w_full()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_semibold()
+                                    .child(self.labels.presets_label.clone()),
+                            )
+                            .child(info_button(
+                                "hud-preset-info",
+                                self.labels.presets_help.clone(),
+                            )),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(self.display.in_cycle_summary.clone()),
+                    ),
+            )
+            .child(preset_buttons);
+
+        // Row 3: FPS limit values; contextual Pacing ButtonGroup appears only when a limit is active.
         let mut fps_values = h_flex()
             .flex_wrap()
             .gap_1p5()
@@ -465,115 +530,121 @@ impl HudPanel {
             ));
         }
         fps_values = fps_values.child(Input::new(&self.fps_limit_input).small().w_20());
-        let fps_methods = h_flex()
-            .flex_wrap()
-            .gap_1p5()
-            .items_center()
+
+        let has_fps_limit = p.fps_limit.is_some_and(|v| v > 0);
+        let fps_method_group = ButtonGroup::new("hud-fps-method-group")
+            .outline()
+            .xsmall()
             .child(
-                choice_button(
-                    "hud-fps-method-late",
-                    self.labels.fps_limit_method_late.clone(),
-                    p.fps_limit_method == FpsLimitMethod::Late,
-                    cx.listener(|this, _, window, cx| {
-                        this.edit_mangohud(window, cx, |p| {
-                            p.fps_limit_method = FpsLimitMethod::Late
-                        });
-                    }),
-                )
-                .tooltip(self.labels.fps_limit_method_help.clone()),
+                Button::new("hud-fps-method-late")
+                    .label(self.labels.fps_limit_method_late.clone())
+                    .tooltip(self.labels.fps_limit_method_help.clone())
+                    .selected(p.fps_limit_method == FpsLimitMethod::Late),
             )
             .child(
-                choice_button(
-                    "hud-fps-method-early",
-                    self.labels.fps_limit_method_early.clone(),
-                    p.fps_limit_method == FpsLimitMethod::Early,
-                    cx.listener(|this, _, window, cx| {
-                        this.edit_mangohud(window, cx, |p| {
-                            p.fps_limit_method = FpsLimitMethod::Early
-                        });
+                Button::new("hud-fps-method-early")
+                    .label(self.labels.fps_limit_method_early.clone())
+                    .tooltip(self.labels.fps_limit_method_help.clone())
+                    .selected(p.fps_limit_method == FpsLimitMethod::Early),
+            )
+            .on_click(cx.listener(|this, clicked: &Vec<usize>, window, cx| {
+                match clicked.first().copied() {
+                    Some(0) => this.edit_mangohud(window, cx, |p| {
+                        p.fps_limit_method = FpsLimitMethod::Late;
                     }),
-                )
-                .tooltip(self.labels.fps_limit_method_help.clone()),
-            );
-        let fps_row = v_flex().gap_1p5().child(fps_values).child(fps_methods);
+                    Some(1) => this.edit_mangohud(window, cx, |p| {
+                        p.fps_limit_method = FpsLimitMethod::Early;
+                    }),
+                    _ => {}
+                }
+            }));
 
-        let compact_row =
-            |info_id: &'static str, label: SharedString, hint: SharedString, body: AnyElement| {
-                v_flex()
+        let fps_section = v_flex()
+            .w_full()
+            .px_4()
+            .py_2p5()
+            .gap_1p5()
+            .child(
+                h_flex()
                     .w_full()
-                    .px_4()
-                    .py_2p5()
-                    .gap_1p5()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
                     .child(
                         h_flex()
                             .items_center()
                             .gap_1()
-                            .child(div().text_xs().font_semibold().child(label))
-                            .child(info_button(info_id, hint)),
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_semibold()
+                                    .child(self.labels.fps_limit_label.clone()),
+                            )
+                            .child(info_button(
+                                "hud-fps-info",
+                                self.labels.fps_limit_help.clone(),
+                            )),
                     )
-                    .child(body)
-            };
-
-        let mode_hint = match &self.scope {
-            HudPanelScope::Global => self.labels.mode_global_help.clone(),
-            HudPanelScope::PerGame { .. } => self.labels.mode_game_help.clone(),
-        };
+                    .when(has_fps_limit, |row| {
+                        row.child(
+                            h_flex()
+                                .items_center()
+                                .gap_1p5()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted_fg)
+                                        .child(self.labels.fps_limit_method_pacing.clone()),
+                                )
+                                .child(fps_method_group),
+                        )
+                    }),
+            )
+            .child(fps_values);
 
         group_panel(cx)
-            .child(compact_row(
-                "hud-mode-info",
-                self.labels.mode_label.clone(),
-                mode_hint,
-                mode_buttons,
-            ))
-            .child(div().border_t_1().border_color(border).child(compact_row(
-                "hud-preset-info",
-                self.labels.presets_label.clone(),
-                self.labels.presets_help.clone(),
-                preset_buttons.into_any_element(),
-            )))
-            .child(div().border_t_1().border_color(border).child(compact_row(
-                "hud-fps-info",
-                self.labels.fps_limit_label.clone(),
-                self.labels.fps_limit_help.clone(),
-                fps_row.into_any_element(),
-            )))
+            .child(mode_row)
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(border)
+                    .child(preset_section),
+            )
+            .child(div().border_t_1().border_color(border).child(fps_section))
             .into_any_element()
     }
 
     pub(super) fn render_tab_bar(&self, cx: &mut Context<Self>) -> AnyElement {
-        let active = self.active_tab;
-        h_flex()
+        let selected = match self.active_tab {
+            HudTab::Metrics => 0,
+            HudTab::Layout => 1,
+            HudTab::Appearance => 2,
+        };
+        div()
             .w_full()
-            .pt_2()
-            .gap_1p5()
-            .child(choice_button(
-                "hud-tab-metrics",
-                self.labels.tab_metrics.clone(),
-                active == HudTab::Metrics,
-                cx.listener(|this, _, _, cx| {
-                    this.active_tab = HudTab::Metrics;
-                    cx.notify();
-                }),
-            ))
-            .child(choice_button(
-                "hud-tab-layout",
-                self.labels.tab_layout.clone(),
-                active == HudTab::Layout,
-                cx.listener(|this, _, _, cx| {
-                    this.active_tab = HudTab::Layout;
-                    cx.notify();
-                }),
-            ))
-            .child(choice_button(
-                "hud-tab-appearance",
-                self.labels.tab_appearance.clone(),
-                active == HudTab::Appearance,
-                cx.listener(|this, _, _, cx| {
-                    this.active_tab = HudTab::Appearance;
-                    cx.notify();
-                }),
-            ))
+            .pt_1()
+            .child(
+                TabBar::new("hud-tabs")
+                    .underline()
+                    .large()
+                    .selected_index(selected)
+                    .child(Tab::new().label(self.labels.tab_metrics.clone()))
+                    .child(Tab::new().label(self.labels.tab_layout.clone()))
+                    .child(Tab::new().label(self.labels.tab_appearance.clone()))
+                    .on_click(cx.listener(|this, ix: &usize, _, cx| {
+                        let next = match ix {
+                            1 => HudTab::Layout,
+                            2 => HudTab::Appearance,
+                            _ => HudTab::Metrics,
+                        };
+                        if next != HudTab::Appearance {
+                            this.open_color_slot = None;
+                        }
+                        this.active_tab = next;
+                        cx.notify();
+                    })),
+            )
             .into_any_element()
     }
 
@@ -627,43 +698,17 @@ impl HudPanel {
     pub(super) fn render_metal_section(&self, cx: &mut Context<Self>) -> AnyElement {
         let border = cx.theme().border;
         let current = self.active_metal().alignment;
-
-        let buttons = h_flex()
-            .flex_wrap()
-            .gap_1p5()
-            .child(choice_button(
-                "hud-metal-top-left",
-                self.labels.position_labels[0].clone(),
-                current == MetalHudAlignment::TopLeft,
-                cx.listener(|this, _, _, cx| {
-                    this.edit_metal(cx, |m| m.alignment = MetalHudAlignment::TopLeft);
-                }),
-            ))
-            .child(choice_button(
-                "hud-metal-top-right",
-                self.labels.position_labels[1].clone(),
-                current == MetalHudAlignment::TopRight,
-                cx.listener(|this, _, _, cx| {
-                    this.edit_metal(cx, |m| m.alignment = MetalHudAlignment::TopRight);
-                }),
-            ))
-            .child(choice_button(
-                "hud-metal-bottom-left",
-                self.labels.position_labels[2].clone(),
-                current == MetalHudAlignment::BottomLeft,
-                cx.listener(|this, _, _, cx| {
-                    this.edit_metal(cx, |m| m.alignment = MetalHudAlignment::BottomLeft);
-                }),
-            ))
-            .child(choice_button(
-                "hud-metal-bottom-right",
-                self.labels.position_labels[3].clone(),
-                current == MetalHudAlignment::BottomRight,
-                cx.listener(|this, _, _, cx| {
-                    this.edit_metal(cx, |m| m.alignment = MetalHudAlignment::BottomRight);
-                }),
-            ))
-            .into_any_element();
+        let weak = cx.entity().downgrade();
+        let grid = render_metal_position_grid(
+            current,
+            &self.labels.position_labels,
+            move |align, _, _, cx| {
+                let _ = weak.update(cx, |this, cx| {
+                    this.edit_metal(cx, |m| m.alignment = align);
+                });
+            },
+            cx,
+        );
 
         let mut panel = group_panel(cx);
         if self.is_editing_profile() {
@@ -674,7 +719,7 @@ impl HudPanel {
                     stacked: true,
                     ..Default::default()
                 },
-                buttons,
+                grid,
                 cx,
             ));
             panel = panel.child(

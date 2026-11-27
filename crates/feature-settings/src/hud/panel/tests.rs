@@ -241,6 +241,8 @@ fn global_steam_snippet_tracks_global_mode(cx: &mut TestAppContext) {
                 .expect("global MangoHud On provides a Steam launch options snippet");
             assert!(snippet.contains("MANGOHUD=1 MANGOHUD_CONFIGFILE="));
             assert!(snippet.contains("global.conf"));
+            assert!(snippet.contains("MANGOHUD_PRESETSFILE="));
+            assert!(snippet.contains("global_presets.conf"));
             assert!(snippet.ends_with("%command%"));
         });
         let _ = window.draw(cx);
@@ -262,6 +264,291 @@ fn global_steam_snippet_tracks_global_mode(cx: &mut TestAppContext) {
             assert!(snippet.contains("MTL_HUD_ENABLED=1 MTL_HUD_ALIGNMENT="));
             assert!(snippet.ends_with("%command%"));
         });
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn layout_tab_renders_both_shortcuts_and_persists_toggle_preset(cx: &mut TestAppContext) {
+    let (handle, panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| {
+            p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.active_tab = super::HudTab::Layout;
+            assert_eq!(
+                p.shortcut.read(cx).combo().as_ref(),
+                irori_core::hud::DEFAULT_TOGGLE_HUD
+            );
+            assert_eq!(
+                p.preset_shortcut.read(cx).combo().as_ref(),
+                irori_core::hud::DEFAULT_TOGGLE_PRESET
+            );
+            p.edit_mangohud(window, cx, |m| {
+                m.toggle_preset = "Shift_L+F9".into();
+            });
+            assert_eq!(p.preset_shortcut.read(cx).combo().as_ref(), "Shift_L+F9");
+        });
+        assert_eq!(
+            irori_ui::backend(cx)
+                .settings
+                .app()
+                .hud
+                .mangohud
+                .toggle_preset,
+            "Shift_L+F9"
+        );
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn per_game_custom_horizontal_saves_globally_and_orientation_preserves_both_slots(
+    cx: &mut TestAppContext,
+) {
+    let game_a = GameId::new(Runner::Gog, "hud-global-custom-a");
+    let (a_handle, a_panel) = open_hud(
+        cx,
+        HudPanelScope::PerGame {
+            id: game_a,
+            is_native_linux: false,
+            is_steam: false,
+        },
+        Some(HudBackend::MangoHud),
+    );
+    cx.update_window(a_handle, |_, window, cx| {
+        a_panel.update(cx, |p, cx| {
+            p.set_game_mode(GameHudMode::Custom, window, cx);
+            // Customize vertical Custom slot first.
+            p.edit_mangohud(window, cx, |m| {
+                m.apply_preset(HudPreset::BalancedGaming);
+                m.gpu_fan = true;
+                m.mark_custom();
+            });
+            assert_eq!(p.active_mangohud().preset, HudPreset::Custom);
+
+            // Switch to HorizontalCompact and customize it -> CustomHorizontal.
+            p.edit_mangohud(window, cx, |m| {
+                m.apply_preset(HudPreset::HorizontalCompact);
+                m.cpu_power = true;
+                m.mark_custom();
+            });
+            assert_eq!(p.active_mangohud().preset, HudPreset::CustomHorizontal);
+
+            // Toggling orientation via Layout switches slots without clobbering either.
+            p.edit_mangohud(window, cx, |m| {
+                m.set_orientation(irori_core::HudOrientation::Vertical);
+            });
+            assert_eq!(p.active_mangohud().preset, HudPreset::Custom);
+            assert!(p.active_mangohud().gpu_fan);
+            assert!(!p.active_mangohud().cpu_power);
+
+            p.edit_mangohud(window, cx, |m| {
+                m.set_orientation(irori_core::HudOrientation::Horizontal);
+            });
+            assert_eq!(p.active_mangohud().preset, HudPreset::CustomHorizontal);
+            assert!(p.active_mangohud().cpu_power);
+        });
+        let saved_app = irori_ui::backend(cx).settings.app().hud.clone();
+        assert!(
+            saved_app
+                .custom_preset
+                .as_ref()
+                .is_some_and(|s| s.gpu_fan && s.orientation == irori_core::HudOrientation::Vertical)
+        );
+        assert!(
+            saved_app
+                .custom_horizontal_preset
+                .as_ref()
+                .is_some_and(|s| {
+                    s.cpu_power && s.orientation == irori_core::HudOrientation::Horizontal
+                })
+        );
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    // Opening the Global panel in the same session immediately sees both
+    // globally saved custom slots.
+    let (g_handle, g_panel) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                HudPanel::new(
+                    HudPanelScope::Global,
+                    Some(HudBackend::MangoHud),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .expect("open global hud window")
+    });
+    cx.run_until_parked();
+    cx.update_window(g_handle, |_, window, cx| {
+        g_panel.update(cx, |p, cx| {
+            p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.edit_mangohud(window, cx, |m| m.apply_preset(HudPreset::CustomHorizontal));
+            assert!(p.active_mangohud().cpu_power);
+            assert_eq!(
+                p.active_mangohud().orientation,
+                irori_core::HudOrientation::Horizontal
+            );
+            p.edit_mangohud(window, cx, |m| m.apply_preset(HudPreset::Custom));
+            assert!(p.active_mangohud().gpu_fan);
+            assert_eq!(
+                p.active_mangohud().orientation,
+                irori_core::HudOrientation::Vertical
+            );
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    // Another game with its own custom mode also inherits both shared custom slots.
+    let game_b = GameId::new(Runner::Gog, "hud-global-custom-b");
+    let (b_handle, b_panel) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                HudPanel::new(
+                    HudPanelScope::PerGame {
+                        id: game_b,
+                        is_native_linux: false,
+                        is_steam: false,
+                    },
+                    Some(HudBackend::MangoHud),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .expect("open second game hud window")
+    });
+    cx.run_until_parked();
+    cx.update_window(b_handle, |_, window, cx| {
+        b_panel.update(cx, |p, cx| {
+            p.set_game_mode(GameHudMode::Custom, window, cx);
+            p.edit_mangohud(window, cx, |m| m.apply_preset(HudPreset::CustomHorizontal));
+            assert!(p.active_mangohud().cpu_power);
+            assert!(p.active_mangohud().has_custom_preset());
+            assert!(p.active_mangohud().has_custom_horizontal_preset());
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn appearance_custom_palette_opens_color_wheel_and_updates_slot(cx: &mut TestAppContext) {
+    let (handle, panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| {
+            p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.active_tab = super::HudTab::Appearance;
+            p.edit_mangohud(window, cx, |m| {
+                m.palette = HudColorPalette::Custom;
+            });
+            p.on_color_popover_change(super::ColorSlot::Gpu, true, window, cx);
+            assert_eq!(p.open_color_slot, Some(super::ColorSlot::Gpu));
+            p.edit_mangohud_color(super::ColorSlot::Gpu, "FF3366".into(), true, window, cx);
+            assert_eq!(p.active_mangohud().custom_colors.gpu_color, "FF3366");
+            assert_eq!(
+                p.color_inputs[super::ColorSlot::Gpu as usize]
+                    .read(cx)
+                    .value()
+                    .as_ref(),
+                "FF3366"
+            );
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+
+        assert_eq!(
+            irori_ui::backend(cx)
+                .settings
+                .app()
+                .hud
+                .mangohud
+                .custom_colors
+                .gpu_color,
+            "FF3366"
+        );
+
+        panel.update(cx, |p, cx| {
+            p.reset_custom_colors(window, cx);
+            assert_eq!(
+                p.active_mangohud().custom_colors,
+                irori_core::ThemeHudColors::default()
+            );
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn pinned_preview_scenes_cycle_stepper_and_shortcut_conflict_render_cleanly(
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let backend = test_backend();
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        irori_ui::init(backend, cx);
+        crate::init(cx);
+    });
+    let (handle, panel) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                HudPanel::new(
+                    HudPanelScope::Global,
+                    Some(HudBackend::MangoHud),
+                    window,
+                    cx,
+                )
+                .with_pinned_preview(true)
+            })
+        })
+        .expect("open pinned hud window")
+    });
+    cx.run_until_parked();
+
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| {
+            p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.preview.update(cx, |prev, cx| {
+                prev.set_scene(crate::hud::preview::PreviewScene::Bright, cx);
+                prev.step_cycle(1, cx);
+                prev.set_scene(crate::hud::preview::PreviewScene::Mixed, cx);
+            });
+            // Trigger shortcut conflict detection and low-contrast detection.
+            p.active_tab = super::HudTab::Layout;
+            assert!(!p.has_shortcut_conflict());
+            p.edit_mangohud(window, cx, |m| {
+                m.position = irori_core::HudPosition::BottomRight;
+                m.fps_limit = Some(120);
+                m.toggle_preset = m.toggle_hud.clone();
+            });
+            assert!(p.has_shortcut_conflict());
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+
+        panel.update(cx, |p, cx| {
+            p.active_tab = super::HudTab::Appearance;
+            p.edit_mangohud(window, cx, |m| {
+                m.palette = HudColorPalette::Custom;
+                m.custom_colors.background_color = "111111".into();
+                m.custom_colors.text_color = "222222".into();
+            });
+            assert!(p.display.low_contrast_notice.is_some());
+        });
+        window.refresh();
         let _ = window.draw(cx);
     })
     .unwrap();
