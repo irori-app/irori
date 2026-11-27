@@ -1091,7 +1091,7 @@ mod flatpak_hud_tests {
         env.env_remove.push("MANGOHUD_CONFIG".into());
         env.env_remove.push("DISABLE_MANGOHUD".into());
         env.wrappers = vec![
-            vec!["/usr/bin/mangohud".into()],
+            vec!["/usr/bin/mangohud".into(), "--dlsym".into()],
             vec!["/usr/bin/gamemoderun".into()],
         ];
 

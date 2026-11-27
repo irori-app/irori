@@ -17,7 +17,6 @@ pub struct HudLaunchInput<'a> {
     pub presets_file: Option<&'a Path>,
     pub mangohud_dir: Option<&'a Path>,
     pub mangohud_bin_path: Option<&'a Path>,
-    pub is_native_linux_game: bool,
     pub gamescope_enabled: bool,
     pub deck_game_mode: bool,
 }
@@ -51,6 +50,7 @@ pub fn build_hud_launch_plan(input: &HudLaunchInput<'_>) -> HudLaunchPlan {
                 "MANGOHUD_CONFIGFILE".into(),
                 "MANGOHUD_PRESETSFILE".into(),
                 "MANGOHUD_CONFIG".into(),
+                "MANGOHUD_DLSYM".into(),
             ]);
         }
         (HudBackend::MetalHud, ResolvedHud::Disabled) => {
@@ -61,7 +61,7 @@ pub fn build_hud_launch_plan(input: &HudLaunchInput<'_>) -> HudLaunchPlan {
             configure_mangohud_active(
                 &mut plan,
                 input,
-                profile.opengl_legacy_wrapper,
+                profile.uses_opengl_wrapper(),
                 profile.mangohud_dlsym,
             );
         }
@@ -81,7 +81,7 @@ pub fn build_hud_launch_plan(input: &HudLaunchInput<'_>) -> HudLaunchPlan {
 fn configure_mangohud_active(
     plan: &mut HudLaunchPlan,
     input: &HudLaunchInput<'_>,
-    opengl_legacy_wrapper: bool,
+    use_opengl_wrapper: bool,
     mangohud_dlsym: bool,
 ) {
     if input.gamescope_enabled {
@@ -91,6 +91,7 @@ fn configure_mangohud_active(
         plan.env_remove.extend([
             "MANGOHUD".into(),
             "MANGOHUD_CONFIG".into(),
+            "MANGOHUD_DLSYM".into(),
             "DISABLE_MANGOHUD".into(),
         ]);
     } else {
@@ -98,14 +99,23 @@ fn configure_mangohud_active(
         plan.env_remove
             .extend(["MANGOHUD_CONFIG".into(), "DISABLE_MANGOHUD".into()]);
 
-        if input.is_native_linux_game
-            && opengl_legacy_wrapper
-            && let Some(bin) = input.mangohud_bin_path
-        {
-            plan.opengl_wrapper = Some(vec![bin.to_string_lossy().into_owned()]);
+        if use_opengl_wrapper && let Some(bin) = input.mangohud_bin_path {
+            let bin_str = bin.to_string_lossy().into_owned();
             if mangohud_dlsym {
+                plan.opengl_wrapper = Some(vec![bin_str, "--dlsym".into()]);
                 plan.env_set.insert("MANGOHUD_DLSYM".into(), "1".into());
+            } else {
+                plan.opengl_wrapper = Some(vec![bin_str]);
+                plan.env_set.insert("MANGOHUD_DLSYM".into(), "0".into());
             }
+            if !bin.starts_with("/usr")
+                && !bin.starts_with("/opt")
+                && !plan.sandbox_ro_binds.iter().any(|p| p == bin)
+            {
+                plan.sandbox_ro_binds.push(bin.to_path_buf());
+            }
+        } else {
+            plan.env_remove.push("MANGOHUD_DLSYM".into());
         }
     }
 
@@ -195,18 +205,43 @@ pub fn format_mangohud_inline_config(conf: &str) -> String {
 
 /// Build a copy-ready Steam Launch Options snippet (`... %command%`) for games
 /// started via `steam://rungameid/<id>`.
+///
+/// On Linux, wraps `%command%` with `mangohud --dlsym` (or `MANGOHUD_DLSYM=0
+/// ... mangohud` when dlsym is disabled) whenever the `mangohud` wrapper binary
+/// is available and the OpenGL wrapper is enabled so OpenGL, Vulkan, DXVK and
+/// VKD3D games all display the HUD. Falls back to `MANGOHUD=1` when only the
+/// Vulkan implicit layer is installed or the OpenGL wrapper is opted out.
 pub fn steam_launch_snippet(
     backend: HudBackend,
     resolved: &ResolvedHud,
     conf_path: &Path,
     presets_path: &Path,
+    has_mangohud_bin: bool,
 ) -> Option<String> {
     match (backend, resolved) {
-        (HudBackend::MangoHud, ResolvedHud::MangoHudProfile(_)) => Some(format!(
-            "MANGOHUD=1 MANGOHUD_CONFIGFILE=\"{}\" MANGOHUD_PRESETSFILE=\"{}\" %command%",
-            conf_path.display(),
-            presets_path.display()
-        )),
+        (HudBackend::MangoHud, ResolvedHud::MangoHudProfile(profile)) => {
+            if has_mangohud_bin && profile.uses_opengl_wrapper() {
+                if profile.mangohud_dlsym {
+                    Some(format!(
+                        "MANGOHUD_CONFIGFILE=\"{}\" MANGOHUD_PRESETSFILE=\"{}\" mangohud --dlsym %command%",
+                        conf_path.display(),
+                        presets_path.display()
+                    ))
+                } else {
+                    Some(format!(
+                        "MANGOHUD_DLSYM=0 MANGOHUD_CONFIGFILE=\"{}\" MANGOHUD_PRESETSFILE=\"{}\" mangohud %command%",
+                        conf_path.display(),
+                        presets_path.display()
+                    ))
+                }
+            } else {
+                Some(format!(
+                    "MANGOHUD=1 MANGOHUD_CONFIGFILE=\"{}\" MANGOHUD_PRESETSFILE=\"{}\" %command%",
+                    conf_path.display(),
+                    presets_path.display()
+                ))
+            }
+        }
         (HudBackend::MangoHud, ResolvedHud::Disabled) => {
             Some("DISABLE_MANGOHUD=1 MANGOHUD=0 %command%".into())
         }
@@ -263,7 +298,6 @@ mod tests {
                 presets_file: Some(Path::new("/data/mangohud/global_presets.conf")),
                 mangohud_dir: Some(Path::new("/data/mangohud")),
                 mangohud_bin_path: Some(Path::new("/usr/bin/mangohud")),
-                is_native_linux_game: true,
                 gamescope_enabled: false,
                 deck_game_mode: deck,
             });
@@ -280,7 +314,6 @@ mod tests {
             presets_file: None,
             mangohud_dir: None,
             mangohud_bin_path: None,
-            is_native_linux_game: false,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -289,13 +322,10 @@ mod tests {
         assert!(disabled.env_remove.contains(&"MANGOHUD_CONFIGFILE".into()));
         assert!(disabled.env_remove.contains(&"MANGOHUD_PRESETSFILE".into()));
         assert!(disabled.env_remove.contains(&"MANGOHUD_CONFIG".into()));
+        assert!(disabled.env_remove.contains(&"MANGOHUD_DLSYM".into()));
 
-        let profile = MangoHudProfile {
-            opengl_legacy_wrapper: true,
-            mangohud_dlsym: true,
-            ..Default::default()
-        };
-        let resolved_profile = ResolvedHud::MangoHudProfile(Box::new(profile));
+        // Default profile wraps with `mangohud --dlsym` whenever the binary is available.
+        let resolved_profile = ResolvedHud::MangoHudProfile(Box::default());
         let active = build_hud_launch_plan(&HudLaunchInput {
             backend: HudBackend::MangoHud,
             resolved: &resolved_profile,
@@ -303,7 +333,6 @@ mod tests {
             presets_file: Some(Path::new("/data/mangohud/global_presets.conf")),
             mangohud_dir: Some(Path::new("/data/mangohud")),
             mangohud_bin_path: Some(Path::new("/usr/bin/mangohud")),
-            is_native_linux_game: true,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -321,7 +350,7 @@ mod tests {
         assert!(active.env_remove.contains(&"DISABLE_MANGOHUD".into()));
         assert_eq!(
             active.opengl_wrapper,
-            Some(vec!["/usr/bin/mangohud".into()])
+            Some(vec!["/usr/bin/mangohud".into(), "--dlsym".into()])
         );
         assert_eq!(
             active.sandbox_ro_binds,
@@ -330,6 +359,83 @@ mod tests {
                 PathBuf::from("/data/mangohud/global_presets.conf"),
                 PathBuf::from("/data/mangohud"),
             ]
+        );
+
+        // Disabling dlsym keeps the wrapper, omits `--dlsym`, and sets `MANGOHUD_DLSYM=0`.
+        let no_dlsym = ResolvedHud::MangoHudProfile(Box::new(MangoHudProfile {
+            mangohud_dlsym: false,
+            ..Default::default()
+        }));
+        let no_dlsym_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MangoHud,
+            resolved: &no_dlsym,
+            config_file: Some(Path::new("/data/mangohud/global.conf")),
+            presets_file: Some(Path::new("/data/mangohud/global_presets.conf")),
+            mangohud_dir: Some(Path::new("/data/mangohud")),
+            mangohud_bin_path: Some(Path::new("/usr/bin/mangohud")),
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+        assert_eq!(
+            no_dlsym_plan.opengl_wrapper,
+            Some(vec!["/usr/bin/mangohud".into()])
+        );
+        assert_eq!(no_dlsym_plan.env_set["MANGOHUD_DLSYM"], "0");
+
+        // Opting out of the OpenGL wrapper falls back to Vulkan-only (`MANGOHUD=1`).
+        let vulkan_only = ResolvedHud::MangoHudProfile(Box::new(MangoHudProfile {
+            disable_opengl_wrapper: true,
+            ..Default::default()
+        }));
+        let vulkan_only_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MangoHud,
+            resolved: &vulkan_only,
+            config_file: Some(Path::new("/data/mangohud/global.conf")),
+            presets_file: Some(Path::new("/data/mangohud/global_presets.conf")),
+            mangohud_dir: Some(Path::new("/data/mangohud")),
+            mangohud_bin_path: Some(Path::new("/usr/bin/mangohud")),
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+        assert_eq!(vulkan_only_plan.env_set["MANGOHUD"], "1");
+        assert!(vulkan_only_plan.opengl_wrapper.is_none());
+        assert!(!vulkan_only_plan.env_set.contains_key("MANGOHUD_DLSYM"));
+        assert!(
+            vulkan_only_plan
+                .env_remove
+                .contains(&"MANGOHUD_DLSYM".into())
+        );
+
+        // Missing wrapper binary also degrades cleanly to Vulkan-only (`MANGOHUD=1`).
+        let no_bin_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MangoHud,
+            resolved: &resolved_profile,
+            config_file: Some(Path::new("/data/mangohud/global.conf")),
+            presets_file: Some(Path::new("/data/mangohud/global_presets.conf")),
+            mangohud_dir: Some(Path::new("/data/mangohud")),
+            mangohud_bin_path: None,
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+        assert_eq!(no_bin_plan.env_set["MANGOHUD"], "1");
+        assert!(no_bin_plan.opengl_wrapper.is_none());
+        assert!(no_bin_plan.env_remove.contains(&"MANGOHUD_DLSYM".into()));
+
+        // Custom wrapper binary outside `/usr` and `/opt` gets added to sandbox read-only binds.
+        let custom_bin_plan = build_hud_launch_plan(&HudLaunchInput {
+            backend: HudBackend::MangoHud,
+            resolved: &resolved_profile,
+            config_file: None,
+            presets_file: None,
+            mangohud_dir: None,
+            mangohud_bin_path: Some(Path::new("/home/u/.local/bin/mangohud")),
+            gamescope_enabled: false,
+            deck_game_mode: false,
+        });
+        assert!(
+            custom_bin_plan
+                .sandbox_ro_binds
+                .contains(&PathBuf::from("/home/u/.local/bin/mangohud"))
         );
     }
 
@@ -343,7 +449,6 @@ mod tests {
             presets_file: Some(Path::new("/data/mangohud/global_presets.conf")),
             mangohud_dir: Some(Path::new("/data/mangohud")),
             mangohud_bin_path: Some(Path::new("/usr/bin/mangohud")),
-            is_native_linux_game: true,
             gamescope_enabled: true,
             deck_game_mode: false,
         });
@@ -351,6 +456,7 @@ mod tests {
         assert!(!plan.env_set.contains_key("MANGOHUD"));
         assert!(plan.env_remove.contains(&"MANGOHUD".into()));
         assert!(plan.env_remove.contains(&"MANGOHUD_CONFIG".into()));
+        assert!(plan.env_remove.contains(&"MANGOHUD_DLSYM".into()));
         assert!(plan.env_remove.contains(&"DISABLE_MANGOHUD".into()));
         assert_eq!(
             plan.env_set["MANGOHUD_CONFIGFILE"],
@@ -375,7 +481,6 @@ mod tests {
             presets_file: None,
             mangohud_dir: None,
             mangohud_bin_path: None,
-            is_native_linux_game: false,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -390,7 +495,6 @@ mod tests {
             presets_file: None,
             mangohud_dir: None,
             mangohud_bin_path: None,
-            is_native_linux_game: false,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -408,7 +512,6 @@ mod tests {
             presets_file: Some(Path::new("/data/mangohud/global_presets.conf")),
             mangohud_dir: Some(Path::new("/data/mangohud")),
             mangohud_bin_path: None,
-            is_native_linux_game: true,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -494,6 +597,37 @@ mod tests {
                 &ResolvedHud::MangoHudProfile(Box::default()),
                 conf,
                 presets,
+                true,
+            ),
+            Some(
+                "MANGOHUD_CONFIGFILE=\"/home/u/.local/share/irori/mangohud/steam_123.conf\" MANGOHUD_PRESETSFILE=\"/home/u/.local/share/irori/mangohud/steam_123_presets.conf\" mangohud --dlsym %command%"
+                    .into()
+            )
+        );
+        assert_eq!(
+            steam_launch_snippet(
+                HudBackend::MangoHud,
+                &ResolvedHud::MangoHudProfile(Box::new(MangoHudProfile {
+                    mangohud_dlsym: false,
+                    ..Default::default()
+                })),
+                conf,
+                presets,
+                true,
+            ),
+            Some(
+                "MANGOHUD_DLSYM=0 MANGOHUD_CONFIGFILE=\"/home/u/.local/share/irori/mangohud/steam_123.conf\" MANGOHUD_PRESETSFILE=\"/home/u/.local/share/irori/mangohud/steam_123_presets.conf\" mangohud %command%"
+                    .into()
+            )
+        );
+        // Without the wrapper binary or when opted out, falls back to Vulkan-only `MANGOHUD=1`.
+        assert_eq!(
+            steam_launch_snippet(
+                HudBackend::MangoHud,
+                &ResolvedHud::MangoHudProfile(Box::default()),
+                conf,
+                presets,
+                false,
             ),
             Some(
                 "MANGOHUD=1 MANGOHUD_CONFIGFILE=\"/home/u/.local/share/irori/mangohud/steam_123.conf\" MANGOHUD_PRESETSFILE=\"/home/u/.local/share/irori/mangohud/steam_123_presets.conf\" %command%"
@@ -501,11 +635,33 @@ mod tests {
             )
         );
         assert_eq!(
-            steam_launch_snippet(HudBackend::MangoHud, &ResolvedHud::Disabled, conf, presets),
+            steam_launch_snippet(
+                HudBackend::MangoHud,
+                &ResolvedHud::MangoHudProfile(Box::new(MangoHudProfile {
+                    disable_opengl_wrapper: true,
+                    ..Default::default()
+                })),
+                conf,
+                presets,
+                true,
+            ),
+            Some(
+                "MANGOHUD=1 MANGOHUD_CONFIGFILE=\"/home/u/.local/share/irori/mangohud/steam_123.conf\" MANGOHUD_PRESETSFILE=\"/home/u/.local/share/irori/mangohud/steam_123_presets.conf\" %command%"
+                    .into()
+            )
+        );
+        assert_eq!(
+            steam_launch_snippet(
+                HudBackend::MangoHud,
+                &ResolvedHud::Disabled,
+                conf,
+                presets,
+                true,
+            ),
             Some("DISABLE_MANGOHUD=1 MANGOHUD=0 %command%".into())
         );
         assert_eq!(
-            steam_launch_snippet(HudBackend::MangoHud, &ResolvedHud::Off, conf, presets),
+            steam_launch_snippet(HudBackend::MangoHud, &ResolvedHud::Off, conf, presets, true),
             None
         );
 
@@ -517,11 +673,18 @@ mod tests {
                 }),
                 conf,
                 presets,
+                false,
             ),
             Some("MTL_HUD_ENABLED=1 MTL_HUD_ALIGNMENT=topright %command%".into())
         );
         assert_eq!(
-            steam_launch_snippet(HudBackend::MetalHud, &ResolvedHud::Disabled, conf, presets),
+            steam_launch_snippet(
+                HudBackend::MetalHud,
+                &ResolvedHud::Disabled,
+                conf,
+                presets,
+                false,
+            ),
             Some("MTL_HUD_ENABLED=0 %command%".into())
         );
         assert_eq!(
@@ -529,7 +692,8 @@ mod tests {
                 HudBackend::Unsupported,
                 &ResolvedHud::Disabled,
                 conf,
-                presets
+                presets,
+                false,
             ),
             None
         );
@@ -541,6 +705,7 @@ mod tests {
             ("MANGOHUD".into(), "1".into()),
             ("MANGOHUD_CONFIGFILE".into(), "/x.conf".into()),
             ("MANGOHUD_PRESETSFILE".into(), "/x_presets.conf".into()),
+            ("MANGOHUD_DLSYM".into(), "1".into()),
             ("DISABLE_MANGOHUD".into(), "1".into()),
             ("MTL_HUD_ENABLED".into(), "1".into()),
             ("MTL_HUD_ALIGNMENT".into(), "topright".into()),
@@ -564,7 +729,6 @@ mod tests {
             presets_file: Some(presets),
             mangohud_dir: conf.parent(),
             mangohud_bin_path: None,
-            is_native_linux_game: false,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -603,7 +767,6 @@ mod tests {
             presets_file: None,
             mangohud_dir: None,
             mangohud_bin_path: None,
-            is_native_linux_game: false,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -618,6 +781,7 @@ mod tests {
         assert!(spec.env_remove.iter().any(|k| k == "MANGOHUD_CONFIGFILE"));
         assert!(spec.env_remove.iter().any(|k| k == "MANGOHUD_PRESETSFILE"));
         assert!(spec.env_remove.iter().any(|k| k == "MANGOHUD_CONFIG"));
+        assert!(spec.env_remove.iter().any(|k| k == "MANGOHUD_DLSYM"));
     }
 
     #[test]
@@ -631,7 +795,6 @@ mod tests {
             presets_file: None,
             mangohud_dir: None,
             mangohud_bin_path: None,
-            is_native_linux_game: false,
             gamescope_enabled: false,
             deck_game_mode: false,
         });
@@ -655,7 +818,6 @@ mod tests {
             presets_file: None,
             mangohud_dir: None,
             mangohud_bin_path: None,
-            is_native_linux_game: false,
             gamescope_enabled: false,
             deck_game_mode: false,
         });

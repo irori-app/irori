@@ -902,9 +902,13 @@ overlay shows it. The limit row shows only while MangoHud is the session's limit
 it. A `MANGOHUD_CONFIG` variable without `read_cfg` keeps MangoHud from reading any file: then the
 limit and the hidden start go into that variable and can't change during play, and the overlay offers
 no MangoHud rows. In a sandboxed game or Flatpak emulator both the session file's folder and the
-presets folder are bound read-only. Games Steam starts aren't covered by the Big Picture overlay,
-but Steam games launched with Irori's copyable Launch Options (`MANGOHUD_CONFIGFILE` and
-`MANGOHUD_PRESETSFILE`) reload edits and cycle Irori's presets live.
+presets folder are bound read-only. Outside gamescope and Flatpak emulators, Linux launches wrap
+both native and Wine/Proton games with `mangohud --dlsym` by default when the `mangohud` binary is
+installed (covering OpenGL alongside Vulkan, DXVK and VKD3D), falling back to `MANGOHUD=1` when only
+the Vulkan implicit layer is present or when a game opts out of the OpenGL wrapper in its Appearance
+tab. Games Steam starts aren't covered by the Big Picture overlay,
+but Steam games launched with Irori's copyable Launch Options (`MANGOHUD_CONFIGFILE`,
+`MANGOHUD_PRESETSFILE`, and `mangohud --dlsym %command%`) reload edits and cycle Irori's presets live.
 
 ### Mods
 

@@ -2176,6 +2176,11 @@ fi
         let expected_global_presets = paths.mangohud_presets_file("global");
         assert!(expected_global.is_file());
         assert!(expected_global_presets.is_file());
+        // Third-party launchers receive HUD env vars only and must not wrap the launcher UI in mangohud.
+        assert_ne!(
+            open_spec.program.file_name().and_then(|n| n.to_str()),
+            Some("mangohud")
+        );
         assert_eq!(open_spec.env.get("MANGOHUD").map(String::as_str), Some("1"));
         assert_eq!(
             open_spec.env.get("MANGOHUD_CONFIGFILE").map(PathBuf::from),

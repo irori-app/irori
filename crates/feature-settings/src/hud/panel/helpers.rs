@@ -618,8 +618,15 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
         let resolved = resolve_hud_for_scope(scope, hud_backend, global, game, cx);
         let conf_path = steam_conf_path(scope, game);
         let presets_path = steam_presets_path(scope, game);
-        steam_launch_snippet(hud_backend, &resolved, &conf_path, &presets_path)
-            .map(SharedString::from)
+        let has_mangohud_bin = env.mangohud_bin_path.is_some();
+        steam_launch_snippet(
+            hud_backend,
+            &resolved,
+            &conf_path,
+            &presets_path,
+            has_mangohud_bin,
+        )
+        .map(SharedString::from)
     } else {
         None
     };

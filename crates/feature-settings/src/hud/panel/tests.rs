@@ -97,7 +97,7 @@ fn custom_fps_field_only_shows_values_outside_the_chips() {
 }
 
 #[gpui_kit::test]
-fn per_game_custom_clones_global_and_hides_opengl_wrapper_for_non_native_and_steam(
+fn per_game_custom_clones_global_and_shows_opengl_compat_for_native_and_wine_only(
     cx: &mut TestAppContext,
 ) {
     let native_id = GameId::new(Runner::Sideload, "hud-native-test");
@@ -117,30 +117,10 @@ fn per_game_custom_clones_global_and_hides_opengl_wrapper_for_non_native_and_ste
         });
         panel.update(cx, |p, cx| {
             p.reload_from_settings(window, cx);
-            assert!(p.show_opengl_legacy());
+            assert!(p.show_opengl_compat());
             p.set_game_mode(GameHudMode::Custom, window, cx);
             assert_eq!(p.active_mangohud().fps_limit, Some(90));
-        });
-        let _ = window.draw(cx);
-    })
-    .unwrap();
-
-    let steam_id = GameId::new(Runner::Steam, "620");
-    let (s_handle, s_panel) = open_hud(
-        cx,
-        HudPanelScope::PerGame {
-            id: steam_id,
-            is_native_linux: true,
-            is_steam: true,
-        },
-        Some(HudBackend::MangoHud),
-    );
-    cx.update_window(s_handle, |_, window, cx| {
-        s_panel.update(cx, |p, _| {
-            assert!(
-                !p.show_opengl_legacy(),
-                "Steam games must never show LD_PRELOAD wrapper"
-            );
+            assert!(p.active_mangohud().uses_opengl_wrapper());
         });
         let _ = window.draw(cx);
     })
@@ -159,8 +139,50 @@ fn per_game_custom_clones_global_and_hides_opengl_wrapper_for_non_native_and_ste
     cx.update_window(w_handle, |_, window, cx| {
         w_panel.update(cx, |p, _| {
             assert!(
-                !p.show_opengl_legacy(),
-                "Wine/Proton games must never show LD_PRELOAD wrapper"
+                p.show_opengl_compat(),
+                "Wine/Proton games show OpenGL compatibility controls for Windows OpenGL titles"
+            );
+        });
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    let steam_id = GameId::new(Runner::Steam, "620");
+    let (s_handle, s_panel) = open_hud(
+        cx,
+        HudPanelScope::PerGame {
+            id: steam_id,
+            is_native_linux: true,
+            is_steam: true,
+        },
+        Some(HudBackend::MangoHud),
+    );
+    cx.update_window(s_handle, |_, window, cx| {
+        s_panel.update(cx, |p, _| {
+            assert!(
+                !p.show_opengl_compat(),
+                "Steam games must never show LD_PRELOAD wrapper controls"
+            );
+        });
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    let launcher_id = GameId::new(Runner::Launchers, "battlenet:fenris");
+    let (l_handle, l_panel) = open_hud(
+        cx,
+        HudPanelScope::PerGame {
+            id: launcher_id,
+            is_native_linux: false,
+            is_steam: false,
+        },
+        Some(HudBackend::MangoHud),
+    );
+    cx.update_window(l_handle, |_, window, cx| {
+        l_panel.update(cx, |p, _| {
+            assert!(
+                !p.show_opengl_compat(),
+                "Third-party launchers use env-only HUD injection without LD_PRELOAD wrapping"
             );
         });
         let _ = window.draw(cx);
@@ -238,16 +260,31 @@ fn global_steam_snippet_tracks_global_mode(cx: &mut TestAppContext) {
             assert!(p.display.steam_snippet.is_none());
 
             p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.env.mangohud_bin_path = Some(std::path::PathBuf::from("/usr/bin/mangohud"));
+            p.rebuild_display(cx);
             let snippet = p
                 .display
                 .steam_snippet
                 .as_deref()
                 .expect("global MangoHud On provides a Steam launch options snippet");
-            assert!(snippet.contains("MANGOHUD=1 MANGOHUD_CONFIGFILE="));
+            assert!(snippet.contains("MANGOHUD_CONFIGFILE="));
             assert!(snippet.contains("global.conf"));
             assert!(snippet.contains("MANGOHUD_PRESETSFILE="));
             assert!(snippet.contains("global_presets.conf"));
-            assert!(snippet.ends_with("%command%"));
+            assert!(snippet.ends_with("mangohud --dlsym %command%"));
+
+            p.env.mangohud_bin_path = None;
+            p.rebuild_display(cx);
+            let fallback = p
+                .display
+                .steam_snippet
+                .as_deref()
+                .expect("global MangoHud On falls back to MANGOHUD=1 without wrapper binary");
+            assert!(fallback.contains("MANGOHUD=1 MANGOHUD_CONFIGFILE="));
+            assert!(fallback.contains("global.conf"));
+            assert!(fallback.contains("MANGOHUD_PRESETSFILE="));
+            assert!(fallback.contains("global_presets.conf"));
+            assert!(fallback.ends_with("%command%"));
         });
         let _ = window.draw(cx);
     })
