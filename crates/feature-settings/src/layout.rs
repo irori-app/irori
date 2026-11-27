@@ -22,6 +22,14 @@ pub(crate) struct SidebarGroup {
 /// Sidebar sections grouped for quick scanning without changing route IDs.
 pub(crate) const SIDEBAR_GROUPS: &[SidebarGroup] = &[
     SidebarGroup {
+        label_key: "settings.sidebar.setup",
+        sections: &[
+            SettingsSection::Accounts,
+            SettingsSection::WineManager,
+            SettingsSection::Emulators,
+        ],
+    },
+    SidebarGroup {
         label_key: "settings.sidebar.preferences",
         sections: &[
             SettingsSection::General,

@@ -15,16 +15,16 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AppContext as _, ClipboardItem, Context, ElementId, Entity,
+    AnyElement, AnyView, AppContext as _, ClipboardItem, Context, ElementId, Entity,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
     Subscription, Window, div, rems,
 };
 use irori_core::Paths;
 use irori_runtime::sysinfo::{self, SystemInfo};
 use irori_services::displays::DisplayReport;
-use irori_ui::backend;
 use irori_ui::components::{EmptyState, PageHeader};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::{backend, models, nav};
 
 use crate::app_update::AppUpdatePanel;
 use crate::appearance::AppearancePreview;
@@ -37,12 +37,15 @@ use crate::logs::LogViewer;
 use crate::registry::FieldSection;
 use crate::storage::StoragePanel;
 use crate::widgets::{
-    group_header, group_heading, muted, nav_button, panel, sidebar_section_label,
+    group_header, group_heading, muted, nav_button_with_dot, panel, sidebar_section_label,
 };
 
 /// Sections of the settings page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SettingsSection {
+    Accounts,
+    WineManager,
+    Emulators,
     General,
     Controller,
     GameDefaults,
@@ -58,7 +61,10 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 12] = [
+    pub const ALL: [SettingsSection; 15] = [
+        SettingsSection::Accounts,
+        SettingsSection::WineManager,
+        SettingsSection::Emulators,
         SettingsSection::General,
         SettingsSection::Controller,
         SettingsSection::GameDefaults,
@@ -77,13 +83,26 @@ impl SettingsSection {
     pub fn supported_on_host(self) -> bool {
         match self {
             SettingsSection::PerformanceHud => irori_core::HudBackend::current().is_supported(),
+            SettingsSection::WineManager => !cfg!(windows),
             _ => true,
         }
+    }
+
+    /// Whether this section hosts an embedded management view that owns its
+    /// own page header, layout width and scrolling.
+    fn is_embedded(self) -> bool {
+        matches!(
+            self,
+            SettingsSection::Accounts | SettingsSection::WineManager | SettingsSection::Emulators
+        )
     }
 
     /// Route id of the section.
     pub fn id(self) -> &'static str {
         match self {
+            SettingsSection::Accounts => "accounts",
+            SettingsSection::WineManager => "wine-manager",
+            SettingsSection::Emulators => "emulators",
             SettingsSection::General => "general",
             SettingsSection::Controller => "controller",
             SettingsSection::GameDefaults => "game-defaults",
@@ -103,6 +122,9 @@ impl SettingsSection {
     /// ids open General.
     pub fn from_id(id: &str) -> Self {
         let parsed = match id {
+            "accounts" | "account" | "login" => SettingsSection::Accounts,
+            "wine-manager" | "wine_manager" | "proton" => SettingsSection::WineManager,
+            "emulators" | "emulation" | "roms" => SettingsSection::Emulators,
             "game-defaults" | "games" | "games_settings" | "wine" | "defaults" => {
                 SettingsSection::GameDefaults
             }
@@ -127,6 +149,15 @@ impl SettingsSection {
 
     fn label_key(self) -> &'static str {
         match self {
+            SettingsSection::Accounts => "settings.page.accounts",
+            SettingsSection::WineManager => {
+                if cfg!(target_os = "macos") {
+                    "settings.page.wine_manager_macos"
+                } else {
+                    "settings.page.wine_manager"
+                }
+            }
+            SettingsSection::Emulators => "settings.page.emulators",
             SettingsSection::General => "settings.page.general",
             SettingsSection::Controller => "settings.page.controller",
             SettingsSection::GameDefaults => "settings.page.game_defaults",
@@ -149,6 +180,10 @@ impl SettingsSection {
 
     fn description(self) -> SharedString {
         let key = match self {
+            SettingsSection::Accounts
+            | SettingsSection::WineManager
+            | SettingsSection::Emulators
+            | SettingsSection::About => return SharedString::default(),
             SettingsSection::General => "settings.page.general_description",
             SettingsSection::Controller => "settings.page.controller_description",
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
@@ -165,13 +200,15 @@ impl SettingsSection {
             SettingsSection::Backup => "settings.page.backup_description",
             SettingsSection::Logs => "settings.page.logs_description",
             SettingsSection::SystemInfo => "settings.page.system_info_description",
-            SettingsSection::About => return SharedString::default(),
         };
         t(key)
     }
 
     fn icon(self) -> IconName {
         match self {
+            SettingsSection::Accounts => IconName::CircleUser,
+            SettingsSection::WineManager => IconName::Wine,
+            SettingsSection::Emulators => IconName::Joystick,
             SettingsSection::General => IconName::Settings,
             SettingsSection::Controller => IconName::Gamepad2,
             SettingsSection::GameDefaults => IconName::Gamepad2,
@@ -190,6 +227,15 @@ impl SettingsSection {
     /// English search terms for pages without fields.
     fn keywords(self) -> &'static str {
         match self {
+            SettingsSection::Accounts => {
+                "accounts login sign in logout store epic gog amazon zoom itch xbox steam friends"
+            }
+            SettingsSection::WineManager => {
+                "wine proton ge-proton umu runner prefix prefixes bottle download version rollback"
+            }
+            SettingsSection::Emulators => {
+                "emulators emulation rom roms bios retroarch cores retroachievements console systems"
+            }
             SettingsSection::PerformanceHud => {
                 "performance hud mangohud metal overlay fps frametime gpu cpu vram temperature"
             }
@@ -244,6 +290,9 @@ pub struct SettingsView {
     app_update: Entity<AppUpdatePanel>,
     preview: Entity<AppearancePreview>,
     storage: Entity<StoragePanel>,
+    accounts_view: Option<AnyView>,
+    wine_view: Option<AnyView>,
+    emulators_view: Option<AnyView>,
     sysinfo: SysInfoState,
     /// A problem report is reading this computer's facts.
     reporting: bool,
@@ -285,6 +334,7 @@ impl SettingsView {
         let log =
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
         let storage = cx.new(StoragePanel::new);
+        let accounts = models(cx).accounts.clone();
         let default_defaults_tab = crate::layout::supported_defaults_tabs()
             .first()
             .map(|tab| tab.id)
@@ -305,13 +355,24 @@ impl SettingsView {
             app_update: cx.new(AppUpdatePanel::new),
             preview: cx.new(AppearancePreview::new),
             storage: storage.clone(),
+            accounts_view: None,
+            wine_view: None,
+            emulators_view: None,
             sysinfo: SysInfoState::default(),
             reporting: false,
             language: LanguageStamp::new(),
-            // The header's Rescan button shows the measuring.
-            _subscriptions: vec![sub, cx.observe(&storage, |_, _, cx| cx.notify())],
+            // The header's Rescan button shows the measuring; accounts updates
+            // the expired-login indicator on the Accounts section row.
+            _subscriptions: vec![
+                sub,
+                cx.observe(&storage, |_, _, cx| cx.notify()),
+                cx.observe(&accounts, |_, _, cx| cx.notify()),
+            ],
         };
-        this.set_section(&section, window, cx);
+        if section.as_ref() == "downloads" {
+            this.general_tab = "integrations";
+        }
+        this.open(SettingsSection::from_id(&section), false, window, cx);
         this
     }
 
@@ -328,10 +389,28 @@ impl SettingsView {
     /// Show a section (route id); the shell calls this when the route
     /// changes while the page is open.
     pub fn set_section(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let target = SettingsSection::from_id(id);
         if id == "downloads" {
             self.general_tab = "integrations";
+            self.open(target, false, window, cx);
+            return;
         }
-        self.open(SettingsSection::from_id(id), window, cx);
+        if target == self.section
+            && self.query.is_empty()
+            && (!target.is_embedded() || self.embedded_view(target).is_some())
+        {
+            return;
+        }
+        self.open(target, false, window, cx);
+    }
+
+    fn embedded_view(&self, section: SettingsSection) -> Option<AnyView> {
+        match section {
+            SettingsSection::Accounts => self.accounts_view.clone(),
+            SettingsSection::WineManager => self.wine_view.clone(),
+            SettingsSection::Emulators => self.emulators_view.clone(),
+            _ => None,
+        }
     }
 
     /// The shared application-fields form (General, Appearance, Advanced).
@@ -371,10 +450,16 @@ impl SettingsView {
             SettingsSection::Appearance => self.appearance_tab = tab,
             _ => return,
         }
-        self.open(self.section, window, cx);
+        self.open(self.section, false, window, cx);
     }
 
-    fn open(&mut self, section: SettingsSection, window: &mut Window, cx: &mut Context<Self>) {
+    fn open(
+        &mut self,
+        section: SettingsSection,
+        sync_nav: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let section = if section.supported_on_host() {
             section
         } else {
@@ -400,6 +485,15 @@ impl SettingsView {
             });
         }
         match section {
+            SettingsSection::Accounts if self.accounts_view.is_none() => {
+                self.accounts_view = irori_ui::hooks::accounts_view(window, cx);
+            }
+            SettingsSection::WineManager if self.wine_view.is_none() => {
+                self.wine_view = irori_ui::hooks::wine_manager_view(window, cx);
+            }
+            SettingsSection::Emulators if self.emulators_view.is_none() => {
+                self.emulators_view = irori_ui::hooks::emulators_view(window, cx);
+            }
             SettingsSection::GameDefaults => {
                 let fs = crate::layout::defaults_section_for_tab(self.defaults_tab);
                 let tab = self.defaults_tab;
@@ -421,6 +515,17 @@ impl SettingsView {
             }
             _ => {}
         }
+        if sync_nav {
+            let navigator = nav::navigator(cx);
+            let target = nav::Route::Settings(section.id().into());
+            let should_sync = {
+                let current = navigator.read(cx).current();
+                current.section() == "settings" && current != &target
+            };
+            if should_sync {
+                navigator.update(cx, |n, cx| n.replace(target, cx));
+            }
+        }
         cx.notify();
     }
 
@@ -433,7 +538,7 @@ impl SettingsView {
         if self.query.trim().is_empty() {
             let section = self.section;
             self.query.clear();
-            self.open(section, window, cx);
+            self.open(section, false, window, cx);
             return;
         }
         let q = self.query.clone();
@@ -479,7 +584,7 @@ impl SettingsView {
     ) {
         self.sysinfo.info = Some(info);
         self.sysinfo.displays = Some(displays);
-        self.open(SettingsSection::SystemInfo, window, cx);
+        self.open(SettingsSection::SystemInfo, false, window, cx);
     }
 
     fn copy_sysinfo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -507,21 +612,14 @@ impl SettingsView {
 
     fn render_nav(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let searching = !self.query.trim().is_empty();
-        let mut nav = v_flex()
-            .w(rems(15.))
-            .flex_shrink_0()
+        let accounts_expired = models(cx).accounts.read(cx).any_expired();
+        let warning_dot = cx.theme().warning;
+        let mut list = v_flex()
+            .id("settings-nav-list")
+            .flex_1()
+            .min_h_0()
             .gap_0p5()
-            .p_3()
-            .border_r_1()
-            .border_color(cx.theme().border)
-            .child(
-                Input::new(&self.search)
-                    .id("settings-search")
-                    .aria_label(t("settings.common.search_settings"))
-                    .prefix(Icon::new(IconName::Search).small())
-                    .cleanable(true)
-                    .mb_2(),
-            );
+            .overflow_y_scrollbar();
         for (gx, group) in crate::layout::SIDEBAR_GROUPS.iter().enumerate() {
             let items: Vec<SettingsSection> = group
                 .sections
@@ -532,18 +630,37 @@ impl SettingsView {
             if items.is_empty() {
                 continue;
             }
-            nav = nav.child(sidebar_section_label(t(group.label_key), gx == 0, cx));
+            list = list.child(sidebar_section_label(t(group.label_key), gx == 0, cx));
             for s in items {
-                nav = nav.child(nav_button(
+                let dot =
+                    (s == SettingsSection::Accounts && accounts_expired).then_some(warning_dot);
+                list = list.child(nav_button_with_dot(
                     ElementId::Name(format!("settings-nav-{}", s.id()).into()),
                     s.icon(),
                     s.label(),
                     !searching && s == self.section,
-                    cx.listener(move |this, _, window, cx| this.open(s, window, cx)),
+                    dot,
+                    cx.listener(move |this, _, window, cx| this.open(s, true, window, cx)),
                 ));
             }
         }
-        nav
+        v_flex()
+            .w(rems(15.))
+            .h_full()
+            .min_h_0()
+            .flex_shrink_0()
+            .p_3()
+            .border_r_1()
+            .border_color(cx.theme().border)
+            .child(
+                Input::new(&self.search)
+                    .id("settings-search")
+                    .aria_label(t("settings.common.search_settings"))
+                    .prefix(Icon::new(IconName::Search).small())
+                    .cleanable(true)
+                    .mb_2(),
+            )
+            .child(list)
     }
 
     fn render_subtabs(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -623,14 +740,13 @@ impl SettingsView {
                                 Button::new(ElementId::Name(
                                     format!("search-page-{}", s.id()).into(),
                                 ))
+                                .debug_selector(move || format!("search-page-{}", s.id()))
                                 .outline()
                                 .icon(s.icon())
                                 .label(s.label())
-                                .on_click(
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.open(s, window, cx)
-                                    }),
-                                )
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| this.open(s, true, window, cx),
+                                ))
                             })),
                     )
             })
@@ -1147,7 +1263,27 @@ impl Render for SettingsView {
         }
         let searching = !self.query.trim().is_empty();
         let section = self.section;
-        let content: AnyElement = if !searching && section == SettingsSection::Logs {
+        let content: AnyElement = if !searching && section.is_embedded() {
+            match self.embedded_view(section) {
+                Some(view) => div()
+                    .id("settings-embedded-content")
+                    .debug_selector(|| "settings-embedded-content".into())
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .h_full()
+                    .child(view)
+                    .into_any_element(),
+                None => v_flex()
+                    .id("settings-embedded-fallback")
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .p_6()
+                    .child(PageHeader::new(section.label()))
+                    .into_any_element(),
+            }
+        } else if !searching && section == SettingsSection::Logs {
             v_flex()
                 .flex_1()
                 .min_w_0()
@@ -1204,7 +1340,10 @@ impl Render for SettingsView {
                     SettingsSection::Backup => self.backup.clone().into_any_element(),
                     SettingsSection::SystemInfo => self.render_sysinfo(cx),
                     SettingsSection::About => self.render_about(cx),
-                    SettingsSection::Logs => div().into_any_element(),
+                    SettingsSection::Accounts
+                    | SettingsSection::WineManager
+                    | SettingsSection::Emulators
+                    | SettingsSection::Logs => div().into_any_element(),
                 }
             };
             div()
@@ -1252,6 +1391,24 @@ mod tests {
             SettingsSection::from_id("games_settings"),
             SettingsSection::GameDefaults
         );
+        assert_eq!(
+            SettingsSection::from_id("wine"),
+            SettingsSection::GameDefaults
+        );
+        for alias in ["accounts", "account", "login"] {
+            assert_eq!(SettingsSection::from_id(alias), SettingsSection::Accounts);
+        }
+        let expected_wine = if SettingsSection::WineManager.supported_on_host() {
+            SettingsSection::WineManager
+        } else {
+            SettingsSection::General
+        };
+        for alias in ["wine-manager", "wine_manager", "proton"] {
+            assert_eq!(SettingsSection::from_id(alias), expected_wine);
+        }
+        for alias in ["emulators", "emulation", "roms"] {
+            assert_eq!(SettingsSection::from_id(alias), SettingsSection::Emulators);
+        }
         let expected_hud = if SettingsSection::PerformanceHud.supported_on_host() {
             SettingsSection::PerformanceHud
         } else {

@@ -1199,3 +1199,146 @@ fn performance_optiscaler_and_replay_subtabs_render_cleanly(cx: &mut TestAppCont
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext) {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use gpui_kit::{
+        InteractiveElement as _, IntoElement, Render, Styled as _, VisualTestContext, div,
+    };
+
+    struct StubView(&'static str);
+    impl Render for StubView {
+        fn render(
+            &mut self,
+            _: &mut gpui_kit::Window,
+            _: &mut gpui_kit::Context<Self>,
+        ) -> impl IntoElement {
+            let selector = self.0;
+            div().size_full().debug_selector(move || selector.into())
+        }
+    }
+
+    let accounts_calls = Arc::new(AtomicUsize::new(0));
+    let wine_calls = Arc::new(AtomicUsize::new(0));
+    let emulators_calls = Arc::new(AtomicUsize::new(0));
+
+    let (handle, view) = open(cx, {
+        let accounts_calls = accounts_calls.clone();
+        let wine_calls = wine_calls.clone();
+        let emulators_calls = emulators_calls.clone();
+        move |window, cx| {
+            irori_ui::hooks::install(
+                irori_ui::hooks::Hooks {
+                    accounts_view: Some(Arc::new(move |_, cx| {
+                        accounts_calls.fetch_add(1, Ordering::Relaxed);
+                        cx.new(|_| StubView("stub-accounts")).into()
+                    })),
+                    wine_manager_view: Some(Arc::new(move |_, cx| {
+                        wine_calls.fetch_add(1, Ordering::Relaxed);
+                        cx.new(|_| StubView("stub-wine")).into()
+                    })),
+                    emulators_view: Some(Arc::new(move |_, cx| {
+                        emulators_calls.fetch_add(1, Ordering::Relaxed);
+                        cx.new(|_| StubView("stub-emulators")).into()
+                    })),
+                    ..Default::default()
+                },
+                cx,
+            );
+            SettingsView::new("general".into(), window, cx)
+        }
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    // Opening General must not eagerly build management views.
+    assert_eq!(accounts_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(wine_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(emulators_calls.load(Ordering::Relaxed), 0);
+
+    for (id, expected_section, selector, counter) in [
+        (
+            "accounts",
+            SettingsSection::Accounts,
+            "stub-accounts",
+            &accounts_calls,
+        ),
+        (
+            "emulators",
+            SettingsSection::Emulators,
+            "stub-emulators",
+            &emulators_calls,
+        ),
+    ] {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section(id, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert_eq!(vcx.read(|cx| view.read(cx).section()), expected_section);
+        assert!(vcx.debug_bounds(selector).is_some(), "{selector}");
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+    }
+
+    if SettingsSection::WineManager.supported_on_host() {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section("wine-manager", window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert_eq!(
+            vcx.read(|cx| view.read(cx).section()),
+            SettingsSection::WineManager
+        );
+        assert!(vcx.debug_bounds("stub-wine").is_some());
+        assert_eq!(wine_calls.load(Ordering::Relaxed), 1);
+    }
+
+    // Revisiting Accounts reuses the cached view instead of rebuilding it.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("accounts", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert_eq!(accounts_calls.load(Ordering::Relaxed), 1);
+    assert!(vcx.debug_bounds("stub-accounts").is_some());
+
+    // Search surfaces embedded pages via their keywords.
+    let mut search_cases = vec![
+        ("epic", "search-page-accounts"),
+        ("roms", "search-page-emulators"),
+    ];
+    if SettingsSection::WineManager.supported_on_host() {
+        search_cases.push(("proton", "search-page-wine-manager"));
+    }
+    for (query, page_id) in search_cases {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section("general", window, cx));
+            let search = view.read(cx).search_input();
+            search.read(cx).focus_handle(cx).focus(window, cx);
+        })
+        .unwrap();
+        vcx.simulate_input(query);
+        vcx.run_until_parked();
+        vcx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert_eq!(vcx.read(|cx| view.read(cx).query().to_string()), query);
+        assert!(
+            vcx.debug_bounds(page_id).is_some(),
+            "expected search result button {page_id} for query {query}"
+        );
+    }
+}

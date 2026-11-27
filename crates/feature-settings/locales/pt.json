@@ -2323,5 +2323,10 @@
   "settings.field.ui_cover_compat_badges.help": "Mostra classificações ProtonDB e selos Steam Deck Verified nas capas de jogos não instalados.",
   "settings.option.cover_caption.hover": "Ao passar o rato",
   "settings.field.ui_library_greeting.label": "Mostrar saudação no cabeçalho da biblioteca",
-  "settings.field.ui_library_greeting.help": "Cumprimenta-te consoante a hora do dia no topo da Biblioteca. Clica no teu nome para o editar ou ocultar."
+  "settings.field.ui_library_greeting.help": "Cumprimenta-te consoante a hora do dia no topo da Biblioteca. Clica no teu nome para o editar ou ocultar.",
+  "settings.sidebar.setup": "Contas e ferramentas",
+  "settings.page.accounts": "Contas",
+  "settings.page.wine_manager": "Wine e Proton",
+  "settings.page.wine_manager_macos": "Gestor do Wine",
+  "settings.page.emulators": "Emuladores"
 }

@@ -2323,5 +2323,10 @@
   "settings.field.ui_cover_compat_badges.help": "ProtonDB-Bewertungen und „Steam Deck Verified“-Abzeichen auf Covern nicht installierter Spiele anzeigen.",
   "settings.option.cover_caption.hover": "Beim Überfahren",
   "settings.field.ui_library_greeting.label": "Begrüßung in der Bibliotheksüberschrift anzeigen",
-  "settings.field.ui_library_greeting.help": "Begrüßt dich oben in der Bibliothek passend zur Tageszeit. Klicke dort auf deinen Namen, um ihn zu ändern oder auszublenden."
+  "settings.field.ui_library_greeting.help": "Begrüßt dich oben in der Bibliothek passend zur Tageszeit. Klicke dort auf deinen Namen, um ihn zu ändern oder auszublenden.",
+  "settings.sidebar.setup": "Konten & Werkzeuge",
+  "settings.page.accounts": "Konten",
+  "settings.page.wine_manager": "Wine & Proton",
+  "settings.page.wine_manager_macos": "Wine-Manager",
+  "settings.page.emulators": "Emulatoren"
 }

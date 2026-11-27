@@ -127,6 +127,13 @@ pub struct Hooks {
     /// computer (the management screens draw it, from stores the library
     /// doesn't know).
     pub found_sources: Option<ViewFn>,
+    /// Make the Accounts view shown inside Settings (lives in `irori-manage`,
+    /// which `irori-settings` does not depend on).
+    pub accounts_view: Option<ViewFn>,
+    /// Make the Wine & Proton manager view shown inside Settings.
+    pub wine_manager_view: Option<ViewFn>,
+    /// Make the Emulators view shown inside Settings.
+    pub emulators_view: Option<ViewFn>,
     /// Play one game (its copy) as the game page does: saves conflicts and
     /// missing files answered there (the game feature).
     pub play: Option<GameFn>,
@@ -169,6 +176,30 @@ pub fn found_sources(window: &mut Window, cx: &mut App) -> Option<AnyView> {
     let hook = cx
         .try_global::<Hooks>()
         .and_then(|h| h.found_sources.clone())?;
+    Some(hook(window, cx))
+}
+
+/// The Accounts view embedded inside Settings; `None` without the hook (tests).
+pub fn accounts_view(window: &mut Window, cx: &mut App) -> Option<AnyView> {
+    let hook = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.accounts_view.clone())?;
+    Some(hook(window, cx))
+}
+
+/// The Wine & Proton manager view embedded inside Settings; `None` without the hook (tests).
+pub fn wine_manager_view(window: &mut Window, cx: &mut App) -> Option<AnyView> {
+    let hook = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.wine_manager_view.clone())?;
+    Some(hook(window, cx))
+}
+
+/// The Emulators view embedded inside Settings; `None` without the hook (tests).
+pub fn emulators_view(window: &mut Window, cx: &mut App) -> Option<AnyView> {
+    let hook = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.emulators_view.clone())?;
     Some(hook(window, cx))
 }
 

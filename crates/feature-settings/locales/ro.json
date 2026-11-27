@@ -2323,5 +2323,10 @@
   "settings.field.ui_cover_compat_badges.help": "Afișează evaluările ProtonDB și insignele Steam Deck Verified pe coperțile jocurilor neinstalate.",
   "settings.option.cover_caption.hover": "La trecerea mouse-ului",
   "settings.field.ui_library_greeting.label": "Arată salutul în antetul bibliotecii",
-  "settings.field.ui_library_greeting.help": "Te salută în funcție de ora zilei în partea de sus a Bibliotecii. Dă clic pe numele tău acolo pentru a-l edita sau ascunde."
+  "settings.field.ui_library_greeting.help": "Te salută în funcție de ora zilei în partea de sus a Bibliotecii. Dă clic pe numele tău acolo pentru a-l edita sau ascunde.",
+  "settings.sidebar.setup": "Conturi și unelte",
+  "settings.page.accounts": "Conturi",
+  "settings.page.wine_manager": "Wine și Proton",
+  "settings.page.wine_manager_macos": "Manager Wine",
+  "settings.page.emulators": "Emulatoare"
 }
