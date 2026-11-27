@@ -20,7 +20,7 @@ use gpui_kit::{
     Background, Context, Hsla, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
     Window, div, linear_color_stop, linear_gradient, px, rems, rgb,
 };
-use irori_core::hud::{sanitize_hex6, sanitize_hud_label};
+use irori_core::hud::{sanitize_hex6, sanitize_hud_label, truncate_hud_label};
 use irori_core::{
     HardwareVendor, HudBackend, HudColorPalette, HudOrientation, HudPosition, HudPreset,
     MangoHudProfile, MetalHudAlignment, MetalHudSettings, Paths, ThemeHudColors,
@@ -1151,12 +1151,15 @@ fn build_cache(
     let cpu_vendor = env.cpu_vendor;
     let palette = resolve_preview_palette(profile, gpu_vendor, cpu_vendor, theme_colors);
     let gpu_label: SharedString = {
-        let custom = sanitize_hud_label(&profile.gpu_label_override);
+        let custom = truncate_hud_label(&sanitize_hud_label(&profile.gpu_label_override));
         if !custom.is_empty() {
             custom.into()
         } else {
-            let detected = default_gpu_short_label(&profile.gpu_selection, &env.gpus);
-            if detected.trim().is_empty() {
+            let detected = truncate_hud_label(&sanitize_hud_label(&default_gpu_short_label(
+                &profile.gpu_selection,
+                &env.gpus,
+            )));
+            if detected.is_empty() {
                 SharedString::new_static("GPU")
             } else {
                 detected.into()
@@ -1164,13 +1167,16 @@ fn build_cache(
         }
     };
     let cpu_label: SharedString = {
-        let custom = sanitize_hud_label(&profile.cpu_label_override);
+        let custom = truncate_hud_label(&sanitize_hud_label(&profile.cpu_label_override));
         if !custom.is_empty() {
             custom.into()
-        } else if !env.cpu_label.trim().is_empty() {
-            env.cpu_label.clone().into()
         } else {
-            SharedString::new_static("CPU")
+            let detected = truncate_hud_label(&sanitize_hud_label(&env.cpu_label));
+            if detected.is_empty() {
+                SharedString::new_static("CPU")
+            } else {
+                detected.into()
+            }
         }
     };
 
@@ -1688,5 +1694,62 @@ mod tests {
             &irori_core::ThemeHudColors::default(),
         );
         assert!((large.font_scale - 1.55).abs() < 1e-4);
+    }
+
+    #[test]
+    fn preview_truncates_long_gpu_and_cpu_labels_identically_in_vertical_and_horizontal() {
+        let mut profile = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        let env = LinuxHudEnv {
+            cpu_label: "R7 7800X3D".into(),
+            gpus: vec![irori_runtime::hud::hardware_linux::DetectedGpu {
+                slot: "0000:03:00.0".into(),
+                vendor_id: "1002".into(),
+                device_id: "73ff".into(),
+                subvendor_id: None,
+                subdevice_id: None,
+                vram_bytes: Some(8 * 1024 * 1024 * 1024),
+                display_name: "Radeon RX 6600/6600 XT/6600M".into(),
+                short_label: "RX 6600/6600 XT/6600M".into(),
+                is_dedicated: true,
+            }],
+            ..Default::default()
+        };
+        let theme = ThemeHudColors::default();
+        let cache = build_cache(&profile, &MetalHudSettings::default(), &env, &theme);
+        assert_eq!(cache.grid_rows[0].label.as_ref(), "RX 6600...");
+        assert_eq!(cache.horizontal_segments[0].label.as_ref(), "RX 6600...");
+        assert!(
+            cache
+                .grid_rows
+                .iter()
+                .any(|r| r.label.as_ref() == "R7 7800X3D")
+        );
+        assert!(
+            cache
+                .horizontal_segments
+                .iter()
+                .any(|s| s.label.as_ref() == "R7 7800X3D")
+        );
+
+        profile.gpu_label_override = "RX 6600 - TEST TEST TEST".into();
+        profile.cpu_label_override = "Ryzen 7 7800X3D".into();
+        let override_cache = build_cache(&profile, &MetalHudSettings::default(), &env, &theme);
+        assert_eq!(override_cache.grid_rows[0].label.as_ref(), "RX 6600...");
+        assert_eq!(
+            override_cache.horizontal_segments[0].label.as_ref(),
+            "RX 6600..."
+        );
+        assert!(
+            override_cache
+                .grid_rows
+                .iter()
+                .any(|r| r.label.as_ref() == "Ryzen 7...")
+        );
+        assert!(
+            override_cache
+                .horizontal_segments
+                .iter()
+                .any(|s| s.label.as_ref() == "Ryzen 7...")
+        );
     }
 }

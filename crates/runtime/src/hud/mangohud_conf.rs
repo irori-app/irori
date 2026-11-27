@@ -4,6 +4,7 @@ use std::fmt::Write as _;
 
 use irori_core::hud::{
     DEFAULT_TOGGLE_HUD, DEFAULT_TOGGLE_PRESET, sanitize_hex6, sanitize_hud_label,
+    truncate_hud_label,
 };
 use irori_core::{
     HardwareVendor, HudColorPalette, HudOrientation, HudPreset, MangoHudProfile, ThemeHudColors,
@@ -186,19 +187,21 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
     }
 
     // (c) Labels (parameter values only; never add display elements on their own)
-    let gpu_label = if profile.gpu_label_override.trim().is_empty() {
-        sanitize_hud_label(&ctx.detected_gpu_label)
+    let raw_gpu = if profile.gpu_label_override.trim().is_empty() {
+        &ctx.detected_gpu_label
     } else {
-        sanitize_hud_label(&profile.gpu_label_override)
+        &profile.gpu_label_override
     };
+    let gpu_label = truncate_hud_label(&sanitize_hud_label(raw_gpu));
     if !gpu_label.is_empty() {
         let _ = writeln!(out, "gpu_text={gpu_label}");
     }
-    let cpu_label = if profile.cpu_label_override.trim().is_empty() {
-        sanitize_hud_label(&ctx.detected_cpu_label)
+    let raw_cpu = if profile.cpu_label_override.trim().is_empty() {
+        &ctx.detected_cpu_label
     } else {
-        sanitize_hud_label(&profile.cpu_label_override)
+        &profile.cpu_label_override
     };
+    let cpu_label = truncate_hud_label(&sanitize_hud_label(raw_cpu));
     if !cpu_label.is_empty() {
         let _ = writeln!(out, "cpu_text={cpu_label}");
     }
@@ -489,16 +492,16 @@ mod tests {
         p.toggle_preset = "Shift_L+F9\n=bad".into();
 
         let ctx = ConfRenderContext {
-            detected_gpu_label: "RX 9070 XT #1=fast,ok;+yes\n".into(),
-            detected_cpu_label: "Ryzen 7=7800X3D".into(),
+            detected_gpu_label: "RX #6=6,0;+0\n".into(),
+            detected_cpu_label: "R7=7800X3D".into(),
             ..Default::default()
         };
         let conf = render_mangohud_conf(&p, &ctx);
         let l = lines(&conf);
         assert!(l.contains(&"preset=5,1,2,3,4"));
         assert!(l.contains(&"toggle_preset=Shift_L+F9bad"));
-        assert!(l.contains(&"gpu_text=RX 9070 XT 1fastokyes"));
-        assert!(l.contains(&"cpu_text=Ryzen 77800X3D"));
+        assert!(l.contains(&"gpu_text=RX 6600"));
+        assert!(l.contains(&"cpu_text=R77800X3D"));
 
         let presets = render_mangohud_presets(&p);
         let p5 = preset_section(&presets, 5);
@@ -676,5 +679,26 @@ mod tests {
         assert!(l_nv.contains(&"gpu_color=76B900"));
         assert!(l_nv.contains(&"vram_color=76B900"));
         assert!(l_nv.contains(&"cpu_color=ED1C24"));
+    }
+
+    #[test]
+    fn long_gpu_and_cpu_labels_truncate_with_ascii_ellipsis() {
+        let mut p = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        let ctx = ConfRenderContext {
+            detected_gpu_label: "RX 6600/6600 XT/6600M".into(),
+            detected_cpu_label: "R7 7800X3D".into(),
+            ..Default::default()
+        };
+        let conf = render_mangohud_conf(&p, &ctx);
+        let l = lines(&conf);
+        assert!(l.contains(&"gpu_text=RX 6600..."));
+        assert!(l.contains(&"cpu_text=R7 7800X3D"));
+
+        p.gpu_label_override = "RX 6600 - TEST TEST TEST".into();
+        p.cpu_label_override = "Ryzen 7 7800X3D".into();
+        let conf_override = render_mangohud_conf(&p, &ctx);
+        let lo = lines(&conf_override);
+        assert!(lo.contains(&"gpu_text=RX 6600..."));
+        assert!(lo.contains(&"cpu_text=Ryzen 7..."));
     }
 }
