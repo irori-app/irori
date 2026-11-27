@@ -117,6 +117,14 @@ pub(crate) fn shown_games(cx: &App) -> Option<Arc<[Arc<GameInfo>]>> {
     Some(view.read(cx).visible_games())
 }
 
+/// Whether the active library view found `id`'s installed files missing.
+pub(crate) fn is_game_unavailable(id: &GameId, cx: &App) -> bool {
+    let Some(view) = active_library(cx) else {
+        return false;
+    };
+    view.read(cx).availability.missing().contains(id)
+}
+
 /// How many picked games "Remove from library" would take out, while the
 /// library is in selection mode with any.
 pub fn removable_picks(cx: &App) -> Option<usize> {

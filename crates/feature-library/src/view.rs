@@ -22,20 +22,22 @@ use std::time::Instant;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::slider::{SliderEvent, SliderState, SliderValue};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{
-    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, VirtualListScrollHandle, h_flex, v_flex,
-    v_virtual_list,
+    ActiveTheme as _, Icon, Selectable, Sizable as _, StyledExt as _, VirtualListScrollHandle,
+    h_flex, v_flex, v_virtual_list,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, EventEmitter, ExternalPaths, FocusHandle,
-    Focusable, InteractiveElement as _, IntoElement, KeyDownEvent, Keystroke, ParentElement as _,
-    Pixels, Render, SharedString, Size, Styled as _, Subscription, Window, canvas, div, px, rems,
+    Focusable, Hsla, InteractiveElement as _, IntoElement, KeyDownEvent, Keystroke,
+    ParentElement as _, Pixels, Render, RenderOnce, SharedString, Size, Styled as _, Subscription,
+    Window, canvas, div, px, rems,
 };
 use irori_core::settings::{
     CoverShape, Density, FocusCoverSize, LibraryBackground, LibraryLayout, ListRowSize, UiPrefs,
@@ -64,8 +66,6 @@ use crate::{
 };
 use irori_ui::art::LruImageCache;
 
-/// Width of a "Continue playing" card, in rem (16:9 art).
-const CARD_REM: f32 = 24.0;
 /// Width of a favourite tile in the top row, in rem.
 const FAVOURITE_REM: f32 = 8.0;
 /// Decoded images kept by the library's image cache until the first layout
@@ -86,6 +86,8 @@ pub struct LibraryView {
     pub(super) sort_open: bool,
     pub(super) sort_more_open: Option<bool>,
     pub(super) tabs_manager_open: bool,
+    pub(super) greeting_open: bool,
+    greeting_input: Option<(Entity<InputState>, Subscription)>,
     tile_slider: Entity<SliderState>,
     scroll: VirtualListScrollHandle,
     images: Entity<LruImageCache>,
@@ -150,6 +152,8 @@ pub struct LibraryView {
     toolbar: toolbar::ListToolbar,
     /// The stores the library has games of, once per library revision.
     stores_with_games: filter::PerRevision<HashSet<Runner>>,
+    /// Total installed games in the library, once per library revision.
+    installed_count: filter::PerRevision<usize>,
     launching: HashSet<GameId>,
     /// Games whose next launch skips the store's update check ("Play now").
     skip_version_check: HashSet<GameId>,
@@ -337,6 +341,8 @@ impl LibraryView {
             sort_open: false,
             sort_more_open: None,
             tabs_manager_open: false,
+            greeting_open: false,
+            greeting_input: None,
             tile_slider,
             scroll: VirtualListScrollHandle::new(),
             images: LruImageCache::new(IMAGE_CACHE_CAPACITY, cx),
@@ -372,6 +378,7 @@ impl LibraryView {
             launching: HashSet::new(),
             bulk: Default::default(),
             stores_with_games: Default::default(),
+            installed_count: Default::default(),
             skip_version_check: HashSet::new(),
             availability: Availability::default(),
             compat: crate::compat_badges::CompatQueue::default(),
@@ -582,6 +589,26 @@ impl LibraryView {
         cx.notify();
     }
 
+    #[cfg(test)]
+    pub(crate) fn is_greeting_open(&self) -> bool {
+        self.greeting_open
+    }
+
+    #[cfg(test)]
+    pub(crate) fn greeting_input_focused_for_test(&self, window: &Window, cx: &App) -> bool {
+        self.greeting_input
+            .as_ref()
+            .is_some_and(|(input, _)| input.focus_handle(cx).is_focused(window))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn greeting_state_for_test(&self) -> (bool, Option<String>) {
+        (
+            self.ui_prefs.library_greeting,
+            self.ui_prefs.greeting_name.clone(),
+        )
+    }
+
     /// Move keyboard focus to the search field.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search.update(cx, |s, cx| s.focus(window, cx));
@@ -713,6 +740,63 @@ impl LibraryView {
         });
     }
 
+    fn open_greeting_popover(
+        &mut self,
+        current: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let initial = current.to_owned();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .default_value(initial)
+                .placeholder(t("library.greeting.name_placeholder"))
+        });
+        input.update(cx, |s, cx| s.focus(window, cx));
+        let sub = cx.subscribe_in(&input, window, |this, _, event, _, cx| match event {
+            InputEvent::Change => cx.notify(),
+            InputEvent::PressEnter { .. } => this.save_greeting_name(cx),
+            _ => {}
+        });
+        self.greeting_input = Some((input, sub));
+        self.greeting_open = true;
+        cx.notify();
+    }
+
+    fn save_greeting_name(&mut self, cx: &mut Context<Self>) {
+        let raw = self
+            .greeting_input
+            .as_ref()
+            .map(|(input, _)| input.read(cx).value().trim().to_string())
+            .unwrap_or_default();
+        self.greeting_open = false;
+        self.greeting_input = None;
+        if raw.is_empty() {
+            self.ui_prefs.library_greeting = false;
+            self.ui_prefs.greeting_name = None;
+            persist_ui(cx, |u| {
+                u.library_greeting = false;
+                u.greeting_name = None;
+            });
+        } else {
+            self.ui_prefs.greeting_name = Some(raw.clone());
+            self.ui_prefs.library_greeting = true;
+            persist_ui(cx, move |u| {
+                u.greeting_name = Some(raw);
+                u.library_greeting = true;
+            });
+        }
+        cx.notify();
+    }
+
+    fn hide_greeting(&mut self, cx: &mut Context<Self>) {
+        self.greeting_open = false;
+        self.greeting_input = None;
+        self.ui_prefs.library_greeting = false;
+        persist_ui(cx, |u| u.library_greeting = false);
+        cx.notify();
+    }
+
     // ---- rendering --------------------------------------------------------------
 
     fn render_header(&mut self, _window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -720,9 +804,11 @@ impl LibraryView {
             let lib = models(cx).library.read(cx);
             (lib.snapshot.len(), lib.refreshing)
         };
+        let installed = self.frame.installed_count;
         let shown = self.frame.games.len();
         let filter = self.filters.read(cx).filter().clone();
-        let (shown, count) = (shown.to_string(), total.to_string());
+        let (shown_str, count_str, installed_str) =
+            (shown.to_string(), total.to_string(), installed.to_string());
         // Installing from GOG offline installers needs the GOG library.
         let gog_signed_in = models(cx)
             .accounts
@@ -730,18 +816,165 @@ impl LibraryView {
             .users
             .get(&Runner::Gog)
             .is_some_and(Option::is_some);
+        let greeting_on = self.ui_prefs.library_greeting;
         let description = match (filter.is_narrowed(), total) {
             (_, 0) => t("library.header.no_games"),
             (true, 1) => t_args(
                 "library.header.shown_of_total_one",
-                &[("shown", &shown), ("total", &count)],
+                &[("shown", &shown_str), ("total", &count_str)],
             ),
             (true, _) => t_args(
                 "library.header.shown_of_total_other",
-                &[("shown", &shown), ("total", &count)],
+                &[("shown", &shown_str), ("total", &count_str)],
+            ),
+            (false, 1) if installed > 0 => t_args(
+                "library.header.count_installed_one",
+                &[("installed", &installed_str)],
             ),
             (false, 1) => t("library.common.games_one"),
-            (false, _) => t_args("library.common.games_other", &[("count", &count)]),
+            (false, _) if installed > 0 => t_args(
+                "library.header.count_installed_other",
+                &[("count", &count_str), ("installed", &installed_str)],
+            ),
+            (false, _) => t_args("library.common.games_other", &[("count", &count_str)]),
+        };
+
+        let title_el: AnyElement = if greeting_on {
+            let pod = crate::greeting::current_part_of_day();
+            let resolved = crate::greeting::resolve_name(self.ui_prefs.greeting_name.as_deref());
+            let (before, trigger_label, after, initial_name, underlined) = match resolved {
+                Some(name) => {
+                    let (before, after) = pod.split_greeting();
+                    (before, SharedString::from(name.clone()), after, name, true)
+                }
+                None => (
+                    SharedString::default(),
+                    pod.plain_greeting(),
+                    SharedString::default(),
+                    String::new(),
+                    false,
+                ),
+            };
+            let theme = cx.theme();
+            let primary = theme.primary;
+            let muted = theme.muted_foreground;
+            let view = cx.entity().downgrade();
+            let open_view = view.clone();
+            let save_view = view.clone();
+            let cancel_view = view.clone();
+            let hide_view = view.clone();
+            let input_entity = self.greeting_input.as_ref().map(|(input, _)| input.clone());
+            let input_focus = input_entity.as_ref().map(|i| i.focus_handle(cx));
+            let popover = Popover::new("library-greeting-popover")
+                .open(self.greeting_open)
+                .when_some(input_focus, |p, handle| p.track_focus(&handle))
+                .on_open_change(move |open, window, cx| {
+                    let initial = initial_name.clone();
+                    open_view
+                        .update(cx, |this, cx| {
+                            if *open {
+                                this.open_greeting_popover(&initial, window, cx);
+                            } else if this.greeting_open {
+                                this.greeting_open = false;
+                                this.greeting_input = None;
+                                cx.notify();
+                            }
+                        })
+                        .ok();
+                })
+                .trigger(GreetingTrigger {
+                    label: trigger_label,
+                    primary,
+                    underlined,
+                    selected: self.greeting_open,
+                })
+                .content(move |_, _, _| {
+                    let save_view = save_view.clone();
+                    let cancel_view = cancel_view.clone();
+                    let hide_view = hide_view.clone();
+                    let input = input_entity.clone();
+                    v_flex()
+                        .w(rems(19.))
+                        .gap_2p5()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_semibold()
+                                .text_color(muted)
+                                .child(t("library.greeting.name_label")),
+                        )
+                        .when_some(input, |el, input| el.child(Input::new(&input).small()))
+                        .child(
+                            h_flex()
+                                .w_full()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    Button::new("greeting-hide")
+                                        .small()
+                                        .ghost()
+                                        .label(t("library.greeting.hide"))
+                                        .on_click(move |_, _, cx| {
+                                            hide_view
+                                                .update(cx, |this, cx| this.hide_greeting(cx))
+                                                .ok();
+                                        }),
+                                )
+                                .child(
+                                    h_flex()
+                                        .gap_1p5()
+                                        .child(
+                                            Button::new("greeting-cancel")
+                                                .small()
+                                                .ghost()
+                                                .label(t("library.common.cancel"))
+                                                .on_click(move |_, _, cx| {
+                                                    cancel_view
+                                                        .update(cx, |this, cx| {
+                                                            this.greeting_open = false;
+                                                            this.greeting_input = None;
+                                                            cx.notify();
+                                                        })
+                                                        .ok();
+                                                }),
+                                        )
+                                        .child(
+                                            Button::new("greeting-save")
+                                                .small()
+                                                .primary()
+                                                .label(t("library.common.save"))
+                                                .on_click(move |_, _, cx| {
+                                                    save_view
+                                                        .update(cx, |this, cx| {
+                                                            this.save_greeting_name(cx)
+                                                        })
+                                                        .ok();
+                                                }),
+                                        ),
+                                ),
+                        )
+                });
+            h_flex()
+                .items_baseline()
+                .text_3xl()
+                .font_extrabold()
+                .min_w_0()
+                .overflow_hidden()
+                .when(!before.is_empty(), |el| {
+                    el.child(div().flex_shrink_0().child(before))
+                })
+                .child(div().min_w_0().child(popover))
+                .when(!after.is_empty(), |el| {
+                    el.child(div().flex_shrink_0().child(after))
+                })
+                .into_any_element()
+        } else {
+            div()
+                .text_3xl()
+                .font_extrabold()
+                .truncate()
+                .child(t("library.header.title"))
+                .into_any_element()
         };
 
         let actions = h_flex()
@@ -810,23 +1043,13 @@ impl LibraryView {
             .gap_4()
             .justify_between()
             .child(
-                v_flex()
-                    .gap_1()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .text_3xl()
-                            .font_extrabold()
-                            .truncate()
-                            .child(t("library.header.title")),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .truncate()
-                            .child(description),
-                    ),
+                v_flex().gap_1().min_w_0().child(title_el).child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .truncate()
+                        .child(description),
+                ),
             )
             .child(actions);
 
@@ -926,16 +1149,38 @@ impl LibraryView {
 
         if self.frame.games.is_empty() {
             let filter = self.filters.read(cx).filter().clone();
-            let description = t_args(
-                "library.no_match.description",
-                &[(
-                    "filters",
-                    &filter
-                        .describe(&models(cx).library.read(cx).user)
-                        .join(" · "),
-                )],
-            );
-            return EmptyState::new(IconName::SearchX, t("library.no_match.title"))
+            let trimmed_query = filter.query.trim();
+            let (icon, title, description) = if !trimmed_query.is_empty() {
+                (
+                    IconName::SearchX,
+                    t("library.no_match.search_title"),
+                    t_args(
+                        "library.no_match.search_description",
+                        &[("query", trimmed_query)],
+                    ),
+                )
+            } else if filter.favourites_only && filter.active_count() == 1 {
+                (
+                    IconName::Star,
+                    t("library.no_match.favourites_title"),
+                    t("library.no_match.favourites_description"),
+                )
+            } else {
+                (
+                    IconName::SearchX,
+                    t("library.no_match.title"),
+                    t_args(
+                        "library.no_match.description",
+                        &[(
+                            "filters",
+                            &filter
+                                .describe(&models(cx).library.read(cx).user)
+                                .join(" · "),
+                        )],
+                    ),
+                )
+            };
+            return EmptyState::new(icon, title)
                 .description(description)
                 .action(
                     Button::new("clear-filters")
@@ -972,7 +1217,12 @@ impl LibraryView {
         let list = div()
             .size_full()
             .on_scroll_wheel(cx.listener(|this, _, _, cx| {
-                if this.filters_open || this.look_open || this.sort_open || this.tabs_manager_open {
+                if this.filters_open
+                    || this.look_open
+                    || this.sort_open
+                    || this.tabs_manager_open
+                    || this.greeting_open
+                {
                     if this.filters_open {
                         this.filters_open = false;
                         this.filters_panel
@@ -984,6 +1234,8 @@ impl LibraryView {
                         this.sort_more_open = None;
                     }
                     this.tabs_manager_open = false;
+                    this.greeting_open = false;
+                    this.greeting_input = None;
                     cx.notify();
                 }
             }))
@@ -1277,6 +1529,48 @@ pub(crate) fn typed_search_text(keystroke: &Keystroke) -> Option<String> {
     let text = keystroke.key_char.as_deref()?;
     (!text.is_empty() && text.chars().all(|c| !c.is_control() && !c.is_whitespace()))
         .then(|| text.to_string())
+}
+
+/// Clickable name (or plain greeting) trigger for the library greeting popover.
+#[derive(IntoElement)]
+struct GreetingTrigger {
+    label: SharedString,
+    primary: Hsla,
+    underlined: bool,
+    selected: bool,
+}
+
+impl Selectable for GreetingTrigger {
+    fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    fn is_selected(&self) -> bool {
+        self.selected
+    }
+}
+
+impl RenderOnce for GreetingTrigger {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        let primary = self.primary;
+        div()
+            .id("library-greeting-name")
+            .debug_selector(|| "library-greeting-name".into())
+            .min_w_0()
+            .truncate()
+            .cursor_pointer()
+            .when(self.underlined, |el| {
+                el.border_b_2().border_color(if self.selected {
+                    primary
+                } else {
+                    primary.opacity(0.55)
+                })
+            })
+            .when(self.selected, |el| el.text_color(primary))
+            .hover(move |s| s.text_color(primary).border_color(primary))
+            .child(self.label)
+    }
 }
 
 #[cfg(test)]

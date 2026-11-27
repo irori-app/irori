@@ -2320,5 +2320,8 @@
   "settings.crash.delete": "Usuń raport",
   "settings.crash.delete_failed": "Nie udało się usunąć raportu o awarii",
   "settings.field.ui_cover_compat_badges.label": "Odznaki ProtonDB i Steam Deck na okładkach",
-  "settings.field.ui_cover_compat_badges.help": "Pokazuj oceny ProtonDB i odznaki Steam Deck Verified na okładkach niezainstalowanych gier."
+  "settings.field.ui_cover_compat_badges.help": "Pokazuj oceny ProtonDB i odznaki Steam Deck Verified na okładkach niezainstalowanych gier.",
+  "settings.option.cover_caption.hover": "Po najechaniu",
+  "settings.field.ui_library_greeting.label": "Pokazuj powitanie w nagłówku biblioteki",
+  "settings.field.ui_library_greeting.help": "Wita Cię zależnie od pory dnia u góry Biblioteki. Kliknij tam swoje imię, aby je zmienić lub ukryć."
 }

@@ -2358,5 +2358,8 @@
   "settings.crash.delete": "Excluir relatório",
   "settings.crash.delete_failed": "Não foi possível excluir o relatório de falha",
   "settings.field.ui_cover_compat_badges.label": "Selos ProtonDB e Steam Deck nas capas",
-  "settings.field.ui_cover_compat_badges.help": "Mostra classificações ProtonDB e selos Steam Deck Verified nas capas de jogos não instalados."
+  "settings.field.ui_cover_compat_badges.help": "Mostra classificações ProtonDB e selos Steam Deck Verified nas capas de jogos não instalados.",
+  "settings.option.cover_caption.hover": "Só no hover",
+  "settings.field.ui_library_greeting.label": "Mostrar saudação no cabeçalho da biblioteca",
+  "settings.field.ui_library_greeting.help": "Cumprimenta você conforme a hora do dia no topo da Biblioteca. Clique no seu nome para editar ou esconder."
 }

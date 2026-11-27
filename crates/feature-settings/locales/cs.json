@@ -2320,5 +2320,8 @@
   "settings.crash.delete": "Smazat zprávu",
   "settings.crash.delete_failed": "Zprávu o pádu se nepodařilo smazat",
   "settings.field.ui_cover_compat_badges.label": "Štítky ProtonDB a Steam Deck na obalech",
-  "settings.field.ui_cover_compat_badges.help": "Zobrazovat hodnocení ProtonDB a odznaky Steam Deck Verified na obalech nenainstalovaných her."
+  "settings.field.ui_cover_compat_badges.help": "Zobrazovat hodnocení ProtonDB a odznaky Steam Deck Verified na obalech nenainstalovaných her.",
+  "settings.option.cover_caption.hover": "Při najetí",
+  "settings.field.ui_library_greeting.label": "Zobrazovat pozdrav v záhlaví knihovny",
+  "settings.field.ui_library_greeting.help": "Pozdraví vás podle denní doby v horní části knihovny. Kliknutím na jméno ho upravíte nebo skryjete."
 }

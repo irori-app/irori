@@ -237,6 +237,10 @@ pub(super) const COVER_CAPTION: &[ChoiceOption] = &[
         Key("settings.option.cover_caption.title"),
     ),
     opt(
+        ChoiceValue::Str("hover"),
+        Key("settings.option.cover_caption.hover"),
+    ),
+    opt(
         ChoiceValue::Str("none"),
         Key("settings.option.cover_caption.none"),
     ),

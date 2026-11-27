@@ -2521,6 +2521,32 @@ fn look_popover_slider_clearance_and_single_line_segments(cx: &mut TestAppContex
         top_bounds[2].size.width > top_bounds[3].size.width,
         "Favourites should receive more width than Off with flex_auto: {top_bounds:?}"
     );
+
+    // Under covers (4 segments: Full | Title | Hover | None) also stays on one line.
+    let cap_ids = [
+        "look-cap-full",
+        "look-cap-title",
+        "look-cap-hover",
+        "look-cap-none",
+    ];
+    let cap_bounds: Vec<_> = cap_ids
+        .iter()
+        .map(|id| vcx.debug_bounds(id).expect(id))
+        .collect();
+    for pair in cap_bounds.windows(2) {
+        assert!(
+            (pair[0].origin.y - pair[1].origin.y).abs() <= px(1.),
+            "Under covers segments must share one line: {cap_bounds:?}"
+        );
+        assert!(
+            pair[1].left() >= pair[0].right(),
+            "Under covers segments must not overlap: {cap_bounds:?}"
+        );
+    }
+    assert!(
+        cap_bounds.last().unwrap().right() <= panel.right(),
+        "Under covers segments must stay within Look panel"
+    );
 }
 
 #[gpui_kit::test]
@@ -3077,4 +3103,200 @@ fn collection_dialog_scrolls_all_tags_and_supports_icon_and_manual_games(cx: &mu
     cx.update_window(window, |_, window, cx| window.close_dialog(cx))
         .unwrap();
     settle(cx);
+}
+
+#[gpui_kit::test]
+fn greeting_popover_focus_toggle_hide_and_shuffle_dialog(cx: &mut TestAppContext) {
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    // 1. Click greeting name -> opens popover and immediately focuses input.
+    let name_bounds = {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let b = vcx
+            .debug_bounds("library-greeting-name")
+            .expect("greeting name rendered");
+        vcx.simulate_click(b.center(), Default::default());
+        b
+    };
+    settle(cx);
+    assert!(cx.read(|cx| view.read(cx).is_greeting_open()));
+    let focused = cx
+        .update_window(window, |_, window, cx| {
+            view.read(cx).greeting_input_focused_for_test(window, cx)
+        })
+        .unwrap();
+    assert!(focused, "greeting input must receive focus on open");
+
+    // 2. Clicking the name again while open toggles the popover closed cleanly.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.simulate_click(name_bounds.center(), Default::default());
+    }
+    settle(cx);
+    assert!(
+        !cx.read(|cx| view.read(cx).is_greeting_open()),
+        "second click on greeting name must close popover"
+    );
+
+    let select_all = if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    };
+
+    // 3. Re-open, type a custom name + Enter -> saves custom name and closes.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        vcx.simulate_click(name_bounds.center(), Default::default());
+    }
+    settle(cx);
+    cx.simulate_keystrokes(window, select_all);
+    cx.simulate_input(window, "Borges");
+    cx.simulate_keystrokes(window, "enter");
+    settle(cx);
+    assert!(!cx.read(|cx| view.read(cx).is_greeting_open()));
+    assert_eq!(
+        cx.read(|cx| view.read(cx).greeting_state_for_test()),
+        (true, Some("Borges".into()))
+    );
+
+    // 4. Re-open, clear input to empty + Enter -> hides greeting and clears custom name.
+    let updated_bounds = {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let b = vcx
+            .debug_bounds("library-greeting-name")
+            .expect("updated greeting name rendered");
+        vcx.simulate_click(b.center(), Default::default());
+        b
+    };
+    let _ = updated_bounds;
+    settle(cx);
+    cx.simulate_keystrokes(window, select_all);
+    cx.simulate_keystrokes(window, "backspace");
+    cx.simulate_keystrokes(window, "enter");
+    settle(cx);
+    assert_eq!(
+        cx.read(|cx| view.read(cx).greeting_state_for_test()),
+        (false, None)
+    );
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-greeting-name").is_none(),
+            "hidden greeting reverts header to plain Library title"
+        );
+    }
+
+    // 5. Clicking "Surprise me" opens the upgraded Shuffle showcase modal.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let b = vcx
+            .debug_bounds("library-random-trigger")
+            .expect("Surprise me button rendered");
+        vcx.simulate_click(b.center(), Default::default());
+    }
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let dialog_bounds = vcx
+            .debug_bounds("library-shuffle-dialog")
+            .expect("Surprise me opens the shuffle showcase dialog");
+        assert!(
+            dialog_bounds.size.width >= px(500.),
+            "showcase modal must be widened (~38 rem), got {dialog_bounds:?}"
+        );
+        assert!(vcx.debug_bounds("shuffle-again").is_some());
+        let close = vcx
+            .debug_bounds("shuffle-close")
+            .expect("subtle close button rendered");
+        vcx.simulate_click(close.center(), Default::default());
+    }
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-shuffle-dialog").is_none(),
+            "clicking close button dismisses shuffle modal"
+        );
+    }
+
+    // 6. Under reduced motion the shuffle lands immediately, acquires focus,
+    // Space reshuffles (even after clicking Shuffle again), and Enter runs the
+    // primary action and closes the modal.
+    cx.update(|cx| {
+        let settings = irori_ui::models(cx).settings.clone();
+        settings.update(cx, |s, cx| {
+            let mut next = (*s.app).clone();
+            next.ui.reduce_motion = true;
+            s.app = Arc::new(next);
+            cx.notify();
+        });
+    });
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let b = vcx
+            .debug_bounds("library-random-trigger")
+            .expect("Surprise me button rendered");
+        vcx.simulate_click(b.center(), Default::default());
+    }
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("library-shuffle-dialog").is_some());
+        assert!(
+            vcx.debug_bounds("shuffle-winner-title").is_some(),
+            "reduced motion lands immediately on the winner showcase"
+        );
+        assert!(vcx.debug_bounds("shuffle-open").is_some());
+    }
+    cx.simulate_keystrokes(window, "space");
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("shuffle-winner-title").is_some(),
+            "Space reshuffles in place without dismissing the modal"
+        );
+        let again = vcx
+            .debug_bounds("shuffle-again")
+            .expect("Shuffle again button");
+        vcx.simulate_click(again.center(), Default::default());
+    }
+    settle(cx);
+    cx.simulate_keystrokes(window, "enter");
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("library-shuffle-dialog").is_none(),
+            "Enter after Shuffle again must trigger primary action and dismiss modal"
+        );
+    }
 }

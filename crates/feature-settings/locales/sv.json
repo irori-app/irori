@@ -2320,5 +2320,8 @@
   "settings.crash.delete": "Ta bort rapport",
   "settings.crash.delete_failed": "Kunde inte ta bort kraschrapporten",
   "settings.field.ui_cover_compat_badges.label": "ProtonDB- och Steam Deck-märken på omslag",
-  "settings.field.ui_cover_compat_badges.help": "Visa ProtonDB-betyg och Steam Deck Verified-märken på omslag för spel som inte är installerade."
+  "settings.field.ui_cover_compat_badges.help": "Visa ProtonDB-betyg och Steam Deck Verified-märken på omslag för spel som inte är installerade.",
+  "settings.option.cover_caption.hover": "Vid hovring",
+  "settings.field.ui_library_greeting.label": "Visa hälsning i biblioteksrubriken",
+  "settings.field.ui_library_greeting.help": "Hälsar dig efter tid på dygnet överst i Biblioteket. Klicka på ditt namn där för att ändra eller dölja det."
 }

@@ -214,6 +214,45 @@ fn roll() -> u64 {
     hasher.finish()
 }
 
+/// Filter hidden games out of `pool` and draw one winner across the entire
+/// remaining selection (installed and uninstalled alike), avoiding recent picks.
+fn select_shuffle_winner(
+    pool: Vec<Arc<GameInfo>>,
+    hidden: &BTreeSet<String>,
+    recent: &[String],
+    roll: u64,
+) -> Option<(Vec<Arc<GameInfo>>, Arc<GameInfo>)> {
+    let visible_pool: Vec<Arc<GameInfo>> = pool
+        .into_iter()
+        .filter(|g| !hidden.contains(&g.id().key()))
+        .collect();
+    let winner_id = choose(&visible_pool, hidden, recent, roll)?;
+    let winner = visible_pool.iter().find(|g| g.id() == winner_id)?.clone();
+    Some((visible_pool, winner))
+}
+
+/// Pick a game for the "Surprise me" shuffle modal from the library's current
+/// selection (falling back to the full library if nothing is shown), avoiding
+/// hidden games and recent picks. Returns `(eligible_pool, winner)`.
+pub(crate) fn pick_for_shuffle(cx: &mut App) -> Option<(Vec<Arc<GameInfo>>, Arc<GameInfo>)> {
+    crate::i18n::register();
+    let recent: Vec<String> = cx
+        .try_global::<RecentPicks>()
+        .map(|r| r.0.iter().cloned().collect())
+        .unwrap_or_default();
+    let (pool, hidden) = {
+        let library = models(cx).library.read(cx);
+        let shown = crate::view::remove::shown_games(cx)
+            .filter(|g| !g.is_empty())
+            .map(|g| g.to_vec())
+            .unwrap_or_else(|| library.snapshot.games.clone());
+        (shown, library.user.hidden.clone())
+    };
+    let (visible_pool, winner) = select_shuffle_winner(pool, &hidden, &recent, roll())?;
+    remember(&winner.id(), cx);
+    Some((visible_pool, winner))
+}
+
 /// Open the page of a random game (installed if any is), or say there is
 /// nothing to pick from.
 pub fn open_random_game(window: &mut Window, cx: &mut App) {
@@ -308,5 +347,41 @@ mod tests {
             choose(&games[..1], &none, &["gog:1".to_string()], 7),
             Some(GameId::new(Runner::Gog, "1"))
         );
+    }
+
+    #[test]
+    fn shuffle_draws_from_all_shown_games_not_only_installed() {
+        let pool = vec![
+            game("1", true),
+            game("2", false),
+            game("3", false),
+            game("4", false),
+        ];
+        let hidden: BTreeSet<String> = ["gog:4".to_string()].into();
+        let picks: BTreeSet<GameId> = (0..12)
+            .filter_map(|roll| {
+                let (eligible, winner) = select_shuffle_winner(pool.clone(), &hidden, &[], roll)?;
+                assert_eq!(eligible.len(), 3, "hidden game excluded from reel pool");
+                Some(winner.id())
+            })
+            .collect();
+        assert_eq!(
+            picks,
+            [
+                GameId::new(Runner::Gog, "1"),
+                GameId::new(Runner::Gog, "2"),
+                GameId::new(Runner::Gog, "3"),
+            ]
+            .into_iter()
+            .collect(),
+            "shuffle in All must draw across both installed and uninstalled games"
+        );
+        // Recent winner is skipped on the next roll while other games remain.
+        let recent = ["gog:1".to_string()];
+        for roll in 0..10 {
+            let (_, winner) =
+                select_shuffle_winner(pool.clone(), &hidden, &recent, roll).expect("winner");
+            assert_ne!(winner.id(), GameId::new(Runner::Gog, "1"));
+        }
     }
 }

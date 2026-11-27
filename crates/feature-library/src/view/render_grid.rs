@@ -28,14 +28,12 @@ use irori_ui::components::{
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
-use irori_ui::style::{KeyboardFocusable as _, art_tint};
+use irori_ui::style::{KeyboardFocusable as _, art_tint, reduce_motion};
 use irori_ui::{Route, models, navigate};
 
 use super::menus::game_menu;
 use super::render_list::pick_mark;
-use super::{
-    CARD_REM, FAVOURITE_REM, Item, LibraryView, caption, item_rem, status_text, store_badges_shown,
-};
+use super::{FAVOURITE_REM, Item, LibraryView, caption, item_rem, status_text, store_badges_shown};
 use crate::commands::{self, GameCommand};
 use crate::filter::GroupKind;
 use crate::grid;
@@ -142,14 +140,19 @@ impl LibraryView {
             )
         };
         let badges_always = self.ui_prefs.store_badges_always;
+        let focus_view = self.layout == LibraryLayout::Focus;
         let (corners, caption_kind, hover, favourite_star) = (
             self.ui_prefs.cover_corners,
-            self.ui_prefs.cover_caption,
+            if focus_view {
+                self.ui_prefs.focus_cover_caption()
+            } else {
+                self.ui_prefs.cover_caption
+            },
             self.ui_prefs.cover_hover,
             self.ui_prefs.cover_favourite,
         );
-        let lifts = hover == CoverHover::Lift;
-        let focus_view = self.layout == LibraryLayout::Focus;
+        let reduced = reduce_motion(cx);
+        let lifts = hover == CoverHover::Lift && !reduced;
         // The user's categories, at the cover's foot while nothing else is.
         let categories = (cover_categories && !focus_view)
             .then(|| {
@@ -350,10 +353,55 @@ impl LibraryView {
         // Uninstalled games are dimmed until pointed at, so installed ones stand out.
         let dim = !state.installed && !active && status.is_none();
         let primary_color = cx.theme().primary;
+        let bg_color = cx.theme().background;
+        // Consistent theme accent keeps rapid cover hovering instant with zero
+        // colour-swap flash and avoids generating *-ambient.jpg blur files on disk.
+        let hover_glow = (active && lifts).then(|| BoxShadow {
+            color: primary_color.opacity(0.45),
+            offset: point(px(0.), px(10.)),
+            blur_radius: px(28.),
+            spread_radius: px(-6.),
+            inset: false,
+        });
+        let has_top_right_markers = copies > 1
+            || (state.has_update && state.installed && !state.sideload)
+            || (state.favourite && favourite_star);
+        let hover_caption = (caption_kind == CoverCaption::Hover && active).then(|| {
+            let fade = linear_gradient(
+                180.,
+                linear_color_stop(bg_color.opacity(0.84), 0.0),
+                linear_color_stop(bg_color.opacity(0.0), 1.0),
+            );
+            let badges_at_top =
+                show_badges && (active || badges_always) && !selecting && !focus_view;
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .rounded_t(radius)
+                .bg(fade)
+                .pl_2()
+                .pb_4()
+                .when(badges_at_top, |el| el.pt_10().pr_2())
+                .when(!badges_at_top && has_top_right_markers, |el| {
+                    el.pt_2().pr_8()
+                })
+                .when(!badges_at_top && !has_top_right_markers, |el| {
+                    el.pt_2().pr_2()
+                })
+                .child(
+                    div()
+                        .text_xs()
+                        .font_bold()
+                        .truncate()
+                        .child(game.title.clone()),
+                )
+        });
         let cover = div()
             .relative()
             .rounded(radius)
-            .when(active && lifts, |el| el.shadow_lg())
+            .when_some(hover_glow, |el, glow| el.shadow(vec![glow]))
             .when(keyboard, |el| el.focus_ring_style(window, cx))
             .child(div().when(dim, |el| el.opacity(0.45)).child({
                 let cover = GameCover::new(game.clone())
@@ -364,6 +412,7 @@ impl LibraryView {
                     None => cover.width(width),
                 }
             }))
+            .children(hover_caption)
             .when(active || selected, |el| {
                 el.child(
                     div()
@@ -511,41 +560,44 @@ impl LibraryView {
                     None => cover.into_any_element(),
                 }
             })
-            .when(caption_kind != CoverCaption::None, |tile| {
-                tile.child(
-                    v_flex()
-                        .min_w_0()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_semibold()
-                                .truncate()
-                                .when(dim, |el| el.text_color(muted))
-                                .child(game.title.clone()),
-                        )
-                        .when(
-                            caption_kind == CoverCaption::Full
-                                && (!caption_text.is_empty() || sorted_by.is_some()),
-                            |el| {
-                                el.child(
-                                    h_flex()
-                                        .min_w_0()
-                                        .gap_1()
-                                        .text_xs()
-                                        .text_color(muted)
-                                        .when_some(sorted_by, |el, (icon, value)| {
-                                            el.child(Icon::new(icon).xsmall().flex_none())
-                                                .child(div().flex_none().child(value))
-                                                .when(!caption_text.is_empty(), |el| {
-                                                    el.child(div().flex_none().child("·"))
-                                                })
-                                        })
-                                        .child(div().min_w_0().truncate().child(caption_text)),
-                                )
-                            },
-                        ),
-                )
-            })
+            .when(
+                !matches!(caption_kind, CoverCaption::None | CoverCaption::Hover),
+                |tile| {
+                    tile.child(
+                        v_flex()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_semibold()
+                                    .truncate()
+                                    .when(dim, |el| el.text_color(muted))
+                                    .child(game.title.clone()),
+                            )
+                            .when(
+                                caption_kind == CoverCaption::Full
+                                    && (!caption_text.is_empty() || sorted_by.is_some()),
+                                |el| {
+                                    el.child(
+                                        h_flex()
+                                            .min_w_0()
+                                            .gap_1()
+                                            .text_xs()
+                                            .text_color(muted)
+                                            .when_some(sorted_by, |el, (icon, value)| {
+                                                el.child(Icon::new(icon).xsmall().flex_none())
+                                                    .child(div().flex_none().child(value))
+                                                    .when(!caption_text.is_empty(), |el| {
+                                                        el.child(div().flex_none().child("·"))
+                                                    })
+                                            })
+                                            .child(div().min_w_0().truncate().child(caption_text)),
+                                    )
+                                },
+                            ),
+                    )
+                },
+            )
             .context_menu(move |menu, window, cx| {
                 game_menu(menu, &view, &menu_game, in_recent, window, cx)
             })
@@ -556,10 +608,19 @@ impl LibraryView {
         let Some((kind, games)) = self.frame.top.clone() else {
             return div().into_any_element();
         };
+        let card_widths = self.frame.top_card_widths.clone();
+        let card_height_rem = self.frame.top_card_height_rem;
         let cards: Vec<AnyElement> = match kind {
             TopKind::ContinuePlaying => games
                 .iter()
-                .map(|g| self.render_card(g, window, cx))
+                .enumerate()
+                .map(|(ix, g)| {
+                    let width_rem = card_widths
+                        .get(ix)
+                        .copied()
+                        .unwrap_or(grid::TOP_CARD_BASE_REM);
+                    self.render_card(g, ix == 0, width_rem, card_height_rem, window, cx)
+                })
                 .collect(),
             TopKind::Favourites => games
                 .iter()
@@ -577,7 +638,12 @@ impl LibraryView {
                 .collect(),
         };
         v_flex()
-            .h(rems(item_rem(Item::Top, Some(kind), &self.frame.metrics)))
+            .h(rems(item_rem(
+                Item::Top,
+                Some(kind),
+                card_height_rem,
+                &self.frame.metrics,
+            )))
             .child(
                 div()
                     .h(rems(grid::HEADING_REM))
@@ -600,10 +666,14 @@ impl LibraryView {
             .into_any_element()
     }
 
-    /// A large landscape "Continue playing" card with one-click Play.
+    /// A landscape "Continue playing" card with one-click Play, sized
+    /// dynamically by [`grid::top_card_widths`].
     fn render_card(
         &mut self,
         game: &Arc<GameInfo>,
+        featured: bool,
+        width_rem: f32,
+        height_rem: f32,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -618,8 +688,8 @@ impl LibraryView {
                 lib.last_played(&id).map(str::to_string),
             )
         };
-        let width = rems(CARD_REM);
-        let height = rems(CARD_REM * 9.0 / 16.0);
+        let width = rems(width_rem);
+        let height = rems(height_rem);
         let image = match game.hero_art() {
             Some(url) => art_image(url, physical_width(width, window), false, cx),
             None => ArtImage::Missing,
@@ -627,12 +697,13 @@ impl LibraryView {
         // Store logos are drawn for dark backgrounds (often white lettering);
         // the card's fade is the theme's background, so light themes show
         // the title as text, as the game page does.
+        let logo_max_rem = (width_rem * 0.55).min(16.0);
         let logo = game
             .art_logo
             .clone()
             .filter(|l| !l.is_empty() && cx.theme().mode.is_dark())
             .and_then(|url| {
-                let px = physical_width(rems(CARD_REM * 0.6), window);
+                let px = physical_width(rems(logo_max_rem), window);
                 art_img(&url, px, true, cx)
             });
         // Hovered cards glow in their art's colour.
@@ -674,12 +745,15 @@ impl LibraryView {
             linear_color_stop(bg.opacity(0.92), 1.),
         );
 
+        let compact_card = !featured && width_rem < 18.0;
         let primary = commands::primary(&state).map(|command| {
             let id = id.clone();
             let playing = command == GameCommand::Stop;
             let button = Button::new(ElementId::Name(format!("card-primary:{key}").into()))
+                .when(compact_card, |b| b.small())
                 .icon(command.icon(&state))
-                .label(command.label(&state))
+                .when(!compact_card, |b| b.label(command.label(&state)))
+                .when(compact_card, |b| b.tooltip(command.label(&state)))
                 .loading(state.launching)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     cx.stop_propagation();
@@ -731,12 +805,13 @@ impl LibraryView {
                                     .overflow_hidden()
                                     .child(
                                         logo.h(rems(CARD_LOGO_REM))
-                                            .max_w(rems(CARD_REM * 0.6))
+                                            .max_w(rems(logo_max_rem))
                                             .object_fit(ObjectFit::Contain),
                                     )
                                     .into_any_element(),
                                 None => div()
-                                    .text_lg()
+                                    .when(featured, |el| el.text_xl())
+                                    .when(!featured, |el| el.text_base())
                                     .font_extrabold()
                                     .truncate()
                                     .child(game.title.clone())
