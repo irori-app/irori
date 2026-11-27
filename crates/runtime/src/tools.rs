@@ -8,11 +8,12 @@ use std::time::{Duration, SystemTime};
 use std::collections::HashMap;
 
 use anyhow::{Context as _, Result, bail};
+use irori_core::github_releases::{self, CheckKind, GuardedFetch};
 use irori_core::process::{self, CommandSpec, ExecResult, RunOptions};
-use irori_core::{AppSettings, GameSettings, OpContext, WineKind};
+use irori_core::{AppSettings, GameSettings, OpContext, Paths, WineKind, json_store};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::download;
 use crate::env::{self, HostEnv};
@@ -95,13 +96,13 @@ impl DxTool {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GhAsset {
     name: String,
     browser_download_url: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GhRelease {
     #[serde(default)]
     tag_name: String,
@@ -109,6 +110,56 @@ struct GhRelease {
     prerelease: bool,
     #[serde(default)]
     assets: Vec<GhAsset>,
+}
+
+/// Cached latest release metadata for a [`DxTool`] so unchanged Atom feeds or
+/// `304 Not Modified` answers consume zero `api.github.com` quota.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CachedToolRelease {
+    url: String,
+    release: GhRelease,
+}
+
+fn tool_release_cache_path(tool: DxTool) -> PathBuf {
+    Paths::get()
+        .state_dir()
+        .join("tool-releases")
+        .join(format!("{}.json", tool.id()))
+}
+
+fn read_cached_tool_release(path: &Path, expected_url: &str) -> Option<GhRelease> {
+    json_store::read::<CachedToolRelease>(path)
+        .ok()
+        .flatten()
+        .filter(|c| c.url == expected_url)
+        .map(|c| c.release)
+}
+
+async fn fetch_tool_release(tool: DxTool, url: &str, check: CheckKind) -> Result<GhRelease> {
+    let cache_path = tool_release_cache_path(tool);
+    let cached = read_cached_tool_release(&cache_path, url);
+    let cache_key = format!("tool:{}", tool.id());
+    match github_releases::fetch_guarded_json(url, &cache_key, cached.is_some(), check).await? {
+        GuardedFetch::Unchanged => cached.with_context(|| {
+            format!(
+                "missing cached {} release after unchanged feed check",
+                tool.label()
+            )
+        }),
+        GuardedFetch::Updated(body) => {
+            let release: GhRelease = serde_json::from_str(&body)
+                .with_context(|| format!("unexpected answer for {} release", tool.label()))?;
+            let entry = CachedToolRelease {
+                url: url.to_string(),
+                release: release.clone(),
+            };
+            if let Err(e) = json_store::write(&cache_path, &entry) {
+                tracing::warn!("caching {} release metadata: {e:#}", tool.label());
+            }
+            Ok(release)
+        }
+        GuardedFetch::NotFound => bail!("no {} release was found on GitHub", tool.label()),
+    }
 }
 
 fn is_archive(name: &str) -> bool {
@@ -189,8 +240,16 @@ pub async fn tool_versions(tool: DxTool) -> Result<Vec<String>> {
         "https://api.github.com/repos/{}/releases?per_page=50",
         tool.repo()
     );
-    let releases: Vec<GhRelease> = download::get_json(&url)
+    let cache_key = format!("tool-versions:{}", tool.id());
+    let body = match github_releases::fetch_guarded_json(&url, &cache_key, false, CheckKind::Manual)
         .await
+        .with_context(|| format!("could not list {} versions", tool.label()))?
+    {
+        GuardedFetch::Updated(body) => body,
+        GuardedFetch::NotFound => bail!("no {} versions found on GitHub", tool.label()),
+        GuardedFetch::Unchanged => unreachable!("has_cached is false"),
+    };
+    let releases: Vec<GhRelease> = serde_json::from_str(&body)
         .with_context(|| format!("could not list {} versions", tool.label()))?;
     let tags = installable_tags(&releases);
     CACHE.lock().insert(tool, tags.clone());
@@ -228,8 +287,16 @@ async fn chosen_source(tool: DxTool, tag: &str, ctx: &OpContext) -> Result<(Stri
         "https://api.github.com/repos/{}/releases/tags/{tag}",
         tool.repo()
     );
-    let release: GhRelease = download::get_json(&url)
+    let cache_key = format!("tool-tag:{}:{tag}", tool.id());
+    let body = match github_releases::fetch_guarded_json(&url, &cache_key, false, CheckKind::Manual)
         .await
+        .with_context(|| format!("could not find {} {tag}", tool.label()))?
+    {
+        GuardedFetch::Updated(body) => body,
+        GuardedFetch::NotFound => bail!("could not find {} {tag}", tool.label()),
+        GuardedFetch::Unchanged => unreachable!("has_cached is false"),
+    };
+    let release: GhRelease = serde_json::from_str(&body)
         .with_context(|| format!("could not find {} {tag}", tool.label()))?;
     let asset = release.archive(tool)?;
     let version = strip_archive_ext(&asset.name).to_string();
@@ -248,7 +315,7 @@ pub async fn update_tool(tool: DxTool, ctx: &OpContext) -> Result<String> {
     if vulkan.is_none() {
         tracing::debug!("Vulkan version unknown; using the latest {}", tool.label());
     }
-    let release: GhRelease = download::get_json(tool.url(vulkan))
+    let release = fetch_tool_release(tool, tool.url(vulkan), CheckKind::Manual)
         .await
         .with_context(|| format!("could not check for {} updates", tool.label()))?;
     let asset = release.archive(tool)?;
@@ -324,11 +391,20 @@ pub async fn update_all_tools(ctx: &OpContext) {
 /// The downloaded build of `tool` and the newest release's, when they
 /// differ. Nothing for a tool never downloaded: it arrives on first use.
 pub async fn tool_update(tool: DxTool) -> Result<Option<(String, String)>> {
+    tool_update_with_kind(tool, CheckKind::Manual).await
+}
+
+/// Like [`tool_update`], respecting `check` (`Automatic` keeps GitHub's
+/// [`github_releases::RESERVE`] calls for manual user actions).
+pub async fn tool_update_with_kind(
+    tool: DxTool,
+    check: CheckKind,
+) -> Result<Option<(String, String)>> {
     let Some((installed, _)) = tool_source(tool) else {
         return Ok(None);
     };
     let vulkan = sysinfo::vulkan_api_version().await;
-    let release: GhRelease = download::get_json(tool.url(vulkan))
+    let release = fetch_tool_release(tool, tool.url(vulkan), check)
         .await
         .with_context(|| format!("could not check for {} updates", tool.label()))?;
     let latest = release
