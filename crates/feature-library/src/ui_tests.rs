@@ -3300,3 +3300,192 @@ fn greeting_popover_focus_toggle_hide_and_shuffle_dialog(cx: &mut TestAppContext
         );
     }
 }
+
+#[gpui_kit::test]
+fn focus_view_renders_store_badges_on_active_and_always_show(cx: &mut TestAppContext) {
+    use irori_core::settings::LibraryLayout;
+
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1600.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    let set_badge_prefs = |cx: &mut TestAppContext, show: bool, always: bool| {
+        cx.update(|cx| {
+            let settings = irori_ui::models(cx).settings.clone();
+            settings.update(cx, |s, cx| {
+                let mut next = (*s.app).clone();
+                next.ui.show_store_badges = show;
+                next.ui.store_badges_always = always;
+                s.app = Arc::new(next);
+                cx.notify();
+            });
+        });
+    };
+
+    settle(cx);
+    cx.update(|cx| view.update(cx, |v, cx| v.show_layout_for_test(LibraryLayout::Focus, cx)));
+    settle(cx);
+
+    let g1 = GameId::new(Runner::Gog, "1");
+    assert_eq!(g1.key(), "gog:1");
+    const BADGE1: &str = "tile-badges:gog:1";
+    const BADGE2: &str = "tile-badges:gog:2";
+
+    // Default prefs (show_store_badges = true, store_badges_always = false):
+    // badges stay hidden until a Focus cover is focused/hovered.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds(BADGE1).is_none());
+        assert!(vcx.debug_bounds(BADGE2).is_none());
+    }
+
+    // Clicking a cover in Focus view focuses the grid on it and shows its store badge.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.click_for_test(&g1, Default::default(), 1, window, cx)
+        })
+    })
+    .unwrap();
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds(BADGE1).is_some(),
+            "focused cover in Focus view must render its store badge"
+        );
+        assert!(
+            vcx.debug_bounds(BADGE2).is_none(),
+            "inactive covers stay clean when store_badges_always is off"
+        );
+    }
+
+    // Enabling "Always show" renders store badges across every Focus cover.
+    set_badge_prefs(cx, true, true);
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds(BADGE1).is_some(),
+            "first Focus cover must show its store badge with Always show on"
+        );
+        assert!(
+            vcx.debug_bounds(BADGE2).is_some(),
+            "unfocused Focus covers must show store badges with Always show on"
+        );
+    }
+
+    // Turning off "Store badges" hides them in Focus view even when Always show is set.
+    set_badge_prefs(cx, false, true);
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds(BADGE1).is_none());
+        assert!(vcx.debug_bounds(BADGE2).is_none());
+    }
+}
+
+#[gpui_kit::test]
+fn wide_banner_scales_cover_action_buttons_only_for_banner_shape(cx: &mut TestAppContext) {
+    use irori_core::settings::{CoverShape, LibraryLayout};
+
+    let _backend = start(cx);
+    let (window, view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+
+    let g1 = GameId::new(Runner::Gog, "1");
+    settle(cx);
+    cx.update(|cx| {
+        view.update(cx, |v, cx| {
+            v.show_layout_for_test(LibraryLayout::Grid, cx);
+            v.hover_for_test(&g1, true, cx);
+        });
+    });
+
+    let measure = |shape: CoverShape, cx: &mut TestAppContext| {
+        cx.update(|cx| view.update(cx, |v, cx| v.set_cover_shape(shape, cx)));
+        settle(cx);
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let play = vcx
+            .debug_bounds("tile-primary:gog:1")
+            .expect("hovered tile renders primary Play/Install button");
+        let more = vcx
+            .debug_bounds("tile-more-wrap:gog:1")
+            .expect("hovered tile renders circular more button");
+        (play.size, more.size)
+    };
+
+    let (portrait_play, portrait_more) = measure(CoverShape::Portrait, cx);
+    let (square_play, square_more) = measure(CoverShape::Square, cx);
+    let (banner_play, banner_more) = measure(CoverShape::Banner, cx);
+
+    // Portrait and Square keep identical default heights.
+    assert_eq!(portrait_play.height, square_play.height);
+    assert_eq!(portrait_more, square_more);
+
+    // Wide banner enlarges both Play and "..." while keeping "..." circular.
+    assert!(
+        banner_play.height > portrait_play.height,
+        "banner Play height ({:?}) should exceed portrait ({:?})",
+        banner_play.height,
+        portrait_play.height
+    );
+    assert!(
+        banner_play.width > portrait_play.width,
+        "banner Play width ({:?}) should exceed portrait ({:?})",
+        banner_play.width,
+        portrait_play.width
+    );
+    assert!(
+        banner_more.height > portrait_more.height && banner_more.width > portrait_more.width,
+        "banner more button ({banner_more:?}) should exceed portrait ({portrait_more:?})"
+    );
+    assert!(
+        (f32::from(banner_more.width) - f32::from(banner_more.height)).abs() <= 1.0,
+        "banner more button must remain circular, got {banner_more:?}"
+    );
+}

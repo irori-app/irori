@@ -452,6 +452,11 @@ impl LibraryView {
         self.click_game(id, modifiers, count, window, cx)
     }
 
+    #[cfg(test)]
+    pub(crate) fn hover_for_test(&mut self, id: &GameId, hovered: bool, cx: &mut Context<Self>) {
+        self.set_hovered(id, hovered, cx)
+    }
+
     /// Scroll `y` down from the top, as the wheel would.
     #[cfg(test)]
     pub(crate) fn scroll_for_test(&mut self, y: Pixels, cx: &mut Context<Self>) {
