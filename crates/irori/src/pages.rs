@@ -8,7 +8,7 @@ use irori_ui::Route;
 #[derive(Default)]
 pub struct Pages {
     current: Option<(Route, AnyView)>,
-    downloads: Option<AnyView>,
+    downloads: Option<Entity<irori_manage::DownloadsView>>,
     stores: Option<AnyView>,
     settings: Option<Entity<irori_settings::SettingsView>>,
     library: Option<Entity<irori_library::LibraryView>>,
@@ -61,10 +61,17 @@ impl Pages {
                 window.defer(cx, move |window, cx| focus.focus(window, cx));
                 view.into()
             }
-            Route::Downloads => cached(&mut self.downloads, || {
-                cx.new(|cx| irori_manage::DownloadsView::new(window, cx))
-                    .into()
-            }),
+            Route::Downloads => match &self.downloads {
+                Some(view) => {
+                    view.update(cx, |v, cx| v.refresh_install_disks(cx));
+                    view.clone().into()
+                }
+                None => {
+                    let view = cx.new(|cx| irori_manage::DownloadsView::new(window, cx));
+                    self.downloads = Some(view.clone());
+                    view.into()
+                }
+            },
             Route::WineManager => self.settings_view("wine-manager", window, cx),
             Route::Emulators => self.settings_view("emulators", window, cx),
             Route::Accounts => self.settings_view("accounts", window, cx),

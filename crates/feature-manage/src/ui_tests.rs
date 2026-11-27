@@ -351,6 +351,62 @@ fn downloads_history_only_shows_idle_banner_and_opens_game_page(cx: &mut TestApp
     );
 }
 
+#[gpui_kit::test]
+fn downloads_empty_renders_multiple_disk_pills(cx: &mut TestAppContext) {
+    setup(cx);
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(1000.), px(800.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| DownloadsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    vcx.update(|window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_install_disks_for_tests(vec![
+                irori_services::QueueDisk {
+                    folder: std::path::PathBuf::from("/home/edward/Games/Heroic"),
+                    label: Some("/ · Reletech P400 EVO 2TB".into()),
+                    needed: 0,
+                    free: Some(1_300_u64 << 30),
+                    total: Some(1_900_u64 << 30),
+                },
+                irori_services::QueueDisk {
+                    folder: std::path::PathBuf::from("/mnt/Asgard"),
+                    label: Some("/mnt/Asgard".into()),
+                    needed: 0,
+                    free: Some(177_u64 << 30),
+                    total: Some(938_u64 << 30),
+                },
+            ]);
+            cx.notify();
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+
+    let first = vcx
+        .debug_bounds("downloads-idle-disk-0")
+        .expect("first disk pill rendered");
+    let second = vcx
+        .debug_bounds("downloads-idle-disk-1")
+        .expect("second disk pill rendered");
+    assert!(
+        first.right() <= second.left() || first.bottom() <= second.top(),
+        "disk pills should not overlap: first={first:?}, second={second:?}"
+    );
+}
+
 /// A store with fixed accounts and no games.
 struct TestStore {
     runner: Runner,

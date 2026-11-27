@@ -217,8 +217,15 @@ impl DownloadsView {
         .detach();
     }
 
-    /// Read configured install disks off the UI thread when library folders
-    /// change or after a download finishes.
+    /// Re-read configured and auto-detected install disks off the UI thread
+    /// (for example when returning to the Downloads page after mounting a drive).
+    pub fn refresh_install_disks(&mut self, cx: &mut Context<Self>) {
+        self.install_disks_loaded = false;
+        self.sync_install_disks(cx);
+    }
+
+    /// Read configured and auto-detected install disks off the UI thread when
+    /// library folders change, a download finishes, or the page is revisited.
     fn sync_install_disks(&mut self, cx: &mut Context<Self>) {
         let folders: Vec<String> = models(cx)
             .settings
@@ -1982,5 +1989,9 @@ impl DownloadsView {
     pub(crate) fn summary_for_tests(&self, cx: &App) -> String {
         let app_status = models(cx).app_update.read(cx).status.clone();
         self.summary(None, &app_status)
+    }
+
+    pub(crate) fn set_install_disks_for_tests(&mut self, disks: Vec<irori_services::QueueDisk>) {
+        self.install_disks = disks;
     }
 }

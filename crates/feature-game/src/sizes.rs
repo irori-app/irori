@@ -1,10 +1,11 @@
 //! Install size accounting and free-space checks for the install sheet.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use irori_core::InstallInfo;
 use irori_core::util::format_bytes;
+pub use irori_services::{DetectedDrive, detect_extra_drives, drive_label};
 use irori_ui::i18n::{t, t_args};
 
 /// Download and on-disk bytes of an install choice.
@@ -168,62 +169,6 @@ pub fn disk_bar_fractions(space: DiskSpace, required: u64) -> (f32, f32) {
     (used as f32, install as f32)
 }
 
-/// Short, cross-platform drive or mount label for a destination path
-/// (`C:\`, `\\server\share`, `/mnt/games`, `/Volumes/SSD`, `/home`, `/`).
-pub fn drive_label(path: &Path) -> String {
-    let raw = path.to_string_lossy();
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    // Windows extended-length UNC prefix: `\\?\UNC\server\share\...`
-    if let Some(rest) = trimmed
-        .strip_prefix("\\\\?\\UNC\\")
-        .or_else(|| trimmed.strip_prefix("\\\\?\\unc\\"))
-    {
-        let mut parts = rest.split(['\\', '/']).filter(|s| !s.is_empty());
-        if let (Some(server), Some(share)) = (parts.next(), parts.next()) {
-            return format!("\\\\{server}\\{share}");
-        }
-    }
-    // Strip Windows extended-length device prefix: `\\?\C:\...` -> `C:\...`
-    let trimmed = trimmed.strip_prefix("\\\\?\\").unwrap_or(trimmed);
-    // Windows drive letter: `C:\...`, `d:/...`, `E:`
-    let bytes = trimmed.as_bytes();
-    if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
-        let letter = (bytes[0] as char).to_ascii_uppercase();
-        return format!("{letter}:\\");
-    }
-    // Windows UNC share: `\\server\share\...` or `//server/share/...`
-    if let Some(rest) = trimmed
-        .strip_prefix("\\\\")
-        .or_else(|| trimmed.strip_prefix("//"))
-    {
-        let mut parts = rest.split(['\\', '/']).filter(|s| !s.is_empty());
-        if let (Some(server), Some(share)) = (parts.next(), parts.next()) {
-            return format!("\\\\{server}\\{share}");
-        }
-    }
-    // POSIX absolute paths (Linux / macOS).
-    if trimmed.starts_with('/') {
-        let parts: Vec<&str> = trimmed.split('/').filter(|s| !s.is_empty()).collect();
-        return match parts.as_slice() {
-            ["run", "media", user, vol, ..] => format!("/run/media/{user}/{vol}"),
-            ["media", user, vol, ..] => format!("/media/{user}/{vol}"),
-            ["media", vol] => format!("/media/{vol}"),
-            ["mnt", vol, ..] => format!("/mnt/{vol}"),
-            ["Volumes", vol, ..] => format!("/Volumes/{vol}"),
-            ["home", ..] => "/home".into(),
-            _ => "/".into(),
-        };
-    }
-    trimmed
-        .split(['\\', '/'])
-        .find(|s| !s.is_empty())
-        .unwrap_or(trimmed)
-        .to_string()
-}
-
 /// Disk verdict for Modify mode, accounting for space the installed game
 /// already occupies on its drive so we never double-count the base install.
 pub fn modify_disk_verdict(
@@ -272,122 +217,6 @@ pub fn same_dir(a: &Path, b: &Path) -> bool {
     {
         a == b
     }
-}
-
-/// Minimum total capacity for an auto-detected extra drive (5 GiB).
-/// Filters out small Windows recovery/OEM/EFI partitions.
-const MIN_EXTRA_DRIVE_BYTES: u64 = 5 * 1024 * 1024 * 1024;
-
-/// An additional mounted drive suggested as an install destination.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DetectedDrive {
-    pub label: String,
-    pub suggested_base: String,
-    pub free: u64,
-    pub mount: PathBuf,
-}
-
-#[derive(Debug, Clone)]
-struct DiskEntry {
-    name: String,
-    mount: PathBuf,
-    total: u64,
-    free: u64,
-    read_only: bool,
-}
-
-fn is_system_mount(mount: &str) -> bool {
-    const SYSTEM_EXACT: &[&str] = &[
-        "/", "/boot", "/efi", "/snap", "/sys", "/proc", "/dev", "/var", "/tmp", "/etc", "/usr",
-        "/nix", "/opt", "/System", "/private", "/run",
-    ];
-    const SYSTEM_PREFIXES: &[&str] = &[
-        "/boot/",
-        "/efi/",
-        "/snap/",
-        "/sys/",
-        "/proc/",
-        "/dev/",
-        "/var/",
-        "/tmp/",
-        "/etc/",
-        "/usr/",
-        "/nix/",
-        "/opt/",
-        "/System/",
-        "/private/",
-    ];
-    SYSTEM_EXACT.contains(&mount)
-        || SYSTEM_PREFIXES.iter().any(|p| mount.starts_with(p))
-        || (mount.starts_with("/run/") && !mount.starts_with("/run/media/"))
-}
-
-fn extra_drives_from_list(disks: &[DiskEntry], existing_paths: &[PathBuf]) -> Vec<DetectedDrive> {
-    let mut seen: HashSet<String> = existing_paths
-        .iter()
-        .map(|p| drive_label(p).to_ascii_lowercase())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    let mut out = Vec::new();
-    for disk in disks {
-        if disk.read_only || disk.total < MIN_EXTRA_DRIVE_BYTES {
-            continue;
-        }
-        let mount_raw = disk.mount.to_string_lossy();
-        let mount_str = mount_raw.trim();
-        if mount_str.is_empty() {
-            continue;
-        }
-        if mount_str.starts_with('/') && is_system_mount(mount_str) {
-            continue;
-        }
-        let short = drive_label(&disk.mount);
-        if short.is_empty() || !seen.insert(short.to_ascii_lowercase()) {
-            continue;
-        }
-        let suggested_base = if mount_str.contains('\\') || mount_str.contains(':') {
-            format!("{}\\Games\\Irori", mount_str.trim_end_matches(['\\', '/']))
-        } else {
-            format!("{}/Games/Irori", mount_str.trim_end_matches('/'))
-        };
-        let name = disk.name.trim();
-        let label = if !name.is_empty()
-            && name.chars().count() <= 18
-            && !name.starts_with(['/', '\\'])
-            && !name.contains(':')
-            && !name.eq_ignore_ascii_case(&short)
-        {
-            format!("{name} ({short})")
-        } else {
-            short
-        };
-        out.push(DetectedDrive {
-            label,
-            suggested_base,
-            free: disk.free,
-            mount: disk.mount.clone(),
-        });
-    }
-    out
-}
-
-/// Detect writable mounted drives not already represented by `existing_paths`.
-/// Blocking: run off the UI thread.
-pub fn detect_extra_drives(existing_paths: &[PathBuf]) -> Vec<DetectedDrive> {
-    let entries: Vec<DiskEntry> = sysinfo::Disks::new_with_refreshed_list()
-        .list()
-        .iter()
-        .filter(|d| std::fs::read_dir(d.mount_point()).is_ok())
-        .map(|d| DiskEntry {
-            name: d.name().to_string_lossy().into_owned(),
-            mount: d.mount_point().to_path_buf(),
-            total: d.total_space(),
-            free: d.available_space(),
-            read_only: d.is_read_only(),
-        })
-        .collect();
-    extra_drives_from_list(&entries, existing_paths)
 }
 
 /// Read-only available-space query for `path` without touching the filesystem
@@ -647,53 +476,6 @@ mod tests {
     }
 
     #[test]
-    fn drive_labels_are_short_and_cross_platform() {
-        assert_eq!(drive_label(Path::new("")), "");
-        assert_eq!(
-            drive_label(Path::new(r"C:\Users\eduardo.junior\Games\Irori")),
-            r"C:\"
-        );
-        assert_eq!(drive_label(Path::new("d:/Games/BG3")), r"D:\");
-        assert_eq!(drive_label(Path::new("e:")), r"E:\");
-        assert_eq!(
-            drive_label(Path::new(r"\\nas\games\library")),
-            r"\\nas\games"
-        );
-        assert_eq!(
-            drive_label(Path::new("/mnt/games/Irori/Cyberpunk 2077")),
-            "/mnt/games"
-        );
-        assert_eq!(
-            drive_label(Path::new("/media/deck/SDCard/Games")),
-            "/media/deck/SDCard"
-        );
-        assert_eq!(
-            drive_label(Path::new("/run/media/deck/SDCard/Games")),
-            "/run/media/deck/SDCard"
-        );
-        assert_eq!(
-            drive_label(Path::new("/media/usb/Games")),
-            "/media/usb/Games"
-        );
-        assert_eq!(drive_label(Path::new("/media/usb")), "/media/usb");
-        assert_eq!(
-            drive_label(Path::new("/Volumes/ExternalSSD/Games")),
-            "/Volumes/ExternalSSD"
-        );
-        assert_eq!(drive_label(Path::new("/home/user/Games/Irori")), "/home");
-        assert_eq!(drive_label(Path::new("/opt/games")), "/");
-        assert_eq!(drive_label(Path::new("  C:\\Games  ")), r"C:\");
-        assert_eq!(
-            drive_label(Path::new(r"\\?\C:\Users\eduardo\Games\Irori")),
-            r"C:\"
-        );
-        assert_eq!(
-            drive_label(Path::new(r"\\?\UNC\nas\games\library")),
-            r"\\nas\games"
-        );
-    }
-
-    #[test]
     fn modify_verdict_does_not_double_count_installed_game() {
         let gib = 1024 * 1024 * 1024;
         let space = DiskSpace {
@@ -816,116 +598,5 @@ mod tests {
 
         let checking = bar_summary(DiskVerdict::Unknown, None, 0);
         assert!(!checking.is_empty());
-    }
-
-    #[test]
-    fn extra_drives_filters_system_mounts_and_dedups_existing() {
-        let gib = 1024 * 1024 * 1024;
-        let disks = vec![
-            DiskEntry {
-                name: "System".into(),
-                mount: PathBuf::from(r"C:\"),
-                total: 500 * gib,
-                free: 80 * gib,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "GamesSSD".into(),
-                mount: PathBuf::from(r"D:\"),
-                total: 1000 * gib,
-                free: 420 * gib,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "Recovery".into(),
-                mount: PathBuf::from(r"E:\"),
-                total: 50 * gib,
-                free: 10 * gib,
-                read_only: true,
-            },
-            DiskEntry {
-                name: "WindowsRE".into(),
-                mount: PathBuf::from(r"F:\"),
-                total: 4 * gib,
-                free: 512 * 1024 * 1024,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "boot".into(),
-                mount: PathBuf::from("/boot/efi"),
-                total: 20 * gib,
-                free: 10 * gib,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "snap".into(),
-                mount: PathBuf::from("/snap/core22/1"),
-                total: 20 * gib,
-                free: 0,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "run".into(),
-                mount: PathBuf::from("/run/user/1000"),
-                total: 20 * gib,
-                free: 10 * gib,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "".into(),
-                mount: PathBuf::from("/mnt/games"),
-                total: 1000 * gib,
-                free: 600 * gib,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "SDCard".into(),
-                mount: PathBuf::from("/run/media/deck/SDCard"),
-                total: 512 * gib,
-                free: 200 * gib,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "Data".into(),
-                mount: PathBuf::from("/System/Volumes/Data"),
-                total: 500 * gib,
-                free: 120 * gib,
-                read_only: false,
-            },
-            DiskEntry {
-                name: "ExternalSSD".into(),
-                mount: PathBuf::from("/Volumes/ExternalSSD"),
-                total: 2000 * gib,
-                free: 900 * gib,
-                read_only: false,
-            },
-        ];
-
-        let existing = vec![PathBuf::from(r"C:\Users\eduardo\Games\Irori")];
-        let detected = extra_drives_from_list(&disks, &existing);
-        let labels: Vec<&str> = detected.iter().map(|d| d.label.as_str()).collect();
-        assert_eq!(
-            labels,
-            vec![
-                r"GamesSSD (D:\)",
-                "/mnt/games",
-                "SDCard (/run/media/deck/SDCard)",
-                "ExternalSSD (/Volumes/ExternalSSD)",
-            ]
-        );
-        assert_eq!(detected[0].suggested_base, r"D:\Games\Irori");
-        assert_eq!(detected[1].suggested_base, "/mnt/games/Games/Irori");
-        assert_eq!(
-            detected[3].suggested_base,
-            "/Volumes/ExternalSSD/Games/Irori"
-        );
-
-        // If D:\ already hosts a configured library folder, don't duplicate it.
-        let with_d = vec![
-            PathBuf::from(r"C:\Games\Irori"),
-            PathBuf::from(r"d:\MyLibrary"),
-        ];
-        let detected2 = extra_drives_from_list(&disks, &with_d);
-        assert!(!detected2.iter().any(|d| d.label.contains(r"D:\")));
     }
 }

@@ -51,6 +51,7 @@ struct InstallTarget {
     label: SharedString,
     base_path: String,
     free: Option<u64>,
+    is_default: bool,
 }
 
 /// State of the install / modify modal. Owns its inputs and selects; the hero
@@ -285,7 +286,8 @@ impl InstallSheet {
                 .map(|f| {
                     let expanded = irori_core::paths::expand_home(f.path.trim());
                     let base_label = irori_ui::library_folders::label(&f);
-                    let label: SharedString = if f.is_default() {
+                    let is_default = f.is_default();
+                    let label: SharedString = if is_default {
                         let drive = drive_label(&expanded);
                         if drive.is_empty() {
                             base_label
@@ -299,6 +301,7 @@ impl InstallSheet {
                         label,
                         base_path: f.path,
                         free: None,
+                        is_default,
                     }
                 })
                 .collect()
