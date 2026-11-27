@@ -5,7 +5,7 @@
 use irori_core::{AgeRating, CriticScore, ExtraInfo, RatingSystem, age_rating};
 use serde::{Deserialize, Serialize};
 
-use crate::wiki::hltb;
+use crate::title_match;
 
 /// Where IGDB serves its images.
 const IMAGE_BASE: &str = "https://images.igdb.com/igdb/image/upload";
@@ -328,24 +328,62 @@ pub(crate) fn parse_games(body: &[u8]) -> serde_json::Result<Vec<IgdbGame>> {
         .collect())
 }
 
-/// The search result that is the game titled `title`: its folded name is
-/// the title's (case, punctuation and Roman numerals aside), the one from
-/// `year` when several are. Nothing that only looks alike is taken.
+/// The search result that is the game titled `title`: exact folded matches
+/// win first, then edition/subtitle matches vetted by [`title_match::same_game`]
+/// (rejecting sequels, add-ons, and release years more than [`title_match::YEAR_SLACK`]
+/// apart).
 pub fn best_match<'a>(
     found: &'a [IgdbGame],
     title: &str,
     year: Option<u32>,
 ) -> Option<&'a IgdbGame> {
-    let wanted = hltb::fold(title);
+    let wanted = title_match::fold_words(title);
     if wanted.is_empty() {
         return None;
     }
-    let same: Vec<&IgdbGame> = found
+    let pick = |candidates: Vec<&'a IgdbGame>| -> Option<&'a IgdbGame> {
+        let Some(y) = year else {
+            return candidates.first().copied();
+        };
+        candidates
+            .iter()
+            .find(|g| g.release_year() == Some(y))
+            .or_else(|| {
+                candidates.iter().find(|g| {
+                    g.release_year()
+                        .is_some_and(|gy| gy.abs_diff(y) <= title_match::YEAR_SLACK)
+                })
+            })
+            .or_else(|| candidates.iter().find(|g| g.release_year().is_none()))
+            .copied()
+    };
+    let exact: Vec<&IgdbGame> = found
         .iter()
-        .filter(|g| hltb::fold(&g.name) == wanted)
+        .filter(|g| title_match::fold_words(&g.name) == wanted)
         .collect();
-    year.and_then(|y| same.iter().find(|g| g.release_year() == Some(y)).copied())
-        .or_else(|| same.first().copied())
+    if !exact.is_empty() {
+        return pick(exact);
+    }
+    let base = title_match::without_edition(&wanted);
+    let edition: Vec<&IgdbGame> = found
+        .iter()
+        .filter(|g| {
+            let words = title_match::fold_words(&g.name);
+            title_match::without_edition(&words) == base
+                && match (year, g.release_year()) {
+                    (Some(a), Some(b)) => a.abs_diff(b) <= title_match::YEAR_SLACK,
+                    _ => true,
+                }
+        })
+        .collect();
+    if !edition.is_empty() {
+        return pick(edition);
+    }
+    let confident: Vec<&IgdbGame> = found
+        .iter()
+        .filter(|g| title_match::same_game(title, year, &g.name, g.release_year()))
+        .collect();
+    pick(confident)
 }
 
 /// Fill what the store page leaves empty with what IGDB knows: the
@@ -529,6 +567,40 @@ mod tests {
         assert_eq!(best_match(&found, "™", None), None);
         let sequel = [game(9, "Final Fantasy VII", None)];
         assert_eq!(best_match(&sequel, "Final Fantasy 7", None).unwrap().id, 9);
+        // Subtitle and edition matches pass, while sequels, add-ons, and distant years are rejected.
+        let witcher = [
+            game(
+                10,
+                "The Witcher 3: Wild Hunt - Soundtrack",
+                Some("2015-05-19"),
+            ),
+            game(11, "The Witcher 3: Wild Hunt", Some("2015-05-19")),
+        ];
+        assert_eq!(
+            best_match(&witcher, "The Witcher 3", Some(2015))
+                .unwrap()
+                .id,
+            11
+        );
+        assert_eq!(
+            best_match(&witcher, "The Witcher 3", Some(2016))
+                .unwrap()
+                .id,
+            11
+        );
+        assert_eq!(best_match(&witcher, "The Witcher 3", Some(2005)), None);
+        assert_eq!(
+            best_match(&[game(12, "Portal 2", Some("2011-04-19"))], "Portal", None),
+            None
+        );
+        assert_eq!(
+            best_match(
+                &[game(13, "Hades: Demo", Some("2020-09-17"))],
+                "Hades",
+                None
+            ),
+            None
+        );
     }
 
     #[test]

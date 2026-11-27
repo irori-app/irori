@@ -249,6 +249,8 @@
   "library.metadata.mixed": "Differs between the games; type to set it for all",
   "library.metadata.reset": "Use the stores’ details",
   "library.metadata.save": "Save",
+  "library.metadata.saved_one": "Updated details of 1 game",
+  "library.metadata.saved_other": "Updated details of {count} games",
   "library.metadata.failed": "Couldn’t save the details",
   "library.command.hide": "Hide",
   "library.command.install": "Install",

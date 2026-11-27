@@ -28,6 +28,7 @@ pub mod protocol;
 pub mod releases;
 pub mod shortcuts;
 pub mod steamgrid;
+pub mod title_match;
 pub mod vndb;
 pub mod wiki;
 pub mod wine_launchers;
