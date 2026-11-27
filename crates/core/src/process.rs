@@ -41,6 +41,10 @@ pub const LAUNCH_ENV: &str = "--irori-launch-env";
 pub struct CommandSpec {
     pub program: PathBuf,
     pub args: Vec<OsString>,
+    /// Trailing arguments appended verbatim on Windows (`CommandExt::raw_arg`)
+    /// without CRT quoting (e.g. NSIS's unquoted `/D=C:\Games\My Game`).
+    /// Passed as regular trailing arguments on other platforms.
+    pub raw_args: Vec<OsString>,
     /// Variables set on top of the inherited environment (ordered for logs).
     pub env: BTreeMap<String, String>,
     pub env_remove: Vec<String>,
@@ -121,6 +125,14 @@ impl CommandSpec {
         S: Into<OsString>,
     {
         self.args.extend(args.into_iter().map(Into::into));
+        self
+    }
+
+    /// Append a trailing argument passed verbatim on Windows
+    /// (`CommandExt::raw_arg`) without CRT quoting. Passed as a regular
+    /// trailing argument on other platforms.
+    pub fn raw_arg(mut self, arg: impl Into<OsString>) -> Self {
+        self.raw_args.push(arg.into());
         self
     }
 
@@ -213,6 +225,17 @@ impl CommandSpec {
             };
         let mut cmd = Command::new(program);
         cmd.args(self.expanded_args());
+        for raw in &self.raw_args {
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt as _;
+                cmd.as_std_mut().raw_arg(raw);
+            }
+            #[cfg(not(windows))]
+            {
+                cmd.arg(raw);
+            }
+        }
         for key in &self.env_remove {
             cmd.env_remove(key);
         }
@@ -274,7 +297,7 @@ impl fmt::Display for CommandSpec {
         }
         write!(f, "{}", shell_quote(&self.program.to_string_lossy()))?;
         let mut mask_next = false;
-        for a in &self.args {
+        for a in self.args.iter().chain(&self.raw_args) {
             let a = a.to_string_lossy();
             if mask_next {
                 write!(f, " ***")?;
@@ -318,7 +341,13 @@ pub fn is_secret_var(name: &str) -> bool {
 fn is_secret_flag(arg: &str) -> bool {
     matches!(
         arg,
-        "--code" | "--code-verifier" | "--token" | "--auth-code" | "--password" | "--refresh-token"
+        "--code"
+            | "--code-verifier"
+            | "--token"
+            | "--auth-code"
+            | "--password"
+            | "--refresh-token"
+            | "--rpc-secret"
     )
 }
 
@@ -1529,9 +1558,34 @@ mod tests {
 
     #[test]
     fn masks_secret_flags() {
-        let spec = CommandSpec::new("legendary").args(["auth", "--code", "abc", "--token=xyz"]);
+        let spec = CommandSpec::new("legendary").args([
+            "auth",
+            "--code",
+            "abc",
+            "--token=xyz",
+            "--rpc-secret",
+            "aria-secret-1",
+            "--rpc-secret=aria-secret-2",
+        ]);
         let shown = spec.to_string();
-        assert!(!shown.contains("abc") && !shown.contains("xyz"), "{shown}");
+        for secret in ["abc", "xyz", "aria-secret-1", "aria-secret-2"] {
+            assert!(!shown.contains(secret), "{shown}");
+        }
+        assert!(shown.contains("--rpc-secret ***"), "{shown}");
+        assert!(shown.contains("--rpc-secret=***"), "{shown}");
+    }
+
+    #[test]
+    fn raw_arg_is_retained_and_buildable() {
+        let spec = CommandSpec::new("setup.exe")
+            .arg("/S")
+            .raw_arg(r"/D=C:\Games\My Game");
+        assert_eq!(spec.args, vec![OsString::from("/S")]);
+        assert_eq!(spec.raw_args, vec![OsString::from(r"/D=C:\Games\My Game")]);
+        let shown = spec.to_string();
+        assert!(shown.contains("/S"), "{shown}");
+        assert!(shown.contains(r"/D=C:\Games\My Game"), "{shown}");
+        assert!(spec.to_command(Start::Run).is_ok());
     }
 
     #[test]

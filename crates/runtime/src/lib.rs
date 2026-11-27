@@ -24,6 +24,7 @@ pub mod release_checks;
 pub mod rosetta;
 pub mod runtimes;
 pub mod sandbox;
+pub mod setup;
 pub mod steam_tools;
 pub mod sysinfo;
 pub mod tools;
