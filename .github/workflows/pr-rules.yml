@@ -25,6 +25,8 @@ jobs:
           python-version: '3.12'
       - name: Rule tests
         run: python -m unittest discover -s .github/scripts -p "test_*.py"
+      - name: Security domain transparency check
+        run: python .github/scripts/check_security_domains.py
       - name: Branch, title, base, body, and Rust diff size
         # Passed through the environment, never interpolated into the script:
         # titles, branch names, bodies, and labels are untrusted input.

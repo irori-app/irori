@@ -79,6 +79,7 @@ pub mod steam_overlay;
 pub mod steam_reception;
 mod steam_shortcuts;
 mod steam_tags;
+mod steamgrid;
 pub mod storage;
 mod store_facts;
 pub mod sunshine;
@@ -266,6 +267,8 @@ pub struct Inner {
     vndb: vndb::VndbState,
     /// Optional personal GG.deals API key.
     ggdeals: ggdeals::GgDealsState,
+    /// Optional personal SteamGridDB API key (`irori_secrets`).
+    steamgrid: steamgrid::SteamGridState,
 }
 
 impl Deref for Backend {
@@ -374,6 +377,7 @@ impl Backend {
             igdb: Default::default(),
             vndb: Default::default(),
             ggdeals: Default::default(),
+            steamgrid: Default::default(),
             bus,
         }));
         irori_runtime::set_hooks(Arc::new(hooks::KnownFixHooks {
@@ -522,6 +526,9 @@ impl Backend {
             if !interactive || b.isolated {
                 return;
             }
+            // Migrate or warm any saved SteamGridDB key off the UI thread.
+            let sgdb = b.clone();
+            b.spawn(async move { sgdb.preload_steamgrid_key().await });
             // The clip shortcut works from the first game on.
             if cfg!(target_os = "linux") && b.settings.app().game.replay.enabled {
                 let shortcut = b.clone();
@@ -910,12 +917,15 @@ impl Backend {
         let ok = match decided_online(self.settings.app().network_mode) {
             Some(ok) => ok,
             None if self.isolated => return self.is_online_now(),
-            None => irori_core::http::client()
-                .head("https://www.gstatic.com/generate_204")
-                .timeout(Duration::from_secs(5))
-                .send()
-                .await
-                .is_ok(),
+            None => match crate::network::is_online().await {
+                Some(online) => online,
+                None => irori_core::http::client()
+                    .head("https://www.gstatic.com/generate_204")
+                    .timeout(Duration::from_secs(5))
+                    .send()
+                    .await
+                    .is_ok(),
+            },
         };
         if self.online.swap(ok, Ordering::Relaxed) != ok {
             self.bus.emit(Event::Connectivity(ok));

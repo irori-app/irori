@@ -18,7 +18,7 @@ Directory names and Cargo package names differ; always pass the package name to 
 | `crates/gog` | `irori-gog-api` | GOG protocol (port of gogdl): auth, content system, depots, Linux installers, saves |
 | `crates/amazon` | `irori-amazon-api` | Amazon Games protocol (port of nile): device sign-in, library, signed manifests |
 | `crates/itch` | `irori-itch-api` | itch.io public API: API-key login, owned keys, uploads, download links |
-| `crates/steam` | `irori-steam-api` | Steam Web API: login (QR, password, Steam Guard, tokens), owned and Family games, store art/pages, achievements, friends |
+| `crates/steam` | `irori-steam-api` | Steam Web API: web session cookie refresh (`/jwt/refresh`) and personal API key auth, owned and Family games, store art/pages, achievements, friends |
 | `crates/retroachievements` | `irori-retroachievements-api` | RetroAchievements Web API, emulator token login, rcheevos-compatible ROM hashes |
 | `crates/xbox` | `irori-xbox-api` | Xbox network: Microsoft OAuth PKCE, Xbox Live user and XSTS tokens, title history, playtime, achievements, friends |
 | `crates/msstore` | `irori-msstore-api` | Microsoft Store and Xbox Live protocol (port of Xodus): device registration, RST2 with XML-DSig, CLEP/SPLicense, SISU/XSTS, display catalog, package plans, content licenses, offline leases, Game Pass, offline PC |
@@ -209,7 +209,7 @@ Key environment variables: `IRORI_HOME` (relocate config/data/cache), `IRORI_LOG
 
 ### Steam (`irori-steam-api`, `irori-steam`)
 
-- Local mode scans `steamapps` across native, Flatpak, and Snap Steam installs with `notify`. Optional account mode adds owned/Family games via `IAuthenticationService` mobile-app refresh tokens (only mobile tokens renew via `GenerateAccessTokenForApp`; Steam client tokens fail with `AccessDenied`).
+- Local mode scans `steamapps` across native, Flatpak, and Snap Steam installs with `notify`. Optional account mode adds owned/Family games via Valve's official web sign-in (`store.steampowered.com/login/` in `irori-sign-in`, renewed via `/jwt/refresh`) or a personal Steam Web API key (`steamcommunity.com/dev/apikey`, no login session). Legacy `IAuthenticationService` sessions are kept read-only until the user reconnects cleanly.
 - Opt-in client library reader (`client_library/`) uses `.cef-enable-remote-debugging` on loopback only with a strictly read-only expression (`collectionStore.allGamesCollection.allApps`, guarded by unit test), removing only marker files Irori created and never restarting Steam in Game Mode.
 - Hidden games read `cloud-storage-namespace-1.json` (`user-collections.hidden`) and apply once (`store_hidden_imported`).
 - Launches use `process::open_detached` with Windows argument quoting (`split_program_args`) for Windows/Proton titles; `SteamGameWatch` narrows to direct game-folder PIDs and waits on `pidfd` on Linux.
