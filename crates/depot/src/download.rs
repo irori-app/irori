@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
+use futures::StreamExt as _;
 use futures::future::BoxFuture;
-use futures::{StreamExt as _, TryStreamExt as _};
 use tokio_util::sync::CancellationToken;
 
 use self::support::{
@@ -188,6 +188,8 @@ const TUNE_EVERY: Duration = if cfg!(test) {
 };
 /// Files hashed at once while checking what is already on disk.
 const CHECKERS: usize = 4;
+/// Grace window on cancel so active writers flush, sync, and checkpoint.
+const CANCEL_DRAIN: Duration = Duration::from_secs(5);
 
 /// Download `job`. Files already intact are skipped, partial whole-file
 /// downloads resume, and every file is checked against its digest before it
@@ -207,8 +209,12 @@ pub async fn download(
     tokio::fs::create_dir_all(job.root)
         .await
         .with_context(|| format!("Could not create {}", job.root.display()))?;
-    let on_disk = disk_sizes(job.root, job.files).await?;
-    check_free_space(job.root, job.files, &on_disk)?;
+    let journal = match &opts.journal {
+        Some(p) => Some(Journal::open(p).await?),
+        None => None,
+    };
+    let (on_disk, partial_credit) = disk_sizes(job.root, job.files, journal.as_ref()).await?;
+    check_free_space(job.root, job.files, &on_disk, &partial_credit)?;
 
     let total = job.files.iter().map(|f| f.size).sum();
     let stats = Arc::new(Stats::new(total));
@@ -218,11 +224,13 @@ pub async fn download(
         opts.workers
     };
     let tuner = Tuner::new(max);
-    let cancel = cancel.child_token();
+    let caller_cancel = cancel;
+    let cancel = caller_cancel.child_token();
     let ctx = Arc::new(Ctx {
         client: client.clone(),
         root: job.root.to_path_buf(),
         requests: Gate::new(tuner.limit()),
+        assemble_slots: tokio::sync::Semaphore::new(max.min(8)),
         hosts: Hosts::default(),
         limiter: (opts.max_bytes_per_sec > 0).then(|| RateLimiter::new(opts.max_bytes_per_sec)),
         cache: ChunkCache::new(
@@ -235,10 +243,7 @@ pub async fn download(
         ),
         stats: stats.clone(),
         cancel: cancel.clone(),
-        journal: match &opts.journal {
-            Some(p) => Some(Journal::open(p).await?),
-            None => None,
-        },
+        journal,
         retries: opts.retries,
         signing: opts
             .signer
@@ -255,31 +260,58 @@ pub async fn download(
         let ctx = ctx.clone();
         async move {
             let pending = ctx.check_existing(&files, &on_disk).await?;
-            futures::stream::iter(pending)
+            let stream_cancel = ctx.cancel.clone();
+            let map_ctx = ctx.clone();
+            let mut in_flight = futures::stream::iter(pending)
+                .take_while(move |_| futures::future::ready(!stream_cancel.is_cancelled()))
                 .map(move |i| {
-                    let (ctx, files) = (ctx.clone(), files.clone());
+                    let (ctx, files) = (map_ctx.clone(), files.clone());
                     async move { ctx.process_file(&files[i]).await }
                 })
-                .buffer_unordered(max)
-                .try_for_each(|()| async { Ok(()) })
-                .await
+                .buffer_unordered(max);
+            let mut first_err: Option<Error> = None;
+            while let Some(res) = in_flight.next().await {
+                if let Err(e) = res {
+                    match (&first_err, &e) {
+                        (None, _) => first_err = Some(e),
+                        (Some(Error::Cancelled), err) if !matches!(err, Error::Cancelled) => {
+                            first_err = Some(e);
+                        }
+                        _ => {}
+                    }
+                    if !ctx.cancel.is_cancelled() {
+                        ctx.cancel.cancel();
+                    }
+                }
+            }
+            match first_err {
+                Some(e) => Err(e),
+                None if ctx.cancel.is_cancelled() => Err(Error::Cancelled),
+                None => Ok(()),
+            }
         }
     };
     let limit = (opts.max_bytes_per_sec > 0).then_some(opts.max_bytes_per_sec);
     let result = with_progress(stats, progress, async {
+        tokio::pin!(work);
+        let tune_fut = tune(&ctx, tuner, limit);
+        tokio::pin!(tune_fut);
         tokio::select! {
             biased;
-            r = work => r,
-            // Dropping the work stops every request at once, including ones
-            // waiting for a free slot or for addresses to be signed.
-            () = cancel.cancelled() => Err(Error::Cancelled),
-            () = tune(&ctx, tuner, limit) => unreachable!("tuning never ends"),
+            r = &mut work => r,
+            // Allow active workers up to CANCEL_DRAIN to flush, sync_data,
+            // and record PartCheckpoints before forcing shutdown.
+            () = caller_cancel.cancelled() => {
+                let _ = tokio::time::timeout(CANCEL_DRAIN, &mut work).await;
+                Err(Error::Cancelled)
+            }
+            () = &mut tune_fut => unreachable!("tuning never ends"),
         }
     })
     .await;
     match result {
         Ok(()) => {}
-        Err(_) if cancel.is_cancelled() => return Ok(Finished::Cancelled),
+        Err(_) if caller_cancel.is_cancelled() => return Ok(Finished::Cancelled),
         Err(e) => {
             cancel.cancel();
             if is_disk_full(&e) {
@@ -403,6 +435,8 @@ struct Ctx {
     root: PathBuf,
     /// Requests at once, sized by [`tune`].
     requests: Gate,
+    /// Caps concurrent multi-chunk `assemble` writers so small streams are not starved.
+    assemble_slots: tokio::sync::Semaphore,
     hosts: Hosts,
     limiter: Option<RateLimiter>,
     cache: ChunkCache,

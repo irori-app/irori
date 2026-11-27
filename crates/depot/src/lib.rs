@@ -29,4 +29,6 @@ pub use tokio_util::sync::CancellationToken;
 pub use verify::{Problem, Verified, verify};
 
 #[cfg(test)]
+mod resume_tests;
+#[cfg(test)]
 mod tests;

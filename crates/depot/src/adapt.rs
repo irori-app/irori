@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 use irori_core::Bottleneck;
 use tokio::sync::Notify;
+use tokio_util::sync::CancellationToken;
 
 /// Requests at once when the user set no cap.
 pub(crate) const DEFAULT_MAX: usize = 32;
@@ -80,8 +81,11 @@ impl Gate {
         }
     }
 
-    pub async fn acquire(&self) -> Permit<'_> {
+    pub async fn acquire(&self, cancel: &CancellationToken) -> Option<Permit<'_>> {
         loop {
+            if cancel.is_cancelled() {
+                return None;
+            }
             let notified = self.notify.notified();
             tokio::pin!(notified);
             // Registered before checking, so a release in between is not missed.
@@ -90,11 +94,15 @@ impl Gate {
                 let mut s = lock(&self.state);
                 if s.active < s.limit {
                     s.active += 1;
-                    return Permit(self);
+                    return Some(Permit(self));
                 }
                 s.contended = true;
             }
-            notified.await;
+            tokio::select! {
+                biased;
+                () = cancel.cancelled() => return None,
+                () = notified => {}
+            }
         }
     }
 
@@ -524,12 +532,14 @@ mod tests {
 
     #[tokio::test]
     async fn gate_resizes_while_requests_wait() {
+        let cancel = CancellationToken::new();
         let gate = std::sync::Arc::new(Gate::new(1));
-        let first = gate.acquire().await;
+        let first = gate.acquire(&cancel).await.unwrap();
         assert!(!gate.has_spare());
         let g = gate.clone();
+        let c = cancel.clone();
         let waiter = tokio::spawn(async move {
-            let _p = g.acquire().await;
+            let _p = g.acquire(&c).await.unwrap();
         });
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert!(gate.take_contended());
@@ -541,6 +551,23 @@ mod tests {
         drop(first);
         assert!(gate.has_spare());
         assert!(!gate.take_contended());
+    }
+
+    #[tokio::test]
+    async fn gate_acquire_cancels_immediately() {
+        let cancel = CancellationToken::new();
+        let gate = std::sync::Arc::new(Gate::new(1));
+        let _held = gate.acquire(&cancel).await.unwrap();
+        let g = gate.clone();
+        let c = cancel.clone();
+        let waiter = tokio::spawn(async move { g.acquire(&c).await.is_some() });
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        cancel.cancel();
+        let acquired = tokio::time::timeout(Duration::from_millis(200), waiter)
+            .await
+            .expect("cancel wakes Gate::acquire promptly")
+            .unwrap();
+        assert!(!acquired);
     }
 
     #[test]

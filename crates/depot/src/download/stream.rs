@@ -32,7 +32,7 @@ impl Ctx {
         let mut counted = 0u64;
         let result = async {
             if let Some(s) = &self.signing {
-                let url = s.url(&chunk.key).await?;
+                let url = s.url(&chunk.key, &self.cancel).await?;
                 let res = self
                     .stream_once(&url, &part, chunk.download_size, chunk.range, &mut counted)
                     .await;
@@ -120,7 +120,11 @@ impl Ctx {
             return Ok(());
         }
 
-        let _permit = self.requests.acquire().await;
+        let _permit = self
+            .requests
+            .acquire(&self.cancel)
+            .await
+            .ok_or(Error::Cancelled)?;
         let started = Instant::now();
         let before = *counted;
         let result = self
@@ -322,6 +326,7 @@ mod recycle_tests {
             client: reqwest::Client::new(),
             root: dir.path().to_path_buf(),
             requests: Gate::new(4),
+            assemble_slots: tokio::sync::Semaphore::new(4),
             hosts: Hosts::default(),
             limiter: None,
             cache: ChunkCache::new(&files, 1 << 20),
