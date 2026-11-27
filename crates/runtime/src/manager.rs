@@ -228,9 +228,20 @@ pub struct Release {
     /// The checksum file of `download_v3`.
     #[serde(rename = "iroriChecksumV3", skip_serializing_if = "Option::is_none")]
     pub checksum_v3: Option<String>,
+    /// Whether the upstream release was published as a prerelease. Irori-only.
+    #[serde(rename = "iroriPrerelease", default, skip_serializing_if = "is_false")]
+    pub prerelease: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 impl Release {
+    /// Whether this entry is the synthetic `<type>-latest` channel.
+    pub fn is_latest(&self) -> bool {
+        self.version.ends_with("-latest")
+    }
     /// The archive and checksum to install: the x86-64-v3 build when one is
     /// published and `v3` asks for it, else the baseline build.
     pub fn asset(&self, v3: bool) -> (&str, &str) {
@@ -283,6 +294,11 @@ impl Release {
     }
 }
 
+/// Parser revision for cached release lists. Bump when release-selection or
+/// asset-filtering rules change so each source refreshes once even when its
+/// upstream Atom feed has not changed.
+const CACHE_SCHEMA_VERSION: u32 = 2;
+
 /// The cache file.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -292,6 +308,19 @@ pub struct ReleaseStore {
     /// Unix time of the last successful fetch, per type.
     #[serde(rename = "fetchedAt")]
     pub fetched_at: BTreeMap<String, u64>,
+    /// Parser revision last used to populate each source in `releases`.
+    #[serde(
+        rename = "iroriSourceSchema",
+        default,
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub source_schema: BTreeMap<String, u32>,
+}
+
+impl ReleaseStore {
+    fn source_schema_current(&self, kind: ReleaseKind) -> bool {
+        self.source_schema.get(kind.type_str()) == Some(&CACHE_SCHEMA_VERSION)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -312,11 +341,13 @@ struct GhRelease {
     #[serde(default)]
     draft: bool,
     #[serde(default)]
+    prerelease: bool,
+    #[serde(default)]
     assets: Vec<GhAsset>,
 }
 
 static ARM_ASSET: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"-(aarch64|arm64)\.tar\.(gz|xz)$").expect("valid regex"));
+    Lazy::new(|| Regex::new(r"-(aarch64|arm64)\.tar\.(gz|xz|zst|bz2)$").expect("valid regex"));
 /// Proton-Wineland's baseline x86-64 build (`proton-wineland-<version>-x86_64.tar.xz`).
 /// Its `_v3` build needs a newer CPU and its `_wow64` build drops 32-bit
 /// libraries, so neither is a safe default.
@@ -324,7 +355,20 @@ static WINELAND_ASSET: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^proton-wineland-[0-9A-Za-z.+_-]+?-(x86_64|arm64|aarch64)\.tar\.xz$")
         .expect("valid regex")
 });
-static NUMBERED: Lazy<Regex> = Lazy::new(|| Regex::new(r"\d+-\d+$").expect("valid regex"));
+
+/// Whether a release version names a regular build rather than a prerelease,
+/// nightly, test, or single-game specialty build (`-rc`, `-beta`, `-alpha`,
+/// `-nightly`, `-HDRTEST`, `-LoL`).
+fn is_regular_version(version: &str) -> bool {
+    !version.split(['-', '_', '.']).any(|token| {
+        let lower = token.to_ascii_lowercase();
+        let stem = lower.trim_end_matches(|c: char| c.is_ascii_digit());
+        matches!(
+            stem,
+            "alpha" | "beta" | "rc" | "nightly" | "canary" | "preview" | "lol" | "test"
+        ) || (stem != "latest" && stem.ends_with("test"))
+    })
+}
 
 /// CPU architecture name as used by release assets.
 pub fn host_arch() -> &'static str {
@@ -369,18 +413,25 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
             };
             name.starts_with("dwproton-") && name.ends_with(suffix)
         }
-        // These publish x86-64 builds only, without an architecture in the
-        // name.
+        // Older UMU-Proton builds omit the architecture (x86-64 only);
+        // newer ones publish separate `-x86_64` and `-aarch64` tarballs.
         Some(ReleaseKind::UmuProton) => {
-            !arm && file_name_of(url).starts_with("UMU-Proton-") && is_tarball(url)
+            let name = file_name_of(url);
+            name.starts_with("UMU-Proton-") && is_tarball(&name) && ARM_ASSET.is_match(&name) == arm
         }
+        // These publish x86-64 builds only, without an architecture in the
+        // name. Reject `-aarch64`/`-arm64` archives if a project ever adds them.
         Some(ReleaseKind::ProtonEm) => {
-            !arm && file_name_of(url).starts_with("proton-EM-") && is_tarball(url)
+            let name = file_name_of(url);
+            !arm && name.starts_with("proton-EM-")
+                && is_tarball(&name)
+                && !ARM_ASSET.is_match(&name)
         }
         Some(ReleaseKind::ProtonGeRtsp) => {
             let name = file_name_of(url);
             !arm && (name.starts_with("proton-rtsp-") || name.starts_with("GE-Proton"))
                 && is_tarball(&name)
+                && !ARM_ASSET.is_match(&name)
         }
         // `-async` builds turn on DXVK's asynchronous shader compiling,
         // which some online games' anticheat takes for cheating.
@@ -389,6 +440,7 @@ pub fn is_compatible_download(kind: &str, url: &str, arch: &str) -> bool {
             !arm && name.starts_with("Proton-Sarek")
                 && is_tarball(&name)
                 && !name.contains("-async")
+                && !ARM_ASSET.is_match(&name)
         }
         _ => true,
     }
@@ -558,8 +610,9 @@ fn version_of(kind: ReleaseKind, tag: &str) -> String {
 }
 
 /// Turn a GitHub releases response into release entries, newest first, with
-/// a synthetic `<type>-latest` entry at index 0 (copied from the newest
-/// regularly numbered release).
+/// a synthetic `<type>-latest` entry at index 0 copied from the newest
+/// non-prerelease regular build (falling back to the newest non-prerelease,
+/// then the newest release overall).
 fn releases_from_github(kind: ReleaseKind, gh: Vec<GhRelease>, arch: &str) -> Vec<Release> {
     let mut out: Vec<Release> = gh
         .into_iter()
@@ -572,6 +625,7 @@ fn releases_from_github(kind: ReleaseKind, gh: Vec<GhRelease>, arch: &str) -> Ve
             Some(Release {
                 download_v3: v3.map(|a| a.browser_download_url.clone()),
                 checksum_v3: v3.map(|a| checksum_of(&a.name)),
+                prerelease: r.prerelease,
                 version: version_of(kind, &r.tag_name),
                 kind: kind.type_str().into(),
                 date: r
@@ -591,7 +645,8 @@ fn releases_from_github(kind: ReleaseKind, gh: Vec<GhRelease>, arch: &str) -> Ve
         .collect();
     if let Some(base) = out
         .iter()
-        .find(|r| NUMBERED.is_match(&r.version))
+        .find(|r| !r.prerelease && is_regular_version(&r.version))
+        .or_else(|| out.iter().find(|r| !r.prerelease))
         .or(out.first())
         .cloned()
     {
@@ -599,6 +654,7 @@ fn releases_from_github(kind: ReleaseKind, gh: Vec<GhRelease>, arch: &str) -> Ve
             0,
             Release {
                 version: format!("{}-latest", kind.type_str()),
+                prerelease: false,
                 ..base
             },
         );
@@ -693,6 +749,17 @@ fn keep_cached(r: &Release) -> bool {
             .is_some_and(|d| !d.is_empty() && Path::new(d).is_dir())
 }
 
+/// Order releases with synthetic `-latest` entries first, then newest date
+/// first. Keeping `-latest` ahead of newer prereleases ensures update checks,
+/// default downloads, and UI lists treat the tracked stable channel as primary.
+fn sort_releases(releases: &mut [Release]) {
+    releases.sort_by(|a, b| {
+        b.is_latest()
+            .cmp(&a.is_latest())
+            .then_with(|| b.date.cmp(&a.date))
+    });
+}
+
 /// Merge freshly fetched releases of `fetched` sources into the cache,
 /// carrying install state over and flagging updates of installed `-latest`
 /// builds.
@@ -725,7 +792,7 @@ fn merge(cached: Vec<Release>, fresh: Vec<Release>, fetched: &[ReleaseKind]) -> 
         }
     }
     result.extend(fresh);
-    result.sort_by(|a, b| b.date.cmp(&a.date));
+    sort_releases(&mut result);
     result
 }
 
@@ -773,12 +840,16 @@ async fn refresh_releases(kinds: &[ReleaseKind], check: CheckKind) -> Result<Vec
     let mut checked = 0;
     let mut last_err = None;
     for &kind in kinds {
-        let has_cached = store.releases.iter().any(|r| r.kind == kind.type_str());
-        match check_source(kind, has_cached, check).await {
+        let has_current_cache = store.source_schema_current(kind)
+            && store.releases.iter().any(|r| r.kind == kind.type_str());
+        match check_source(kind, has_current_cache, check).await {
             Ok(list) => {
                 if let Some(list) = list {
                     fresh.extend(list);
                     fetched.push(kind);
+                    store
+                        .source_schema
+                        .insert(kind.type_str().into(), CACHE_SCHEMA_VERSION);
                 }
                 checked += 1;
                 store
@@ -811,10 +882,11 @@ async fn refresh_releases(kinds: &[ReleaseKind], check: CheckKind) -> Result<Vec
 /// state reflects what is on disk now.
 pub async fn available_releases(kind: ReleaseKind) -> Result<Vec<Release>> {
     let store = read_store();
-    let fresh_enough = store
-        .fetched_at
-        .get(kind.type_str())
-        .is_some_and(|t| irori_core::util::unix_now().saturating_sub(*t) < 24 * 3600);
+    let fresh_enough = store.source_schema_current(kind)
+        && store
+            .fetched_at
+            .get(kind.type_str())
+            .is_some_and(|t| irori_core::util::unix_now().saturating_sub(*t) < 24 * 3600);
     let has_any = store.releases.iter().any(|r| r.kind == kind.type_str());
     let list = if has_any && fresh_enough {
         store.releases
@@ -828,7 +900,7 @@ pub async fn available_releases(kind: ReleaseKind) -> Result<Vec<Release>> {
             Err(e) => return Err(e),
         }
     };
-    Ok(list
+    let mut of_kind: Vec<Release> = list
         .into_iter()
         .filter(|r| r.kind == kind.type_str())
         .map(|mut r| {
@@ -838,18 +910,35 @@ pub async fn available_releases(kind: ReleaseKind) -> Result<Vec<Release>> {
             }
             r
         })
-        .collect())
+        .collect();
+    sort_releases(&mut of_kind);
+    Ok(of_kind)
 }
 
-/// The newest regularly numbered build of `kind` in `releases` that runs on
+/// The newest regular non-prerelease build of `kind` in `releases` that runs on
 /// this computer: never the `-latest` entry, which is replaced in place when
 /// the source publishes again.
 pub fn newest_numbered(releases: &[Release], kind: ReleaseKind, arch: &str) -> Option<Release> {
+    let compatible = |r: &Release| {
+        r.kind == kind.type_str()
+            && !r.is_latest()
+            && !r.download.is_empty()
+            && is_compatible_download(&r.kind, &r.download, arch)
+    };
+    newest_matching(releases, |r| {
+        compatible(r) && !r.prerelease && is_regular_version(&r.version)
+    })
+    .or_else(|| newest_matching(releases, |r| compatible(r) && !r.prerelease))
+    .or_else(|| newest_matching(releases, compatible))
+}
+
+fn newest_matching(
+    releases: &[Release],
+    mut predicate: impl FnMut(&Release) -> bool,
+) -> Option<Release> {
     releases
         .iter()
-        .filter(|r| r.kind == kind.type_str())
-        .filter(|r| !r.version.ends_with("-latest") && NUMBERED.is_match(&r.version))
-        .filter(|r| !r.download.is_empty() && is_compatible_download(&r.kind, &r.download, arch))
+        .filter(|r| predicate(r))
         .fold(None::<&Release>, |best, r| match best {
             Some(b) if b.date >= r.date => Some(b),
             _ => Some(r),
@@ -1430,10 +1519,20 @@ mod tests {
     }
 
     fn gh(tag: &str, date: &str, assets: &[&str]) -> serde_json::Value {
+        gh_with_prerelease(tag, date, assets, false)
+    }
+
+    fn gh_with_prerelease(
+        tag: &str,
+        date: &str,
+        assets: &[&str],
+        prerelease: bool,
+    ) -> serde_json::Value {
         serde_json::json!({
             "tag_name": tag,
             "published_at": format!("{date}T10:00:00Z"),
             "html_url": format!("https://github.com/x/releases/tag/{tag}"),
+            "prerelease": prerelease,
             "assets": assets.iter().map(|a| asset(a)).collect::<Vec<_>>()
         })
     }
@@ -1779,6 +1878,14 @@ mod tests {
 
         let em = parse(serde_json::json!([
             gh(
+                "EM-10.0-38-HDRTEST",
+                "2026-04-20",
+                &[
+                    "proton-EM-10.0-38-HDRTEST.sha256sum",
+                    "proton-EM-10.0-38-HDRTEST.tar.xz"
+                ]
+            ),
+            gh(
                 "EM-10.0-37-HDR",
                 "2026-04-11",
                 &[
@@ -1793,11 +1900,12 @@ mod tests {
             ),
         ]));
         let rel = releases_from_github(ReleaseKind::ProtonEm, em, "x86_64");
-        assert_eq!(rel[1].version, "Proton-EM-10.0-37-HDR");
-        assert!(rel[1].checksum.ends_with("proton-EM-10.0-37-HDR.sha256sum"));
-        // The test builds aren't what `-latest` follows.
+        assert_eq!(rel[1].version, "Proton-EM-10.0-38-HDRTEST");
+        assert_eq!(rel[2].version, "Proton-EM-10.0-37-HDR");
+        assert!(rel[2].checksum.ends_with("proton-EM-10.0-37-HDR.sha256sum"));
+        // TEST builds aren't what `-latest` follows, while regular `-HDR` releases are.
         assert_eq!(rel[0].version, "Proton-EM-latest");
-        assert!(rel[0].download.ends_with("proton-EM-10.0-34.tar.xz"));
+        assert!(rel[0].download.ends_with("proton-EM-10.0-37-HDR.tar.xz"));
 
         let sarek = parse(serde_json::json!([gh(
             "Proton-Sarek10-29",
@@ -2116,5 +2224,147 @@ mod tests {
             ReleaseKind::for_host(irori_core::HostPlatform::Linux)
                 .contains(&ReleaseKind::ProtonGeRtsp)
         );
+    }
+
+    #[test]
+    fn umu_proton_latest_tracks_experimental_suffix_and_matches_arch() {
+        let umu = parse(serde_json::json!([
+            gh(
+                "UMU-Proton-11.0-2e",
+                "2026-11-18",
+                &[
+                    "UMU-Proton-11.0-2e-aarch64.sha512sum",
+                    "UMU-Proton-11.0-2e-aarch64.tar.gz",
+                    "UMU-Proton-11.0-2e-x86_64.sha512sum",
+                    "UMU-Proton-11.0-2e-x86_64.tar.gz",
+                ]
+            ),
+            gh(
+                "UMU-Proton-10.0-4",
+                "2026-03-30",
+                &["UMU-Proton-10.0-4.sha512sum", "UMU-Proton-10.0-4.tar.gz"]
+            ),
+            gh(
+                "UMU-Proton-9.0-beta16-2",
+                "2024-04-17",
+                &["UMU-Proton-9.0-beta16-2.tar.gz"]
+            ),
+        ]));
+        let x64 = releases_from_github(ReleaseKind::UmuProton, umu.clone(), "x86_64");
+        assert_eq!(x64[0].version, "UMU-Proton-latest");
+        assert_eq!(x64[0].date, "2026-11-18");
+        assert!(
+            x64[0]
+                .download
+                .ends_with("UMU-Proton-11.0-2e-x86_64.tar.gz")
+        );
+        assert!(
+            x64[0]
+                .checksum
+                .ends_with("UMU-Proton-11.0-2e-x86_64.sha512sum")
+        );
+        assert_eq!(x64[1].version, "UMU-Proton-11.0-2e");
+        assert!(
+            x64[1]
+                .download
+                .ends_with("UMU-Proton-11.0-2e-x86_64.tar.gz")
+        );
+        assert_eq!(x64[2].version, "UMU-Proton-10.0-4");
+        assert!(x64[2].download.ends_with("UMU-Proton-10.0-4.tar.gz"));
+
+        let arm = releases_from_github(ReleaseKind::UmuProton, umu, "aarch64");
+        assert_eq!(arm.len(), 2);
+        assert_eq!(arm[0].version, "UMU-Proton-latest");
+        assert!(
+            arm[0]
+                .download
+                .ends_with("UMU-Proton-11.0-2e-aarch64.tar.gz")
+        );
+        assert_eq!(arm[1].version, "UMU-Proton-11.0-2e");
+    }
+
+    #[test]
+    fn latest_skips_prereleases_stays_first_after_merge_and_does_not_nag_updates() {
+        let cachy = parse(serde_json::json!([
+            gh_with_prerelease(
+                "cachyos-11.0-20261125-nightly",
+                "2026-11-27",
+                &["proton-cachyos-11.0-20261125-x86_64.tar.xz"],
+                true
+            ),
+            gh(
+                "cachyos-11.0-20261015-slr",
+                "2026-10-20",
+                &["proton-cachyos-11.0-20261015-slr-x86_64.tar.xz"]
+            ),
+        ]));
+        let fresh = releases_from_github(ReleaseKind::ProtonCachyOs, cachy, "x86_64");
+        assert_eq!(fresh[0].version, "Proton-CachyOS-latest");
+        assert_eq!(fresh[0].date, "2026-10-20");
+        assert!(
+            fresh[0]
+                .download
+                .ends_with("proton-cachyos-11.0-20261015-slr-x86_64.tar.xz")
+        );
+        assert!(fresh[1].prerelease);
+
+        let dir = tempfile::tempdir().unwrap();
+        let installed = Release {
+            install_dir: Some(dir.path().to_string_lossy().into_owned()),
+            is_installed: Some(true),
+            has_update: Some(false),
+            ..fresh[0].clone()
+        };
+        let merged = merge(vec![installed], fresh, &[ReleaseKind::ProtonCachyOs]);
+        let versions: Vec<&str> = merged.iter().map(|r| r.version.as_str()).collect();
+        assert_eq!(
+            versions,
+            vec![
+                "Proton-CachyOS-latest",
+                "cachyos-11.0-20261125-nightly",
+                "cachyos-11.0-20261015-slr",
+            ]
+        );
+        // Up-to-date `-latest` must not offer the newer nightly prerelease as an update.
+        assert!(pending_updates(&merged).is_empty());
+
+        // `newest_numbered` also skips the nightly prerelease and picks the stable `-slr` build.
+        let picked = newest_numbered(&merged, ReleaseKind::ProtonCachyOs, "x86_64").unwrap();
+        assert_eq!(picked.version, "cachyos-11.0-20261015-slr");
+    }
+
+    #[test]
+    fn latest_skips_specialty_builds_and_falls_back_when_only_prereleases_exist() {
+        let wine_ge = parse(serde_json::json!([
+            gh(
+                "GE-Proton8-27-LoL",
+                "2023-12-14",
+                &["wine-lutris-GE-Proton8-27-LoL-x86_64.tar.xz"]
+            ),
+            gh(
+                "GE-Proton8-25",
+                "2023-12-01",
+                &["wine-lutris-GE-Proton8-25-x86_64.tar.xz"]
+            ),
+        ]));
+        let rel = releases_from_github(ReleaseKind::WineGe, wine_ge, "x86_64");
+        assert_eq!(rel[0].version, "Wine-GE-latest");
+        assert!(rel[0].download.ends_with("GE-Proton8-25-x86_64.tar.xz"));
+
+        // When every release is a prerelease, `-latest` falls back to the newest one.
+        let only_pre = parse(serde_json::json!([gh_with_prerelease(
+            "EM-11.0-1-beta1",
+            "2026-08-05",
+            &["proton-EM-11.0-1-beta1.tar.xz"],
+            true
+        )]));
+        let rel = releases_from_github(ReleaseKind::ProtonEm, only_pre, "x86_64");
+        assert_eq!(rel[0].version, "Proton-EM-latest");
+        assert!(!rel[0].prerelease);
+        assert!(rel[0].download.ends_with("proton-EM-11.0-1-beta1.tar.xz"));
+
+        // Legacy caches without `iroriSourceSchema` require a one-time refresh.
+        let legacy: ReleaseStore = serde_json::from_str(r#"{"wine-releases":[]}"#).unwrap();
+        assert!(!legacy.source_schema_current(ReleaseKind::UmuProton));
     }
 }
