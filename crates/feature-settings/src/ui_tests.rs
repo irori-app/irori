@@ -1166,3 +1166,36 @@ fn app_update_panel_draws_all_states_and_clears_restarting_on_failure(cx: &mut T
         "restarting state must clear after a failed restart"
     );
 }
+
+#[gpui_kit::test]
+fn performance_optiscaler_and_replay_subtabs_render_cleanly(cx: &mut TestAppContext) {
+    use crate::game_view::{GameSection, GameSettingsView};
+
+    let id = GameId::new(Runner::Sideload, "ui-test-perf-tabs");
+    let (handle, view) = open(cx, move |window, cx| {
+        GameSettingsView::new(id, "optiscaler".into(), window, cx)
+    });
+    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Performance));
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    cx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("replay", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Performance));
+
+    let (d_handle, _) = open(cx, |window, cx| {
+        crate::optiscaler_defaults::OptiscalerDefaultsPanel::new(window, cx)
+    });
+    cx.update_window(d_handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}

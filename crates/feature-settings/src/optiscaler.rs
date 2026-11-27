@@ -1,8 +1,10 @@
-//! OptiScaler for one game, in the game's Tools section below RenoDX:
-//! pick release channel (Stable or Nightly), GPU driver mode (Mesa Auto with
-//! FakeNVAPI or NVIDIA), proxy file name, and OptiPatcher toggle, inspect or
-//! choose the game executable and folder, install (asking first when the game
-//! has anticheat), toggle on or off, update, and remove.
+//! OptiScaler for one game, in the game's Performance section below In-game
+//! stats: inherits global defaults from Settings -> Game defaults ->
+//! Performance, lets the user override release channel (Stable or Nightly), GPU
+//! driver mode (Mesa Auto with FakeNVAPI or NVIDIA), proxy file name,
+//! OptiPatcher, and menu shortcut key per game, inspect or choose the game
+//! executable and folder, install (asking first when the game has anticheat or
+//! when a proxy file already exists), toggle on or off, update, and remove.
 
 use std::path::{Path, PathBuf};
 
@@ -12,21 +14,24 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::select::{Select, SelectEvent, SelectState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AppContext as _, Context, Entity, EventEmitter, IntoElement, ParentElement as _,
-    PathPromptOptions, Render, SharedString, Styled as _, Subscription, Window, div,
+    AnyElement, AppContext as _, Context, ElementId, Entity, EventEmitter, IntoElement,
+    ParentElement as _, PathPromptOptions, Render, SharedString, Styled as _, Subscription, Window,
+    div,
 };
 use irori_core::process::CancellationToken;
 use irori_core::{GameId, Runner};
-use irori_reshade::optiscaler::{GpuDriverMode, OptiscalerChannel, OptiscalerConfig, ProxyDll};
+use irori_reshade::optiscaler::{
+    GpuDriverMode, OptiscalerChannel, OptiscalerConfig, ProxyDll, default_shortcut_from,
+};
 use irori_reshade::optiscaler_keys::vk_display_name;
-use irori_reshade::{GraphicsMod, Manifest, Step};
+use irori_reshade::{ExistingDllKind, GraphicsMod, Manifest, ReshadeError, Step};
 use irori_services::{OptiscalerInstallParams, OptiscalerStatus, supports_reshade};
-use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
+use irori_ui::{backend, models};
 
 use crate::form::ChoiceItem;
 use crate::graphics_mods::{
@@ -202,6 +207,7 @@ pub(crate) fn installed_help(
     status: &OptiscalerStatus,
     manifest: &Manifest,
     runner: Runner,
+    global_shortcut: Option<&str>,
 ) -> String {
     let program = manifest
         .exe
@@ -212,6 +218,7 @@ pub(crate) fn installed_help(
         .optiscaler
         .as_ref()
         .and_then(|c| c.shortcut_key.as_deref())
+        .or(global_shortcut)
         .unwrap_or("");
     let key_name = vk_display_name(shortcut);
     let mut lines = vec![
@@ -306,6 +313,11 @@ pub(crate) struct OptiscalerPanel {
     percent: Option<f32>,
     cancel: Option<CancellationToken>,
     config: OptiscalerConfig,
+    /// Global defaults from `Settings -> Game defaults -> Performance`.
+    global_config: OptiscalerConfig,
+    /// Normalized global default shortcut key (`None` = Auto/Insert).
+    global_shortcut: Option<String>,
+    /// True once loaded from an installed manifest or modified by the user.
     config_initialized: bool,
     chosen_exe: Option<PathBuf>,
     channel_select: Entity<SelectState<Vec<ChoiceItem>>>,
@@ -322,7 +334,10 @@ impl EventEmitter<GraphicsModsChanged> for OptiscalerPanel {}
 impl OptiscalerPanel {
     pub(crate) fn new(id: GameId, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let labels = Labels::load();
-        let config = OptiscalerConfig::default();
+        let defaults = backend(cx).settings.app().game.optiscaler.clone();
+        let global_config = OptiscalerConfig::from_defaults(&defaults);
+        let global_shortcut = default_shortcut_from(&defaults);
+        let config = global_config.clone();
 
         let channel_select = cx.new(|cx| {
             let mut s = SelectState::new(channel_items(&labels), None, window, cx);
@@ -352,7 +367,12 @@ impl OptiscalerPanel {
             s
         });
         let key_capture = cx.new(|cx| {
-            OptiscalerKeyCapture::new("optiscaler-game-shortcut", config.shortcut_key.clone(), cx)
+            OptiscalerKeyCapture::new(
+                "optiscaler-game-shortcut",
+                config.shortcut_key.clone(),
+                global_shortcut.clone(),
+                cx,
+            )
         });
 
         let sub_channel = cx.subscribe_in(
@@ -411,6 +431,10 @@ impl OptiscalerPanel {
                 }
             },
         );
+        let settings_model = models(cx).settings.clone();
+        let sub_settings = cx.observe_in(&settings_model, window, |this, _, window, cx| {
+            this.sync_global_defaults(window, cx);
+        });
 
         Self {
             id,
@@ -421,6 +445,8 @@ impl OptiscalerPanel {
             percent: None,
             cancel: None,
             config,
+            global_config,
+            global_shortcut,
             config_initialized: false,
             chosen_exe: None,
             channel_select,
@@ -429,8 +455,32 @@ impl OptiscalerPanel {
             key_capture,
             labels,
             language: LanguageStamp::new(),
-            _subscriptions: vec![sub_channel, sub_driver, sub_proxy, sub_key],
+            _subscriptions: vec![sub_channel, sub_driver, sub_proxy, sub_key, sub_settings],
         }
+    }
+
+    fn sync_global_defaults(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let defaults = backend(cx).settings.app().game.optiscaler.clone();
+        let next_global = OptiscalerConfig::from_defaults(&defaults);
+        let next_shortcut = default_shortcut_from(&defaults);
+        if self.global_config == next_global && self.global_shortcut == next_shortcut {
+            return;
+        }
+        let channel_changed = self.config.channel != next_global.channel;
+        self.global_config = next_global.clone();
+        self.global_shortcut = next_shortcut.clone();
+        self.key_capture
+            .update(cx, |k, cx| k.set_inherited(next_shortcut, cx));
+        // Before install and before any per-game edits, inherit global defaults live.
+        if !self.config_initialized && self.status().is_none_or(|s| s.manifest.is_none()) {
+            self.config = next_global;
+            self.sync_selects(window, cx);
+            if channel_changed && !matches!(self.load, Load::Idle) && self.busy.is_none() {
+                self.reload(window, cx);
+                return;
+            }
+        }
+        cx.notify();
     }
 
     fn applies(&self, cx: &Context<Self>) -> bool {
@@ -545,16 +595,16 @@ impl OptiscalerPanel {
                 }
                 match result {
                     Ok(status) => {
-                        if !this.config_initialized {
+                        if !this.config_initialized
+                            && let Some(installed) = status.installed_config().cloned()
+                        {
                             this.config_initialized = true;
-                            if let Some(installed) = status.installed_config().cloned() {
-                                let channel_differs = installed.channel != status.channel;
-                                this.config = installed;
-                                this.sync_selects(window, cx);
-                                if channel_differs {
-                                    this.reload(window, cx);
-                                    return;
-                                }
+                            let channel_differs = installed.channel != status.channel;
+                            this.config = installed;
+                            this.sync_selects(window, cx);
+                            if channel_differs {
+                                this.reload(window, cx);
+                                return;
                             }
                         }
                         this.load = Load::Ready(Box::new(status));
@@ -642,11 +692,11 @@ impl OptiscalerPanel {
     }
 
     fn install(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.run_change(true, window, cx);
+        self.run_change(true, false, window, cx);
     }
 
     fn apply_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.run_change(false, window, cx);
+        self.run_change(false, false, window, cx);
     }
 
     fn set_busy(&mut self, busy: Option<Busy>, cx: &mut Context<Self>) {
@@ -656,7 +706,58 @@ impl OptiscalerPanel {
             .update(cx, |k, cx| k.set_disabled(disabled, cx));
     }
 
-    fn run_change(&mut self, update_version: bool, window: &mut Window, cx: &mut Context<Self>) {
+    /// Ask the user in a prominent centered AlertDialog whether to overwrite an
+    /// unmanaged DLL already occupying the target proxy slot.
+    fn confirm_overwrite_proxy(
+        &mut self,
+        file: String,
+        kind: ExistingDllKind,
+        update_version: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let title = self.title(cx);
+        let desc_key = match kind {
+            ExistingDllKind::Optiscaler => "settings.optiscaler.overwrite.description_optiscaler",
+            ExistingDllKind::Reshade => "settings.optiscaler.overwrite.description_reshade",
+            ExistingDllKind::Unknown => "settings.optiscaler.overwrite.description_unknown",
+        };
+        let description = t_args(desc_key, &[("file", &file), ("title", &title)]);
+        let dialog_title = t_args("settings.optiscaler.overwrite.title", &[("file", &file)]);
+        let this = cx.entity().downgrade();
+        window.open_alert_dialog(cx, move |alert, _, cx| {
+            let this = this.clone();
+            let warning = cx.theme().warning;
+            alert
+                .icon(Icon::new(IconName::TriangleAlert).text_color(warning))
+                .title(dialog_title.clone())
+                .description(description.clone())
+                .show_cancel(true)
+                .cancel_text(t("settings.common.cancel"))
+                .ok_text(t("settings.optiscaler.overwrite.confirm"))
+                .ok_variant(ButtonVariant::Danger)
+                .on_ok(move |_, window, cx| {
+                    let this = this.clone();
+                    let handle = window.window_handle();
+                    cx.defer(move |cx| {
+                        let _ = handle.update(cx, |_, window, cx| {
+                            let _ = this.update(cx, |this, cx| {
+                                this.run_change(update_version, true, window, cx)
+                            });
+                        });
+                    });
+                    true
+                })
+        });
+    }
+
+    fn run_change(
+        &mut self,
+        update_version: bool,
+        overwrite_proxy: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.busy.is_some() {
             return;
         }
@@ -668,9 +769,11 @@ impl OptiscalerPanel {
         let (step, progress, mut rx) = progress_channel();
         let b = backend(cx);
         let id = self.id.clone();
+        let chosen_for_inspect = self.chosen_exe.clone();
         let params = OptiscalerInstallParams {
             config: self.config.clone(),
             chosen_exe: self.chosen_exe.clone(),
+            overwrite_proxy,
         };
         let task = irori_ui::run(cx, async move {
             if update_version {
@@ -721,6 +824,42 @@ impl OptiscalerPanel {
                         Notification::info(t("settings.optiscaler.cancelled")),
                         cx,
                     ),
+                    Err(e)
+                        if !overwrite_proxy
+                            && matches!(
+                                ReshadeError::of(&e),
+                                Some(ReshadeError::DllTaken { .. })
+                            ) =>
+                    {
+                        let file = match ReshadeError::of(&e) {
+                            Some(ReshadeError::DllTaken { name }) => name.clone(),
+                            _ => this.config.proxy_dll.file_name().to_string(),
+                        };
+                        let b = backend(cx);
+                        let id = this.id.clone();
+                        let chosen = chosen_for_inspect.clone();
+                        let file_for_inspect = file.clone();
+                        let inspect = irori_ui::run(cx, async move {
+                            Ok(
+                                b.inspect_optiscaler_conflict(&id, &file_for_inspect, chosen)
+                                    .await,
+                            )
+                        });
+                        cx.spawn_in(window, async move |this, cx| {
+                            let kind = inspect.await.unwrap_or(ExistingDllKind::Unknown);
+                            let _ = this.update_in(cx, |this, window, cx| {
+                                this.confirm_overwrite_proxy(
+                                    file,
+                                    kind,
+                                    update_version,
+                                    window,
+                                    cx,
+                                );
+                            });
+                        })
+                        .detach();
+                        return;
+                    }
                     Err(e) => window.push_notification(
                         Notification::error(error_text(&e))
                             .title(t("settings.optiscaler.install_failed")),
@@ -868,7 +1007,13 @@ impl OptiscalerPanel {
                         "settings.optiscaler.installed_label",
                         &[("version", &manifest.version)],
                     ),
-                    help: installed_help(status, manifest, self.id.runner).into(),
+                    help: installed_help(
+                        status,
+                        manifest,
+                        self.id.runner,
+                        self.global_shortcut.as_deref(),
+                    )
+                    .into(),
                     error: incomplete.then(|| self.labels.incomplete.clone()),
                     ..Default::default()
                 };
@@ -971,10 +1116,42 @@ impl OptiscalerPanel {
         let border = cx.theme().border;
         let divider = |el: AnyElement| div().border_t_1().border_color(border).child(el);
 
+        let reset_btn = |id: &'static str,
+                         overridden: bool,
+                         on_reset: fn(&mut Self, &mut Window, &mut Context<Self>),
+                         cx: &mut Context<Self>|
+         -> Option<AnyElement> {
+            overridden.then(|| {
+                Button::new(ElementId::Name(id.into()))
+                    .ghost()
+                    .xsmall()
+                    .icon(IconName::RotateCcw)
+                    .tooltip(t("settings.field.use_default"))
+                    .disabled(busy)
+                    .on_click(cx.listener(move |this, _, window, cx| on_reset(this, window, cx)))
+                    .into_any_element()
+            })
+        };
+
         let channel_row = field_row(
             RowState {
                 label: self.labels.channel_label.clone(),
                 help: self.labels.channel_help.clone(),
+                reset: reset_btn(
+                    "optiscaler-reset-channel",
+                    self.config.channel != self.global_config.channel,
+                    |this, window, cx| {
+                        let next = this.global_config.channel;
+                        this.config.channel = next;
+                        this.sync_selects(window, cx);
+                        if !matches!(this.load, Load::Idle) && this.busy.is_none() {
+                            this.reload(window, cx);
+                        } else {
+                            cx.notify();
+                        }
+                    },
+                    cx,
+                ),
                 ..Default::default()
             },
             Select::new(&self.channel_select)
@@ -991,6 +1168,16 @@ impl OptiscalerPanel {
             RowState {
                 label: self.labels.driver_label.clone(),
                 help: self.labels.driver_help.clone(),
+                reset: reset_btn(
+                    "optiscaler-reset-driver",
+                    self.config.gpu_driver != self.global_config.gpu_driver,
+                    |this, window, cx| {
+                        this.config.gpu_driver = this.global_config.gpu_driver;
+                        this.sync_selects(window, cx);
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 ..Default::default()
             },
             Select::new(&self.driver_select)
@@ -1007,6 +1194,16 @@ impl OptiscalerPanel {
             RowState {
                 label: self.labels.proxy_label.clone(),
                 help: self.labels.proxy_help.clone(),
+                reset: reset_btn(
+                    "optiscaler-reset-proxy",
+                    self.config.proxy_dll != self.global_config.proxy_dll,
+                    |this, window, cx| {
+                        this.config.proxy_dll = this.global_config.proxy_dll;
+                        this.sync_selects(window, cx);
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 ..Default::default()
             },
             Select::new(&self.proxy_select)
@@ -1023,6 +1220,15 @@ impl OptiscalerPanel {
             RowState {
                 label: self.labels.optipatcher_label.clone(),
                 help: self.labels.optipatcher_help.clone(),
+                reset: reset_btn(
+                    "optiscaler-reset-optipatcher",
+                    self.config.enable_optipatcher != self.global_config.enable_optipatcher,
+                    |this, _, cx| {
+                        this.config.enable_optipatcher = this.global_config.enable_optipatcher;
+                        cx.notify();
+                    },
+                    cx,
+                ),
                 ..Default::default()
             },
             Switch::new("optiscaler-optipatcher")
@@ -1257,7 +1463,7 @@ mod tests {
             catalog_error: Some("offline".into()),
             ..Default::default()
         };
-        let help = installed_help(&status, &manifest, Runner::Sideload);
+        let help = installed_help(&status, &manifest, Runner::Sideload, None);
         assert!(help.contains("dxgi.dll"), "{help}");
         assert!(help.contains("Foo-Win64-Shipping.exe"), "{help}");
         assert!(help.contains("Delete"), "{help}");
@@ -1269,7 +1475,7 @@ mod tests {
             assert!(help.contains("PROTON_ENABLE_NVAPI=1"), "{help}");
         }
 
-        let steam_help = installed_help(&status, &manifest, Runner::Steam);
+        let steam_help = installed_help(&status, &manifest, Runner::Steam, None);
         if !cfg!(target_os = "windows") {
             assert!(steam_help.contains("Proton"), "{steam_help}");
             assert!(
@@ -1277,6 +1483,13 @@ mod tests {
                 "{steam_help}"
             );
         }
+
+        // Inherited global shortcut key is shown when manifest has no per-game override.
+        let mut inherited_manifest = manifest;
+        inherited_manifest.optiscaler.as_mut().unwrap().shortcut_key = None;
+        let inherited_help =
+            installed_help(&status, &inherited_manifest, Runner::Sideload, Some("0x24"));
+        assert!(inherited_help.contains("Home"), "{inherited_help}");
     }
 
     #[test]
@@ -1306,10 +1519,14 @@ mod tests {
     }
 
     #[test]
-    fn optiscaler_route_id_opens_tools_section() {
+    fn optiscaler_and_replay_route_ids_open_performance_section() {
         assert_eq!(
             crate::game_view::GameSection::from_id("optiscaler"),
-            Some(crate::game_view::GameSection::Tools)
+            Some(crate::game_view::GameSection::Performance)
+        );
+        assert_eq!(
+            crate::game_view::GameSection::from_id("replay"),
+            Some(crate::game_view::GameSection::Performance)
         );
     }
 }

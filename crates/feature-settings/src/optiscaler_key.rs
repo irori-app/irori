@@ -15,7 +15,7 @@ use gpui_kit::{
 use irori_reshade::optiscaler_keys::{
     SHORTCUT_AUTO, gpui_key_to_vk, is_modifier_key, vk_display_badge,
 };
-use irori_ui::i18n::t;
+use irori_ui::i18n::{t, t_args};
 
 /// Emitted when the user captures a new key or resets the shortcut.
 pub(crate) struct KeyCaptured(pub(crate) Option<String>);
@@ -27,8 +27,10 @@ pub(crate) struct OptiscalerKeyCapture {
     focus: FocusHandle,
     listening: bool,
     disabled: bool,
-    /// `None` leaves `[Menu] ShortcutKey` at its default (`auto` / Insert).
+    /// `None` inherits [`Self::inherited`] (or OptiScaler's `auto` / Insert default).
     value: Option<String>,
+    /// Optional global default VK hex code shown when `value` is `None`.
+    inherited: Option<String>,
 }
 
 impl EventEmitter<KeyCaptured> for OptiscalerKeyCapture {}
@@ -43,6 +45,7 @@ impl OptiscalerKeyCapture {
     pub(crate) fn new(
         id: impl Into<SharedString>,
         value: Option<String>,
+        inherited: Option<String>,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
@@ -51,6 +54,7 @@ impl OptiscalerKeyCapture {
             listening: false,
             disabled: false,
             value: clean_value(value),
+            inherited: clean_inherited(inherited),
         }
     }
 
@@ -58,6 +62,14 @@ impl OptiscalerKeyCapture {
         let next = clean_value(value);
         if self.value != next {
             self.value = next;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn set_inherited(&mut self, inherited: Option<String>, cx: &mut Context<Self>) {
+        let next = clean_inherited(inherited);
+        if self.inherited != next {
+            self.inherited = next;
             cx.notify();
         }
     }
@@ -121,14 +133,19 @@ impl OptiscalerKeyCapture {
         if self.listening {
             return t("settings.optiscaler.shortcut.listening");
         }
-        match &self.value {
-            Some(v) => vk_display_badge(v).into_owned().into(),
-            None => t("settings.optiscaler.shortcut.default_insert"),
+        match (&self.value, &self.inherited) {
+            (Some(v), _) => vk_display_badge(v).into_owned().into(),
+            (None, Some(v)) => t_args(
+                "settings.optiscaler.shortcut.inherited",
+                &[("key", vk_display_badge(v).as_ref())],
+            ),
+            (None, None) => t("settings.optiscaler.shortcut.default_insert"),
         }
     }
 
     fn can_reset(&self) -> bool {
         match &self.value {
+            Some(v) if self.inherited.is_some() => !v.is_empty(),
             Some(v) => !v.is_empty() && !v.eq_ignore_ascii_case(SHORTCUT_AUTO),
             None => false,
         }
@@ -137,6 +154,10 @@ impl OptiscalerKeyCapture {
 
 fn clean_value(v: Option<String>) -> Option<String> {
     v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+fn clean_inherited(v: Option<String>) -> Option<String> {
+    clean_value(v).filter(|s| !s.eq_ignore_ascii_case(SHORTCUT_AUTO))
 }
 
 impl Render for OptiscalerKeyCapture {

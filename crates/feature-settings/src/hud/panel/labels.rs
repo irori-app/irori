@@ -24,11 +24,11 @@ pub(super) struct HudLabels {
     pub(super) global_stores_notice: SharedString,
     pub(super) launcher_restart_notice: SharedString,
 
-    pub(super) steam_title: SharedString,
-    pub(super) steam_description: SharedString,
+    pub(super) steam_card_subtitle: SharedString,
     pub(super) steam_snippet_label: SharedString,
     pub(super) steam_copy: SharedString,
     pub(super) steam_copied: SharedString,
+    pub(super) steam_how_to_paste: SharedString,
     pub(super) steam_none_needed: SharedString,
 
     pub(super) tab_metrics: SharedString,
@@ -212,11 +212,11 @@ impl HudLabels {
             global_stores_notice: t("settings.hud.global_stores_notice"),
             launcher_restart_notice: t("settings.hud.launcher_restart_notice"),
 
-            steam_title: t("settings.hud.steam.title"),
-            steam_description: t("settings.hud.steam.description"),
+            steam_card_subtitle: t("settings.hud.steam.card_subtitle"),
             steam_snippet_label: t("settings.hud.steam.snippet_label"),
             steam_copy: t("settings.hud.steam.copy"),
             steam_copied: t("settings.hud.steam.copied"),
+            steam_how_to_paste: t("settings.hud.steam.how_to_paste"),
             steam_none_needed: t("settings.hud.steam.none_needed"),
 
             tab_metrics: t("settings.hud.tab.metrics"),

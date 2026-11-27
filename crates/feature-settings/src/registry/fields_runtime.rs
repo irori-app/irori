@@ -349,6 +349,44 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     .tooltip("settings.field.battleye_runtime.tip")
     .keywords(&["battleye", "anticheat", "runtime"]),
     // ---- Performance ----
+    game_only(
+        "panel.performance-hud",
+        "settings.field.panel_performance_hud.label",
+        Performance,
+        "settings.group.performance_hud",
+        Panel(PanelKind::PerformanceHud),
+    )
+    .tooltip("settings.field.panel_performance_hud.tip")
+    .keywords(&[
+        "hud",
+        "mangohud",
+        "metal",
+        "overlay",
+        "fps",
+        "frametime",
+        "performance",
+        "in-game stats",
+        "stats",
+    ]),
+    game(
+        "panel.optiscaler",
+        "settings.field.panel_optiscaler.label",
+        Performance,
+        "settings.group.optiscaler",
+        Panel(PanelKind::Optiscaler),
+    )
+    .tooltip("settings.field.panel_optiscaler.tip")
+    .keywords(&[
+        "optiscaler",
+        "upscaling",
+        "dlss",
+        "xess",
+        "fsr",
+        "fakenvapi",
+        "optipatcher",
+        "proxy",
+        "shortcut",
+    ]),
     game(
         "useGameMode",
         "settings.field.use_game_mode.label",
@@ -388,25 +426,6 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     )
     .tooltip("settings.field.show_fps.tip")
     .keywords(&["fps", "hud", "dxvk", "counter"]),
-    game_only(
-        "panel.performance-hud",
-        "settings.field.panel_performance_hud.label",
-        Performance,
-        "settings.group.performance_hud",
-        Panel(PanelKind::PerformanceHud),
-    )
-    .tooltip("settings.field.panel_performance_hud.tip")
-    .keywords(&[
-        "hud",
-        "mangohud",
-        "metal",
-        "overlay",
-        "fps",
-        "frametime",
-        "performance",
-        "in-game stats",
-        "stats",
-    ]),
     game(
         "panel.replay",
         "settings.field.panel_replay.label",

@@ -22,6 +22,8 @@ use crate::hud::{HudPanel, HudPanelScope};
 use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
 use crate::launch_programs::LaunchProgramsPanel;
+use crate::optiscaler::OptiscalerPanel;
+use crate::optiscaler_defaults::OptiscalerDefaultsPanel;
 use crate::overlay::OverlayPanel;
 use crate::registry::{
     self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
@@ -84,6 +86,14 @@ impl SettingsForm {
             {
                 return false;
             }
+            // Per-game OptiScaler appears only for installed Windows builds
+            // (and Steam Proton builds) that Irori can install graphics mods into.
+            if matches!(f.kind, FieldKind::Panel(PanelKind::Optiscaler))
+                && matches!(&self.target, FormTarget::Game(_))
+                && !self.supports_optiscaler
+            {
+                return false;
+            }
             // The defaults reach native builds too, so only a game that isn't
             // one leaves native-only fields out.
             if f.native_only && matches!(self.target, FormTarget::Game(_)) && !self.native {
@@ -130,7 +140,11 @@ impl SettingsForm {
                 self.snapshot = serde_json::to_value(&*app).unwrap_or_default();
             }
             FormTarget::Game(id) => {
-                self.native = is_native(b.game(id).as_deref());
+                let game = b.game(id);
+                self.native = is_native(game.as_deref());
+                self.supports_optiscaler = game
+                    .as_deref()
+                    .is_some_and(irori_services::supports_reshade);
                 let overrides = b.settings.overrides(id);
                 self.defaults = app.game.clone();
                 self.defaults_json = serde_json::to_value(&self.defaults).unwrap_or_default();
@@ -356,6 +370,18 @@ impl SettingsForm {
                     )
                 }
                 _ => None,
+            },
+            PanelKind::Optiscaler => match &self.target {
+                FormTarget::Defaults => {
+                    Some(cx.new(|cx| OptiscalerDefaultsPanel::new(window, cx)).into())
+                }
+                FormTarget::Game(id) => {
+                    let id = id.clone();
+                    let entity = cx.new(|cx| OptiscalerPanel::new(id, window, cx));
+                    self.optiscaler_panel = Some(entity.clone());
+                    Some(entity.into())
+                }
+                FormTarget::App => None,
             },
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
             PanelKind::QuickLaunch => {

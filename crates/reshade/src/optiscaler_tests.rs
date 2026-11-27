@@ -750,6 +750,8 @@ async fn installs_mesa_auto_with_fakenvapi_and_optipatcher_and_removes_cleanly()
         cache: cache.path().to_path_buf(),
         endpoints: mock.endpoints(),
         previous: None,
+        overwrite_proxy: false,
+        default_shortcut_key: None,
     };
 
     let result = install(req, no_steps(), no_progress(), CancellationToken::new())
@@ -837,6 +839,8 @@ async fn installs_nvidia_mode_without_fakenvapi_and_supports_asi_proxy() {
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: None,
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -877,6 +881,8 @@ async fn installs_nvidia_mode_without_fakenvapi_and_supports_asi_proxy() {
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: None,
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -911,6 +917,8 @@ async fn refuses_untracked_proxy_dll_tampered_downloads_and_32_bit_games() {
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: None,
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -941,6 +949,8 @@ async fn refuses_untracked_proxy_dll_tampered_downloads_and_32_bit_games() {
             cache: cache.path().to_path_buf(),
             endpoints: tampered.endpoints(),
             previous: None,
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -989,6 +999,8 @@ async fn reconfigure_renames_proxy_without_network_and_preserves_custom_ini() {
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: None,
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -1102,6 +1114,8 @@ async fn update_skips_identical_files_preserves_custom_ini_and_prunes_old_cache(
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: None,
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -1142,6 +1156,8 @@ async fn update_skips_identical_files_preserves_custom_ini_and_prunes_old_cache(
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: Some(first.manifest),
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -1182,6 +1198,8 @@ async fn update_skips_identical_files_preserves_custom_ini_and_prunes_old_cache(
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: Some(second.manifest),
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -1216,6 +1234,8 @@ async fn update_skips_identical_files_preserves_custom_ini_and_prunes_old_cache(
             cache: cache.path().to_path_buf(),
             endpoints: mock.endpoints(),
             previous: None,
+            overwrite_proxy: false,
+            default_shortcut_key: None,
         },
         no_steps(),
         no_progress(),
@@ -1301,4 +1321,101 @@ fn sync_wine_user_reg_overrides_adds_updates_and_removes_entries_surgically() {
     let after_remove = std::fs::read_to_string(&reg).unwrap();
     assert!(!after_remove.contains("\"version\""));
     assert!(after_remove.contains("\"atl100\"=\"native,builtin\"\n"));
+}
+
+#[tokio::test]
+async fn overwrite_proxy_replaces_existing_dll_and_syncs_global_shortcut() {
+    let mock = MockOptiscalerServer::start(false);
+    let game = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let journal_path = state.path().join("optiscaler/sideload/overwrite.json");
+
+    let exe = game.path().join("Game.exe");
+    std::fs::write(&exe, x64_pe(&["d3d12.dll"])).unwrap();
+
+    // Plant an unmanaged old OptiScaler DLL, stale disabled file, and existing INI.
+    let mut old_opti_pe = x64_pe(&["d3d12.dll"]);
+    old_opti_pe.extend_from_slice(b"OptiScaler old manual build");
+    std::fs::write(game.path().join("dxgi.dll"), &old_opti_pe).unwrap();
+    std::fs::write(game.path().join("dxgi.dll.irori-disabled"), b"stale").unwrap();
+    std::fs::write(
+        game.path().join("OptiScaler.ini"),
+        "[Menu]\r\nShortcutKey=auto\r\n[Custom]\r\nKeepMe=1\r\n",
+    )
+    .unwrap();
+    assert_eq!(
+        journal::inspect_existing_dll(game.path(), "dxgi.dll"),
+        journal::ExistingDllKind::Optiscaler
+    );
+
+    // Overwrite with a global default shortcut key (Home = 0x24) while leaving
+    // per-game shortcut_key as None (inheriting).
+    let res = install(
+        OptiscalerInstallRequest {
+            game_root: game.path().to_path_buf(),
+            configured_exe: Some(exe),
+            chosen_exe: None,
+            config: OptiscalerConfig::default(),
+            journal: journal_path.clone(),
+            cache: cache.path().to_path_buf(),
+            endpoints: mock.endpoints(),
+            previous: None,
+            overwrite_proxy: true,
+            default_shortcut_key: Some("0x24".into()),
+        },
+        no_steps(),
+        no_progress(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    let mut manifest = res.manifest;
+    assert_eq!(
+        std::fs::read(game.path().join("dxgi.dll")).unwrap(),
+        mock.opti_bytes
+    );
+    assert!(!game.path().join("dxgi.dll.irori-disabled").exists());
+    assert_eq!(
+        manifest
+            .optiscaler
+            .as_ref()
+            .and_then(|c| c.shortcut_key.as_deref()),
+        None
+    );
+    let ini = std::fs::read_to_string(game.path().join("OptiScaler.ini")).unwrap();
+    assert!(ini.contains("ShortcutKey=0x24"), "{ini}");
+    assert!(ini.contains("KeepMe=1"), "{ini}");
+
+    // Syncing global shortcut to Delete (0x2E) updates inheriting manifest.
+    assert!(sync_global_shortcut_in_manifest(&journal_path, &mut manifest, Some("0x2E")).unwrap());
+    let ini = std::fs::read_to_string(game.path().join("OptiScaler.ini")).unwrap();
+    assert!(ini.contains("ShortcutKey=0x2E"), "{ini}");
+
+    // Manifest with explicit per-game override is skipped by global sync.
+    manifest.optiscaler.as_mut().unwrap().shortcut_key = Some("0x2D".into());
+    assert!(!sync_global_shortcut_in_manifest(&journal_path, &mut manifest, Some("0x7B")).unwrap());
+    let ini = std::fs::read_to_string(game.path().join("OptiScaler.ini")).unwrap();
+    assert!(ini.contains("ShortcutKey=0x2E"), "{ini}");
+
+    // Inspecting a ReShade PE classifies it as Reshade, and an unknown binary as Unknown.
+    let reshade_dir = tempfile::tempdir().unwrap();
+    let mut reshade_pe = x64_pe(&["d3d12.dll"]);
+    reshade_pe.extend("ReShade".encode_utf16().flat_map(u16::to_le_bytes));
+    std::fs::write(reshade_dir.path().join("dxgi.dll"), &reshade_pe).unwrap();
+    assert_eq!(
+        journal::inspect_existing_dll(reshade_dir.path(), "dxgi.dll"),
+        journal::ExistingDllKind::Reshade
+    );
+    std::fs::write(reshade_dir.path().join("version.dll"), b"unknown-mod").unwrap();
+    assert_eq!(
+        journal::inspect_existing_dll(reshade_dir.path(), "version.dll"),
+        journal::ExistingDllKind::Unknown
+    );
+
+    // Removing the overwritten OptiScaler cleans up dxgi.dll cleanly while keeping INI.
+    let report = journal::remove(&journal_path, &manifest, &|_| Ok(())).unwrap();
+    assert!(!game.path().join("dxgi.dll").exists());
+    assert!(game.path().join("OptiScaler.ini").exists());
+    assert!(report.removed >= 1);
 }

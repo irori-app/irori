@@ -165,6 +165,8 @@ pub(crate) enum PaletteTarget {
     Troubleshoot(GameId),
     /// Show a game's ReShade and RenoDX (its settings' Tools section).
     GraphicsMods(GameId),
+    /// Show a game's OptiScaler (its settings' Performance section).
+    Optiscaler(GameId),
     /// Run one of the actions the user added to a game, by its place.
     UserAction(GameId, usize),
     /// Edit the actions of a game.
@@ -1189,6 +1191,7 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::Troubleshoot(id) => irori_game::open_troubleshooter(id, window, cx),
         PaletteTarget::GraphicsMods(id) => irori_game::ops::open_settings(&id, "reshade", cx),
+        PaletteTarget::Optiscaler(id) => irori_game::ops::open_settings(&id, "optiscaler", cx),
         PaletteTarget::UserAction(id, index) => irori_ui::user_actions::run(id, index, window, cx),
         PaletteTarget::EditActions(id) => irori_ui::user_actions::edit(&id, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),

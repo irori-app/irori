@@ -44,15 +44,20 @@ impl GraphicsMod {
         *self == GraphicsMod::Reshade
     }
 
+    /// Root folder holding every game's install manifests for this mod.
+    pub fn journals_root(self) -> PathBuf {
+        let base = Paths::get().data.join("reshade");
+        match self {
+            GraphicsMod::Reshade => base,
+            GraphicsMod::Renodx => base.join("renodx"),
+            GraphicsMod::Optiscaler => base.join("optiscaler"),
+        }
+    }
+
     /// Where a game's install manifest of this mod lives.
     pub fn journal_path(self, id: &GameId) -> PathBuf {
         let file = format!("{}.json", irori_core::paths::sanitize(&id.app_name));
-        let base = Paths::get().data.join("reshade");
-        match self {
-            GraphicsMod::Reshade => base.join(id.runner.id()).join(file),
-            GraphicsMod::Renodx => base.join("renodx").join(id.runner.id()).join(file),
-            GraphicsMod::Optiscaler => base.join("optiscaler").join(id.runner.id()).join(file),
-        }
+        self.journals_root().join(id.runner.id()).join(file)
     }
 
     /// Where this mod's downloads are cached.

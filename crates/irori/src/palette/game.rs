@@ -124,6 +124,16 @@ pub(super) fn rows(
                 .icon(IconName::Sparkles),
             PaletteTarget::GraphicsMods(game.id()),
         );
+        push(
+            Entry::new()
+                .label(t_args(
+                    "shell.palette.optiscaler",
+                    &[("title", &game.title)],
+                ))
+                .keywords([t("shell.palette.optiscaler_keywords")])
+                .icon(IconName::Gauge),
+            PaletteTarget::Optiscaler(game.id()),
+        );
     }
     if game.runner() != Runner::Steam && (game.is_installed || game.installable) {
         let keywords = [t("shell.palette.steam_shortcut_keywords")];

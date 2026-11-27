@@ -29,6 +29,7 @@ use irori_ui::{backend, models};
 use serde_json::Value;
 
 use crate::i18n::LanguageStamp;
+use crate::optiscaler::OptiscalerPanel;
 use crate::registry::{self, ActionKind, CustomKind, FieldSection, FieldSpec, Scope};
 use crate::widgets::more_options_disclosure;
 
@@ -196,8 +197,12 @@ pub struct SettingsForm {
     playnite_detected: bool,
     /// Self-contained panels (controllers, EOS overlay, EGL sync, save sync).
     panels: HashMap<&'static str, AnyView>,
+    /// Per-game OptiScaler panel when built for `FormTarget::Game`.
+    optiscaler_panel: Option<Entity<OptiscalerPanel>>,
     /// Game target: the game is installed as this system's own build.
     native: bool,
+    /// Game target: Irori can install Windows graphics mods (OptiScaler) for this game.
+    supports_optiscaler: bool,
     /// The shell installed the Epic store handle.
     epic_available: bool,
     /// Language of the retained placeholders and select items.
@@ -266,7 +271,9 @@ impl SettingsForm {
             faugus_detected: irori_ui::hooks::faugus_detected(),
             playnite_detected: irori_extras::playnite::is_installed(),
             panels: HashMap::new(),
+            optiscaler_panel: None,
             native: false,
+            supports_optiscaler: false,
             epic_available: crate::stores::epic(cx).is_some(),
             language: LanguageStamp::new(),
             _subscriptions: Vec::new(),
@@ -292,19 +299,30 @@ impl SettingsForm {
             }),
         );
         if let FormTarget::Game(id) = &this.target {
-            // Installing or moving the game can change whether it runs natively.
+            // Installing or moving the game can change whether it runs natively
+            // or supports Windows graphics mods.
             let id = id.clone();
             let library = models(cx).library.clone();
             this._subscriptions
                 .push(cx.observe(&library, move |this, _, cx| {
-                    let native = is_native(backend(cx).game(&id).as_deref());
-                    if native != this.native {
+                    let game = backend(cx).game(&id);
+                    let native = is_native(game.as_deref());
+                    let supports_optiscaler = game
+                        .as_deref()
+                        .is_some_and(irori_services::supports_reshade);
+                    if native != this.native || supports_optiscaler != this.supports_optiscaler {
                         this.native = native;
+                        this.supports_optiscaler = supports_optiscaler;
                         cx.notify();
                     }
                 }));
         }
         this
+    }
+
+    /// Per-game OptiScaler panel embedded in this form, when bound to a game.
+    pub(crate) fn optiscaler_panel(&self) -> Option<Entity<OptiscalerPanel>> {
+        self.optiscaler_panel.clone()
     }
 
     /// The edited target.

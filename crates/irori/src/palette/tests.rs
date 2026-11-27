@@ -183,14 +183,27 @@ fn installed_windows_games_offer_reshade_and_renodx() {
         }),
         ..Default::default()
     };
-    let offers = |g: GameInfo| {
-        game::rows(&g, None, &[])
-            .into_iter()
-            .any(|(_, target)| matches!(target, PaletteTarget::GraphicsMods(_)))
+    let offers = |g: &GameInfo| {
+        let rows = game::rows(g, None, &[]);
+        (
+            rows.iter()
+                .any(|(_, target)| matches!(target, PaletteTarget::GraphicsMods(_))),
+            rows.iter()
+                .any(|(_, target)| matches!(target, PaletteTarget::Optiscaler(_))),
+        )
     };
-    assert!(offers(game(true, irori_core::InstallPlatform::Windows)));
-    assert!(!offers(game(true, irori_core::InstallPlatform::Linux)));
-    assert!(!offers(game(false, irori_core::InstallPlatform::Windows)));
+    assert_eq!(
+        offers(&game(true, irori_core::InstallPlatform::Windows)),
+        (true, true)
+    );
+    assert_eq!(
+        offers(&game(true, irori_core::InstallPlatform::Linux)),
+        (false, false)
+    );
+    assert_eq!(
+        offers(&game(false, irori_core::InstallPlatform::Windows)),
+        (false, false)
+    );
 }
 
 /// What `level_rows` offers, as short names in order.

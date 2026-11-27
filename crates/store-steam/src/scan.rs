@@ -90,10 +90,12 @@ pub(crate) fn parse_manifest(text: &str, library: &Path) -> Option<InstalledApp>
     if flags & state::FULLY_INSTALLED == 0 || is_tool(app_id, name) {
         return None;
     }
+    let install_path = library.join("steamapps").join("common").join(install_dir);
+    let windows_build = runs_windows_build(state, library, app_id, &install_path);
     Some(InstalledApp {
         app_id: app_id.to_string(),
         name: name.to_string(),
-        install_path: library.join("steamapps").join("common").join(install_dir),
+        install_path,
         size_on_disk: field("SizeOnDisk")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0),
@@ -104,21 +106,122 @@ pub(crate) fn parse_manifest(text: &str, library: &Path) -> Option<InstalledApp>
         manifest: library
             .join("steamapps")
             .join(format!("appmanifest_{app_id}.acf")),
-        windows_build: runs_windows_build(state),
+        windows_build,
     })
 }
 
-/// Whether a manifest's app runs its Windows build on another system:
-/// Steam records Proton as a platform override (`platform_override_source`
-/// `windows`) in `UserConfig` and `MountedConfig`.
-fn runs_windows_build(state: &Vdf) -> bool {
-    ["UserConfig", "MountedConfig"].iter().any(|section| {
+/// Steamworks Common Redistributables app ID, referenced under `SharedDepots`
+/// exclusively by Windows builds.
+const WINDOWS_REDIST_APP_ID: &str = "228980";
+
+/// Bounds for the shallow fallback scan of an install directory when no
+/// manifest or Proton prefix signal is present yet (e.g. a newly installed
+/// Windows-only game that has not been launched).
+const DETECT_MAX_DEPTH: usize = 2;
+const DETECT_MAX_ENTRIES: usize = 64;
+
+/// Whether a manifest's app runs its Windows build on another system.
+///
+/// Steam writes `platform_override_source = "windows"` only when the user
+/// forces Proton on an app that also ships a Linux build; Windows-only games
+/// running through default Proton omit that key. Check cheapest signals first:
+/// 1. `UserConfig` / `MountedConfig` `platform_override_source == "windows"`.
+/// 2. `SharedDepots` referencing Steamworks Common Redistributables (`228980`).
+/// 3. An initialized Proton prefix (`steamapps/compatdata/<id>/pfx`).
+/// 4. A bounded shallow scan of `install_path` finding `.exe` binaries without
+///    native Linux executables or launch scripts.
+fn runs_windows_build(state: &Vdf, library: &Path, app_id: &str, install_path: &Path) -> bool {
+    let has_override = ["UserConfig", "MountedConfig"].iter().any(|section| {
         state
             .get(section)
             .and_then(|c| c.get("platform_override_source"))
             .and_then(Vdf::as_str)
             .is_some_and(|p| p.trim().eq_ignore_ascii_case("windows"))
-    })
+    });
+    if has_override {
+        return true;
+    }
+
+    let has_windows_redist = state.get("SharedDepots").is_some_and(|depots| {
+        depots.entries().iter().any(|(_, target)| {
+            target
+                .as_str()
+                .is_some_and(|v| v.trim() == WINDOWS_REDIST_APP_ID)
+        })
+    });
+    if has_windows_redist {
+        return true;
+    }
+
+    let pfx = library
+        .join("steamapps")
+        .join("compatdata")
+        .join(app_id)
+        .join("pfx");
+    if pfx.is_dir() {
+        return true;
+    }
+
+    install_dir_looks_windows_only(install_path)
+}
+
+fn install_dir_looks_windows_only(root: &Path) -> bool {
+    if !root.is_dir() {
+        return false;
+    }
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    let mut seen = 0usize;
+    let mut found_exe = false;
+
+    while let Some((dir, depth)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            seen += 1;
+            if seen > DETECT_MAX_ENTRIES {
+                return found_exe;
+            }
+            let Ok(ft) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if ft.is_dir() {
+                if depth < DETECT_MAX_DEPTH {
+                    stack.push((path, depth + 1));
+                }
+                continue;
+            }
+            if !ft.is_file() {
+                continue;
+            }
+            let name = entry.file_name();
+            let lower = name.to_string_lossy().to_ascii_lowercase();
+            if lower.ends_with(".sh")
+                || lower.ends_with(".x86_64")
+                || lower.ends_with(".x86")
+                || lower.ends_with(".so")
+                || lower.contains(".so.")
+            {
+                return false;
+            }
+            if lower.ends_with(".exe") {
+                found_exe = true;
+            } else if depth <= 1 && is_elf_file(&path) {
+                return false;
+            }
+        }
+    }
+    found_exe
+}
+
+fn is_elf_file(path: &Path) -> bool {
+    use std::io::Read as _;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut magic = [0u8; 4];
+    file.read_exact(&mut magic).is_ok() && magic == *b"\x7fELF"
 }
 
 /// The Steam installs whose libraries hold this computer's Steam games:
@@ -641,5 +744,62 @@ mod tests {
             Some("Player One")
         );
         assert!(persona_name(dir.path(), "1").is_none());
+    }
+
+    #[test]
+    fn detects_proton_windows_builds_without_platform_override() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = dir.path();
+
+        // 1. SharedDepots referencing Steamworks Common Redistributables (228980).
+        let with_redist = manifest("934700", "Dead Island 2", "Dead Island 2", 4).replace(
+            "\"UserConfig\"",
+            "\"SharedDepots\"\n\t{\n\t\t\"228988\"\t\t\"228980\"\n\t}\n\t\"UserConfig\"",
+        );
+        assert!(parse_manifest(&with_redist, lib).unwrap().windows_build);
+
+        // 2. Initialized Proton prefix (compatdata/<id>/pfx), vs empty compatdata on Linux-native.
+        std::fs::create_dir_all(lib.join("steamapps/compatdata/1222140/pfx")).unwrap();
+        assert!(
+            parse_manifest(&manifest("1222140", "Detroit", "Detroit", 4), lib)
+                .unwrap()
+                .windows_build
+        );
+        std::fs::create_dir_all(lib.join("steamapps/compatdata/570")).unwrap();
+        assert!(
+            !parse_manifest(&manifest("570", "Dota 2", "dota 2 beta", 4), lib)
+                .unwrap()
+                .windows_build
+        );
+
+        // 3. Unlaunched Windows-only game (no pfx, no 228980) with .exe in install folder.
+        let win_dir = lib.join("steamapps/common/IndieWin");
+        std::fs::create_dir_all(&win_dir).unwrap();
+        std::fs::write(win_dir.join("Game.exe"), b"MZ").unwrap();
+        assert!(
+            parse_manifest(&manifest("999001", "IndieWin", "IndieWin", 4), lib)
+                .unwrap()
+                .windows_build
+        );
+
+        // 4. Native Linux game with .sh launcher or ELF binary is not classified as Windows.
+        let linux_sh_dir = lib.join("steamapps/common/NativeSh");
+        std::fs::create_dir_all(linux_sh_dir.join("game")).unwrap();
+        std::fs::write(linux_sh_dir.join("game/run.sh"), b"#!/bin/sh\n").unwrap();
+        assert!(
+            !parse_manifest(&manifest("999002", "NativeSh", "NativeSh", 4), lib)
+                .unwrap()
+                .windows_build
+        );
+
+        let linux_elf_dir = lib.join("steamapps/common/NativeElf");
+        std::fs::create_dir_all(&linux_elf_dir).unwrap();
+        std::fs::write(linux_elf_dir.join("game_bin"), b"\x7fELF\x02\x01\x01\x00").unwrap();
+        std::fs::write(linux_elf_dir.join("helper.exe"), b"MZ").unwrap();
+        assert!(
+            !parse_manifest(&manifest("999003", "NativeElf", "NativeElf", 4), lib)
+                .unwrap()
+                .windows_build
+        );
     }
 }

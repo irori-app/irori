@@ -882,6 +882,7 @@ impl Render for HudPreview {
         // positions readable when only a line or two is enabled.
         let mut stage = v_flex()
             .w_full()
+            .flex_1()
             .min_h(rems(7.))
             .rounded(theme.radius)
             .bg(self.scene.background())
@@ -913,6 +914,7 @@ impl Render for HudPreview {
 
         v_flex()
             .w_full()
+            .h_full()
             .p_4()
             .gap_3()
             .rounded(radius)
