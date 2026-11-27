@@ -1640,6 +1640,7 @@
   "settings.optiscaler.overwrite.description_reshade": "{file} já existe na pasta de “{title}” e parece pertencer ao ReShade. Sobrescrevê-lo substituirá o ReShade, a menos que você escolha outro arquivo proxy como winmm.dll, version.dll ou OptiScaler.asi. Deseja sobrescrever mesmo assim?",
   "settings.optiscaler.overwrite.description_unknown": "{file} já existe na pasta de “{title}” e não é gerenciado pelo Irori. Outro mod ou DLL personalizada pode estar usando esse arquivo; você pode escolher outro proxy como winmm.dll, version.dll ou OptiScaler.asi. Deseja sobrescrever mesmo assim?",
   "settings.optiscaler.overwrite.confirm": "Sobrescrever mesmo assim",
+  "settings.optiscaler.error.arch": "O OptiScaler só funciona em jogos 64-bit, e o executável deste jogo não é 64-bit.",
   "settings.optiscaler.error.dll_taken": "{file} já está na pasta do jogo e não é do OptiScaler, então o Irori não mexeu nele. Outro mod como o ReShade pode estar usando esse arquivo. Escolha outro arquivo proxy como winmm.dll, version.dll ou OptiScaler.asi e tente novamente.",
   "settings.tools.group.translation_layers": "Camadas de tradução gráfica",
   "settings.tools.group.winetricks": "Componentes do Winetricks",

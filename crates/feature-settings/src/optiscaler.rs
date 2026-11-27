@@ -1506,6 +1506,22 @@ mod tests {
     }
 
     #[test]
+    fn unsupported_arch_error_mentions_optiscaler_not_reshade() {
+        crate::i18n::register();
+        let err = anyhow::Error::new(ReshadeError::UnsupportedArch);
+        let optiscaler_text = error_text(&err);
+        assert!(optiscaler_text.contains("OptiScaler"), "{optiscaler_text}");
+        assert!(optiscaler_text.contains("64-bit"), "{optiscaler_text}");
+        assert!(
+            !optiscaler_text.contains("ReShade"),
+            "OptiScaler arch error should not mention ReShade: {optiscaler_text}"
+        );
+
+        let reshade_text = crate::graphics_mods::error_text(&err, GraphicsMod::Reshade);
+        assert!(reshade_text.contains("ReShade"), "{reshade_text}");
+    }
+
+    #[test]
     fn optiscaler_steps_have_localized_text() {
         crate::i18n::register();
         for step in [

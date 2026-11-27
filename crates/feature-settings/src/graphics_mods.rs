@@ -29,7 +29,10 @@ pub(crate) fn error_text(e: &anyhow::Error, kind: GraphicsMod) -> SharedString {
             "settings.reshade.error.unsupported",
             &[("api", api.label())],
         ),
-        Some(ReshadeError::UnsupportedArch) => t("settings.reshade.error.arch"),
+        Some(ReshadeError::UnsupportedArch) => t(match kind {
+            GraphicsMod::Reshade | GraphicsMod::Renodx => "settings.reshade.error.arch",
+            GraphicsMod::Optiscaler => "settings.optiscaler.error.arch",
+        }),
         Some(ReshadeError::DllTaken { name }) => t_args(
             match kind {
                 GraphicsMod::Reshade => "settings.reshade.error.dll_taken",
