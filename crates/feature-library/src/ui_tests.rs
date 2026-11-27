@@ -3049,12 +3049,28 @@ fn collection_dialog_scrolls_all_tags_and_supports_icon_and_manual_games(cx: &mu
             .expect("collection dialog must render");
         assert!(dialog_bounds.size.width > px(500.));
         assert!(
+            vcx.debug_bounds("collection-colour-none").is_some(),
+            "none colour option must render"
+        );
+        assert!(
+            vcx.debug_bounds("collection-colour-teal").is_some(),
+            "expanded curated colour swatch (teal) must render"
+        );
+        assert!(
+            vcx.debug_bounds("collection-colour-custom").is_some(),
+            "custom Hue colour wheel trigger must render"
+        );
+        assert!(
             vcx.debug_bounds("collection-icon-picker").is_some(),
             "icon picker must render"
         );
         assert!(
             vcx.debug_bounds("collection-icon-flame").is_some(),
             "curated flame icon must render"
+        );
+        assert!(
+            vcx.debug_bounds("collection-icon-more").is_some(),
+            "more icons popover trigger must render"
         );
         assert!(
             vcx.debug_bounds("collection-games-picker").is_some(),

@@ -6,6 +6,7 @@
 
 pub mod categories;
 pub mod collection;
+pub(crate) mod collection_look;
 pub mod duplicates;
 pub mod edit_game;
 pub mod fields;

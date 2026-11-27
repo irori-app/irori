@@ -214,6 +214,14 @@ impl LibraryView {
                         let ctx_id = id.clone();
                         let menu_smart = smart_ids.clone();
                         let ctx_smart = smart_ids.clone();
+                        let selected_fg = tint.map_or(fg, |colour| {
+                            irori_ui::style::legible(
+                                colour,
+                                &[cx.theme().background],
+                                irori_ui::style::TEXT_CONTRAST,
+                                cx,
+                            )
+                        });
                         Some(
                             h_flex()
                                 .id(SharedString::from(format!("collection-tab:{id}")))
@@ -237,7 +245,7 @@ impl LibraryView {
                                 } else {
                                     transparent_black()
                                 })
-                                .text_color(if selected { fg } else { muted })
+                                .text_color(if selected { selected_fg } else { muted })
                                 .when(selected, |el| el.font_semibold())
                                 .when(!selected, |el| {
                                     el.font_medium().hover(move |s| s.text_color(fg))
