@@ -1,6 +1,8 @@
-use gpui_kit::component::{ActiveTheme as _, StyledExt as _, h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::{
-    AnyElement, Context, IntoElement as _, ParentElement as _, SharedString, Styled as _, div,
+    AnyElement, Context, Hsla, IntoElement as _, ParentElement as _, SharedString, Styled as _,
+    div, px,
 };
 
 use crate::widgets::group_panel;
@@ -384,43 +386,198 @@ impl HudPanel {
                 }),
             ));
 
-        let band = |title: SharedString, chips: gpui_kit::Div| {
+        type ClickAction =
+            Box<dyn Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App)>;
+
+        let band = |title: SharedString,
+                    dot_color: Hsla,
+                    all_id: &'static str,
+                    clear_id: &'static str,
+                    on_all: ClickAction,
+                    on_clear: ClickAction,
+                    chips: gpui_kit::Div| {
             v_flex()
                 .w_full()
                 .px_4()
                 .py_3()
                 .gap_2()
                 .child(
-                    div()
-                        .text_xs()
-                        .font_semibold()
-                        .text_color(muted_fg)
-                        .child(title),
+                    h_flex()
+                        .w_full()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            h_flex()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .size(px(10.))
+                                        .flex_shrink_0()
+                                        .rounded_full()
+                                        .bg(dot_color)
+                                        .border_1()
+                                        .border_color(border),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_semibold()
+                                        .text_color(muted_fg)
+                                        .child(title),
+                                ),
+                        )
+                        .child(
+                            h_flex()
+                                .items_center()
+                                .gap_1()
+                                .child(
+                                    Button::new(all_id)
+                                        .ghost()
+                                        .xsmall()
+                                        .label(self.labels.metrics_all.clone())
+                                        .on_click(move |ev, window, cx| on_all(ev, window, cx)),
+                                )
+                                .child(
+                                    Button::new(clear_id)
+                                        .ghost()
+                                        .xsmall()
+                                        .label(self.labels.metrics_clear.clone())
+                                        .on_click(move |ev, window, cx| on_clear(ev, window, cx)),
+                                ),
+                        ),
                 )
                 .child(chips)
         };
 
         let [gpu_title, cpu_title, fps_title, runtime_title] = self.display.band_titles.clone();
+        let [gpu_dot, cpu_dot, fps_dot, runtime_dot] = self.display.band_dots;
         group_panel(cx)
-            .child(band(gpu_title, gpu_chips))
-            .child(
-                div()
-                    .border_t_1()
-                    .border_color(border)
-                    .child(band(cpu_title, cpu_chips)),
-            )
-            .child(
-                div()
-                    .border_t_1()
-                    .border_color(border)
-                    .child(band(fps_title, fps_chips)),
-            )
-            .child(
-                div()
-                    .border_t_1()
-                    .border_color(border)
-                    .child(band(runtime_title, runtime_chips)),
-            )
+            .child(band(
+                gpu_title,
+                gpu_dot,
+                "hud-band-gpu-all",
+                "hud-band-gpu-clear",
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_stats = true;
+                        p.gpu_temp = true;
+                        p.gpu_junction_temp = true;
+                        p.gpu_mem_temp = true;
+                        p.gpu_core_clock = true;
+                        p.gpu_mem_clock = true;
+                        p.gpu_power = true;
+                        p.gpu_fan = true;
+                        p.vram = true;
+                        p.mark_custom();
+                    });
+                })),
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.gpu_stats = false;
+                        p.gpu_temp = false;
+                        p.gpu_junction_temp = false;
+                        p.gpu_mem_temp = false;
+                        p.gpu_core_clock = false;
+                        p.gpu_mem_clock = false;
+                        p.gpu_power = false;
+                        p.gpu_fan = false;
+                        p.vram = false;
+                        p.mark_custom();
+                    });
+                })),
+                gpu_chips,
+            ))
+            .child(div().border_t_1().border_color(border).child(band(
+                cpu_title,
+                cpu_dot,
+                "hud-band-cpu-all",
+                "hud-band-cpu-clear",
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.cpu_stats = true;
+                        p.cpu_temp = true;
+                        p.cpu_mhz = true;
+                        p.cpu_power = true;
+                        p.ram = true;
+                        p.mark_custom();
+                    });
+                })),
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.cpu_stats = false;
+                        p.cpu_temp = false;
+                        p.cpu_mhz = false;
+                        p.cpu_power = false;
+                        p.ram = false;
+                        p.mark_custom();
+                    });
+                })),
+                cpu_chips,
+            )))
+            .child(div().border_t_1().border_color(border).child(band(
+                fps_title,
+                fps_dot,
+                "hud-band-fps-all",
+                "hud-band-fps-clear",
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps = true;
+                        p.fps_avg = true;
+                        p.fps_1_low = true;
+                        p.frametime = true;
+                        p.frame_timing = true;
+                        p.present_mode = true;
+                        p.fps_use_label = true;
+                        p.mark_custom();
+                    });
+                })),
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.fps = false;
+                        p.fps_avg = false;
+                        p.fps_1_low = false;
+                        p.frametime = false;
+                        p.frame_timing = false;
+                        p.present_mode = false;
+                        p.fps_use_label = false;
+                        p.mark_custom();
+                    });
+                })),
+                fps_chips,
+            )))
+            .child(div().border_t_1().border_color(border).child(band(
+                runtime_title,
+                runtime_dot,
+                "hud-band-runtime-all",
+                "hud-band-runtime-clear",
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.wine = true;
+                        p.winesync = true;
+                        p.fsr = true;
+                        p.hdr = true;
+                        p.gamemode = true;
+                        p.throttling_status = true;
+                        p.gamepad_battery = true;
+                        p.mark_custom();
+                    });
+                })),
+                Box::new(cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.wine = false;
+                        p.winesync = false;
+                        p.fsr = false;
+                        p.hdr = false;
+                        p.gamemode = false;
+                        p.throttling_status = false;
+                        p.gamepad_battery = false;
+                        p.mark_custom();
+                    });
+                })),
+                runtime_chips,
+            )))
             .into_any_element()
     }
 }

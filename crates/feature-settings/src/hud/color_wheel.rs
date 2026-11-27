@@ -8,19 +8,25 @@
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
+use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme as _, Selectable, StyledExt as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Selectable, Sizable as _, StyledExt as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Bounds, Context, Corners, Entity, Hsla, InteractiveElement as _,
-    IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _,
-    Pixels, Point, Render, RenderImage, RenderOnce, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, canvas, div, linear_color_stop, linear_gradient, px, rgb,
-    transparent_black,
+    App, AppContext as _, Bounds, ClipboardItem, Context, Corners, Entity, Hsla,
+    InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, ParentElement as _, Pixels, Point, Render, RenderImage, RenderOnce, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, canvas, div,
+    linear_color_stop, linear_gradient, px, rgb, transparent_black,
 };
 use irori_core::hud::sanitize_hex6;
+use irori_ui::i18n::t_args;
 
 use crate::hud::panel::ColorSlot;
 
@@ -118,6 +124,29 @@ fn rgb_u32(r: u8, g: u8, b: u8) -> u32 {
     (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
 }
 
+/// Compute the WCAG 2.1 contrast ratio (`1.0..=21.0`) between two 6-digit hex colors.
+pub(crate) fn wcag_contrast_ratio(hex_a: &str, hex_b: &str) -> f32 {
+    fn channel_lum(c: u8) -> f32 {
+        let s = f32::from(c) / 255.0;
+        if s <= 0.03928 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    fn rel_lum(hex: &str) -> f32 {
+        let clean = sanitize_hex6(hex, "FFFFFF");
+        let val = u32::from_str_radix(&clean, 16).unwrap_or(0xFFFFFF);
+        let r = ((val >> 16) & 0xFF) as u8;
+        let g = ((val >> 8) & 0xFF) as u8;
+        let b = (val & 0xFF) as u8;
+        0.2126 * channel_lum(r) + 0.7152 * channel_lum(g) + 0.0722 * channel_lum(b)
+    }
+    let la = rel_lum(hex_a);
+    let lb = rel_lum(hex_b);
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+}
+
 /// Map a pointer offset `(dx, dy)` relative to the wheel center to `(hue, saturation)`.
 ///
 /// Matches the clockwise wheel layout with red (`0°`) at the bottom (6 o'clock),
@@ -211,10 +240,10 @@ impl RenderOnce for ColorSwatchTrigger {
 
         div()
             .id(self.id)
-            .w(px(18.))
-            .h(px(18.))
+            .w(px(22.))
+            .h(px(22.))
             .flex_shrink_0()
-            .rounded(px(4.))
+            .rounded(px(5.))
             .bg(self.color)
             .when(self.selected, |d| d.border_2())
             .when(!self.selected, |d| d.border_1())
@@ -230,6 +259,9 @@ pub(crate) struct ColorWheelLabels {
     pub(crate) slot: SharedString,
     pub(crate) brightness: SharedString,
     pub(crate) quick_swatches: SharedString,
+    pub(crate) reset_slot: SharedString,
+    pub(crate) copy_hex: SharedString,
+    pub(crate) copied_hex: SharedString,
 }
 
 /// Shared circular Hue/Saturation wheel popover body reused across all 11 color slots.
@@ -244,10 +276,18 @@ pub(crate) struct HudColorWheel {
     wheel_bounds: Rc<Cell<Bounds<Pixels>>>,
     value_slider: Entity<SliderState>,
     on_pick: ColorPickCallback,
+    hex_raw: String,
     hex_label: SharedString,
     value_pct_label: SharedString,
+    pair_hex: Option<String>,
+    contrast_note: Option<SharedString>,
+    copied: bool,
+    copied_task: Option<Task<()>>,
     brightness_label: SharedString,
     quick_swatches_label: SharedString,
+    reset_slot_label: SharedString,
+    copy_hex_label: SharedString,
+    copied_hex_label: SharedString,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -255,6 +295,7 @@ impl HudColorWheel {
     pub(crate) fn new(
         slot: ColorSlot,
         initial_hex: &str,
+        pair_hex: Option<&str>,
         labels: ColorWheelLabels,
         on_pick: impl Fn(ColorSlot, String, bool, &mut Window, &mut App) + 'static,
         window: &mut Window,
@@ -285,10 +326,7 @@ impl HudColorWheel {
                 cx.notify();
             },
         );
-        let hex = hsv_to_hex6(hue, sat, value);
-        let pct = (value * 100.0).round() as u8;
-
-        Self {
+        let mut this = Self {
             slot,
             slot_label: labels.slot,
             hue,
@@ -299,12 +337,22 @@ impl HudColorWheel {
             wheel_bounds: Rc::new(Cell::new(Bounds::default())),
             value_slider,
             on_pick: Rc::new(on_pick),
-            hex_label: SharedString::from(format!("#{hex}")),
-            value_pct_label: SharedString::from(format!("{pct}%")),
+            hex_raw: String::new(),
+            hex_label: SharedString::default(),
+            value_pct_label: SharedString::default(),
+            pair_hex: pair_hex.map(str::to_string),
+            contrast_note: None,
+            copied: false,
+            copied_task: None,
             brightness_label: labels.brightness,
             quick_swatches_label: labels.quick_swatches,
+            reset_slot_label: labels.reset_slot,
+            copy_hex_label: labels.copy_hex,
+            copied_hex_label: labels.copied_hex,
             _subscriptions: vec![sub],
-        }
+        };
+        this.refresh_cached_labels();
+        this
     }
 
     pub(crate) fn is_dragging(&self) -> bool {
@@ -313,16 +361,19 @@ impl HudColorWheel {
 
     pub(crate) fn set_labels(
         &mut self,
-        brightness_label: SharedString,
-        quick_swatches_label: SharedString,
-        slot_label: Option<SharedString>,
+        labels: ColorWheelLabels,
+        update_slot_label: bool,
         cx: &mut Context<Self>,
     ) {
-        self.brightness_label = brightness_label;
-        self.quick_swatches_label = quick_swatches_label;
-        if let Some(label) = slot_label {
-            self.slot_label = label;
+        self.brightness_label = labels.brightness;
+        self.quick_swatches_label = labels.quick_swatches;
+        self.reset_slot_label = labels.reset_slot;
+        self.copy_hex_label = labels.copy_hex;
+        self.copied_hex_label = labels.copied_hex;
+        if update_slot_label {
+            self.slot_label = labels.slot;
         }
+        self.refresh_cached_labels();
         cx.notify();
     }
 
@@ -332,12 +383,16 @@ impl HudColorWheel {
         slot: ColorSlot,
         slot_label: SharedString,
         hex: &str,
+        pair_hex: Option<&str>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.slot = slot;
         self.slot_label = slot_label;
+        self.pair_hex = pair_hex.map(str::to_string);
         self.dragging = false;
+        self.copied = false;
+        self.copied_task = None;
         self.apply_external_hex(hex, window, cx);
     }
 
@@ -347,10 +402,12 @@ impl HudColorWheel {
         &mut self,
         slot: ColorSlot,
         hex: &str,
+        pair_hex: Option<&str>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.slot == slot && !self.dragging {
+            self.pair_hex = pair_hex.map(str::to_string);
             self.apply_external_hex(hex, window, cx);
         }
     }
@@ -376,8 +433,35 @@ impl HudColorWheel {
     fn refresh_cached_labels(&mut self) {
         let hex = hsv_to_hex6(self.hue, self.sat, self.value);
         let pct = (self.value * 100.0).round() as u8;
+        self.contrast_note = self.pair_hex.as_deref().and_then(|other| {
+            let ratio = wcag_contrast_ratio(&hex, other);
+            (ratio < 4.5).then(|| {
+                let ratio_str = format!("{ratio:.1}");
+                t_args(
+                    "settings.hud.color.low_contrast_short",
+                    &[("ratio", ratio_str.as_str())],
+                )
+            })
+        });
         self.hex_label = SharedString::from(format!("#{hex}"));
+        self.hex_raw = hex;
         self.value_pct_label = SharedString::from(format!("{pct}%"));
+    }
+
+    fn copy_hex(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(self.hex_label.to_string()));
+        self.copied = true;
+        cx.notify();
+        self.copied_task = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(900))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.copied = false;
+                this.copied_task = None;
+                cx.notify();
+            });
+        }));
     }
 
     fn pick_from_point(
@@ -427,11 +511,12 @@ impl HudColorWheel {
 
 impl Render for HudColorWheel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (border, muted_fg, mono_font, hover_border) = {
+        let (border, muted_fg, warning, mono_font, hover_border) = {
             let theme = cx.theme();
             (
                 theme.border,
                 theme.muted_foreground,
+                theme.warning,
                 theme.mono_font_family.clone(),
                 theme.foreground,
             )
@@ -593,6 +678,12 @@ impl Render for HudColorWheel {
             )
             .child(brightness_track);
 
+        let is_slot_default = self.hex_raw.eq_ignore_ascii_case(self.slot.fallback());
+        let hex_chip_label = if self.copied {
+            self.copied_hex_label.clone()
+        } else {
+            self.hex_label.clone()
+        };
         let preview_row = h_flex()
             .w_full()
             .items_center()
@@ -622,12 +713,33 @@ impl Render for HudColorWheel {
                     ),
             )
             .child(
-                div()
-                    .text_xs()
-                    .font_family(mono_font)
-                    .text_color(muted_fg)
+                h_flex()
+                    .items_center()
+                    .gap_1()
                     .flex_shrink_0()
-                    .child(self.hex_label.clone()),
+                    .child(
+                        Button::new("hud-wheel-copy-hex")
+                            .outline()
+                            .xsmall()
+                            .tooltip(self.copy_hex_label.clone())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.copy_hex(window, cx);
+                            }))
+                            .child(div().font_family(mono_font).text_xs().child(hex_chip_label)),
+                    )
+                    .child(
+                        Button::new("hud-wheel-reset-slot")
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::RotateCcw)
+                            .disabled(is_slot_default)
+                            .accessibility_label(self.reset_slot_label.clone())
+                            .tooltip(self.reset_slot_label.clone())
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                let fallback = this.slot.fallback();
+                                this.pick_quick_swatch(fallback, window, cx);
+                            })),
+                    ),
             );
 
         let mut quick_row = h_flex().w_full().flex_wrap().gap_1p5();
@@ -666,12 +778,15 @@ impl Render for HudColorWheel {
             .child(quick_row);
 
         v_flex()
-            .w(px(220.))
+            .w(px(236.))
             .gap_3()
             .items_center()
             .child(preview_row)
             .child(wheel)
             .child(brightness_section)
+            .when_some(self.contrast_note.clone(), |v, note| {
+                v.child(div().w_full().text_xs().text_color(warning).child(note))
+            })
             .child(quick_section)
     }
 }
@@ -742,5 +857,13 @@ mod tests {
         let size = img.size(0);
         assert_eq!(size.width.0, WHEEL_TEX_SIZE as i32);
         assert_eq!(size.height.0, WHEEL_TEX_SIZE as i32);
+    }
+
+    #[test]
+    fn wcag_contrast_ratio_identifies_high_and_low_contrast_pairs() {
+        assert!((wcag_contrast_ratio("FFFFFF", "000000") - 21.0).abs() < 0.05);
+        assert!((wcag_contrast_ratio("2E9762", "2E9762") - 1.0).abs() < 0.01);
+        assert!(wcag_contrast_ratio("222222", "020202") < 2.0);
+        assert!(wcag_contrast_ratio("FFFFFF", "020202") > 20.0);
     }
 }
