@@ -355,7 +355,9 @@ pub(crate) async fn run_post_process(
                 output_path,
                 installed_dir: None,
                 post_action: PostAction::ShowInFolder,
-                status_note: Some("Requires manual extraction".into()),
+                status_note: Some(missing_rar_tool_note(
+                    irori_mods::archive::seven_zip_command(),
+                )),
             });
         }
 
@@ -391,7 +393,9 @@ pub(crate) async fn run_post_process(
                     output_path,
                     installed_dir: None,
                     post_action: PostAction::ShowInFolder,
-                    status_note: Some("Requires manual extraction".into()),
+                    status_note: Some(
+                        "Password-protected archive · Requires manual extraction".into(),
+                    ),
                 });
             }
             return Err(err);
@@ -496,6 +500,15 @@ pub(crate) async fn run_post_process(
         post_action: PostAction::ShowInFolder,
         status_note: None,
     })
+}
+
+/// User-facing status note when a `.rar` archive finishes downloading but no
+/// RAR extractor (`unrar`, `7z`, or `bsdtar`) is installed on this machine.
+pub(crate) fn missing_rar_tool_note(seven_zip_cmd: Option<&str>) -> String {
+    match seven_zip_cmd.map(str::trim).filter(|cmd| !cmd.is_empty()) {
+        Some(cmd) => format!("Requires manual extraction · Install 7-Zip: {cmd}"),
+        None => "Requires manual extraction · Install 7-Zip or unrar".into(),
+    }
 }
 
 async fn extract_to_dir(

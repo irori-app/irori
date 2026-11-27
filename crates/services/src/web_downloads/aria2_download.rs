@@ -220,7 +220,7 @@ pub async fn discover_aria2(custom_path: &str) -> Aria2Status {
 
     Aria2Status::Missing {
         can_auto_install: offered(),
-        install_hint: platform_install_hint().to_string(),
+        install_hint: platform_install_hint(),
     }
 }
 
@@ -288,12 +288,54 @@ fn extra_candidate_paths(bin: &str) -> Vec<PathBuf> {
     out
 }
 
-fn platform_install_hint() -> &'static str {
+fn platform_install_hint() -> String {
     if cfg!(windows) {
-        "Install aria2 from Irori or run: winget install aria2.aria2"
+        "Install aria2 from Irori or run: winget install aria2.aria2".into()
     } else if cfg!(target_os = "macos") {
-        "Install aria2 with Homebrew: brew install aria2"
+        "Install aria2 with Homebrew: brew install aria2".into()
     } else {
-        "Install aria2 with your package manager (e.g. apt, dnf, or pacman install aria2)"
+        let paths: &[&str] = if host::is_flatpak() {
+            &["/run/host/etc/os-release", "/run/host/usr/lib/os-release"]
+        } else {
+            &["/etc/os-release", "/usr/lib/os-release"]
+        };
+        let os_release = paths.iter().find_map(|p| std::fs::read_to_string(p).ok());
+        linux_install_hint_for(os_release.as_deref())
     }
+}
+
+/// Distro-specific Linux package install hint parsed from `os-release`
+/// (`ID`, then each `ID_LIKE`), falling back to a generic package-manager note.
+pub(crate) fn linux_install_hint_for(os_release: Option<&str>) -> String {
+    match os_release.and_then(linux_aria2_command_for) {
+        Some(cmd) => format!("Install aria2 with: {cmd}"),
+        None => "Install aria2 with your package manager (e.g. apt, dnf, or pacman install aria2)"
+            .into(),
+    }
+}
+
+pub(crate) fn linux_aria2_command_for(os_release: &str) -> Option<&'static str> {
+    let field = |key: &str| {
+        os_release.lines().find_map(|line| {
+            let value = line.strip_prefix(key)?.strip_prefix('=')?;
+            Some(value.trim().trim_matches(['"', '\'']).to_ascii_lowercase())
+        })
+    };
+    let likes = field("ID_LIKE").unwrap_or_default();
+    let ids = field("ID")
+        .into_iter()
+        .chain(likes.split_whitespace().map(str::to_string));
+    ids.into_iter().find_map(|id| {
+        Some(match id.as_str() {
+            "arch" => "sudo pacman -S aria2",
+            "debian" | "ubuntu" => "sudo apt install aria2",
+            "fedora" | "rhel" => "sudo dnf install aria2",
+            "opensuse" | "suse" | "opensuse-tumbleweed" | "opensuse-leap" => {
+                "sudo zypper install aria2"
+            }
+            "gentoo" => "sudo emerge net-misc/aria2",
+            "alpine" => "sudo apk add aria2",
+            _ => return None,
+        })
+    })
 }

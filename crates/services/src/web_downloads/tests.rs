@@ -22,6 +22,7 @@ use super::aria2::{
 };
 use super::aria2_download;
 use super::model::DownloadSource;
+use super::post_process::missing_rar_tool_note;
 use super::torrent_meta::{self, classify_source, format_select_file, parse_torrent};
 
 fn bencode_bytes(data: &[u8]) -> Vec<u8> {
@@ -542,4 +543,56 @@ async fn aria2_download_verifies_sha256_and_extracts_only_aria2c_exe() {
         .map(|e| e.unwrap().file_name())
         .collect();
     assert_eq!(entries, ["aria2c.exe"]);
+}
+
+#[test]
+fn missing_rar_tool_note_surfaces_install_hint_when_available() {
+    assert_eq!(
+        missing_rar_tool_note(Some("sudo apt install 7zip")),
+        "Requires manual extraction · Install 7-Zip: sudo apt install 7zip"
+    );
+    assert_eq!(
+        missing_rar_tool_note(Some("brew install sevenzip")),
+        "Requires manual extraction · Install 7-Zip: brew install sevenzip"
+    );
+    assert_eq!(
+        missing_rar_tool_note(None),
+        "Requires manual extraction · Install 7-Zip or unrar"
+    );
+    assert_eq!(
+        missing_rar_tool_note(Some("   ")),
+        "Requires manual extraction · Install 7-Zip or unrar"
+    );
+}
+
+#[test]
+fn linux_aria2_install_hint_follows_os_release_and_falls_back() {
+    assert_eq!(
+        aria2_download::linux_install_hint_for(Some("ID=ubuntu\nID_LIKE=debian\n")),
+        "Install aria2 with: sudo apt install aria2"
+    );
+    assert_eq!(
+        aria2_download::linux_install_hint_for(Some("ID=cachyos\nID_LIKE=\"arch\"\n")),
+        "Install aria2 with: sudo pacman -S aria2"
+    );
+    assert_eq!(
+        aria2_download::linux_install_hint_for(Some("ID=fedora\n")),
+        "Install aria2 with: sudo dnf install aria2"
+    );
+    assert_eq!(
+        aria2_download::linux_install_hint_for(Some("ID=\"opensuse-tumbleweed\"\n")),
+        "Install aria2 with: sudo zypper install aria2"
+    );
+    assert_eq!(
+        aria2_download::linux_install_hint_for(Some("ID=alpine\n")),
+        "Install aria2 with: sudo apk add aria2"
+    );
+    assert_eq!(
+        aria2_download::linux_install_hint_for(Some("ID=nixos\n")),
+        "Install aria2 with your package manager (e.g. apt, dnf, or pacman install aria2)"
+    );
+    assert_eq!(
+        aria2_download::linux_install_hint_for(None),
+        "Install aria2 with your package manager (e.g. apt, dnf, or pacman install aria2)"
+    );
 }
