@@ -75,7 +75,7 @@ pub fn gamescope_args(gs: &GamescopeSettings, show_mangohud: bool, new_cli: bool
 pub struct WrapperParts {
     /// `[gamescope, args…, --]`; empty when gamescope is off or missing.
     pub gamescope: Vec<String>,
-    /// Optional `[mangohud]` wrapper for legacy native OpenGL Linux games.
+    /// Optional `[mangohud, ...]` wrapper for Linux games (OpenGL + Vulkan).
     pub mangohud: Vec<String>,
     /// `gamemoderun` when GameMode is enabled.
     pub gamemode: Option<String>,
@@ -118,7 +118,13 @@ pub fn setup_wrappers(gs: &GameSettings, parts: &WrapperParts) -> Vec<Vec<String
     if !parts.frame_generation.is_empty() {
         chain.push(parts.frame_generation.clone());
     }
-    if parts.gamescope.is_empty() && !parts.mangohud.is_empty() {
+    let user_has_mangohud = gs.wrapper_options.iter().any(|w| {
+        std::path::Path::new(w.exe.trim())
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n == "mangohud")
+    });
+    if parts.gamescope.is_empty() && !parts.mangohud.is_empty() && !user_has_mangohud {
         chain.push(parts.mangohud.clone());
     }
     if let Some(gm) = parts.gamemode.as_ref().filter(|_| !sandboxed) {
@@ -328,6 +334,28 @@ mod tests {
             ]
         );
         assert!(setup_wrappers(&GameSettings::default(), &WrapperParts::default()).is_empty());
+    }
+
+    #[test]
+    fn skips_mangohud_wrapper_when_user_already_configured_one() {
+        for user_exe in ["mangohud", "/usr/bin/mangohud"] {
+            let gs = GameSettings {
+                wrapper_options: vec![Wrapper {
+                    exe: user_exe.into(),
+                    args: "--dlsym".into(),
+                }],
+                ..Default::default()
+            };
+            let parts = WrapperParts {
+                mangohud: vec!["/usr/bin/mangohud".into(), "--dlsym".into()],
+                gamemode: Some("/usr/bin/gamemoderun".into()),
+                ..Default::default()
+            };
+            assert_eq!(
+                setup_wrappers(&gs, &parts),
+                vec![vec![user_exe, "--dlsym"], vec!["/usr/bin/gamemoderun"],]
+            );
+        }
     }
 
     #[test]

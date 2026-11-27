@@ -559,15 +559,15 @@ impl HudPanel {
         }
     }
 
-    fn show_opengl_legacy(&self) -> bool {
+    fn show_opengl_compat(&self) -> bool {
         self.backend == HudBackend::MangoHud
             && matches!(
                 self.scope,
                 HudPanelScope::PerGame {
-                    is_native_linux: true,
+                    ref id,
                     is_steam: false,
                     ..
-                }
+                } if id.runner != irori_core::Runner::Launchers
             )
     }
 

@@ -294,11 +294,12 @@ async fn mangohud_env(
 }
 
 /// Resolve GameMode, MAKO, gamescope and the MangoHud wrapper (Heroic's
-/// `prepareLaunch` steps 7–9): the in-game stats' OpenGL wrapper, or
-/// `mangohud --dlsym` when only the frame limit loads MangoHud. A missing
-/// `gamemoderun`, `gamescope` or (for the limit) `mangohud` fails the
-/// launch; Vulkan-layer MangoHud and gamescope `--mangoapp` never require
-/// the `mangohud` wrapper binary.
+/// `prepareLaunch` steps 7–9): the in-game stats' `mangohud` wrapper (enabled
+/// by default for OpenGL + Vulkan compatibility whenever the binary is
+/// available), or `mangohud --dlsym` when only the frame limit loads MangoHud.
+/// A missing `gamemoderun`, `gamescope` or (for the limit) `mangohud` fails the
+/// launch; Vulkan-layer MangoHud and gamescope `--mangoapp` never require the
+/// `mangohud` wrapper binary.
 async fn wrapper_parts(
     settings: &GameSettings,
     hud_plan: &hud::launch_env::HudLaunchPlan,
@@ -365,7 +366,7 @@ pub async fn prepare_hud_plan_for_paths(
     app: &AppSettings,
     settings: &GameSettings,
     game_id: Option<&GameId>,
-    platform: InstallPlatform,
+    _platform: InstallPlatform,
     gamescope_enabled: bool,
     write: bool,
 ) -> Result<hud::launch_env::HudLaunchPlan> {
@@ -379,7 +380,6 @@ pub async fn prepare_hud_plan_for_paths(
     );
     let deck_game_mode = cfg!(target_os = "linux") && locations::is_steam_deck_game_mode();
     let gamescope_enabled = gamescope_enabled && !deck_game_mode;
-    let is_native_linux_game = cfg!(target_os = "linux") && platform == InstallPlatform::Linux;
 
     let mut config_file: Option<PathBuf> = None;
     let mut presets_file: Option<PathBuf> = None;
@@ -445,7 +445,6 @@ pub async fn prepare_hud_plan_for_paths(
             presets_file: presets_file.as_deref(),
             mangohud_dir: mangohud_dir.as_deref(),
             mangohud_bin_path: mangohud_bin_path.as_deref(),
-            is_native_linux_game,
             gamescope_enabled,
             deck_game_mode,
         },

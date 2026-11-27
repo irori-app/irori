@@ -731,7 +731,7 @@ impl HudPanel {
     }
 
     pub(super) fn render_opengl_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.show_opengl_legacy() {
+        if !self.show_opengl_compat() {
             return None;
         }
         if self.game.mode != GameHudMode::Custom {
@@ -739,15 +739,16 @@ impl HudPanel {
         }
         let border = cx.theme().border;
         let p = self.active_mangohud();
+        let wrapper_enabled = p.uses_opengl_wrapper();
 
         let rows = [
             metric_switch_row(
                 "hud-opengl-wrapper",
                 self.labels.opengl_wrapper_label.clone(),
                 self.labels.opengl_wrapper_help.clone(),
-                p.opengl_legacy_wrapper,
+                wrapper_enabled,
                 cx.listener(|this, on: &bool, window, cx| {
-                    this.edit_mangohud(window, cx, |p| p.opengl_legacy_wrapper = *on);
+                    this.edit_mangohud(window, cx, |p| p.disable_opengl_wrapper = !*on);
                 }),
                 cx,
             ),
@@ -759,7 +760,7 @@ impl HudPanel {
                 },
                 Switch::new("hud-mangohud-dlsym")
                     .checked(p.mangohud_dlsym)
-                    .disabled(!p.opengl_legacy_wrapper)
+                    .disabled(!wrapper_enabled)
                     .accessibility_label(self.labels.mangohud_dlsym_label.clone())
                     .on_change(cx.listener(|this, on: &bool, window, cx| {
                         this.edit_mangohud(window, cx, |p| p.mangohud_dlsym = *on);

@@ -427,8 +427,11 @@ pub struct MangoHudProfile {
     pub gpu_label_override: String,
     pub cpu_label_override: String,
 
-    // Native Linux OpenGL legacy wrapper (`mangohud` LD_PRELOAD)
-    pub opengl_legacy_wrapper: bool,
+    // Linux OpenGL wrapper (`mangohud` LD_PRELOAD), enabled by default for both
+    // native Linux and Wine/Proton games. Opt out per game if a title conflicts
+    // with LD_PRELOAD.
+    #[serde(default)]
+    pub disable_opengl_wrapper: bool,
     pub mangohud_dlsym: bool,
 
     /// Last manual selection made under [`HudPreset::Custom`] (vertical).
@@ -497,7 +500,7 @@ impl MangoHudProfile {
             gpu_selection: GpuSelection::AutoDedicated,
             gpu_label_override: String::new(),
             cpu_label_override: String::new(),
-            opengl_legacy_wrapper: false,
+            disable_opengl_wrapper: false,
             mangohud_dlsym: true,
             saved_custom: None,
             saved_custom_horizontal: None,
@@ -506,8 +509,15 @@ impl MangoHudProfile {
         profile
     }
 
+    /// Whether Linux launches should wrap the game with the `mangohud` command
+    /// (`LD_PRELOAD`) so OpenGL games (native Linux and Wine/Proton) also show
+    /// the HUD alongside Vulkan/DXVK/VKD3D titles.
+    pub const fn uses_opengl_wrapper(&self) -> bool {
+        !self.disable_opengl_wrapper
+    }
+
     /// Apply a preset's metric and layout toggles while preserving the user's
-    /// hotkey, GPU selection, custom labels, palette and legacy wrapper choice.
+    /// hotkey, GPU selection, custom labels, palette and OpenGL wrapper choice.
     ///
     /// Leaving [`HudPreset::Custom`] or [`HudPreset::CustomHorizontal`] stores
     /// the current selection in its dedicated slot, and choosing it again
@@ -1447,5 +1457,20 @@ mod tests {
         let before = profile.custom_snapshot();
         profile.apply_preset(HudPreset::Custom);
         assert_eq!(profile.custom_snapshot(), before);
+    }
+
+    #[test]
+    fn legacy_opengl_wrapper_false_json_defaults_to_wrapper_enabled() {
+        let legacy: MangoHudProfile =
+            serde_json::from_str(r#"{"openglLegacyWrapper":false,"mangohudDlsym":true}"#).unwrap();
+        assert!(!legacy.disable_opengl_wrapper);
+        assert!(legacy.uses_opengl_wrapper());
+        assert!(legacy.mangohud_dlsym);
+
+        let opted_out: MangoHudProfile =
+            serde_json::from_str(r#"{"disableOpenglWrapper":true,"mangohudDlsym":false}"#).unwrap();
+        assert!(opted_out.disable_opengl_wrapper);
+        assert!(!opted_out.uses_opengl_wrapper());
+        assert!(!opted_out.mangohud_dlsym);
     }
 }
