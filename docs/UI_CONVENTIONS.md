@@ -2,6 +2,17 @@
 
 Reference for `irori-ui`, the five feature crates (`irori-library`, `irori-game`, `irori-manage`, `irori-settings`, `irori-bigpicture`), and the application shell (`crates/irori`).
 
+## UX north star: Click-and-Play first
+
+Every screen should pass the 1-Click UX Litmus Test in `AGENTS.md` and uphold Irori's tie-breaker order (correctness and user-data safety > lightweight speed > 1-click simplicity > maximum features under progressive disclosure):
+
+- Put one clear 1-click primary action front and center ("Play", "Install", "Fix", "Sign in"). Avoid multi-step modal wizards whenever a single smart-default sheet or inline action solves the task.
+- Pre-fill safe defaults automatically (best already-installed runtime, default prefix path, detected emulators/controllers, and a drive with free space) so most users never have to open advanced settings.
+- Keep power-user controls under progressive disclosure (collapsible sections, settings search, and per-game overrides with 1-click reset) so broad features never clutter the main surface.
+- Respect the automation boundary in UI flows: never trigger destructive actions, third-party scripts (`Approvals`), or heavy downloads silently; present an explicit, clear 1-click confirmation or install button instead.
+- Pair every failure or empty state with plain-language guidance and a direct 1-click recovery button (retry, sign in again, install missing runtime, open the exact setting) rather than raw technical dumps or passive toasts.
+- Keep surfaces clean, modern, and responsive in both light and dark themes, and preserve the same 1-click simplicity across desktop windows and Big Picture with controllers.
+
 ## GPUI and GPUI Kit APIs
 
 - Use `gpui-kit = "0.8.0"` as the sole UI library: `use gpui_kit::*` for GPUI, `gpui_kit::component::*` for components, and `gpui_kit::assets::IconName` for icons (`Icon::new(IconName::...)`).
