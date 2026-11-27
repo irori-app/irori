@@ -68,7 +68,7 @@ AI coding tools can help draft fixes and tests, provided a human contributor sta
 
 ## Scope and Non-Goals
 
-Irori aims to be a lightweight, fast, feature-rich, modern native GPUI desktop and Big Picture game launcher for Linux, macOS, and Windows that prioritizes user experience and removes unnecessary setup friction across official stores, emulators/ROM libraries, Lutris install scripts/imports, and sideloaded apps.
+Irori aims to be a lightweight, fast, modern, feature-rich native GPUI desktop and Big Picture game launcher for Linux, macOS, and Windows built around Click-and-Play UX: sensible automatic defaults, 1-click play and recovery, progressive disclosure for power-user options, and explicit 1-click confirmation for destructive actions, heavy downloads, and third-party scripts across official stores, emulators/ROM libraries, Lutris install scripts/imports, and sideloaded apps.
 
 Out of scope for the repository:
 

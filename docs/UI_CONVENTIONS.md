@@ -2,14 +2,16 @@
 
 Reference for `irori-ui`, the five feature crates (`irori-library`, `irori-game`, `irori-manage`, `irori-settings`, `irori-bigpicture`), and the application shell (`crates/irori`).
 
-## UX north star
+## UX north star: Click-and-Play first
 
-Every screen should serve Irori's vision of a lightweight, fast, feature-rich, modern launcher that removes friction from the user's workflow:
+Every screen should pass the 1-Click UX Litmus Test in `AGENTS.md` and uphold Irori's tie-breaker order (correctness and user-data safety > lightweight speed > 1-click simplicity > maximum features under progressive disclosure):
 
-- Default to the simplest working path so most users never have to open advanced settings; tuck expert options behind progressive disclosure or per-game overrides.
-- Minimize clicks and manual steps by auto-detecting safe defaults (installed runtimes, prefixes, ROM folders, display modes) and offering direct actions right where the user needs them.
-- Keep surfaces visually clean and modern in both light and dark themes, letting game art carry color while labels, badges, and actions stay scannable and uncrowded.
-- Pair every failure or empty state with plain-language guidance and a concrete next action (retry, open settings, install missing component) instead of raw technical dumps.
+- Put one clear 1-click primary action front and center ("Play", "Install", "Fix", "Sign in"). Avoid multi-step modal wizards whenever a single smart-default sheet or inline action solves the task.
+- Pre-fill safe defaults automatically (best already-installed runtime, default prefix path, detected emulators/controllers, and a drive with free space) so most users never have to open advanced settings.
+- Keep power-user controls under progressive disclosure (collapsible sections, settings search, and per-game overrides with 1-click reset) so broad features never clutter the main surface.
+- Respect the automation boundary in UI flows: never trigger destructive actions, third-party scripts (`Approvals`), or heavy downloads silently; present an explicit, clear 1-click confirmation or install button instead.
+- Pair every failure or empty state with plain-language guidance and a direct 1-click recovery button (retry, sign in again, install missing runtime, open the exact setting) rather than raw technical dumps or passive toasts.
+- Keep surfaces clean, modern, and responsive in both light and dark themes, and preserve the same 1-click simplicity across desktop windows and Big Picture with controllers.
 
 ## GPUI and GPUI Kit APIs
 

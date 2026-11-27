@@ -168,9 +168,9 @@ Automated tests verify widget trees without proving visual balance, contrast, or
 
 System-wide speech-to-text tools speed up architectural descriptions and PR plain-language summaries, while speech recognizers routinely mangle Rust identifiers. Dictate high-level intent and user flows by voice, then type exact crate names, file paths, and identifiers (`GameSettingsOverrides`, `enviromentOptions`, `irori_ui::run`, `fs_guard::ensure_deletable`). If you bind a desktop push-to-talk shortcut, never use `F24` while testing Irori (`crates/feature-bigpicture/src/gamepad/pointer.rs` synthesizes `F24` to hide the pointer).
 
-## 6. Junior-analyst diff audit (8 silent LLM traps in Irori)
+## 6. Junior-analyst diff audit (9 silent LLM traps in Irori)
 
-Coding agents routinely make silent assumptions to finish quickly. Audit every generated diff against these eight traps before committing:
+Coding agents routinely make silent assumptions to finish quickly. Audit every generated diff against these nine traps before committing:
 
 1. Blocking work on the GPUI thread or inside `Render::render`: check that zero `std::fs`, SQLite, keyring, subprocess, `Regex::new`, or full-library sort/clone calls landed in UI callbacks or `render()`. Route async work through `irori_ui::run` or `backend.spawn_blocking`.
 2. Re-entrant window updates and premature library events: check that dialog callbacks use `cx.defer` before updating the same window, and check that UI code listens for `Event::LibraryUpdated` rather than `Event::LibraryChanged`.
@@ -180,3 +180,4 @@ Coding agents routinely make silent assumptions to finish quickly. Audit every g
 6. Panics, lock guards across `.await`, or unbounded I/O: check for `.unwrap()`, `.expect()`, or slice indexing `[i]` outside `#[cfg(test)]`, `parking_lot` guards held across `.await`, missing HTTP timeouts, or missing `MAX_*_BYTES` caps.
 7. Machine-translated locale churn or broken `{placeholder}` names: check that code PRs cleanly update `crates/<crate>/locales/en.json` with matching `{placeholder}` variables and zero orphan keys in other catalogs rather than spraying unreviewed text across 18 languages.
 8. Cross-OS `#[cfg]` drift and stale doc paths: check that `#[cfg(target_os = "...")]` changes leave no unused imports or missing methods on Linux, macOS, or Windows, and run `python3 .github/scripts/check_agent_docs.py` whenever modules or crates move.
+9. Click-and-Play UX regression or silent unsafe automation: check that new flows pass the 1-Click UX Litmus Test in `AGENTS.md` (safe smart defaults instead of manual technical fields or multi-step wizards, expert controls behind progressive disclosure, plain-language errors with a direct 1-click recovery button) and never run destructive actions, external scripts, or heavy downloads silently.
