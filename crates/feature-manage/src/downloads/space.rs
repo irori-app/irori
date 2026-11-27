@@ -1,19 +1,22 @@
 //! Free space against what the queue still downloads, per disk, on the
-//! downloads page, plus subtle free-space pills for configured install drives
-//! when idle. The disks are read off the UI thread, and again only when the
-//! queue's items or configured library folders change, never on a progress tick.
+//! downloads page, plus subtle free-space pills for configured install folders
+//! and auto-detected main drives when idle. The disks are read off the UI
+//! thread, and again only when the queue's items, configured library folders,
+//! or route visits change, never on a progress tick.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, IntoElement, ParentElement as _, SharedString, Styled as _, div, relative,
-    rems,
+    AnyElement, App, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, relative, rems,
 };
 use irori_core::GameId;
 use irori_core::util::format_bytes;
 use irori_services::{DownloadQueueSnapshot, DownloadState, QueueDisk};
 use irori_ui::i18n::t_args;
+
+use crate::common::plain_tooltip;
 
 /// What the queue disk reading depends on: the queue's items and their states.
 /// Progress isn't part of it, so a running download doesn't reread disks.
@@ -64,7 +67,7 @@ pub(crate) fn render(disks: &[QueueDisk], cx: &App) -> Option<AnyElement> {
     Some(
         v_flex()
             .gap_1p5()
-            .children(disks.iter().map(|disk| {
+            .children(disks.iter().enumerate().map(|(ix, disk)| {
                 let short = disk.is_short();
                 let color = if short {
                     theme.danger
@@ -72,6 +75,8 @@ pub(crate) fn render(disks: &[QueueDisk], cx: &App) -> Option<AnyElement> {
                     theme.muted_foreground
                 };
                 let queued_color = if short { theme.danger } else { theme.primary };
+                let label = disk.display_label();
+                let folder_tip: SharedString = disk.folder.display().to_string().into();
                 let bar = bar_fractions(disk).map(|(used, queued)| {
                     h_flex()
                         .flex_1()
@@ -93,6 +98,8 @@ pub(crate) fn render(disks: &[QueueDisk], cx: &App) -> Option<AnyElement> {
                         })
                 });
                 h_flex()
+                    .id(("downloads-queue-disk", ix))
+                    .tooltip(move |window, cx| plain_tooltip(folder_tip.clone(), window, cx))
                     .gap_3()
                     .px_3()
                     .py_1p5()
@@ -111,7 +118,7 @@ pub(crate) fn render(disks: &[QueueDisk], cx: &App) -> Option<AnyElement> {
                             .gap_1p5()
                             .items_center()
                             .min_w_0()
-                            .max_w(rems(16.))
+                            .max_w(rems(18.))
                             .text_color(color)
                             .child(
                                 Icon::new(if short {
@@ -121,12 +128,7 @@ pub(crate) fn render(disks: &[QueueDisk], cx: &App) -> Option<AnyElement> {
                                 })
                                 .xsmall(),
                             )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .child(disk.folder.display().to_string()),
-                            ),
+                            .child(div().min_w_0().truncate().child(label)),
                     )
                     .children(bar)
                     .child(
@@ -164,8 +166,10 @@ fn idle_pills(disks: &[QueueDisk], compact: bool, cx: &App) -> Option<AnyElement
         h_flex().flex_wrap().justify_center().gap_2().pt_2()
     };
     Some(
-        row.children(readable.into_iter().map(|disk| {
+        row.children(readable.into_iter().enumerate().map(|(ix, disk)| {
             let free = disk.free.unwrap_or(0);
+            let label = disk.display_label();
+            let folder_tip: SharedString = disk.folder.display().to_string().into();
             let used_bar = bar_fractions(disk).map(|(used, _)| {
                 div()
                     .w_12()
@@ -183,6 +187,9 @@ fn idle_pills(disks: &[QueueDisk], compact: bool, cx: &App) -> Option<AnyElement
                     })
             });
             h_flex()
+                .id(("downloads-idle-disk", ix))
+                .debug_selector(move || format!("downloads-idle-disk-{ix}"))
+                .tooltip(move |window, cx| plain_tooltip(folder_tip.clone(), window, cx))
                 .gap_2()
                 .items_center()
                 .px_3()
@@ -199,10 +206,10 @@ fn idle_pills(disks: &[QueueDisk], compact: bool, cx: &App) -> Option<AnyElement
                 )
                 .child(
                     div()
-                        .max_w(rems(14.))
+                        .max_w(rems(18.))
                         .truncate()
                         .text_color(theme.muted_foreground)
-                        .child(disk.folder.display().to_string()),
+                        .child(label),
                 )
                 .children(used_bar)
                 .child(
@@ -228,6 +235,7 @@ mod tests {
     fn disk(needed: u64, free: Option<u64>, total: Option<u64>) -> QueueDisk {
         QueueDisk {
             folder: PathBuf::from("/games"),
+            label: None,
             needed,
             free,
             total,
