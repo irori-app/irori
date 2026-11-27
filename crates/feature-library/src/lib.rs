@@ -26,6 +26,7 @@ mod availability;
 mod categories;
 mod chips;
 mod commands;
+mod compat_badges;
 mod dialogs;
 mod filter;
 mod filters_panel;

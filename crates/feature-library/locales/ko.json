@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "메타데이터 편집…",
   "library.menu.no_collections": "아직 컬렉션이 없습니다",
   "library.menu.manual_categories": "수동 카테고리",
-  "library.collection.remove_game": "컬렉션에서 제거"
+  "library.collection.remove_game": "컬렉션에서 제거",
+  "library.look.compat_badges": "ProtonDB 및 Steam Deck",
+  "library.list.compat": "Linux 호환"
 }

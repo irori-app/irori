@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "Edit metadata…",
   "library.menu.no_collections": "No collections yet",
   "library.menu.manual_categories": "Manual categories",
-  "library.collection.remove_game": "Remove from collection"
+  "library.collection.remove_game": "Remove from collection",
+  "library.look.compat_badges": "ProtonDB and Steam Deck",
+  "library.list.compat": "On Linux"
 }

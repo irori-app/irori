@@ -2318,5 +2318,7 @@
   "settings.crash.recent_help": "Beklenmeyen kapanma raporları siz kaldırana kadar burada kalır.",
   "settings.crash.review_action": "İncele ve bildir",
   "settings.crash.delete": "Raporu sil",
-  "settings.crash.delete_failed": "Çökme raporu silinemedi"
+  "settings.crash.delete_failed": "Çökme raporu silinemedi",
+  "settings.field.ui_cover_compat_badges.label": "Kapaklarda ProtonDB ve Steam Deck rozetleri",
+  "settings.field.ui_cover_compat_badges.help": "Yüklü olmayan oyunların kapaklarında ProtonDB derecelendirmelerini ve Steam Deck Verified rozetlerini göster."
 }

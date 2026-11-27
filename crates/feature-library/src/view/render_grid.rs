@@ -290,6 +290,13 @@ impl LibraryView {
             linear_color_stop(bg.opacity(0.), 0.),
             linear_color_stop(bg.opacity(0.78), 1.),
         );
+        let compat_enabled = self.ui_prefs.cover_compat_badges && !state.installed && !focus_view;
+        if compat_enabled {
+            self.request_compat(game, false, cx);
+        }
+        let compat_badge = (compat_enabled && !active && !selecting && status_overlay.is_none())
+            .then(|| self.compat.get(&id))
+            .flatten();
         // Focus covers are small, and the page beside them has the actions.
         let actions = (active && busy.is_none() && !selecting && !focus_view).then(|| {
             let primary = commands::primary(&state).map(|command| {
@@ -397,12 +404,27 @@ impl LibraryView {
                 },
             )
             .child(markers)
-            .when(actions.is_none() && status_overlay.is_none(), |el| {
-                el.children(categories.map(|names| {
-                    // A cover Irori draws itself has the title at its foot.
-                    let has_art = irori_ui::components::cover_art_for(game, cover_shape).is_some();
-                    category_chips(names, has_art, scrim)
-                }))
+            .when(
+                actions.is_none() && status_overlay.is_none() && compat_badge.is_none(),
+                |el| {
+                    el.children(categories.map(|names| {
+                        // A cover Irori draws itself has the title at its foot.
+                        let has_art =
+                            irori_ui::components::cover_art_for(game, cover_shape).is_some();
+                        category_chips(names, has_art, scrim)
+                    }))
+                },
+            )
+            .when_some(compat_badge, |el, badge| {
+                el.child(
+                    div()
+                        .absolute()
+                        .bottom_2()
+                        .left_2()
+                        .right_2()
+                        .overflow_hidden()
+                        .child(crate::compat_badges::render_cover_pill(badge, scrim, cx)),
+                )
             })
             .when(actions.is_none(), |el| el.children(status_overlay))
             .children(actions)

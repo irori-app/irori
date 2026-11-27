@@ -257,7 +257,10 @@ impl LibraryView {
             .when(shown[4], |el| {
                 el.child(column(grid::LIST_COLUMNS[4], "library.list.status", false))
             })
-            .child(div().w(rems(grid::LIST_COLUMNS[5])).flex_shrink_0())
+            .when(shown[5], |el| {
+                el.child(column(grid::LIST_COLUMNS[5], "library.list.compat", false))
+            })
+            .child(div().w(rems(grid::LIST_COLUMNS[6])).flex_shrink_0())
             .into_any_element()
     }
 
@@ -359,6 +362,10 @@ impl LibraryView {
         let hover_id = id.clone();
         let click_id = id.clone();
         let shown = self.frame.list_columns;
+        if shown[5] {
+            self.request_compat(&game, true, cx);
+        }
+        let compat_badge = shown[5].then(|| self.compat.get(&id)).flatten();
         // An entry of several stores' copies names every store.
         let stores = shown[0].then(|| {
             irori_ui::copies::stores(&id, cx)
@@ -480,9 +487,17 @@ impl LibraryView {
                         .child(status_cell),
                 )
             })
+            .when(shown[5], |el| {
+                el.child(
+                    div()
+                        .w(rems(grid::LIST_COLUMNS[5]))
+                        .flex_shrink_0()
+                        .child(crate::compat_badges::render_list_cell(compat_badge, cx)),
+                )
+            })
             .child(
                 h_flex()
-                    .w(rems(grid::LIST_COLUMNS[5]))
+                    .w(rems(grid::LIST_COLUMNS[6]))
                     .flex_shrink_0()
                     .justify_end()
                     .gap_1()

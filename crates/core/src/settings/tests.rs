@@ -566,23 +566,33 @@ fn list_columns_defaults_and_round_trip() {
     assert!(cols.playtime);
     assert!(cols.last_played);
     assert!(cols.status);
+    assert_eq!(cols.compat, cfg!(target_os = "linux"));
     let ui: UiPrefs = serde_json::from_str("{}").unwrap();
     assert_eq!(ui.library_list_columns, cols);
+    assert_eq!(ui.cover_compat_badges, cfg!(target_os = "linux"));
     let custom = UiPrefs {
+        cover_compat_badges: !cfg!(target_os = "linux"),
         library_list_columns: ListColumns {
             store: false,
             size: true,
             playtime: false,
             last_played: true,
             status: false,
+            compat: true,
         },
         ..UiPrefs::default()
     };
     let value = serde_json::to_value(&custom).unwrap();
     assert_eq!(value["libraryListColumns"]["size"], Value::Bool(true));
     assert_eq!(value["libraryListColumns"]["store"], Value::Bool(false));
+    assert_eq!(value["libraryListColumns"]["compat"], Value::Bool(true));
+    assert_eq!(
+        value["coverCompatBadges"],
+        Value::Bool(!cfg!(target_os = "linux"))
+    );
     let back: UiPrefs = serde_json::from_value(value).unwrap();
     assert_eq!(back.library_list_columns, custom.library_list_columns);
+    assert_eq!(back.cover_compat_badges, custom.cover_compat_badges);
 }
 
 #[test]

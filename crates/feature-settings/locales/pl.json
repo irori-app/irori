@@ -2318,5 +2318,7 @@
   "settings.crash.recent_help": "Raporty z nieoczekiwanych zamknięć pozostają tutaj, dopóki ich nie usuniesz.",
   "settings.crash.review_action": "Przejrzyj i zgłoś",
   "settings.crash.delete": "Usuń raport",
-  "settings.crash.delete_failed": "Nie udało się usunąć raportu o awarii"
+  "settings.crash.delete_failed": "Nie udało się usunąć raportu o awarii",
+  "settings.field.ui_cover_compat_badges.label": "Odznaki ProtonDB i Steam Deck na okładkach",
+  "settings.field.ui_cover_compat_badges.help": "Pokazuj oceny ProtonDB i odznaki Steam Deck Verified na okładkach niezainstalowanych gier."
 }

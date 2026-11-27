@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "Редагувати метадані…",
   "library.menu.no_collections": "Колекцій ще немає",
   "library.menu.manual_categories": "Ручні категорії",
-  "library.collection.remove_game": "Прибрати з колекції"
+  "library.collection.remove_game": "Прибрати з колекції",
+  "library.look.compat_badges": "ProtonDB і Steam Deck",
+  "library.list.compat": "У Linux"
 }

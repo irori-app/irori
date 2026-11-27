@@ -154,6 +154,12 @@ pub struct LibraryView {
     /// Games whose next launch skips the store's update check ("Play now").
     skip_version_check: HashSet<GameId>,
     availability: Availability,
+    /// Cached and queued ProtonDB / Steam Deck badges for visible games.
+    compat: crate::compat_badges::CompatQueue,
+    /// In-flight compatibility lookup tasks; cleared when turned off or dropped.
+    compat_tasks: HashMap<GameId, gpui_kit::Task<()>>,
+    /// Last observed offline state for compatibility badge lookups.
+    compat_was_offline: bool,
     /// Whether a game has desktop/app-menu shortcuts, with when it was
     /// checked. Checked when a game is hovered or focused, so its menu can
     /// offer the one shortcut command that applies.
@@ -278,6 +284,9 @@ impl LibraryView {
                 }
                 this.density = ui.density;
                 this.ui_prefs = ui.clone();
+                if !this.compat_active() {
+                    this.cancel_compat();
+                }
                 let size = ui.tile_size.clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
                 if (prev.tile_size - ui.tile_size).abs() > f32::EPSILON
                     && tab_prefs.tile_size.is_none()
@@ -365,6 +374,9 @@ impl LibraryView {
             stores_with_games: Default::default(),
             skip_version_check: HashSet::new(),
             availability: Availability::default(),
+            compat: crate::compat_badges::CompatQueue::default(),
+            compat_tasks: HashMap::new(),
+            compat_was_offline: false,
             shortcuts: HashMap::new(),
             shortcut_checks: HashSet::new(),
             _subscriptions: subscriptions,
@@ -573,6 +585,88 @@ impl LibraryView {
     /// Move keyboard focus to the search field.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search.update(cx, |s, cx| s.focus(window, cx));
+    }
+
+    /// Whether the active layout currently displays compatibility badges.
+    pub(super) fn compat_active(&self) -> bool {
+        match self.layout {
+            LibraryLayout::Grid => self.ui_prefs.cover_compat_badges,
+            LibraryLayout::List => self.ui_prefs.library_list_columns.compat,
+            LibraryLayout::Focus => false,
+        }
+    }
+
+    /// Queue a background ProtonDB / Steam Deck lookup for `game` if not
+    /// already cached or queued.
+    pub(super) fn request_compat(
+        &mut self,
+        game: &Arc<GameInfo>,
+        allow_installed: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let offline = backend(cx).working_offline();
+        if self.compat_was_offline && !offline {
+            self.compat.clear_offline_skips();
+        }
+        self.compat_was_offline = offline;
+        if self.compat.request(game, allow_installed) {
+            self.pump_compat(cx);
+        }
+    }
+
+    /// Start up to `compat_badges::MAX_CONCURRENT` compatibility lookups off
+    /// the UI thread, checking the disk cache first before fetching ProtonDB
+    /// and Steam Deck compatibility.
+    fn pump_compat(&mut self, cx: &mut Context<Self>) {
+        enum LookupOutcome {
+            Done(Option<irori_extras::wiki::SteamCompat>),
+            OfflineMiss,
+        }
+        let (generation, batch) = self.compat.take_next();
+        for game in batch {
+            let id = game.id();
+            let b = backend(cx);
+            let game_for_io = game.clone();
+            let io_task = irori_ui::state::run_infallible(cx, async move {
+                if let Some(cached) = b.cached_compat(&game_for_io).await {
+                    return LookupOutcome::Done(cached);
+                }
+                if cfg!(test) {
+                    return LookupOutcome::Done(None);
+                }
+                if b.working_offline() {
+                    return LookupOutcome::OfflineMiss;
+                }
+                LookupOutcome::Done(b.fetch_compat(&game_for_io).await)
+            });
+            let id_for_ui = id.clone();
+            let ui_task = cx.spawn(async move |this, cx| {
+                let outcome = io_task.await.unwrap_or(LookupOutcome::Done(None));
+                this.update(cx, |this, cx| {
+                    this.compat_tasks.remove(&id_for_ui);
+                    let updated = match outcome {
+                        LookupOutcome::Done(result) => {
+                            this.compat.finish(generation, &id_for_ui, result)
+                        }
+                        LookupOutcome::OfflineMiss => {
+                            this.compat.finish_offline(generation, &id_for_ui)
+                        }
+                    };
+                    if updated {
+                        this.pump_compat(cx);
+                        cx.notify();
+                    }
+                })
+                .ok();
+            });
+            self.compat_tasks.insert(id, ui_task);
+        }
+    }
+
+    /// Cancel all queued and in-flight compatibility badge lookups.
+    pub(super) fn cancel_compat(&mut self) {
+        self.compat.cancel_all();
+        self.compat_tasks.clear();
     }
 
     /// A file or folder dropped on the library: the Add game dialog filled in

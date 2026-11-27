@@ -2384,5 +2384,7 @@
   "settings.crash.recent_help": "Reports from unexpected exits stay here until you remove them.",
   "settings.crash.review_action": "Review & report",
   "settings.crash.delete": "Delete report",
-  "settings.crash.delete_failed": "Couldn’t delete the crash report"
+  "settings.crash.delete_failed": "Couldn’t delete the crash report",
+  "settings.field.ui_cover_compat_badges.label": "ProtonDB and Steam Deck badges on covers",
+  "settings.field.ui_cover_compat_badges.help": "Show ProtonDB ratings and Steam Deck Verified badges on covers of games that aren’t installed."
 }

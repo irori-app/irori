@@ -268,6 +268,24 @@ impl Backend {
         Ok(info)
     }
 
+    /// Cached ProtonDB and Steam Deck compatibility for `game` from disk only
+    /// (`wiki::cached_compat`), with zero network calls.
+    ///
+    /// Returns `None` on a cache miss, `Some(None)` on a cached negative hit
+    /// (e.g. a non-Steam exclusive), and `Some(Some(compat))` on a positive hit.
+    pub async fn cached_compat(&self, game: &GameInfo) -> Option<Option<wiki::SteamCompat>> {
+        let ids = self.wiki_ids(game);
+        wiki::cached_compat(&ids).await
+    }
+
+    /// Fetch ProtonDB and Steam Deck compatibility for `game` using only the
+    /// lightweight compatibility lookup (`wiki::fetch_compat`, never HLTB or
+    /// umu), persisting both positive and negative results on disk.
+    pub async fn fetch_compat(&self, game: &GameInfo) -> Option<wiki::SteamCompat> {
+        let ids = self.wiki_ids(game);
+        wiki::fetch_compat(&game.title, &ids).await
+    }
+
     /// What PCGamingWiki, HowLongToBeat, ProtonDB and the others say about a
     /// game ([`irori_extras::wiki::game_info`], cached for a month), with
     /// ProtonDB and the Steam Deck read for its Steam link. The wiki's game
@@ -562,5 +580,28 @@ mod tests {
         let json = serde_json::to_string(&*service.known.read()).unwrap();
         let back: HashMap<String, Learned> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, *service.known.read());
+    }
+
+    #[tokio::test]
+    async fn cached_compat_reads_disk_only_without_network() {
+        let tmp = tempfile::tempdir().unwrap();
+        irori_core::Paths::init(irori_core::Paths::under(tmp.path()));
+        let backend = Backend::start_for_tests(|_, _| Vec::new()).unwrap();
+        let game = GameInfo {
+            runner: Some(Runner::Gog),
+            app_name: "12345-compat-backend-test".into(),
+            title: "Hades".into(),
+            ..Default::default()
+        };
+        wiki::forget(&backend.wiki_ids(&game)).await;
+        assert_eq!(backend.cached_compat(&game).await, None);
+
+        // Explicit "none" steam link resolves locally and caches a negative hit.
+        backend.set_steam_link(&game.id(), Some(wiki::STEAM_NONE.into()));
+        wiki::forget(&backend.wiki_ids(&game)).await;
+        assert_eq!(backend.cached_compat(&game).await, None);
+        assert_eq!(backend.fetch_compat(&game).await, None);
+        assert_eq!(backend.cached_compat(&game).await, Some(None));
+        wiki::forget(&backend.wiki_ids(&game)).await;
     }
 }

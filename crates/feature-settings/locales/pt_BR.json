@@ -2356,5 +2356,7 @@
   "settings.crash.recent_help": "Relatórios de fechamentos inesperados ficam aqui até você removê-los.",
   "settings.crash.review_action": "Revisar e relatar",
   "settings.crash.delete": "Excluir relatório",
-  "settings.crash.delete_failed": "Não foi possível excluir o relatório de falha"
+  "settings.crash.delete_failed": "Não foi possível excluir o relatório de falha",
+  "settings.field.ui_cover_compat_badges.label": "Selos ProtonDB e Steam Deck nas capas",
+  "settings.field.ui_cover_compat_badges.help": "Mostra classificações ProtonDB e selos Steam Deck Verified nas capas de jogos não instalados."
 }

@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "Upravit metadata…",
   "library.menu.no_collections": "Zatím žádné kolekce",
   "library.menu.manual_categories": "Ruční kategorie",
-  "library.collection.remove_game": "Odebrat z kolekce"
+  "library.collection.remove_game": "Odebrat z kolekce",
+  "library.look.compat_badges": "ProtonDB a Steam Deck",
+  "library.list.compat": "Na Linuxu"
 }

@@ -71,7 +71,7 @@ pub(super) struct Frame {
     pub(super) heading: SharedString,
     pub(super) metrics: GridMetrics,
     /// Which of `grid::LIST_COLUMNS` fit the width.
-    pub(super) list_columns: [bool; 6],
+    pub(super) list_columns: [bool; 7],
     /// Width of the Focus view's column of covers, in rem.
     pub(super) focus_rem: f32,
     pub(super) items: Rc<Vec<Item>>,
@@ -95,7 +95,7 @@ impl Default for Frame {
             stores: Vec::new(),
             heading: SharedString::default(),
             metrics: grid::grid_metrics(60.0, 11.0),
-            list_columns: [true; 6],
+            list_columns: [true; 7],
             focus_rem: layouts::focus_column_rem(2, layouts::FOCUS_TILE_REM),
             items: Rc::default(),
             sizes: Rc::default(),
@@ -212,6 +212,9 @@ impl LibraryView {
             let wide = layouts::wide_enough_for_focus(body_rem, focus_tile);
             if let Some(layout) = layouts::auto_layout(self.layout, self.auto_wide, wide) {
                 self.layout = layout;
+                if !self.compat_active() {
+                    self.cancel_compat();
+                }
                 self.scroll_to_focused();
                 // The rows above were worked out for the other view.
                 cx.notify();

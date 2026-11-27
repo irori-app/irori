@@ -1295,5 +1295,7 @@
   "library.menu.edit_metadata_short": "Redigera metadata…",
   "library.menu.no_collections": "Inga samlingar ännu",
   "library.menu.manual_categories": "Manuella kategorier",
-  "library.collection.remove_game": "Ta bort från samling"
+  "library.collection.remove_game": "Ta bort från samling",
+  "library.look.compat_badges": "ProtonDB och Steam Deck",
+  "library.list.compat": "På Linux"
 }
