@@ -1,7 +1,7 @@
 use gpui_kit::{AppContext as _, Entity, TestAppContext, WindowOptions};
 use irori_core::{
-    GameHudMode, GameId, GlobalHudMode, HudBackend, HudColorPalette, HudPreset, MetalHudAlignment,
-    Paths, Runner,
+    FpsLimitMethod, GameHudMode, GameId, GlobalHudMode, HudBackend, HudColorPalette, HudPreset,
+    MetalHudAlignment, Paths, Runner,
 };
 use irori_services::Backend;
 
@@ -169,13 +169,17 @@ fn per_game_custom_clones_global_and_hides_opengl_wrapper_for_non_native_and_ste
 }
 
 #[gpui_kit::test]
-fn scope_notice_matches_global_and_third_party_launchers(cx: &mut TestAppContext) {
+fn scope_notice_only_shows_for_third_party_launchers(cx: &mut TestAppContext) {
     let (g_handle, g_panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
     cx.update_window(g_handle, |_, window, cx| {
         g_panel.update(cx, |p, _| {
-            assert_eq!(
-                p.scope_notice().map(|(id, _)| id),
-                Some("hud-global-stores-notice")
+            assert!(
+                p.scope_notice().is_none(),
+                "Global scope must not duplicate Steam guidance with an extra alert banner"
+            );
+            assert!(
+                !p.steam_expanded,
+                "Global Steam launch options start collapsed"
             );
         });
         let _ = window.draw(cx);
@@ -270,7 +274,7 @@ fn global_steam_snippet_tracks_global_mode(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn steam_hud_renders_side_by_side_and_opens_guide_dialog(cx: &mut TestAppContext) {
+fn steam_hud_bar_defaults_expanded_per_game_and_opens_guide_dialog(cx: &mut TestAppContext) {
     let steam_id = GameId::new(Runner::Steam, "620");
     let (handle, panel) = open_hud(
         cx,
@@ -287,7 +291,15 @@ fn steam_hud_renders_side_by_side_and_opens_guide_dialog(cx: &mut TestAppContext
         });
         panel.update(cx, |p, cx| {
             p.reload_from_settings(window, cx);
+            assert!(p.steam_expanded, "Per-game Steam bar starts expanded");
             assert!(p.display.steam_snippet.is_some());
+            p.steam_expanded = false;
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+
+        panel.update(cx, |p, _| {
+            p.steam_expanded = true;
         });
         window.refresh();
         let _ = window.draw(cx);
@@ -613,6 +625,28 @@ fn pinned_preview_scenes_cycle_stepper_and_shortcut_conflict_render_cleanly(
             });
             assert!(p.display.low_contrast_notice.is_some());
         });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn frame_pacing_can_be_changed_and_persisted_while_fps_limit_is_off(cx: &mut TestAppContext) {
+    let (handle, panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| {
+            p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.edit_mangohud(window, cx, |m| {
+                m.fps_limit = None;
+                m.fps_limit_method = FpsLimitMethod::Early;
+            });
+            assert_eq!(p.active_mangohud().fps_limit, None);
+            assert_eq!(p.active_mangohud().fps_limit_method, FpsLimitMethod::Early);
+        });
+        let saved = irori_ui::backend(cx).settings.app().hud.mangohud.clone();
+        assert_eq!(saved.fps_limit, None);
+        assert_eq!(saved.fps_limit_method, FpsLimitMethod::Early);
         window.refresh();
         let _ = window.draw(cx);
     })
