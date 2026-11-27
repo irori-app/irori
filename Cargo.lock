@@ -5059,7 +5059,7 @@ dependencies = [
  "aes 0.8.4",
  "anyhow",
  "async-trait",
- "cbc 0.1.2",
+ "cbc 0.2.1",
  "hex",
  "irori-amazon-api",
  "irori-core",
