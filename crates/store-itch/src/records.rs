@@ -30,6 +30,14 @@ impl Layout {
     pub fn library_file(&self) -> PathBuf {
         self.cache.join("library.json")
     }
+
+    pub fn playtime_queue_file(&self) -> PathBuf {
+        self.config.join("playtime-queue.json")
+    }
+
+    pub fn playtime_cache_file(&self) -> PathBuf {
+        self.cache.join("playtime-summaries.json")
+    }
 }
 
 /// The saved login. The key is a secret: it never goes to logs.
@@ -77,6 +85,15 @@ pub struct InstalledRecord {
 impl InstalledRecord {
     pub fn executable_path(&self) -> Option<PathBuf> {
         (!self.executable.is_empty()).then(|| self.resolve(&self.executable))
+    }
+
+    /// Butler build id encoded in `revision` (`"build:<id>"`), when known.
+    pub fn build_id(&self) -> Option<u64> {
+        self.revision
+            .strip_prefix("build:")?
+            .parse::<u64>()
+            .ok()
+            .filter(|id| *id > 0)
     }
 
     /// A path relative to the install folder (absolute paths stay as they are).

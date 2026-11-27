@@ -370,3 +370,178 @@ async fn a_folder_the_itch_app_installed_keeps_its_updates() {
     f.version.store(2, Ordering::SeqCst);
     assert_eq!(s.updatable_games().await.unwrap(), ["7"]);
 }
+
+#[tokio::test]
+async fn syncs_playtime_uploads_offline_queue_and_reads_summaries() {
+    use std::sync::Mutex;
+    isolate_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let games = dir.path().join("games");
+    let fail_posts = Arc::new(AtomicBool::new(false));
+    let scope_denied = Arc::new(AtomicBool::new(false));
+    let posted: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let summary_hits = Arc::new(AtomicU8::new(0));
+    let total_secs = Arc::new(std::sync::atomic::AtomicU64::new(1680));
+
+    let (fp, sd, po, sh, ts) = (
+        fail_posts.clone(),
+        scope_denied.clone(),
+        posted.clone(),
+        summary_hits.clone(),
+        total_secs.clone(),
+    );
+    let server = TestServer::start(move |req| {
+        if req.path.starts_with("/files/") {
+            return serve_bytes(req, &archive(1), true);
+        }
+        if req.header("authorization") != Some(KEY) {
+            return Resp {
+                status: 401,
+                ..Resp::json(json!({"errors": ["invalid key"]}))
+            };
+        }
+        match (req.method.as_str(), req.path.as_str()) {
+            ("GET", "/profile") => Resp::json(
+                json!({"user": {"id": 42, "username": "player", "display_name": "Player One"}}),
+            ),
+            ("GET", p) if p.starts_with("/profile/owned-keys?page=1") => {
+                Resp::json(json!({"owned_keys": [
+                    {"id": 500, "game_id": 7, "game": {
+                        "id": 7, "title": "Tiny Dungeon", "classification": "game", "type": "default",
+                        "platforms": {"windows": "all", "linux": "all"}}}
+                ]}))
+            }
+            ("GET", "/games/7/uploads?download_key_id=500") => Resp::json(json!({"uploads": [
+                {"id": 3, "storage": "hosted", "filename": "tiny-dungeon-win.zip", "type": "default",
+                 "size": archive(1).len(), "platforms": {"windows": "all"},
+                 "updated_at": "2024-04-01T00:00:00Z"}
+            ]})),
+            ("GET", "/uploads/3/download?download_key_id=500") => Resp {
+                status: 302,
+                headers: vec![("Location".into(), "/files/1/tiny-dungeon-win.zip".into())],
+                ..Default::default()
+            },
+            ("GET", "/profile/game-sessions/summaries/7") => {
+                sh.fetch_add(1, Ordering::SeqCst);
+                if sd.load(Ordering::SeqCst) {
+                    return Resp {
+                        status: 403,
+                        ..Resp::json(json!({"errors": ["invalid scope"]}))
+                    };
+                }
+                let secs = ts.load(Ordering::SeqCst);
+                Resp::json(json!({
+                    "summary": {
+                        "seconds_run": secs,
+                        "last_run_at": "2026-11-27T18:00:00Z"
+                    }
+                }))
+            }
+            ("POST", "/profile/game-sessions") => {
+                if sd.load(Ordering::SeqCst) {
+                    return Resp {
+                        status: 403,
+                        ..Resp::json(json!({"errors": ["invalid scope"]}))
+                    };
+                }
+                if fp.load(Ordering::SeqCst) {
+                    return Resp::status(503);
+                }
+                let body = String::from_utf8_lossy(&req.body).into_owned();
+                po.lock().unwrap().push(body);
+                let secs = ts.fetch_add(180, Ordering::SeqCst) + 180;
+                Resp::json(json!({
+                    "summary": {
+                        "seconds_run": secs,
+                        "last_run_at": "2026-11-27T18:30:00Z"
+                    }
+                }))
+            }
+            _ => Resp::status(404),
+        }
+    });
+
+    let sync_disabled = Arc::new(AtomicBool::new(false));
+    let sync_flag = sync_disabled.clone();
+    let settings_games = games.clone();
+    let settings: SettingsFn = Arc::new(move || {
+        Arc::new(AppSettings {
+            itch_io: true,
+            disable_playtime_sync: sync_flag.load(Ordering::SeqCst),
+            default_install_path: settings_games.to_string_lossy().into_owned(),
+            ..Default::default()
+        })
+    });
+    let layout = Layout {
+        config: dir.path().join("config"),
+        cache: dir.path().join("cache"),
+    };
+    let store = ItchStore::with_layout(EventBus::new(), settings, layout.clone(), &server.base());
+    store.init().await.unwrap();
+    store.login(KEY).await.unwrap();
+    store.refresh(false).await.unwrap();
+    store
+        .install(
+            "7",
+            &InstallRequest {
+                platform: InstallPlatform::Windows,
+                ..Default::default()
+            },
+            OpContext::detached(),
+        )
+        .await
+        .unwrap();
+
+    // Reading remote playtime populates both minutes and last-played from one summary call.
+    let minutes = store.remote_playtime().await.unwrap();
+    assert_eq!(minutes.get("7"), Some(&28));
+    let last_played = store.remote_last_played().await.unwrap();
+    assert_eq!(
+        last_played.get("7").map(String::as_str),
+        Some("2026-11-27T18:00:00Z")
+    );
+    assert_eq!(summary_hits.load(Ordering::SeqCst), 1);
+
+    // A second call inside the 6-hour throttle window reuses the cache with zero requests.
+    assert_eq!(store.remote_playtime().await.unwrap().get("7"), Some(&28));
+    assert_eq!(summary_hits.load(Ordering::SeqCst), 1);
+
+    // Transient upload failure keeps the session queued; refresh flushes it later.
+    fail_posts.store(true, Ordering::SeqCst);
+    store.after_exit("7", 180).await.unwrap();
+    assert!(posted.lock().unwrap().is_empty());
+    let queued: Vec<playtime::QueuedSession> =
+        irori_core::json_store::read_or_default(&layout.playtime_queue_file());
+    assert_eq!(queued.len(), 1);
+
+    fail_posts.store(false, Ordering::SeqCst);
+    store.refresh(false).await.unwrap();
+    assert_eq!(posted.lock().unwrap().len(), 1);
+    let queued: Vec<playtime::QueuedSession> =
+        irori_core::json_store::read_or_default(&layout.playtime_queue_file());
+    assert!(queued.is_empty());
+    // Summary from POST updated the cached playtime immediately (1680 + 180 = 1860s = 31 min).
+    assert_eq!(store.remote_playtime().await.unwrap().get("7"), Some(&31));
+    assert_eq!(
+        store
+            .remote_last_played()
+            .await
+            .unwrap()
+            .get("7")
+            .map(String::as_str),
+        Some("2026-11-27T18:30:00Z")
+    );
+
+    // Disabling playtime sync suppresses both reads and uploads.
+    sync_disabled.store(true, Ordering::SeqCst);
+    assert!(store.remote_playtime().await.unwrap().is_empty());
+    store.after_exit("7", 240).await.unwrap();
+    assert_eq!(posted.lock().unwrap().len(), 1);
+    sync_disabled.store(false, Ordering::SeqCst);
+
+    // A 403 scope refusal degrades cleanly without triggering SessionExpired.
+    scope_denied.store(true, Ordering::SeqCst);
+    store.after_exit("7", 120).await.unwrap();
+    assert!(store.is_logged_in());
+    assert!(store.sessions_unsupported.load(Ordering::Acquire));
+}

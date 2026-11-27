@@ -454,7 +454,7 @@
   "settings.field.disable_logs.tip": "Stops Irori from saving diagnostic logs on disk. Leave logs enabled whenever troubleshooting problems or filing a bug report.",
   "settings.field.disable_logs.label": "Turn off logs",
   "settings.field.disable_playtime_sync.label": "Don't sync playtime",
-  "settings.field.disable_playtime_sync.tip": "Keeps your hours played saved only on this computer instead of uploading session time back to Epic or GOG.",
+  "settings.field.disable_playtime_sync.tip": "Keeps your hours played saved only on this computer instead of uploading session time back to Epic, GOG, or itch.io.",
   "settings.field.disable_umu.help": "Run Proton directly without umu’s automatic fixes.",
   "settings.field.disable_umu.tip": "umu automatically applies community Proton game fixes outside Steam. Keep umu enabled unless debugging a rare regression.",
   "settings.field.disable_umu.label": "Don't use umu-launcher",

@@ -17,6 +17,7 @@ mod detect;
 mod extract;
 mod install;
 mod launch;
+mod playtime;
 mod receipt;
 mod records;
 mod setup;
@@ -26,6 +27,8 @@ mod tests;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use anyhow::{Context as _, Result, bail};
 use async_trait::async_trait;
@@ -37,6 +40,7 @@ use irori_core::{
 use irori_itch_api::{ApiError, Client, Os, OwnedKey};
 use parking_lot::RwLock;
 
+use playtime::PlaytimeCache;
 pub use records::Layout;
 use records::{Auth, InstalledRecord, LibraryCache};
 
@@ -173,6 +177,14 @@ pub struct ItchStore {
     state: RwLock<State>,
     /// Serialises changes of `installed.json`.
     files_lock: tokio::sync::Mutex<()>,
+    /// Serialises queued playtime uploads.
+    playtime_lock: tokio::sync::Mutex<()>,
+    /// Cached per-game playtime summaries from itch.io.
+    summaries: RwLock<PlaytimeCache>,
+    /// When playtime summaries were last refreshed against itch.io.
+    totals_read: parking_lot::Mutex<Option<Instant>>,
+    /// Set once if the current API key is refused for game-session endpoints.
+    sessions_unsupported: AtomicBool,
 }
 
 impl ItchStore {
@@ -220,6 +232,10 @@ impl ItchStore {
             api_base: api_base.to_string(),
             state: RwLock::new(State::default()),
             files_lock: tokio::sync::Mutex::new(()),
+            playtime_lock: tokio::sync::Mutex::new(()),
+            summaries: RwLock::new(PlaytimeCache::default()),
+            totals_read: parking_lot::Mutex::new(None),
+            sessions_unsupported: AtomicBool::new(false),
         })
     }
 
@@ -299,19 +315,27 @@ impl Store for ItchStore {
 
     async fn init(&self) -> Result<()> {
         let layout = self.layout.clone();
-        let (auth, library, installed) = Self::blocking(move || {
+        let (auth, library, installed, summaries) = Self::blocking(move || {
             (
                 records::load_auth(&layout),
                 records::load_library(&layout),
                 records::load_installed(&layout),
+                irori_core::json_store::read_or_default::<PlaytimeCache>(
+                    &layout.playtime_cache_file(),
+                ),
             )
         })
         .await?;
         let mut state = self.state.write();
+        let account_id = auth.as_ref().map(|a| a.user.id);
         state.auth = auth;
         state.keys = keys_by_app(library.keys);
         state.installed = installed;
         state.recompose();
+        drop(state);
+        if account_id.is_some_and(|id| summaries.account_id == id) {
+            *self.summaries.write() = summaries;
+        }
         Ok(())
     }
 
@@ -354,6 +378,8 @@ impl Store for ItchStore {
         let saved = auth.clone();
         Self::blocking(move || records::save_auth(&layout, &saved)).await??;
         self.state.write().auth = Some(auth);
+        self.sessions_unsupported.store(false, Ordering::Release);
+        *self.totals_read.lock() = None;
         self.bus.emit(Event::AccountChanged(Runner::Itch));
         self.user().context("the login was not kept")
     }
@@ -362,7 +388,11 @@ impl Store for ItchStore {
     async fn logout(&self) -> Result<()> {
         let layout = self.layout.clone();
         Self::blocking(move || {
-            for file in [layout.auth_file(), layout.library_file()] {
+            for file in [
+                layout.auth_file(),
+                layout.library_file(),
+                layout.playtime_cache_file(),
+            ] {
                 match std::fs::remove_file(&file) {
                     Ok(()) => {}
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -380,6 +410,9 @@ impl Store for ItchStore {
             state.keys.clear();
             state.recompose();
         }
+        *self.summaries.write() = PlaytimeCache::default();
+        *self.totals_read.lock() = None;
+        self.sessions_unsupported.store(false, Ordering::Release);
         self.bus.emit(Event::AccountChanged(Runner::Itch));
         self.bus.emit(Event::LibraryChanged(Runner::Itch));
         Ok(())
@@ -404,6 +437,7 @@ impl Store for ItchStore {
             state.keys = keys_by_app(cache.keys);
             state.recompose();
         }
+        self.flush_playtime().await;
         self.bus.emit(Event::LibraryChanged(Runner::Itch));
         Ok(())
     }
@@ -647,6 +681,18 @@ impl Store for ItchStore {
         _ctx: OpContext,
     ) -> Result<LaunchPlan> {
         launch::build_plan(&self.require_record(app_name)?, request)
+    }
+
+    async fn after_exit(&self, app_name: &str, played_secs: u64) -> Result<()> {
+        self.record_playtime(app_name, played_secs).await
+    }
+
+    async fn remote_playtime(&self) -> Result<HashMap<String, u64>> {
+        Ok(self.itch_playtime().await)
+    }
+
+    async fn remote_last_played(&self) -> Result<HashMap<String, String>> {
+        Ok(self.itch_last_played().await)
     }
 }
 
