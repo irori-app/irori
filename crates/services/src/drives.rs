@@ -291,11 +291,17 @@ pub(crate) fn snapshot_system_disks() -> Vec<SystemDisk> {
 
 fn canonical_existing_or_self(path: &Path) -> PathBuf {
     if let Some(existing) = path.ancestors().find(|p| p.is_dir()) {
-        let resolved = std::fs::canonicalize(existing).unwrap_or_else(|_| existing.to_path_buf());
+        let mut resolved =
+            std::fs::canonicalize(existing).unwrap_or_else(|_| existing.to_path_buf());
         if cfg!(windows)
             && let Some(plain) = resolved.to_str().and_then(|s| s.strip_prefix(r"\\?\"))
         {
-            return PathBuf::from(plain);
+            resolved = PathBuf::from(plain);
+        }
+        if let Ok(rest) = path.strip_prefix(existing)
+            && !rest.as_os_str().is_empty()
+        {
+            resolved.push(rest);
         }
         return resolved;
     }
@@ -335,14 +341,19 @@ fn topmost_volume_info<'a>(
     (best, name)
 }
 
+/// Resolve a formatted disk label without touching the host filesystem.
+fn resolve_disk_label_raw(path: &Path, disks: &[SystemDisk]) -> Option<String> {
+    let matched = matching_mount(path, disks)?;
+    let (topmost, name) = topmost_volume_info(matched, disks);
+    let label = format_disk_label(&topmost.mount, name);
+    (!label.is_empty()).then_some(label)
+}
+
 /// Resolve a formatted disk label (`C: System`, `/ · Reletech P400 EVO 2TB`,
 /// `/mnt/Asgard`, `/ · Macintosh HD`) for `path` against a `SystemDisk` slice.
 pub(crate) fn resolve_disk_label(path: &Path, disks: &[SystemDisk]) -> Option<String> {
     let resolved = canonical_existing_or_self(path);
-    let matched = matching_mount(&resolved, disks).or_else(|| matching_mount(path, disks))?;
-    let (topmost, name) = topmost_volume_info(matched, disks);
-    let label = format_disk_label(&topmost.mount, name);
-    (!label.is_empty()).then_some(label)
+    resolve_disk_label_raw(&resolved, disks).or_else(|| resolve_disk_label_raw(path, disks))
 }
 
 fn suggested_base_for_mount(mount_str: &str) -> String {
@@ -362,18 +373,19 @@ fn short_mount_key(mount: &Path, mount_str: &str) -> String {
     }
 }
 
-/// Pure core of extra-drive detection, decoupled from real OS state for
-/// cross-platform offline testing.
-pub(crate) fn extra_drives_from_system(
+/// Core of extra-drive detection with an injectable path canonicalizer so
+/// offline tests stay decoupled from the host filesystem.
+fn extra_drives_with_resolver(
     disks: &[SystemDisk],
     existing_paths: &[PathBuf],
     home_dir: Option<(&Path, bool)>,
+    resolve: impl Fn(&Path) -> PathBuf,
 ) -> Vec<DetectedDrive> {
     let mut covered_volumes: Vec<&SystemDisk> = Vec::new();
     let mut seen_keys: HashSet<String> = HashSet::new();
 
     for path in existing_paths {
-        let resolved = canonical_existing_or_self(path);
+        let resolved = resolve(path);
         if let Some(matched) =
             matching_mount(&resolved, disks).or_else(|| matching_mount(path, disks))
         {
@@ -461,7 +473,7 @@ pub(crate) fn extra_drives_from_system(
     if let Some((home, home_writable)) = home_dir
         && home_writable
     {
-        let resolved_home = canonical_existing_or_self(home);
+        let resolved_home = resolve(home);
         if let Some(matched) =
             matching_mount(&resolved_home, disks).or_else(|| matching_mount(home, disks))
             && !matched.read_only
@@ -488,15 +500,35 @@ pub(crate) fn extra_drives_from_system(
     out
 }
 
-/// Detect writable main mounted drives not already represented by
-/// `existing_paths`. Blocking: run off the UI thread.
-pub fn detect_extra_drives(existing_paths: &[PathBuf]) -> Vec<DetectedDrive> {
-    let disks = snapshot_system_disks();
+/// Pure core of extra-drive detection, decoupled from real OS state for
+/// cross-platform offline testing.
+#[cfg(test)]
+pub(crate) fn extra_drives_from_system(
+    disks: &[SystemDisk],
+    existing_paths: &[PathBuf],
+    home_dir: Option<(&Path, bool)>,
+) -> Vec<DetectedDrive> {
+    extra_drives_with_resolver(disks, existing_paths, home_dir, Path::to_path_buf)
+}
+
+/// Detect writable extra drives against an already-refreshed `SystemDisk`
+/// snapshot, following symlinks and checking the current user's home directory.
+pub(crate) fn extra_drives_for_snapshot(
+    disks: &[SystemDisk],
+    existing_paths: &[PathBuf],
+) -> Vec<DetectedDrive> {
     let home = dirs::home_dir();
     let home_ref = home
         .as_deref()
         .map(|p| (p, irori_core::util::is_dir_writable(p)));
-    extra_drives_from_system(&disks, existing_paths, home_ref)
+    extra_drives_with_resolver(disks, existing_paths, home_ref, canonical_existing_or_self)
+}
+
+/// Detect writable main mounted drives not already represented by
+/// `existing_paths`. Blocking: run off the UI thread.
+pub fn detect_extra_drives(existing_paths: &[PathBuf]) -> Vec<DetectedDrive> {
+    let disks = snapshot_system_disks();
+    extra_drives_for_snapshot(&disks, existing_paths)
 }
 
 /// Probe configured install folders and extra writable drives in one
@@ -507,11 +539,7 @@ pub fn probe_install_drives(configured_paths: &[PathBuf]) -> InstallDriveProbe {
         .iter()
         .map(|p| resolve_disk_label(p, &disks))
         .collect();
-    let home = dirs::home_dir();
-    let home_ref = home
-        .as_deref()
-        .map(|p| (p, irori_core::util::is_dir_writable(p)));
-    let extras = extra_drives_from_system(&disks, configured_paths, home_ref);
+    let extras = extra_drives_for_snapshot(&disks, configured_paths);
     InstallDriveProbe {
         configured_labels,
         extras,

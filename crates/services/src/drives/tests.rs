@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use super::filters::unescape_udev_label;
 use super::{
-    SystemDisk, drive_label, extra_drives_from_system, format_disk_label, resolve_disk_label,
+    SystemDisk, canonical_existing_or_self, drive_label, extra_drives_from_system,
+    extra_drives_with_resolver, format_disk_label, resolve_disk_label, resolve_disk_label_raw,
 };
 
 const GIB: u64 = 1024 * 1024 * 1024;
@@ -191,7 +192,7 @@ fn btrfs_subvolumes_and_root_owned_mounts_never_leak_as_extra_drives() {
 
     // Default folder resolves to topmost mount `/` + hardware model.
     assert_eq!(
-        resolve_disk_label(Path::new("/home/edward/Games/Heroic"), &disks).as_deref(),
+        resolve_disk_label_raw(Path::new("/home/edward/Games/Heroic"), &disks).as_deref(),
         Some("/ · Reletech P400 EVO 2TB")
     );
 
@@ -383,4 +384,68 @@ fn surfaces_home_disk_when_default_install_moved_to_secondary_drive() {
     assert_eq!(detected[0].mount, Path::new("/"));
     assert_eq!(detected[0].disk_label, "/ · Reletech P400 EVO 2TB");
     assert_eq!(detected[0].suggested_base, "/home/edward/Games/Irori");
+}
+
+#[test]
+fn canonical_existing_or_self_preserves_missing_suffix_for_mount_matching() {
+    let tmp = tempfile::tempdir().unwrap();
+    let canonical_tmp = canonical_existing_or_self(tmp.path());
+    let missing_secondary_games = tmp.path().join("Secondary").join("Games");
+    let canonical_secondary_mount = canonical_tmp.join("Secondary");
+
+    // Non-existent subdirectories must stay attached after canonicalizing the
+    // nearest existing ancestor so mount matching does not collapse to `/`.
+    assert_eq!(
+        canonical_existing_or_self(&missing_secondary_games),
+        canonical_secondary_mount.join("Games")
+    );
+
+    let mut root = sys_disk(
+        "/dev/nvme0n1p2",
+        Some("RootDisk"),
+        &canonical_tmp.to_string_lossy(),
+        "btrfs",
+        1900,
+        1350,
+    );
+    root.writable = false;
+    let secondary = sys_disk(
+        "/dev/nvme1n1p1",
+        Some("Secondary"),
+        &canonical_secondary_mount.to_string_lossy(),
+        "ext4",
+        938,
+        177,
+    );
+    let disks = vec![root, secondary];
+
+    assert_eq!(
+        resolve_disk_label(&missing_secondary_games, &disks),
+        Some(format_disk_label(
+            &canonical_secondary_mount,
+            Some("Secondary")
+        ))
+    );
+
+    let home_dir = canonical_tmp.join("home").join("player");
+    let detected = extra_drives_with_resolver(
+        &disks,
+        std::slice::from_ref(&missing_secondary_games),
+        Some((&home_dir, true)),
+        canonical_existing_or_self,
+    );
+    assert_eq!(detected.len(), 1);
+    assert_eq!(detected[0].mount, canonical_tmp);
+
+    #[cfg(unix)]
+    {
+        let real_target = tmp.path().join("real_target");
+        std::fs::create_dir(&real_target).unwrap();
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real_target, &link).unwrap();
+        assert_eq!(
+            canonical_existing_or_self(&link.join("NewGames")),
+            canonical_tmp.join("real_target").join("NewGames")
+        );
+    }
 }

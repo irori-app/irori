@@ -10,7 +10,7 @@ use irori_core::GameId;
 use crate::Backend;
 use crate::downloads::{DownloadItem, DownloadKind, DownloadState};
 use crate::drives::{
-    DetectedDrive, extra_drives_from_system, resolve_disk_label, snapshot_system_disks,
+    DetectedDrive, extra_drives_for_snapshot, resolve_disk_label, snapshot_system_disks,
 };
 
 /// One disk the queue downloads to, or an install drive shown when idle.
@@ -221,11 +221,7 @@ impl Backend {
         for disk in &mut configured {
             disk.label = resolve_disk_label(&disk.folder, &system_disks);
         }
-        let home = dirs::home_dir();
-        let home_ref = home
-            .as_deref()
-            .map(|p| (p, irori_core::util::is_dir_writable(p)));
-        let extras = extra_drives_from_system(&system_disks, &configured_paths, home_ref);
+        let extras = extra_drives_for_snapshot(&system_disks, &configured_paths);
         merge_install_disks(configured, extras, |path| {
             path.ancestors().find(|p| p.is_dir()).and_then(disk_key)
         })
