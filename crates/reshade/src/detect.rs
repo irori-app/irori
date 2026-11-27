@@ -9,8 +9,10 @@
 //! (a few levels deep, skipping installers, redistributables, crash
 //! reporters, anticheat and updaters) and the program chosen is, in order:
 //! one the compatibility list knows the API of, else the largest one whose
-//! imports name an API. The real game is nearly always the largest program
-//! that draws anything; the user can still choose another.
+//! imports name an API. When an executable delegates rendering to a sibling
+//! engine runtime DLL (such as Unity's `UnityPlayer.dll`), that DLL's imports
+//! and size are counted toward the executable. The real game is nearly always
+//! the largest program that draws anything; the user can still choose another.
 
 use std::path::{Path, PathBuf};
 
@@ -117,6 +119,14 @@ static SKIP_EXE: Lazy<Regex> = Lazy::new(|| {
     .expect("valid regex")
 });
 
+/// Engine runtime DLLs that carry the render API imports for a thin stub
+/// executable (for example Unity 2018+ games, where `<Game>.exe` imports only
+/// `UnityPlayer.dll` and `kernel32.dll`).
+///
+/// Stored as `(lowercase_import_name, canonical_filename)` so the common case
+/// resolves directly on case-sensitive filesystems without scanning the folder.
+const ENGINE_DLLS: &[(&str, &str)] = &[("unityplayer.dll", "UnityPlayer.dll")];
+
 /// How deep the folder search goes, and how much it looks at.
 /// Depth 4 reaches `<Game>/Binaries/Win64/*-Shipping.exe` (depth 3) and one
 /// wrapper directory above it without traversing deep asset trees.
@@ -138,8 +148,22 @@ fn is_engine_binaries(parent: &Path, lower_name: &str) -> bool {
             .is_some_and(|p| p.eq_ignore_ascii_case("engine"))
 }
 
+struct Candidate {
+    path: PathBuf,
+    exe_size: u64,
+    /// Total size of known engine runtime DLLs in the same folder, used as an
+    /// upper bound when ordering candidates before reading PE headers.
+    sibling_engine_size: u64,
+}
+
+impl Candidate {
+    fn max_size(&self) -> u64 {
+        self.exe_size.saturating_add(self.sibling_engine_size)
+    }
+}
+
 /// Programs under `root` that might be the game, largest first.
-fn candidates(root: &Path) -> Vec<(PathBuf, u64)> {
+fn candidates(root: &Path) -> Vec<Candidate> {
     let mut found = Vec::new();
     let mut stack = vec![(root.to_path_buf(), 0usize)];
     let mut seen = 0usize;
@@ -147,6 +171,8 @@ fn candidates(root: &Path) -> Vec<(PathBuf, u64)> {
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };
+        let mut dir_exes = Vec::new();
+        let mut dir_engine_size = 0u64;
         for entry in entries.flatten() {
             seen += 1;
             if seen > MAX_ENTRIES {
@@ -164,13 +190,29 @@ fn candidates(root: &Path) -> Vec<(PathBuf, u64)> {
                 {
                     stack.push((path, depth + 1));
                 }
-            } else if kind.is_file() && is_exe(&path) && !SKIP_EXE.is_match(&name) {
-                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-                found.push((path, size));
+            } else if kind.is_file() {
+                if is_exe(&path) && !SKIP_EXE.is_match(&name) {
+                    let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                    dir_exes.push((path, size));
+                } else if ENGINE_DLLS.iter().any(|&(lower, _)| name == lower) {
+                    let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                    dir_engine_size = dir_engine_size.saturating_add(size);
+                }
             }
         }
+        for (path, exe_size) in dir_exes {
+            found.push(Candidate {
+                path,
+                exe_size,
+                sibling_engine_size: dir_engine_size,
+            });
+        }
     }
-    found.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    found.sort_by(|a, b| {
+        b.max_size()
+            .cmp(&a.max_size())
+            .then_with(|| a.path.cmp(&b.path))
+    });
     found
 }
 
@@ -180,13 +222,74 @@ fn file_name(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// The API of `exe`: the list's, when it names one (forced or not), else
-/// the imports'.
-fn api_of(exe: &Path, imports: &[String], compat: &CompatList) -> Option<Api> {
+fn inside(root: &Path, path: &Path) -> Option<PathBuf> {
+    std::fs::canonicalize(path)
+        .ok()
+        .filter(|p| p.starts_with(root))
+}
+
+fn find_sibling_engine_dll(
+    root: &Path,
+    dir: &Path,
+    lower: &str,
+    canonical: &str,
+) -> Option<PathBuf> {
+    let direct = dir.join(canonical);
+    if let Some(path) = inside(root, &direct).filter(|p| p.is_file()) {
+        return Some(path);
+    }
+    // Fall back to a case-insensitive scan on case-sensitive filesystems when
+    // the DLL on disk uses different letter case.
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.eq_ignore_ascii_case(lower))
+            && let Some(path) = inside(root, &entry.path()).filter(|p| p.is_file())
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Resolve a render API from a sibling engine runtime DLL imported by `exe`,
+/// keeping the lookup inside `root` and requiring the DLL's architecture to
+/// match `exe`. Returns the API and the DLL's byte size.
+fn api_from_engine_dlls(root: &Path, exe: &Path, info: &pe::PeInfo) -> Option<(Api, u64)> {
+    let dir = exe.parent()?;
+    for &(lower, canonical) in ENGINE_DLLS {
+        if !info.imports.iter().any(|m| m == lower) {
+            continue;
+        }
+        let Some(dll) = find_sibling_engine_dll(root, dir, lower, canonical) else {
+            continue;
+        };
+        let Ok(dll_info) = pe::read_file(&dll) else {
+            continue;
+        };
+        if dll_info.machine != info.machine {
+            continue;
+        }
+        if let Some(api) = api_from_imports(&dll_info.imports) {
+            let size = std::fs::metadata(&dll).map(|m| m.len()).unwrap_or(0);
+            return Some((api, size));
+        }
+    }
+    None
+}
+
+/// The API of `exe`: the list's, when it names one (forced or not), else the
+/// imports of `exe`, else a sibling engine runtime DLL imported by `exe`.
+/// Also returns the engine DLL's byte size when the API came from one.
+fn api_of(root: &Path, exe: &Path, info: &pe::PeInfo, compat: &CompatList) -> Option<(Api, u64)> {
     compat
         .get(&file_name(exe))
         .and_then(|e| e.api())
-        .or_else(|| api_from_imports(imports))
+        .or_else(|| api_from_imports(&info.imports))
+        .map(|api| (api, 0))
+        .or_else(|| api_from_engine_dlls(root, exe, info))
 }
 
 /// The DLL for `api`; a list entry forcing Direct3D 10, 11 or 12 gets that
@@ -207,12 +310,14 @@ fn dll_for(exe: &Path, api: Api, compat: &CompatList) -> Option<String> {
 }
 
 /// A usable program: a PE for x86 or x64 that draws with a known API.
-fn probe(exe: &Path, compat: &CompatList) -> Option<(Machine, Api)> {
+/// Returns `(machine, api, engine_dll_size)`.
+fn probe(root: &Path, exe: &Path, compat: &CompatList) -> Option<(Machine, Api, u64)> {
     let info = pe::read_file(exe).ok()?;
     if !matches!(info.machine, Machine::X86 | Machine::X64) {
         return None;
     }
-    Some((info.machine, api_of(exe, &info.imports, compat)?))
+    let (api, engine_size) = api_of(root, exe, &info, compat)?;
+    Some((info.machine, api, engine_size))
 }
 
 /// Find the game's program under `root`. `chosen` is a program the user
@@ -226,35 +331,58 @@ pub fn detect(
     compat: &CompatList,
 ) -> Result<Detection> {
     let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    let inside = |p: &Path| {
-        std::fs::canonicalize(p)
-            .ok()
-            .filter(|p| p.starts_with(&root))
-    };
     let launcher_banned = configured
         .map(file_name)
         .filter(|name| compat.is_banned(name));
 
     let (exe, searched) = if let Some(chosen) = chosen {
-        (inside(chosen).ok_or(ReshadeError::OutsideGame)?, false)
+        (
+            inside(&root, chosen).ok_or(ReshadeError::OutsideGame)?,
+            false,
+        )
     } else if let Some(exe) = configured
-        .and_then(inside)
-        .filter(|e| e.is_file() && probe(e, compat).is_some())
+        .and_then(|p| inside(&root, p))
+        .filter(|e| e.is_file() && probe(&root, e, compat).is_some())
     {
         (exe, false)
     } else {
         let all = candidates(&root);
-        let known = all.iter().find(|(p, _)| {
-            compat.get(&file_name(p)).is_some_and(|e| e.api().is_some())
-                && probe(p, compat).is_some()
-        });
+        let known = all
+            .iter()
+            .find(|c| {
+                compat
+                    .get(&file_name(&c.path))
+                    .is_some_and(|e| e.api().is_some())
+                    && probe(&root, &c.path, compat).is_some()
+            })
+            .map(|c| &c.path);
         let drawn = || {
-            all.iter()
-                .take(MAX_PARSED)
-                .find(|(p, _)| probe(p, compat).is_some())
+            let mut best: Option<(&PathBuf, u64)> = None;
+            for candidate in all.iter().take(MAX_PARSED) {
+                if let Some((_, best_size)) = best
+                    && candidate.max_size() < best_size
+                {
+                    break;
+                }
+                let Some((_, _, engine_size)) = probe(&root, &candidate.path, compat) else {
+                    continue;
+                };
+                let effective_size = candidate.exe_size.saturating_add(engine_size);
+                let better = match best {
+                    None => true,
+                    Some((best_path, best_size)) => {
+                        effective_size > best_size
+                            || (effective_size == best_size && candidate.path < *best_path)
+                    }
+                };
+                if better {
+                    best = Some((&candidate.path, effective_size));
+                }
+            }
+            best.map(|(p, _)| p)
         };
         match known.or_else(drawn) {
-            Some((p, _)) => (p.clone(), true),
+            Some(p) => (p.clone(), true),
             None => {
                 // Nothing draws: report the configured program, so a banned
                 // launcher is still refused by name.
@@ -267,7 +395,7 @@ pub fn detect(
     };
 
     let info = pe::read_file(&exe)?;
-    let api = api_of(&exe, &info.imports, compat);
+    let api = api_of(&root, &exe, &info, compat).map(|(a, _)| a);
     let entry = compat.get(&file_name(&exe));
     let mut dir = exe.parent().map(Path::to_path_buf).unwrap_or(root.clone());
     if api != Some(Api::Vulkan)
@@ -475,5 +603,143 @@ mod tests {
         assert_eq!(found.machine, Machine::X64);
         assert_eq!(found.api, Some(Api::Dxgi));
         assert!(found.searched);
+    }
+
+    #[test]
+    fn detects_unity_stub_via_sibling_unity_player_dll() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("REPO.exe");
+        write(
+            &exe,
+            &build_pe(0x8664, &["UnityPlayer.dll", "KERNEL32.dll"], &[]),
+        );
+        write(
+            &dir.path().join("UnityPlayer.dll"),
+            &build_pe(
+                0x8664,
+                &["OPENGL32.dll", "d3d11.dll", "dxgi.dll"],
+                &["d3d12.dll"],
+            ),
+        );
+        write(
+            &dir.path().join("UnityCrashHandler64.exe"),
+            &build_pe(0x8664, &["KERNEL32.dll"], &[]),
+        );
+
+        let canonical_exe = std::fs::canonicalize(&exe).unwrap();
+
+        // Folder search (Steam-like game with no configured executable).
+        let searched = detect(dir.path(), None, None, &CompatList::default()).unwrap();
+        assert_eq!(searched.exe, canonical_exe);
+        assert_eq!(searched.machine, Machine::X64);
+        assert_eq!(searched.api, Some(Api::Dxgi));
+        assert_eq!(searched.dll.as_deref(), Some("dxgi.dll"));
+        assert!(searched.searched);
+
+        // Configured executable (sideload/GOG/Epic).
+        let configured = detect(dir.path(), Some(&exe), None, &CompatList::default()).unwrap();
+        assert_eq!(configured.exe, canonical_exe);
+        assert_eq!(configured.api, Some(Api::Dxgi));
+        assert!(!configured.searched);
+
+        // Explicitly chosen executable (ReShade/OptiScaler).
+        let chosen = detect(dir.path(), None, Some(&exe), &CompatList::default()).unwrap();
+        assert_eq!(chosen.exe, canonical_exe);
+        assert_eq!(chosen.api, Some(Api::Dxgi));
+        assert_eq!(chosen.dll.as_deref(), Some("dxgi.dll"));
+
+        // OptiScaler target detection succeeds on the 64-bit Unity game.
+        let opti = crate::optiscaler::detect_target(dir.path(), None, None).unwrap();
+        assert_eq!(opti.exe, canonical_exe);
+        assert_eq!(opti.api, Some(Api::Dxgi));
+    }
+
+    #[test]
+    fn unity_stub_ranks_by_unity_player_size_over_larger_helper_exes() {
+        let dir = tempfile::tempdir().unwrap();
+        let game = dir.path().join("Game.exe");
+        write(
+            &game,
+            &build_pe(0x8664, &["UnityPlayer.dll", "KERNEL32.dll"], &[]),
+        );
+
+        let mut unity_player = build_pe(0x8664, &["d3d11.dll", "dxgi.dll"], &[]);
+        unity_player.resize(unity_player.len() + 65536, 0);
+        write(&dir.path().join("UnityPlayer.dll"), &unity_player);
+
+        // A larger helper tool in a subfolder and a larger unrelated tool in the
+        // same folder as UnityPlayer.dll must both lose to the Unity game stub.
+        let mut tool = build_pe(0x8664, &["opengl32.dll"], &[]);
+        tool.resize(tool.len() + 16384, 0);
+        write(&dir.path().join("tools/Viewer.exe"), &tool);
+        write(&dir.path().join("AssetTool.exe"), &tool);
+
+        let found = detect(dir.path(), None, None, &CompatList::default()).unwrap();
+        assert_eq!(found.exe, std::fs::canonicalize(&game).unwrap());
+        assert_eq!(found.api, Some(Api::Dxgi));
+    }
+
+    #[test]
+    fn unity_detection_handles_non_standard_casing_and_architecture_checks() {
+        // Non-standard lowercase UnityPlayer.dll filename on disk.
+        let lower_dir = tempfile::tempdir().unwrap();
+        let lower_exe = lower_dir.path().join("LowerGame.exe");
+        write(&lower_exe, &build_pe(0x8664, &["UnityPlayer.dll"], &[]));
+        write(
+            &lower_dir.path().join("unityplayer.dll"),
+            &build_pe(0x8664, &["d3d11.dll"], &[]),
+        );
+        let found = detect(lower_dir.path(), None, None, &CompatList::default()).unwrap();
+        assert_eq!(found.exe, std::fs::canonicalize(&lower_exe).unwrap());
+        assert_eq!(found.api, Some(Api::Dxgi));
+
+        // 32-bit Unity game is detected for ReShade and rejected as 32-bit by OptiScaler.
+        let x86_dir = tempfile::tempdir().unwrap();
+        let x86_exe = x86_dir.path().join("Unity32.exe");
+        write(&x86_exe, &build_pe(0x014c, &["UnityPlayer.dll"], &[]));
+        write(
+            &x86_dir.path().join("UnityPlayer.dll"),
+            &build_pe(0x014c, &["d3d11.dll"], &[]),
+        );
+        let found32 = detect(x86_dir.path(), None, None, &CompatList::default()).unwrap();
+        assert_eq!(found32.machine, Machine::X86);
+        assert_eq!(found32.api, Some(Api::Dxgi));
+        let err = crate::optiscaler::detect_target(x86_dir.path(), None, None).unwrap_err();
+        assert!(matches!(
+            ReshadeError::of(&err),
+            Some(ReshadeError::UnsupportedArch)
+        ));
+
+        // Architecture mismatch between the stub and UnityPlayer.dll is ignored.
+        let mismatch_dir = tempfile::tempdir().unwrap();
+        write(
+            &mismatch_dir.path().join("Mismatch.exe"),
+            &build_pe(0x8664, &["UnityPlayer.dll"], &[]),
+        );
+        write(
+            &mismatch_dir.path().join("UnityPlayer.dll"),
+            &build_pe(0x014c, &["d3d11.dll"], &[]),
+        );
+        let err = detect(mismatch_dir.path(), None, None, &CompatList::default()).unwrap_err();
+        assert!(matches!(ReshadeError::of(&err), Some(ReshadeError::NoApi)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unity_detection_refuses_symlink_outside_game_folder() {
+        use std::os::unix::fs::symlink;
+
+        let game = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let external_dll = outside.path().join("UnityPlayer.dll");
+        write(&external_dll, &build_pe(0x8664, &["d3d11.dll"], &[]));
+        write(
+            &game.path().join("Game.exe"),
+            &build_pe(0x8664, &["UnityPlayer.dll"], &[]),
+        );
+        symlink(&external_dll, game.path().join("UnityPlayer.dll")).unwrap();
+
+        let err = detect(game.path(), None, None, &CompatList::default()).unwrap_err();
+        assert!(matches!(ReshadeError::of(&err), Some(ReshadeError::NoApi)));
     }
 }
