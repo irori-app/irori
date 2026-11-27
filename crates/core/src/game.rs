@@ -28,8 +28,10 @@ pub struct GameInfo {
     pub store_url: Option<String>,
     /// Vertical cover (library tile).
     pub art_cover: Option<String>,
-    /// Square/landscape art used when no cover exists.
+    /// Square art used when a square tile is shown or no cover exists.
     pub art_square: Option<String>,
+    /// Wide/landscape cover (banner tiles, Steam headers, wide ROM boxes).
+    pub art_wide: Option<String>,
     pub art_logo: Option<String>,
     pub art_background: Option<String>,
     pub art_icon: Option<String>,
@@ -140,19 +142,40 @@ impl GameInfo {
 
     /// Best art for a vertical tile, falling back through the alternatives.
     pub fn cover_art(&self) -> Option<&str> {
-        self.art_cover
-            .as_deref()
-            .or(self.art_square.as_deref())
-            .filter(|s| !s.is_empty())
+        [
+            self.art_cover.as_deref(),
+            self.art_square.as_deref(),
+            self.art_wide.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .find(|s| !s.is_empty())
+    }
+
+    /// Best art for a wide cover tile (banner or landscape view).
+    pub fn wide_cover_art(&self) -> Option<&str> {
+        [
+            self.art_wide.as_deref(),
+            self.art_background.as_deref(),
+            self.art_square.as_deref(),
+            self.art_cover.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .find(|s| !s.is_empty())
     }
 
     /// Best art for a wide hero banner.
     pub fn hero_art(&self) -> Option<&str> {
-        self.art_background
-            .as_deref()
-            .or(self.art_square.as_deref())
-            .or(self.art_cover.as_deref())
-            .filter(|s| !s.is_empty())
+        [
+            self.art_background.as_deref(),
+            self.art_wide.as_deref(),
+            self.art_square.as_deref(),
+            self.art_cover.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .find(|s| !s.is_empty())
     }
 
     pub fn install_path(&self) -> Option<PathBuf> {
@@ -605,6 +628,8 @@ pub struct GameOverrides {
     pub title: Option<String>,
     pub art_cover: Option<String>,
     pub art_square: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub art_wide: Option<String>,
     pub art_background: Option<String>,
     pub art_logo: Option<String>,
     /// The game's modes as the user set them, replacing what stores and
@@ -772,6 +797,32 @@ pub type PlaytimeMap = BTreeMap<String, PlaytimeRecord>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wide_cover_art_prefers_wide_then_background_then_fallbacks() {
+        let mut game = GameInfo {
+            art_cover: Some("cover".into()),
+            art_square: Some("square".into()),
+            art_wide: Some("wide".into()),
+            art_background: Some("bg".into()),
+            ..Default::default()
+        };
+        assert_eq!(game.wide_cover_art(), Some("wide"));
+        assert_eq!(game.hero_art(), Some("bg"));
+        game.art_wide = Some(String::new());
+        assert_eq!(game.wide_cover_art(), Some("bg"));
+        game.art_background = None;
+        assert_eq!(game.wide_cover_art(), Some("square"));
+        game.art_square = None;
+        assert_eq!(game.wide_cover_art(), Some("cover"));
+        // A game with only wide art still shows it in portrait tiles.
+        let wide_only = GameInfo {
+            art_wide: Some("wide".into()),
+            ..Default::default()
+        };
+        assert_eq!(wide_only.cover_art(), Some("wide"));
+        assert_eq!(wide_only.hero_art(), Some("wide"));
+    }
 
     #[test]
     fn notes_each_source_once_in_order() {

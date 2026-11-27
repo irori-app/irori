@@ -85,7 +85,7 @@ Irori collects zero telemetry, embeds no analytics SDKs, and does not upload cra
 Network requests fall into two categories:
 
 1. Store backends you sign in to or use: Steam, Epic Games, GOG, Amazon Games, itch.io, Xbox / Microsoft Store, and ZOOM Platform. These domains are contacted only when signing in, refreshing libraries, downloading or updating games, checking cloud saves, or fetching runtime components.
-2. Optional or user-triggered integrations: IGDB, SteamGridDB, VNDB, LaunchBox, ProtonDB, PCGamingWiki, AreWeAntiCheatYet, HowLongToBeat, RetroAchievements, Lutris API, ReShade, RenoDX, and GitHub Releases (for runtime or update checks). Integrations that enrich metadata or check external databases only query those services when enabled or triggered by the user.
+2. Optional or user-triggered integrations: IGDB, SteamGridDB, VNDB, LaunchBox, ProtonDB, PCGamingWiki, AreWeAntiCheatYet, HowLongToBeat, RetroAchievements, Lutris API, ReShade, RenoDX, GitHub Releases (for runtime or update checks), and on-demand Art Picker web image search via DuckDuckGo (`duckduckgo.com`), Bing (`www.bing.com`), and Google (`www.google.com`). Integrations that enrich metadata or check external databases only query those services when enabled or explicitly triggered by the user (web image search only runs when clicking "Find online…" in Add game or the "Web" tab in the Art Picker; never automatically or in the background).
 
 ## Verifying Release Artifacts
 

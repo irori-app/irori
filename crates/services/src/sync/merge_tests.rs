@@ -1067,3 +1067,33 @@ fn where_i_left_off_travels_and_its_clearing_too() {
     round(&mut b, &mut a, t(30));
     assert!(a.data.left_off.is_empty());
 }
+
+#[test]
+fn wide_art_web_url_syncs_while_local_path_stays_local() {
+    let mut a = Device::new("a");
+    let mut b = Device::new("b");
+    a.data.overrides.insert(
+        "gog:1".into(),
+        GameOverrides {
+            art_wide: Some("https://cdn.example/wide.jpg".into()),
+            ..Default::default()
+        },
+    );
+    b.data.overrides.insert(
+        "gog:2".into(),
+        GameOverrides {
+            art_wide: Some("/home/me/local-wide.png".into()),
+            ..Default::default()
+        },
+    );
+    round(&mut a, &mut b, t(10));
+    assert_eq!(
+        b.data.overrides["gog:1"].art_wide.as_deref(),
+        Some("https://cdn.example/wide.jpg")
+    );
+    assert!(!a.data.overrides.contains_key("gog:2"));
+    assert_eq!(
+        b.data.overrides["gog:2"].art_wide.as_deref(),
+        Some("/home/me/local-wide.png")
+    );
+}

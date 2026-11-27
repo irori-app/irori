@@ -247,7 +247,7 @@ pub fn cover_art_for(game: &GameInfo, shape: CoverShape) -> Option<&str> {
             .as_deref()
             .filter(|s| !s.is_empty())
             .or_else(|| game.cover_art()),
-        CoverShape::Banner => game.hero_art(),
+        CoverShape::Banner => game.wide_cover_art(),
     }
 }
 
@@ -387,11 +387,14 @@ mod tests {
         let mut game = GameInfo {
             art_cover: Some("box".into()),
             art_square: Some("square".into()),
+            art_wide: Some("wide".into()),
             art_background: Some("hero".into()),
             ..Default::default()
         };
         assert_eq!(cover_art_for(&game, CoverShape::Portrait), Some("box"));
         assert_eq!(cover_art_for(&game, CoverShape::Square), Some("square"));
+        assert_eq!(cover_art_for(&game, CoverShape::Banner), Some("wide"));
+        game.art_wide = None;
         assert_eq!(cover_art_for(&game, CoverShape::Banner), Some("hero"));
         game.art_square = None;
         game.art_background = None;

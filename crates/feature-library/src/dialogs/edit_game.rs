@@ -27,15 +27,16 @@ use super::steamgrid::{ArtKind, ArtPicker, ArtPickerEvent};
 use super::{dialog_width, pick_path, text};
 
 /// The art a store game's details can replace, in the order the form lists it.
-const ART_KINDS: [ArtKind; 4] = [
+const ART_KINDS: [ArtKind; 5] = [
     ArtKind::Cover,
     ArtKind::Square,
+    ArtKind::Wide,
     ArtKind::Background,
     ArtKind::Logo,
 ];
 
 /// What the user entered for each kind of art, in [`ART_KINDS`] order.
-pub type ArtValues<'a> = [&'a str; 4];
+pub type ArtValues<'a> = [&'a str; 5];
 
 /// Overrides that turn `original` into what the user entered: unchanged or
 /// empty fields are left out, so the store's value keeps applying. Game
@@ -53,11 +54,12 @@ pub fn overrides_for(
         let s = s.trim();
         (!s.is_empty() && Some(s) != orig.as_deref()).then(|| s.to_string())
     };
-    let [cover, square, background, logo] = art;
+    let [cover, square, wide, background, logo] = art;
     GameOverrides {
         title: (!title.is_empty() && title != original.title).then(|| title.to_string()),
         art_cover: keep(cover, &original.art_cover),
         art_square: keep(square, &original.art_square),
+        art_wide: keep(wide, &original.art_wide),
         art_background: keep(background, &original.art_background),
         art_logo: keep(logo, &original.art_logo),
         game_modes: super::chosen_modes(known, modes),
@@ -70,6 +72,7 @@ fn override_of(o: &GameOverrides, kind: ArtKind) -> Option<String> {
     match kind {
         ArtKind::Cover => o.art_cover.clone(),
         ArtKind::Square => o.art_square.clone(),
+        ArtKind::Wide => o.art_wide.clone(),
         ArtKind::Background => o.art_background.clone(),
         ArtKind::Logo => o.art_logo.clone(),
     }
@@ -80,6 +83,7 @@ fn store_placeholder(kind: ArtKind) -> SharedString {
     t(match kind {
         ArtKind::Cover => "library.edit.store_cover",
         ArtKind::Square => "library.edit.store_artwork",
+        ArtKind::Wide => "library.edit.store_wide",
         ArtKind::Background => "library.edit.store_background",
         ArtKind::Logo => "library.edit.store_logo",
     })
@@ -90,6 +94,7 @@ fn field_text(kind: ArtKind) -> (SharedString, SharedString) {
     let (label, hint) = match kind {
         ArtKind::Cover => ("library.common.cover_art", "library.edit.cover_hint"),
         ArtKind::Square => ("library.edit.square_art", "library.edit.square_hint"),
+        ArtKind::Wide => ("library.edit.wide_art", "library.edit.wide_hint"),
         ArtKind::Background => (
             "library.edit.background_art",
             "library.edit.background_hint",
@@ -104,6 +109,7 @@ fn kind_name(kind: ArtKind) -> &'static str {
     match kind {
         ArtKind::Cover => "cover",
         ArtKind::Square => "square",
+        ArtKind::Wide => "wide",
         ArtKind::Background => "background",
         ArtKind::Logo => "logo",
     }
@@ -115,7 +121,7 @@ pub struct EditGameDialog {
     has_overrides: bool,
     title: Entity<InputState>,
     /// One field per kind of art, in [`ART_KINDS`] order.
-    art: [Entity<InputState>; 4],
+    art: [Entity<InputState>; 5],
     /// The game's modes as stores and PCGamingWiki say.
     known_modes: Vec<GameMode>,
     /// The game's modes as ticked.
@@ -473,7 +479,7 @@ mod tests {
         let o = overrides_for(
             &original,
             " Hades ",
-            ["https://cdn/cover.jpg", "", "", ""],
+            ["https://cdn/cover.jpg", "", "", "", ""],
             &[],
             &none,
         );
@@ -481,7 +487,7 @@ mod tests {
         let o = overrides_for(
             &original,
             "Hades II",
-            [" /home/me/cover.png ", "", "", ""],
+            [" /home/me/cover.png ", "", "", "", ""],
             &[],
             &none,
         );
@@ -489,7 +495,7 @@ mod tests {
         assert_eq!(o.art_cover.as_deref(), Some("/home/me/cover.png"));
         // An emptied title falls back to the store title.
         assert_eq!(
-            overrides_for(&original, "  ", ["", "", "", ""], &[], &none).title,
+            overrides_for(&original, "  ", ["", "", "", "", ""], &[], &none).title,
             None
         );
     }
@@ -501,8 +507,15 @@ mod tests {
             art_logo: Some("https://cdn/logo.png".into()),
             ..Default::default()
         };
-        let art = ["", "", "/home/me/hero.jpg", "https://cdn/logo.png"];
+        let art = [
+            "",
+            "",
+            "/home/me/wide.jpg",
+            "/home/me/hero.jpg",
+            "https://cdn/logo.png",
+        ];
         let o = overrides_for(&original, "Hades", art, &[], &BTreeSet::new());
+        assert_eq!(o.art_wide.as_deref(), Some("/home/me/wide.jpg"));
         assert_eq!(o.art_background.as_deref(), Some("/home/me/hero.jpg"));
         // The store's own logo is not an override.
         assert_eq!(o.art_logo, None);
@@ -518,7 +531,7 @@ mod tests {
         let known = [Single, Coop];
         let entered = |modes: &[GameMode]| {
             let modes = modes.iter().copied().collect();
-            overrides_for(&original, "Portal 2", ["", "", "", ""], &known, &modes).game_modes
+            overrides_for(&original, "Portal 2", ["", "", "", "", ""], &known, &modes).game_modes
         };
         assert_eq!(entered(&[Coop, Single]), None);
         assert_eq!(

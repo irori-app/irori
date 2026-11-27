@@ -12,6 +12,8 @@ use irori_core::GameId;
 pub enum ArtSlot {
     /// Vertical 2:3 library cover.
     Cover,
+    /// Wide/landscape cover (banner tiles and Big Picture landscape).
+    Wide,
     /// Wide background behind the game page.
     Background,
     /// The game's name as artwork, usually transparent.

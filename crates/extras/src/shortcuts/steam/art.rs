@@ -144,7 +144,7 @@ async fn art_bytes(
         ArtKind::Cover => pick(&[&game.art_cover]),
         ArtKind::Hero => pick(&[&game.art_background]),
         ArtKind::Logo => pick(&[&game.art_logo]),
-        ArtKind::Header => None,
+        ArtKind::Header => pick(&[&game.art_wide]),
     };
     if let Some(src) = own {
         match fetch_normalized(Some(src)).await {

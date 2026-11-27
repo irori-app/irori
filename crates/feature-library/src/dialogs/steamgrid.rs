@@ -49,6 +49,7 @@ use irori_emulation::launchbox::LaunchBoxGame;
 use irori_extras::igdb::{IgdbGame, ImageSize, image_url};
 use irori_extras::steamgrid::{self, ApiKey, ImageFilter, SgdbGame, SgdbImage};
 use irori_extras::vndb::VndbNovel;
+use irori_extras::web_images::{self, WebShape};
 use irori_extras::wiki::{self, SteamArtMatch};
 use irori_ui::art_picker::{ArtSlot, OnPicked};
 use irori_ui::components::{art_img, physical_width};
@@ -69,6 +70,8 @@ pub enum ArtKind {
     Cover,
     /// Square artwork (square "grids").
     Square,
+    /// Wide/landscape cover (SteamGridDB horizontal "grids", Steam header).
+    Wide,
     /// Wide background (SteamGridDB "heroes").
     Background,
     /// The game's name as artwork, usually transparent (SteamGridDB "logos").
@@ -81,6 +84,7 @@ impl ArtKind {
         let dimensions: &[&str] = match self {
             ArtKind::Cover => &["600x900", "342x482", "660x930"],
             ArtKind::Square => &["512x512", "1024x1024"],
+            ArtKind::Wide => &["460x215", "920x430"],
             ArtKind::Background | ArtKind::Logo => &[],
         };
         ImageFilter {
@@ -94,6 +98,7 @@ impl ArtKind {
         let key = match self {
             ArtKind::Cover => "library.art.none_found.cover",
             ArtKind::Square => "library.art.none_found.square",
+            ArtKind::Wide => "library.art.none_found.wide",
             ArtKind::Background => "library.art.none_found.background",
             ArtKind::Logo => "library.art.none_found.logo",
         };
@@ -105,6 +110,7 @@ impl ArtKind {
         t(match self {
             ArtKind::Cover => "library.art.title.cover",
             ArtKind::Square => "library.art.title.square",
+            ArtKind::Wide => "library.art.title.wide",
             ArtKind::Background => "library.art.title.background",
             ArtKind::Logo => "library.art.title.logo",
         })
@@ -115,6 +121,7 @@ impl ArtKind {
         match self {
             ArtKind::Cover => (6.0, 9.0),
             ArtKind::Square => (6.0, 6.0),
+            ArtKind::Wide => (10.0, 4.67),
             ArtKind::Background => (12.5, 4.0),
             ArtKind::Logo => (9.0, 4.0),
         }
@@ -134,6 +141,8 @@ pub enum ArtSource {
     LaunchBox,
     /// VNDB's visual novels, searched on their own.
     Vndb,
+    /// Explicit on-demand web image search (DuckDuckGo -> Bing -> Google).
+    Web,
 }
 
 impl ArtSource {
@@ -146,12 +155,46 @@ impl ArtSource {
             ArtSource::Igdb => "IGDB".into(),
             ArtSource::LaunchBox => irori_extras::launchbox::SOURCE_NAME.into(),
             ArtSource::Vndb => "VNDB".into(),
+            ArtSource::Web => t("library.art.source_web"),
         }
     }
 }
 
-/// Steam's public CDN images of `m` for `kind`: cover (600×900) or hero + header
-/// backgrounds. Steam doesn't supply square grids or logos here.
+/// Build the search query used by the on-demand Web tab, appending a slot
+/// keyword unless the user already typed one.
+pub fn web_search_query(query: &str, kind: ArtKind) -> String {
+    let q = query.trim();
+    if q.is_empty() {
+        return String::new();
+    }
+    let lower = q.to_ascii_lowercase();
+    let has_hint = [
+        "cover",
+        "box art",
+        "boxart",
+        "banner",
+        "header",
+        "wallpaper",
+        "hero",
+        "logo",
+        "icon",
+    ]
+    .iter()
+    .any(|word| lower.contains(word));
+    if has_hint {
+        return q.to_string();
+    }
+    let suffix = match kind {
+        ArtKind::Cover | ArtKind::Square => "game cover",
+        ArtKind::Wide => "game header banner",
+        ArtKind::Background => "wallpaper",
+        ArtKind::Logo => "logo",
+    };
+    format!("\"{q}\" {suffix}")
+}
+
+/// Steam's public CDN images of `m` for `kind`: cover (600×900), wide header
+/// (460×215), or hero + header backgrounds. Steam doesn't supply square grids or logos here.
 pub fn steam_images(kind: ArtKind, m: &SteamArtMatch) -> Vec<SgdbImage> {
     match kind {
         ArtKind::Cover => vec![SgdbImage {
@@ -160,6 +203,13 @@ pub fn steam_images(kind: ArtKind, m: &SteamArtMatch) -> Vec<SgdbImage> {
             thumb: m.cover_url.clone(),
             width: Some(600),
             height: Some(900),
+        }],
+        ArtKind::Wide => vec![SgdbImage {
+            id: m.app_id,
+            url: m.header_url.clone(),
+            thumb: m.header_url.clone(),
+            width: Some(460),
+            height: Some(215),
         }],
         ArtKind::Background => vec![
             SgdbImage {
@@ -226,7 +276,7 @@ pub fn vndb_images(kind: ArtKind, novel: &VndbNovel) -> Vec<SgdbImage> {
     match kind {
         ArtKind::Cover => novel.cover.iter().map(image).collect(),
         ArtKind::Background => novel.screenshots.iter().map(image).collect(),
-        ArtKind::Square | ArtKind::Logo => Vec::new(),
+        ArtKind::Square | ArtKind::Wide | ArtKind::Logo => Vec::new(),
     }
 }
 
@@ -294,7 +344,7 @@ pub fn igdb_images(kind: ArtKind, game: &IgdbGame) -> Vec<SgdbImage> {
             .chain(&game.screenshots)
             .filter_map(|id| image(id, ImageSize::ScreenshotMed, ImageSize::FullHD))
             .collect(),
-        ArtKind::Square | ArtKind::Logo => Vec::new(),
+        ArtKind::Square | ArtKind::Wide | ArtKind::Logo => Vec::new(),
     }
 }
 
@@ -469,7 +519,7 @@ impl ArtPicker {
             .map(|id| id.app_name.to_string());
         let sources = Sources {
             key,
-            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Background),
+            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Wide | ArtKind::Background),
             igdb_on,
             vndb_on,
             rom,
@@ -490,7 +540,7 @@ impl ArtPicker {
     ) -> Self {
         let sources = Sources {
             key,
-            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Background),
+            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Wide | ArtKind::Background),
             igdb_on,
             vndb_on: false,
             rom: None,
@@ -512,7 +562,7 @@ impl ArtPicker {
     ) -> Self {
         let sources = Sources {
             key,
-            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Background),
+            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Wide | ArtKind::Background),
             igdb_on,
             vndb_on,
             rom: None,
@@ -639,6 +689,8 @@ impl ArtPicker {
         if self.vndb_on {
             sources.push(ArtSource::Vndb);
         }
+        // Explicit on-demand web image search; never included in searchable() or All.
+        sources.push(ArtSource::Web);
         sources
     }
 
@@ -735,6 +787,7 @@ impl ArtPicker {
             ArtSource::Igdb => None,
             ArtSource::LaunchBox => return self.search_launchbox(cx),
             ArtSource::Vndb => return self.search_vndb(cx),
+            ArtSource::Web => return self.search_web(cx),
         };
         let query = self.query.read(cx).value().trim().to_string();
         if query.is_empty() {
@@ -829,6 +882,61 @@ impl ArtPicker {
                     }
                     Err(e) => this.phase = Phase::Message(format!("{e:#}").into()),
                 }
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
+    /// Search web images directly (DuckDuckGo -> Bing -> Google), only when
+    /// the user explicitly selects the "Web" tab.
+    fn search_web(&mut self, cx: &mut Context<Self>) {
+        let raw_query = self.query.read(cx).value().trim().to_string();
+        if raw_query.is_empty() {
+            return;
+        }
+        let kind = self.kind;
+        let query = web_search_query(&raw_query, kind);
+        let (transparent, shape) = match kind {
+            ArtKind::Cover => (false, None),
+            ArtKind::Square => (false, Some(WebShape::Square)),
+            ArtKind::Wide | ArtKind::Background => (false, Some(WebShape::Wide)),
+            ArtKind::Logo => (true, None),
+        };
+        self.filter = None;
+        self.cursor = None;
+        self.phase = Phase::Searching;
+        cx.notify();
+        let label: SharedString = raw_query.into();
+        let task = irori_ui::run(cx, async move {
+            web_images::search(&query, transparent, shape).await
+        });
+        self._task = Some(cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |this, cx| {
+                this.phase = match result {
+                    Ok(images) if images.is_empty() => Phase::Message(kind.none_found(&label)),
+                    Ok(images) => {
+                        let found: Vec<Found> = images
+                            .into_iter()
+                            .take(MAX_IMAGES)
+                            .enumerate()
+                            .map(|(ix, img)| Found {
+                                source: ArtSource::Web,
+                                image: SgdbImage {
+                                    id: ix as u64,
+                                    url: img.image_url,
+                                    thumb: img.thumb_url,
+                                    width: (img.width > 0).then_some(img.width),
+                                    height: (img.height > 0).then_some(img.height),
+                                },
+                            })
+                            .collect();
+                        Phase::Images(label, found)
+                    }
+                    Err(_) => Phase::Message(t("library.art.web_failed")),
+                };
+                this.read_sizes(cx);
                 cx.notify();
             })
             .ok();
@@ -965,7 +1073,7 @@ impl ArtPicker {
                 let images = match kind {
                     ArtKind::Background => steamgrid::heroes(&key, game.id, &filter).await?,
                     ArtKind::Logo => steamgrid::logos(&key, game.id, &filter).await?,
-                    ArtKind::Cover | ArtKind::Square => {
+                    ArtKind::Cover | ArtKind::Square | ArtKind::Wide => {
                         steamgrid::grids(&key, game.id, &filter).await?
                     }
                 };
@@ -1317,7 +1425,9 @@ impl ArtPicker {
             match kind {
                 ArtKind::Background => steamgrid::heroes(&key, game.id, &filter).await,
                 ArtKind::Logo => steamgrid::logos(&key, game.id, &filter).await,
-                ArtKind::Cover | ArtKind::Square => steamgrid::grids(&key, game.id, &filter).await,
+                ArtKind::Cover | ArtKind::Square | ArtKind::Wide => {
+                    steamgrid::grids(&key, game.id, &filter).await
+                }
             }
         });
         self._task = Some(cx.spawn(async move |this, cx| {
@@ -1548,9 +1658,11 @@ impl ArtPicker {
         ));
         for (source, n) in counts {
             let id = match source {
+                ArtSource::Steam => "art-filter-steam",
                 ArtSource::Igdb => "art-filter-igdb",
                 ArtSource::LaunchBox => "art-filter-launchbox",
                 ArtSource::Vndb => "art-filter-vndb",
+                ArtSource::Web => "art-filter-web",
                 _ => "art-filter-sgdb",
             };
             row = row.child(pill(id, Some(source), count(source.name(), n)));
@@ -1569,11 +1681,18 @@ impl ArtPicker {
     ) -> Vec<AnyElement> {
         let (w, h) = self.kind.thumb_rem();
         let width: Rems = rems(w);
+        let max_caption_chars = ((w * 2.4).round() as usize).max(12);
         let pixels = physical_width(width, window);
         let cursor = self.cursor.filter(|_| self.focus.is_focused(window));
         let theme = cx.theme();
         let (radius, muted_bg, muted) = (theme.radius, theme.muted, theme.muted_foreground);
         let ring = theme.ring;
+        let hover_bg = if theme.mode.is_dark() {
+            theme.accent.opacity(0.5)
+        } else {
+            theme.accent
+        };
+        let active_bg = theme.accent;
         let mut tiles = Vec::with_capacity(found.len());
         for (ix, f) in shown(found, self.filter).enumerate() {
             let image = &f.image;
@@ -1598,61 +1717,73 @@ impl ArtPicker {
             let logo = self.kind == ArtKind::Logo;
             let thumb = art_img(&image.thumb, pixels, logo, cx);
             let url = image.url.clone();
-            let frame = div()
-                .w(width)
-                .h(rems(h))
-                .overflow_hidden()
-                .rounded(radius)
-                .bg(muted_bg)
-                .map(|el| match thumb {
-                    Some(img) => el.child(img.size_full().rounded(radius).object_fit(if logo {
-                        ObjectFit::Contain
-                    } else {
-                        ObjectFit::Cover
-                    })),
-                    None => el.child(
+            // Avoid nested `overflow_hidden()` inside the scrolled grid: GPUI's
+            // `cover_bounds` expands an empty intersected content mask at a
+            // fractional y coordinate to a 1px strip, leaking off-screen rows
+            // below the dialog. `Img` already clips `ObjectFit::Cover` and
+            // applies `rounded(radius)` directly.
+            let frame =
+                div()
+                    .w(width)
+                    .h(rems(h))
+                    .rounded(radius)
+                    .bg(muted_bg)
+                    .map(|el| match thumb {
+                        Some(img) => {
+                            el.child(img.size_full().rounded(radius).object_fit(if logo {
+                                ObjectFit::Contain
+                            } else {
+                                ObjectFit::Cover
+                            }))
+                        }
+                        None => el.child(
+                            v_flex()
+                                .size_full()
+                                .items_center()
+                                .justify_center()
+                                .text_color(muted)
+                                .child(Icon::new(IconName::Image)),
+                        ),
+                    });
+            let tile =
+                gpui_kit::base::Button::new(ElementId::Name(format!("sgdb-image-{ix}").into()))
+                    .cursor_pointer()
+                    .rounded(radius)
+                    .p_1()
+                    .hover(move |s| s.bg(hover_bg))
+                    .active(move |s| s.bg(active_bg))
+                    .accessibility_label(label)
+                    .child(
                         v_flex()
-                            .size_full()
-                            .items_center()
-                            .justify_center()
-                            .text_color(muted)
-                            .child(Icon::new(IconName::Image)),
-                    ),
-                });
-            let tile = Button::new(ElementId::Name(format!("sgdb-image-{ix}").into()))
-                .ghost()
-                .p_1()
-                .h_auto()
-                .accessibility_label(label)
-                .child(
-                    v_flex()
-                        .w(width)
-                        .gap_0p5()
-                        .child(frame)
-                        .when_some(caption, |el, c| {
-                            el.child(
+                            .w(width)
+                            .gap_0p5()
+                            .child(frame)
+                            .when_some(caption, |el, c| {
+                                el.child(
+                                    div()
+                                        .min_w_0()
+                                        .text_xs()
+                                        .text_color(muted)
+                                        .whitespace_nowrap()
+                                        .child(ellipsize_caption(c, max_caption_chars)),
+                                )
+                            })
+                            // The line keeps its height before the size is known,
+                            // so the grid doesn't shift when it arrives.
+                            .child(
                                 div()
-                                    .min_w_0()
+                                    .h(rems(1.))
                                     .text_xs()
                                     .text_color(muted)
-                                    .truncate()
-                                    .child(c),
-                            )
-                        })
-                        // The line keeps its height before the size is known,
-                        // so the grid doesn't shift when it arrives.
-                        .child(
-                            div()
-                                .h(rems(1.))
-                                .text_xs()
-                                .text_color(muted)
-                                .truncate()
-                                .children(size),
-                        ),
-                )
-                .on_click(
-                    cx.listener(move |_, _, _, cx| cx.emit(ArtPickerEvent::Picked(url.clone()))),
-                );
+                                    .whitespace_nowrap()
+                                    .children(size),
+                            ),
+                    )
+                    .on_click(
+                        cx.listener(move |_, _, _, cx| {
+                            cx.emit(ArtPickerEvent::Picked(url.clone()))
+                        }),
+                    );
             tiles.push(
                 div()
                     .rounded(radius)
@@ -1668,6 +1799,20 @@ impl ArtPicker {
         }
         tiles
     }
+}
+
+/// Cap a tile caption in characters so it fits under a thumbnail without
+/// needing a nested `overflow_hidden()` mask inside the scrolled picker.
+fn ellipsize_caption(text: SharedString, max_chars: usize) -> SharedString {
+    if max_chars == 0 || text.chars().count() <= max_chars {
+        return text;
+    }
+    let mut out: String = text.chars().take(max_chars.saturating_sub(1)).collect();
+    while out.ends_with(' ') {
+        out.pop();
+    }
+    out.push('…');
+    out.into()
 }
 
 impl Render for ArtPicker {
@@ -1745,11 +1890,30 @@ impl Render for ArtPicker {
                 })
                 .into_any_element(),
             Phase::Games => self.render_games(cx),
-            Phase::Message(text) => div()
-                .text_sm()
-                .text_color(muted)
-                .child(text.clone())
-                .into_any_element(),
+            Phase::Message(text) => {
+                let text = text.clone();
+                if source == ArtSource::Web {
+                    let web_q = web_search_query(&self.query.read(cx).value(), self.kind);
+                    let href = web_images::browser_search_url(&web_q);
+                    v_flex()
+                        .gap_2()
+                        .text_sm()
+                        .text_color(muted)
+                        .child(text)
+                        .child(
+                            Link::new("web-art-open-browser")
+                                .href(href)
+                                .child(t("library.art.open_in_browser")),
+                        )
+                        .into_any_element()
+                } else {
+                    div()
+                        .text_sm()
+                        .text_color(muted)
+                        .child(text)
+                        .into_any_element()
+                }
+            }
         };
         let content = match header {
             Some(_) => content,
@@ -1808,6 +1972,7 @@ impl Render for ArtPicker {
                         ArtSource::Igdb => "art-source-igdb",
                         ArtSource::LaunchBox => "art-source-launchbox",
                         ArtSource::Vndb => "art-source-vndb",
+                        ArtSource::Web => "art-source-web",
                     };
                     row = row.child(
                         Button::new(id)
@@ -1854,11 +2019,22 @@ impl Render for ArtPicker {
                     .justify_between()
                     .gap_2()
                     .child(
-                        div()
+                        h_flex()
+                            .gap_2()
+                            .flex_wrap()
                             .text_xs()
                             .text_color(muted)
                             .min_w_0()
-                            .when(has_key, |el| el.child(self.attribution())),
+                            .when(has_key, |el| el.child(self.attribution()))
+                            .when(source == ArtSource::Web, |el| {
+                                let web_q =
+                                    web_search_query(&self.query.read(cx).value(), self.kind);
+                                el.child(
+                                    Link::new("web-art-footer-browser")
+                                        .href(web_images::browser_search_url(&web_q))
+                                        .child(t("library.art.open_in_browser")),
+                                )
+                            }),
                     )
                     .child(
                         Button::new("sgdb-cancel")
@@ -1881,6 +2057,7 @@ impl ArtPicker {
             ArtSource::Igdb => t("library.art.attribution_igdb"),
             ArtSource::LaunchBox => t("library.art.attribution_launchbox"),
             ArtSource::Vndb => t("library.art.attribution_vndb"),
+            ArtSource::Web => t("library.art.attribution_web"),
             ArtSource::All => {
                 let searchable = self.searchable();
                 if searchable == [ArtSource::SteamGridDb, ArtSource::Igdb] {
@@ -1911,6 +2088,7 @@ pub fn open_art_picker_dialog(
 ) {
     let kind = match slot {
         ArtSlot::Cover => ArtKind::Cover,
+        ArtSlot::Wide => ArtKind::Wide,
         ArtSlot::Background => ArtKind::Background,
         ArtSlot::Logo => ArtKind::Logo,
     };
@@ -2109,21 +2287,58 @@ mod tests {
             vec!["600x900", "342x482", "660x930"]
         );
         assert_eq!(ArtKind::Square.filter().dimensions.len(), 2);
+        assert_eq!(
+            ArtKind::Wide.filter().dimensions,
+            vec!["460x215", "920x430"]
+        );
         assert_eq!(ArtKind::Background.filter(), ImageFilter::default());
     }
 
     #[test]
-    fn steam_source_offers_covers_and_backgrounds_only() {
+    fn steam_source_offers_covers_wide_and_backgrounds_only() {
         let m = SteamArtMatch::from_app(570, "Dota 2".into());
         let covers = steam_images(ArtKind::Cover, &m);
         assert_eq!(covers.len(), 1);
         assert_eq!(covers[0].id, 570);
         assert!(covers[0].url.ends_with("/570/library_600x900_2x.jpg"));
+        let wide = steam_images(ArtKind::Wide, &m);
+        assert_eq!(wide.len(), 1);
+        assert!(wide[0].url.ends_with("/570/header.jpg"));
+        assert_eq!((wide[0].width, wide[0].height), (Some(460), Some(215)));
         let backgrounds = steam_images(ArtKind::Background, &m);
         assert_eq!(backgrounds.len(), 2);
         assert!(backgrounds[0].url.ends_with("/570/library_hero.jpg"));
         assert!(backgrounds[1].url.ends_with("/570/header.jpg"));
         assert!(steam_images(ArtKind::Square, &m).is_empty());
         assert!(steam_images(ArtKind::Logo, &m).is_empty());
+    }
+
+    #[test]
+    fn web_search_query_appends_slot_hint_unless_present() {
+        assert_eq!(
+            web_search_query("Portal 2", ArtKind::Cover),
+            "\"Portal 2\" game cover"
+        );
+        assert_eq!(
+            web_search_query("Portal 2", ArtKind::Wide),
+            "\"Portal 2\" game header banner"
+        );
+        assert_eq!(
+            web_search_query("Portal 2", ArtKind::Logo),
+            "\"Portal 2\" logo"
+        );
+        assert_eq!(
+            web_search_query("Portal 2 wallpaper", ArtKind::Background),
+            "Portal 2 wallpaper"
+        );
+    }
+
+    #[test]
+    fn ellipsize_caption_caps_long_labels_without_clipping_short_ones() {
+        assert_eq!(ellipsize_caption("Europe".into(), 14), "Europe");
+        assert_eq!(
+            ellipsize_caption("North America (reconstructed)".into(), 14),
+            "North America…"
+        );
     }
 }

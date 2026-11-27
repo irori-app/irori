@@ -29,6 +29,7 @@ pub mod releases;
 pub mod shortcuts;
 pub mod steamgrid;
 pub mod vndb;
+pub mod web_images;
 pub mod wiki;
 pub mod wine_launchers;
 

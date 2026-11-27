@@ -322,7 +322,7 @@ impl CoverShape {
                 .as_deref()
                 .filter(|s| !s.is_empty())
                 .or_else(|| game.cover_art()),
-            CoverShape::Landscape => game.hero_art(),
+            CoverShape::Landscape => game.wide_cover_art(),
         }
     }
 }
