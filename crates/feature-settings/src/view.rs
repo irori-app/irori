@@ -277,7 +277,9 @@ impl SettingsView {
             form.set_compact(true, cx);
             form
         });
-        let hud = cx.new(|cx| HudPanel::new(HudPanelScope::Global, None, window, cx));
+        let hud = cx.new(|cx| {
+            HudPanel::new(HudPanelScope::Global, None, window, cx).with_pinned_preview(true)
+        });
         // The upload name identifies the log at the paste service and in the
         // upload history, so it stays the same in every language.
         let log =
@@ -1155,6 +1157,18 @@ impl Render for SettingsView {
                 .child(PageHeader::new(section.label()).description(section.description()))
                 .children(self.render_crash_reports(cx))
                 .child(div().flex_1().min_h_0().child(self.log.clone()))
+                .into_any_element()
+        } else if !searching && section == SettingsSection::PerformanceHud {
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .min_h_0()
+                .max_w(rems(52.))
+                .p_5()
+                .pb_4()
+                .gap_2()
+                .child(PageHeader::new(section.label()).description(section.description()))
+                .child(div().flex_1().min_h_0().child(self.hud.clone()))
                 .into_any_element()
         } else {
             let (title, description): (SharedString, SharedString) = if searching {

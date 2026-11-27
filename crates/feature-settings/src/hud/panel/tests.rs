@@ -477,6 +477,79 @@ fn appearance_custom_palette_opens_color_wheel_and_updates_slot(cx: &mut TestApp
                 .gpu_color,
             "FF3366"
         );
+
+        panel.update(cx, |p, cx| {
+            p.reset_custom_colors(window, cx);
+            assert_eq!(
+                p.active_mangohud().custom_colors,
+                irori_core::ThemeHudColors::default()
+            );
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn pinned_preview_scenes_cycle_stepper_and_shortcut_conflict_render_cleanly(
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let backend = test_backend();
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        irori_ui::init(backend, cx);
+        crate::init(cx);
+    });
+    let (handle, panel) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                HudPanel::new(
+                    HudPanelScope::Global,
+                    Some(HudBackend::MangoHud),
+                    window,
+                    cx,
+                )
+                .with_pinned_preview(true)
+            })
+        })
+        .expect("open pinned hud window")
+    });
+    cx.run_until_parked();
+
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| {
+            p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.preview.update(cx, |prev, cx| {
+                prev.set_scene(crate::hud::preview::PreviewScene::Bright, cx);
+                prev.step_cycle(1, cx);
+                prev.set_scene(crate::hud::preview::PreviewScene::Mixed, cx);
+            });
+            // Trigger shortcut conflict detection and low-contrast detection.
+            p.active_tab = super::HudTab::Layout;
+            assert!(!p.has_shortcut_conflict());
+            p.edit_mangohud(window, cx, |m| {
+                m.position = irori_core::HudPosition::BottomRight;
+                m.fps_limit = Some(120);
+                m.toggle_preset = m.toggle_hud.clone();
+            });
+            assert!(p.has_shortcut_conflict());
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+
+        panel.update(cx, |p, cx| {
+            p.active_tab = super::HudTab::Appearance;
+            p.edit_mangohud(window, cx, |m| {
+                m.palette = HudColorPalette::Custom;
+                m.custom_colors.background_color = "111111".into();
+                m.custom_colors.text_color = "222222".into();
+            });
+            assert!(p.display.low_contrast_notice.is_some());
+        });
+        window.refresh();
+        let _ = window.draw(cx);
     })
     .unwrap();
 }

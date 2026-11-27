@@ -14,8 +14,7 @@ use gpui_kit::{
 use irori_core::hud::{resolve_effective_hud, sanitize_hex6};
 use irori_core::{
     GameHudMode, GameHudSettings, GlobalHudMode, GlobalHudSettings, GpuSelection, HudBackend,
-    HudColorPalette, HudPosition, MangoHudProfile, MetalHudSettings, Paths, ResolvedHud,
-    ThemeHudColors,
+    HudColorPalette, MangoHudProfile, MetalHudSettings, Paths, ResolvedHud, ThemeHudColors,
 };
 use irori_runtime::hud::hardware_linux::{LinuxHudEnv, default_gpu_vendor};
 use irori_runtime::hud::launch_env::steam_launch_snippet;
@@ -24,6 +23,7 @@ use irori_ui::backend;
 use irori_ui::i18n::t_args;
 use irori_ui::theme::theme_hud_colors;
 
+use crate::hud::color_wheel::wcag_contrast_ratio;
 use crate::widgets::{RowState, field_row, group_heading, group_panel};
 
 use super::HudPanelScope;
@@ -203,6 +203,12 @@ pub(super) struct CachedDisplay {
     pub(super) custom_swatches: [Hsla; 11],
     /// Metric band titles with the enabled count (GPU, CPU, FPS, runtime).
     pub(super) band_titles: [SharedString; 4],
+    /// Active HUD palette color dots for each metric band header (GPU, CPU, FPS, runtime).
+    pub(super) band_dots: [Hsla; 4],
+    /// Compact summary of how many presets are in the in-game cycle (e.g. `5 in cycle`).
+    pub(super) in_cycle_summary: SharedString,
+    /// Inline contrast warning when custom Text and Background colors have low contrast.
+    pub(super) low_contrast_notice: Option<SharedString>,
     /// GPU, CPU and RAM sample colors for each palette button, in the order
     /// hardware, Irori theme, monochrome, custom.
     pub(super) palette_dots: [[Hsla; 3]; 4],
@@ -245,6 +251,7 @@ pub(super) fn locked_metric_chip(
     Button::new(id)
         .primary()
         .small()
+        .icon(IconName::Lock)
         .disabled(true)
         .label(label)
         .tooltip(reason)
@@ -572,25 +579,6 @@ pub(super) fn parse_gpu_selection_key(key: &str, env: &LinuxHudEnv) -> GpuSelect
     GpuSelection::AutoDedicated
 }
 
-pub(super) fn build_position_options(labels: &HudLabels) -> Vec<HudOption> {
-    HudPosition::ALL
-        .iter()
-        .enumerate()
-        .map(|(ix, pos)| {
-            HudOption::new(
-                SharedString::new_static(pos.as_mangohud_value()),
-                labels.position_labels[ix].clone(),
-            )
-        })
-        .collect()
-}
-
-pub(super) fn parse_position_key(key: &str) -> Option<HudPosition> {
-    HudPosition::ALL
-        .into_iter()
-        .find(|p| p.as_mangohud_value() == key)
-}
-
 /// Panel state that [`build_cached_display`] reads.
 pub(super) struct DisplayInputs<'a> {
     pub(super) scope: &'a HudPanelScope,
@@ -708,6 +696,38 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
         theme_colors: Some(theme_hud_colors(cx.theme())),
         ..Default::default()
     };
+    let active_colors = resolve_effective_colors(&profile, &ctx).unwrap_or_default();
+    let d = ThemeHudColors::default();
+    let band_dots = [
+        hex_hsla(&active_colors.gpu_color, &d.gpu_color),
+        hex_hsla(&active_colors.cpu_color, &d.cpu_color),
+        hex_hsla(&active_colors.engine_color, &d.engine_color),
+        hex_hsla(&active_colors.accent_color, &d.accent_color),
+    ];
+
+    let cycle_count = profile.preset_cycle().len().to_string();
+    let in_cycle_summary = t_args(
+        "settings.hud.presets.in_cycle",
+        &[("count", cycle_count.as_str())],
+    );
+
+    let low_contrast_notice =
+        if profile.palette == HudColorPalette::Custom && profile.background_alpha >= 0.30 {
+            let ratio = wcag_contrast_ratio(
+                &profile.custom_colors.text_color,
+                &profile.custom_colors.background_color,
+            );
+            (ratio < 4.5).then(|| {
+                let ratio_str = format!("{ratio:.1}");
+                t_args(
+                    "settings.hud.color.low_contrast",
+                    &[("ratio", ratio_str.as_str())],
+                )
+            })
+        } else {
+            None
+        };
+
     let mut sample = profile.clone();
     let palette_dots = [
         HudColorPalette::MangoHudDefault,
@@ -718,7 +738,6 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
     .map(|palette| {
         sample.palette = palette;
         let colors = resolve_effective_colors(&sample, &ctx).unwrap_or_default();
-        let d = ThemeHudColors::default();
         [
             hex_hsla(&colors.gpu_color, &d.gpu_color),
             hex_hsla(&colors.cpu_color, &d.cpu_color),
@@ -738,6 +757,9 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
         steam_snippet,
         custom_swatches,
         band_titles,
+        band_dots,
+        in_cycle_summary,
+        low_contrast_notice,
         palette_dots,
     }
 }
