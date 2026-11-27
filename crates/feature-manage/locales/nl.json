@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Uit de geschiedenis verwijderen",
   "manage.downloads.history.show_more": "Meer tonen ({count} verborgen)",
   "manage.downloads.history.filter.all": "Alle",
-  "manage.downloads.history.filter.done": "Voltooid",
-  "manage.downloads.history.filter.unfinished": "Niet voltooid",
   "manage.downloads.history.filter.none": "Geen downloads om hier te tonen",
   "manage.downloads.history.play": "Spelen",
   "manage.downloads.history.play_failed": "{title} kon niet worden gestart",

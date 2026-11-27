@@ -798,6 +798,16 @@ pub(super) const NEEDS_OVERLAY: &[Condition] = &[when(
     true,
     "settings.requires.overlay",
 )];
+pub(super) const NEEDS_AUTO_EXTRACT: &[Condition] = &[when(
+    "iroriWebDownloads.autoExtract",
+    true,
+    "settings.requires.web_auto_extract",
+)];
+pub(super) const NEEDS_BITTORRENT: &[Condition] = &[when(
+    "iroriWebDownloads.bittorrent",
+    true,
+    "settings.requires.web_bittorrent",
+)];
 
 pub(super) const OVERLAY_SIDE: &[ChoiceOption] = &[
     opt(

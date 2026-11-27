@@ -1708,6 +1708,37 @@ pub fn open_add_game_dialog(window: &mut Window, cx: &mut App) {
     open(None, None, window, cx);
 }
 
+/// Open the "Add game" dialog pre-filled for a downloaded file or folder.
+pub fn open_sideload_dialog_for_path(path: PathBuf, window: &mut Window, cx: &mut App) {
+    let found = irori_ui::backend(cx).spawn_blocking({
+        let path = path.clone();
+        move || {
+            let is_dir = path.is_dir();
+            let game = irori_sideload::scan::scan_extracted_game(&path)
+                .or_else(|| irori_sideload::scan::game_of_file(&path));
+            (is_dir, game)
+        }
+    });
+    let task = irori_ui::run(cx, async move { Ok(found.await?) });
+    window
+        .spawn(cx, async move |cx| {
+            let (is_dir, found) = task.await.ok().unwrap_or((false, None));
+            let _ = cx.update(|window, cx| {
+                let prefill = match found {
+                    Some(game) => dropped_app(&path, Some(game)),
+                    None if is_dir => SideloadApp {
+                        title: title_from_executable(&path).unwrap_or_default(),
+                        install_folder: Some(path),
+                        ..Default::default()
+                    },
+                    None => dropped_app(&path, None),
+                };
+                open(None, Some(prefill), window, cx);
+            });
+        })
+        .detach();
+}
+
 /// Open the "Add game" dialog filled in for a file dropped on the library:
 /// the game it starts when it is a program, desktop entry, shortcut or app
 /// bundle, else just the file (a ROM, which the dialog offers to the ROM

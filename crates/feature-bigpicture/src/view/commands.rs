@@ -211,11 +211,26 @@ impl BigPictureView {
 
     pub(super) fn menu(&self, cx: &App) -> Vec<MenuItem> {
         let m = models(cx);
-        let queue = &m.downloads.read(cx).queue;
+        let dl = m.downloads.read(cx);
+        let queue = &dl.queue;
+        let web = &dl.web;
+        let active = !queue.active.is_empty() || !web.active.is_empty();
+        let web_paused = web.paused
+            || (!web.active.is_empty()
+                && web
+                    .active
+                    .iter()
+                    .all(|w| w.state == irori_services::WebDownloadState::Paused));
+        let paused = match (!queue.active.is_empty(), !web.active.is_empty()) {
+            (true, true) => queue.paused && web_paused,
+            (true, false) => queue.paused,
+            (false, true) => web_paused,
+            (false, false) => false,
+        };
         let app = &m.settings.read(cx).app;
         menu_items(
-            !queue.active.is_empty(),
-            queue.paused,
+            active,
+            paused,
             app.ui.big_picture_scale,
             self.look.layout(),
             app.big_picture.sounds,
@@ -235,9 +250,9 @@ impl BigPictureView {
                 let pause = item == MenuItem::PauseDownloads;
                 let task = irori_ui::run(cx, async move {
                     if pause {
-                        b.pause_downloads();
+                        b.pause_all_downloads();
                     } else {
-                        b.resume_downloads();
+                        b.resume_all_downloads();
                     }
                     Ok(())
                 });

@@ -14,7 +14,7 @@ use irori_core::{
 };
 use irori_services::{
     AppUpdateStatus, CategoryIndex, ComponentReport, DownloadQueueSnapshot, LibrarySnapshot,
-    UserData,
+    UserData, WebDownloadSnapshot,
 };
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 
@@ -109,6 +109,8 @@ pub struct DownloadsModel {
     pub queue: DownloadQueueSnapshot,
     /// Single files: offline installers, patches, goodies.
     pub files: Vec<irori_services::FileDownload>,
+    /// Direct-link and opt-in BitTorrent downloads.
+    pub web: WebDownloadSnapshot,
 }
 
 /// What the update manager knows about components.
@@ -263,6 +265,7 @@ pub(crate) fn install(cx: &mut App) {
     let downloads = cx.new(|_| DownloadsModel {
         queue: b.downloads(),
         files: b.file_downloads(),
+        web: b.web_downloads(),
     });
     let (users, accounts) = accounts_now(cx);
     let accounts = cx.new(|_| AccountsModel {
@@ -473,10 +476,11 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
         });
     }
     if downloads {
-        let (queue, files) = (b.downloads(), b.file_downloads());
+        let (queue, files, web) = (b.downloads(), b.file_downloads(), b.web_downloads());
         m.downloads.update(cx, |d, cx| {
             d.queue = queue;
             d.files = files;
+            d.web = web;
             cx.notify();
         });
     }

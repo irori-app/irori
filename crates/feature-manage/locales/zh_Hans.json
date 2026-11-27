@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "从历史记录中移除",
   "manage.downloads.history.show_more": "显示更多（已隐藏 {count} 项）",
   "manage.downloads.history.filter.all": "全部",
-  "manage.downloads.history.filter.done": "已完成",
-  "manage.downloads.history.filter.unfinished": "未完成",
   "manage.downloads.history.filter.none": "这里没有可显示的下载",
   "manage.downloads.history.play": "开始游戏",
   "manage.downloads.history.play_failed": "无法启动 {title}",

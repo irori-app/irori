@@ -16,9 +16,11 @@ use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex};
 use gpui_kit::{
     AnyElement, App, Global, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, Styled as _, div,
+    SharedString, Styled as _, Window, div,
 };
-use irori_services::{DownloadQueueSnapshot, PowerAction, PowerCountdown};
+use irori_services::{
+    DownloadQueueSnapshot, PowerAction, PowerCountdown, WebDownloadSnapshot, WebDownloadState,
+};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
@@ -110,16 +112,37 @@ pub fn keep_on(cx: &App) {
     b.set_when_downloads_done(None);
 }
 
+fn combined_paused(queue: &DownloadQueueSnapshot, web: &WebDownloadSnapshot) -> bool {
+    let store_active = !queue.active.is_empty();
+    let web_active = !web.active.is_empty();
+    let web_paused = web.paused
+        || (!web.active.is_empty()
+            && web
+                .active
+                .iter()
+                .all(|w| w.state == WebDownloadState::Paused));
+    match (store_active, web_active) {
+        (true, true) => queue.paused && web_paused,
+        (true, false) => queue.paused,
+        (false, true) => web_paused,
+        (false, false) => false,
+    }
+}
+
 /// Unified power & display menu button shown while downloads run: labeled
 /// `Stay on` (with caret) by default, `When done: Sleep` / `Power off` when
 /// armed, or a direct `Turn the screen off` button when no power action is
 /// available. Combines "Turn the screen off" into the menu when supported.
-pub(crate) fn power_menu_button(queue: &DownloadQueueSnapshot, cx: &mut App) -> Option<AnyElement> {
-    if queue.active.is_empty() {
+pub(crate) fn power_menu_button(
+    queue: &DownloadQueueSnapshot,
+    web: &WebDownloadSnapshot,
+    cx: &mut App,
+) -> Option<AnyElement> {
+    if queue.active.is_empty() && web.active.is_empty() {
         return None;
     }
     let choices = power_choices_loaded(cx)?;
-    let can_screen_off = offers_screen_off(queue, cx);
+    let can_screen_off = offers_screen_off(queue, web, cx);
     if choices.is_empty() && !can_screen_off {
         return None;
     }
@@ -210,8 +233,13 @@ pub(crate) fn countdown_banner(countdown: &PowerCountdown, cx: &App) -> AnyEleme
 
 /// Whether "Turn the screen off" is offered: downloads run, and this
 /// desktop turns the screen on again by itself.
-pub(crate) fn offers_screen_off(queue: &DownloadQueueSnapshot, cx: &App) -> bool {
-    !queue.paused && !queue.active.is_empty() && backend(cx).can_turn_screen_off()
+pub(crate) fn offers_screen_off(
+    queue: &DownloadQueueSnapshot,
+    web: &WebDownloadSnapshot,
+    cx: &App,
+) -> bool {
+    let any_active = !queue.active.is_empty() || !web.active.is_empty();
+    any_active && !combined_paused(queue, web) && backend(cx).can_turn_screen_off()
 }
 
 /// Turn the screen off now; a failure is told as a notice, since the screen
@@ -238,6 +266,8 @@ pub fn turn_screen_off(cx: &mut App) {
 /// A download command of the command palette.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DownloadCommand {
+    /// Open the `+ Add download` dialog for links and torrents.
+    AddDownload,
     Pause,
     Resume,
     /// Turn the screen off while the downloads run.
@@ -250,8 +280,15 @@ pub enum DownloadCommand {
 
 /// The download commands that apply now, with their label and icon.
 pub fn download_commands(cx: &mut App) -> Vec<(SharedString, IconName, DownloadCommand)> {
-    let queue = models(cx).downloads.read(cx).queue.clone();
-    let mut rows = Vec::new();
+    let (queue, web) = {
+        let d = models(cx).downloads.read(cx);
+        (d.queue.clone(), d.web.clone())
+    };
+    let mut rows = vec![(
+        t("manage.downloads.command.add"),
+        IconName::Plus,
+        DownloadCommand::AddDownload,
+    )];
     if queue.countdown.is_some() {
         rows.push((
             t("manage.downloads.command.keep_on"),
@@ -259,17 +296,17 @@ pub fn download_commands(cx: &mut App) -> Vec<(SharedString, IconName, DownloadC
             DownloadCommand::KeepOn,
         ));
     }
-    if queue.active.is_empty() {
+    if queue.active.is_empty() && web.active.is_empty() {
         return rows;
     }
-    if offers_screen_off(&queue, cx) {
+    if offers_screen_off(&queue, &web, cx) {
         rows.push((
             t("manage.downloads.command.screen_off"),
             IconName::MonitorOff,
             DownloadCommand::ScreenOff,
         ));
     }
-    rows.push(if queue.paused {
+    rows.push(if combined_paused(&queue, &web) {
         (
             t("manage.downloads.command.resume"),
             IconName::Play,
@@ -304,11 +341,16 @@ pub fn download_command_keywords() -> SharedString {
 }
 
 /// Run a download command of the palette.
-pub fn run_download_command(command: DownloadCommand, cx: &mut App) {
+pub fn run_download_command(command: DownloadCommand, window: &mut Window, cx: &mut App) {
     let b = backend(cx);
     match command {
-        DownloadCommand::Pause => b.pause_downloads(),
-        DownloadCommand::Resume => b.resume_downloads(),
+        DownloadCommand::AddDownload => {
+            window.defer(cx, |window, cx| {
+                super::open_add_download_dialog(None, window, cx)
+            });
+        }
+        DownloadCommand::Pause => b.pause_all_downloads(),
+        DownloadCommand::Resume => b.resume_all_downloads(),
         DownloadCommand::ScreenOff => turn_screen_off(cx),
         DownloadCommand::WhenDone(choice) => b.set_when_downloads_done(choice),
         DownloadCommand::KeepOn => b.set_when_downloads_done(None),

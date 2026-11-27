@@ -154,6 +154,7 @@ fn main() -> Result<()> {
     limit_malloc_arenas();
 
     let backend = Backend::start(stores::build)?;
+    stores::install_sideload_bridge(&backend);
     let last_crash = crash::take_last_crash();
     let (tx, rx) = mpsc::unbounded::<ShellCommand>();
     {
@@ -212,6 +213,24 @@ fn main() -> Result<()> {
         }
         actions::bind_keys(cx);
         cx.set_quit_mode(QuitMode::Explicit);
+        {
+            let shutdown_backend = backend.clone();
+            cx.on_app_quit(move |_| {
+                let b = shutdown_backend.clone();
+                async move {
+                    let worker = b.clone();
+                    let handle = b.spawn(async move {
+                        let _ = tokio::time::timeout(
+                            std::time::Duration::from_secs(5),
+                            worker.shutdown(),
+                        )
+                        .await;
+                    });
+                    let _ = handle.await;
+                }
+            })
+            .detach();
+        }
         let prefs = backend.settings.app().ui.clone();
         irori_ui::theme::apply(&prefs, None, cx);
 

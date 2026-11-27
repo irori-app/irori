@@ -7,7 +7,7 @@ use gpui_kit::component::{
     ActiveTheme as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
-use gpui_kit::{Context, ParentElement as _, Styled as _, Window, div, rems};
+use gpui_kit::{Context, ExternalPaths, ParentElement as _, Styled as _, Window, div, rems};
 use irori_core::GameId;
 use irori_services::{DownloadKind, LaunchParams};
 use irori_ui::components::{GameCover, StoreBadge};
@@ -15,8 +15,10 @@ use irori_ui::i18n::{t, t_args};
 use irori_ui::state::run_infallible;
 use irori_ui::{backend, models};
 
+use super::add_dialog::{is_download_link_text, open_add_download_dialog};
 use super::history::HISTORY_PAGE;
 use super::{DownloadsView, HistoryFilter, Step, when_done};
+use crate::PasteDownloadLink;
 use crate::common::{backend_op, notify_error};
 
 impl DownloadsView {
@@ -92,6 +94,52 @@ impl DownloadsView {
             backend_op(cx, |b| b.resume_downloads());
         } else {
             backend_op(cx, |b| b.pause_downloads());
+        }
+    }
+
+    pub(super) fn toggle_pause_all(&mut self, cx: &mut Context<Self>) {
+        let web = models(cx).downloads.read(cx).web.clone();
+        if self.all_active_paused(&web) {
+            backend_op(cx, |b| b.resume_all_downloads());
+        } else {
+            backend_op(cx, |b| b.pause_all_downloads());
+        }
+    }
+
+    pub(super) fn paste_link(
+        &mut self,
+        _: &PasteDownloadLink,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.has_active_dialog(cx) {
+            return;
+        }
+        if let Some(text) = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .map(|s| s.trim().to_string())
+            .filter(|s| is_download_link_text(s))
+        {
+            open_add_download_dialog(Some(text), window, cx);
+        }
+    }
+
+    pub(super) fn on_paths_dropped(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.has_active_dialog(cx) {
+            return;
+        }
+        let torrent = paths.paths().iter().find(|p| {
+            p.extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("torrent"))
+        });
+        if let Some(path) = torrent {
+            open_add_download_dialog(Some(path.display().to_string()), window, cx);
         }
     }
 

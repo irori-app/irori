@@ -98,6 +98,14 @@ pub fn install(app: Arc<Mutex<AppHandles>>, cx: &mut App) {
     .detach();
 }
 
+/// Whether a system tray icon is running and usable on this desktop.
+pub fn tray_running(cx: &App) -> bool {
+    let Some(TrayHide(app)) = cx.try_global::<TrayHide>() else {
+        return false;
+    };
+    app.lock().tray.is_some() && !irori_core::platform::in_steam_gamepad_ui()
+}
+
 /// Whether a game starting may close the window to the tray now.
 pub fn available(cx: &App) -> bool {
     let Some(TrayHide(app)) = cx.try_global::<TrayHide>() else {

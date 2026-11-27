@@ -34,7 +34,8 @@ This document holds the full feature reference previously inline in `README.md`.
 
 ## Downloads and Updates
 
-- Single download queue for games, runtime tools, and updates, pausing offline and resuming automatically after restarts.
+- Single download queue for games, runtime tools, and updates, pausing offline and resuming automatically after restarts, with chunk-level resume and dynamic bandwidth limiting across Epic, GOG, Amazon, ZOOM, itch.io, and Xbox stores.
+- Direct HTTP/HTTPS link downloads (resumable multi-segment transfers with optional automatic archive extraction and one-click Library registration) and opt-in `.torrent` / `magnet:` downloads powered by on-demand `aria2c` (file selection preview, automatic stop at 100% with zero seeding).
 - Unified Updates view covering games, Wine/Proton builds, DXVK, VKD3D-Proton, umu, anticheat runtimes, emulators, RetroArch cores, and Irori update checks, with version pinning and metered-connection / active-hours controls.
 
 <p align="center">

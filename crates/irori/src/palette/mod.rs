@@ -1195,7 +1195,9 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::UserAction(id, index) => irori_ui::user_actions::run(id, index, window, cx),
         PaletteTarget::EditActions(id) => irori_ui::user_actions::edit(&id, cx),
         PaletteTarget::SaveClip => irori_ui::backend(cx).save_clip(),
-        PaletteTarget::Downloads(command) => irori_manage::run_download_command(command, cx),
+        PaletteTarget::Downloads(command) => {
+            irori_manage::run_download_command(command, window, cx)
+        }
         PaletteTarget::InterfaceSize(step) => irori_ui::theme::change_interface_size(step, cx),
         PaletteTarget::Feedback(way) => irori_settings::feedback::open(way, window, cx).detach(),
         PaletteTarget::LatestCrashReport(path) => window.defer(cx, move |window, cx| {

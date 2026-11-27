@@ -762,38 +762,4 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "wine",
         "default",
     ]),
-    app(
-        "maxWorkers",
-        "settings.field.max_workers.label",
-        General,
-        "settings.group.downloads",
-        Text(TextKind::Number { min: 0, max: 64 }),
-    )
-    .help("settings.field.max_workers.help")
-    .tooltip("settings.field.max_workers.tip")
-    .keywords(&["workers", "threads", "parallel", "download"]),
-    app(
-        "maxDownloadSpeed",
-        "settings.field.max_download_speed.label",
-        General,
-        "settings.group.downloads",
-        Text(TextKind::Number {
-            min: 0,
-            max: 10_000_000,
-        }),
-    )
-    .help("settings.field.max_download_speed.help")
-    .tooltip("settings.field.max_download_speed.tip")
-    .keywords(&["bandwidth", "speed", "limit", "throttle", "download", "kib"]),
-    app(
-        "downloadNoHttps",
-        "settings.field.download_no_https.label",
-        General,
-        "settings.group.downloads",
-        Toggle,
-    )
-    .tag(Verbatim("Epic"))
-    .help("settings.field.download_no_https.help")
-    .tooltip("settings.field.download_no_https.tip")
-    .keywords(&["https", "lancache", "cdn", "cache"]),
 ];

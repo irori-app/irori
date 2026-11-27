@@ -40,4 +40,11 @@ Run these checks on each physically tested platform:
 3. Launch and stop a game, verifying playtime tracking and clean process teardown.
 4. Open the Wine / Emulator / Updates managers and verify build discovery or download flow.
 5. Switch into Big Picture mode (`Ctrl+Shift+B`) and verify controller/keyboard navigation.
-6. Uninstall cleanly (including verifying registry/handler/data expectations for the package format).
+6. Verify Downloads Engine & Web Download Manager behavior:
+   - **GOG & Epic chunk resume:** pause mid-install, quit and reopen Irori, confirm resume skips already-verified chunks and completes cleanly without corrupting files.
+   - **Segmented HTTP direct links:** add an HTTP/HTTPS archive via `+ Add download` (or `Ctrl+V` on Downloads), pause/resume mid-transfer, verify speed cap applies live without restarting, and confirm optional auto-extraction + one-click `Play` registration.
+   - **Opt-in BitTorrent (`aria2c` zero-seed):** drop a `.torrent` file or paste a `magnet:` URI, confirm explicit opt-in consent before starting, select a subset of files, verify download stops immediately at 100% with zero seeding and `aria2c` exits cleanly on idle/app quit.
+   - **Windows ARM64 (Prism):** confirm x64 `aria2c.exe` auto-install and execution work smoothly under Prism emulation on Windows 11 ARM64.
+   - **macOS quarantine:** verify extracted apps/binaries downloaded via web links have `com.apple.quarantine` handled cleanly and launch as expected under Gatekeeper rules.
+   - **Linux Flatpak host `aria2c`:** verify `aria2c` discovery and loopback JSON-RPC execution via `flatpak-spawn --host` when installed on the host, and confirm clean fallback instructions when absent.
+7. Uninstall cleanly (including verifying registry/handler/data expectations for the package format).

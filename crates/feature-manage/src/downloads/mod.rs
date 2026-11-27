@@ -3,6 +3,8 @@
 //! updates, Irori self-update banner, offline files and finished history.
 
 mod actions;
+mod add_dialog;
+mod add_dialog_parts;
 mod history;
 mod indicator;
 mod queue;
@@ -10,31 +12,37 @@ mod sections;
 mod space;
 mod speed;
 mod updates;
+mod web_completed;
+mod web_section;
 mod when_done;
 
+pub use add_dialog::open_add_download_dialog;
 pub use indicator::{DownloadsBadge, DownloadsPanel, DownloadsPill};
 pub use when_done::{
     DownloadCommand, download_command_keywords, download_commands, keep_on, run_download_command,
 };
 
+use std::collections::HashSet;
+
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::scroll::ScrollableElement as _;
-use gpui_kit::component::{ActiveTheme as _, StyledExt as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, Styled as _, Subscription, Task, Window, div, px, rems,
+    AnyElement, App, Context, Entity, ExternalPaths, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
+    Subscription, Task, Window, div, px, rems,
 };
 use irori_core::util::unix_now;
-use irori_services::{AppUpdateStatus, SelfInstall};
+use irori_services::{AppUpdateStatus, SelfInstall, WebDownloadId, WebDownloadState};
 use irori_ui::art::{LruImageCache, art_store};
 use irori_ui::components::BrandMark;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, backend, models, navigate};
 
 use crate::common::card;
-use crate::format;
+use crate::{DOWNLOADS_CONTEXT, format};
 pub(crate) use queue::{Estimates, HistoryFilter, QueuePresentation, Step};
 use speed::{SPEED_SAMPLES, SpeedHistory};
 
@@ -58,8 +66,11 @@ pub(super) fn list_card(cx: &App) -> gpui_kit::Div {
 /// redistributables. Observes downloads, library, components, app updates,
 /// settings, art and status models.
 pub struct DownloadsView {
+    focus: FocusHandle,
     queue: QueuePresentation,
     speeds: SpeedHistory,
+    /// Web download IDs currently running a silent setup installer.
+    installing_web: HashSet<WebDownloadId>,
     /// Unqueued game updates plus non-skipped, not-yet-running component updates.
     pending_updates: usize,
     /// Component updates currently downloading/extracting.
@@ -94,9 +105,15 @@ pub struct DownloadsView {
     _subscriptions: Vec<Subscription>,
 }
 
+impl Focusable for DownloadsView {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus.clone()
+    }
+}
+
 impl DownloadsView {
     pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
-        crate::i18n::register();
+        crate::init(cx);
         let m = models(cx).clone();
         let subscriptions = vec![
             cx.observe(&m.downloads, |this, _, cx| {
@@ -124,8 +141,10 @@ impl DownloadsView {
             }),
         ];
         let mut view = Self {
+            focus: cx.focus_handle(),
             queue: QueuePresentation::default(),
             speeds: SpeedHistory::new(SPEED_SAMPLES),
+            installing_web: HashSet::new(),
             pending_updates: 0,
             running_components: 0,
             queuing_updates: false,
@@ -163,7 +182,9 @@ impl DownloadsView {
             .filter(|u| !components.running.contains(&u.id))
             .count();
         self.running_components = components.running.len();
-        let downloads = &m.downloads.read(cx).queue;
+        let dl = m.downloads.read(cx);
+        let downloads = &dl.queue;
+        let web = &dl.web;
         self.queue = QueuePresentation::build(downloads, |id| {
             snapshot.get(id).cloned().or_else(|| b.game(id))
         });
@@ -172,8 +193,8 @@ impl DownloadsView {
             .filter(|id| !downloads.active.iter().any(|i| &i.id == *id))
             .count();
         self.pending_updates = pending_games + pending_components;
-        let space_key = space::key_of(downloads);
-        let finished = downloads.finished.len();
+        let space_key = space::key_of(downloads, web);
+        let finished = downloads.finished.len() + web.finished.len();
         if space_key != self.space_key {
             self.space_key = space_key;
             self.read_disks(cx);
@@ -197,7 +218,23 @@ impl DownloadsView {
             .as_ref()
             .and_then(|id| models(cx).statuses.read(cx).get(id))
             .and_then(|s| s.progress);
-        let changed = self.speeds.record(id.as_ref(), progress);
+        let (web_active, web_speed, web_bytes_done) = {
+            let web = &models(cx).downloads.read(cx).web;
+            let transferring =
+                !web.paused && web.active.iter().any(|w| w.state.is_network_active());
+            let bytes = web
+                .active
+                .iter()
+                .fold(0u64, |acc, w| acc.saturating_add(w.bytes_done));
+            (transferring, web.total_speed, bytes)
+        };
+        let changed = self.speeds.record_combined(
+            id.as_ref(),
+            progress,
+            web_active,
+            web_speed,
+            web_bytes_done,
+        );
         // From the averaged rate, not the latest reading, so the times
         // shown hold still while the speed wobbles.
         self.estimates = if id.is_some() && !self.queue.paused {
@@ -215,11 +252,46 @@ impl DownloadsView {
         changed
     }
 
+    fn all_active_paused(&self, web: &irori_services::WebDownloadSnapshot) -> bool {
+        let store_active = self.queue.has_active();
+        let web_active = !web.active.is_empty();
+        let web_paused = web.paused
+            || (web_active
+                && web
+                    .active
+                    .iter()
+                    .all(|w| w.state == WebDownloadState::Paused));
+        match (store_active, web_active) {
+            (true, true) => self.queue.paused && web_paused,
+            (true, false) => self.queue.paused,
+            (false, true) => web_paused,
+            (false, false) => false,
+        }
+    }
+
     /// Status line under the title: independent facts joined by " · ".
-    fn summary(&self, checked_at: Option<u64>, app_update: &AppUpdateStatus) -> String {
+    fn summary(
+        &self,
+        web: &irori_services::WebDownloadSnapshot,
+        checked_at: Option<u64>,
+        app_update: &AppUpdateStatus,
+    ) -> String {
         let mut parts: Vec<SharedString> = Vec::new();
+        let web_active = !web.active.is_empty();
+        let web_paused = web.paused
+            || (web_active
+                && web
+                    .active
+                    .iter()
+                    .all(|w| w.state == WebDownloadState::Paused));
         if let Some(c) = &self.queue.current {
-            parts.push(if c.paused {
+            parts.push(if c.paused && (!web_active || web_paused) {
+                t("manage.downloads.summary.paused")
+            } else {
+                t("manage.downloads.summary.downloading")
+            });
+        } else if web_active {
+            parts.push(if web_paused {
                 t("manage.downloads.summary.paused")
             } else {
                 t("manage.downloads.summary.downloading")
@@ -229,7 +301,12 @@ impl DownloadsView {
         } else if matches!(app_update.install, SelfInstall::Downloading { .. }) {
             parts.push(t("manage.downloads.summary.downloading"));
         }
-        let waiting = self.queue.waiting.len();
+        let waiting = self.queue.waiting.len()
+            + if self.queue.current.is_some() {
+                web.active.len()
+            } else {
+                web.active.len().saturating_sub(1)
+            };
         if waiting > 0 {
             let count = waiting.to_string();
             parts.push(if waiting == 1 {
@@ -276,15 +353,27 @@ impl DownloadsView {
         app_update: &AppUpdateStatus,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let queue = models(cx).downloads.read(cx).queue.clone();
-        let active = self.queue.has_active();
-        let power_btn = when_done::power_menu_button(&queue, cx);
+        let (queue, web) = {
+            let d = models(cx).downloads.read(cx);
+            (d.queue.clone(), d.web.clone())
+        };
+        let active = self.queue.has_active() || !web.active.is_empty();
+        let all_paused = self.all_active_paused(&web);
+        let power_btn = when_done::power_menu_button(&queue, &web, cx);
 
-        let mut primary_actions: Vec<AnyElement> = Vec::new();
+        let mut primary_actions: Vec<AnyElement> = vec![
+            Button::new("downloads-add")
+                .debug_selector(|| "downloads-add".into())
+                .outline()
+                .icon(IconName::Plus)
+                .label(t("manage.downloads.add.button"))
+                .on_click(|_, window, cx| open_add_download_dialog(None, window, cx))
+                .into_any_element(),
+        ];
         if self.pending_updates > 0 {
             primary_actions.push(
                 Button::new("update-all")
-                    .when(!self.queue.paused, |b| b.primary())
+                    .when(!all_paused, |b| b.primary())
                     .label(t_args(
                         "manage.downloads.update_all",
                         &[("count", &self.pending_updates.to_string())],
@@ -295,22 +384,21 @@ impl DownloadsView {
             );
         }
         if active {
-            let paused = self.queue.paused;
             primary_actions.push(
                 Button::new("toggle-pause")
-                    .when(paused, |b| b.primary())
-                    .when(!paused, |b| b.outline())
-                    .icon(if paused {
+                    .when(all_paused, |b| b.primary())
+                    .when(!all_paused, |b| b.outline())
+                    .icon(if all_paused {
                         IconName::Play
                     } else {
                         IconName::Pause
                     })
-                    .label(if paused {
+                    .label(if all_paused {
                         t("manage.downloads.resume")
                     } else {
                         t("manage.downloads.pause")
                     })
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_pause(cx)))
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_pause_all(cx)))
                     .into_any_element(),
             );
         }
@@ -369,7 +457,7 @@ impl DownloadsView {
                         div()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child(self.summary(checked_at, app_update)),
+                            .child(self.summary(&web, checked_at, app_update)),
                     ),
             )
             .child(
@@ -501,7 +589,13 @@ impl Render for DownloadsView {
         let alerts = self.render_update_alerts(&report, &failed_stores);
         let irori = self.render_irori(cx);
         let current = self.render_current(window, cx);
-        let disk_strip = if self.queue.has_active() {
+        let web_only_speed = self.render_web_only_speed(cx);
+        let web_active = self.render_web_active(cx);
+        let (has_web_active, has_web_finished) = {
+            let w = &m.downloads.read(cx).web;
+            (!w.active.is_empty(), !w.finished.is_empty())
+        };
+        let disk_strip = if self.queue.has_active() || has_web_active {
             space::render(&self.disks, cx)
         } else {
             None
@@ -511,6 +605,8 @@ impl Render for DownloadsView {
         let files = self.render_files(cx);
 
         let is_completely_idle = self.queue.is_empty()
+            && !has_web_active
+            && !has_web_finished
             && files.is_none()
             && game_updates.is_none()
             && component_updates.is_none()
@@ -518,6 +614,7 @@ impl Render for DownloadsView {
 
         let show_idle_banner = !is_completely_idle
             && !self.queue.has_active()
+            && !has_web_active
             && game_updates.is_none()
             && component_updates.is_none()
             && irori.is_none();
@@ -543,6 +640,7 @@ impl Render for DownloadsView {
                 )
                 .into_any_element()
         } else {
+            let has_history = !self.queue.history.is_empty() || has_web_finished;
             let sections = v_flex()
                 .gap_6()
                 .when(!alerts.is_empty(), |d| {
@@ -553,15 +651,15 @@ impl Render for DownloadsView {
                 .when(current.is_some() || disk_strip.is_some(), |this| {
                     this.child(v_flex().gap_2().children(current).children(disk_strip))
                 })
+                .children(web_only_speed)
+                .children(web_active)
                 .when(!self.queue.waiting.is_empty(), |this| {
                     this.child(self.render_queue(cx))
                 })
                 .children(game_updates)
                 .children(component_updates)
                 .children(files)
-                .when(!self.queue.history.is_empty(), |this| {
-                    this.child(self.render_history(cx))
-                });
+                .when(has_history, |this| this.child(self.render_history(cx)));
             div()
                 .id("downloads-body")
                 .flex_1()
@@ -577,7 +675,16 @@ impl Render for DownloadsView {
                 .into_any_element()
         };
 
+        let drop_hint_bg = cx.theme().background.opacity(0.82);
+        let drop_border = cx.theme().primary;
+        let drop_fg = cx.theme().foreground;
+        let drop_muted = cx.theme().muted_foreground;
         v_flex()
+            .relative()
+            .track_focus(&self.focus)
+            .key_context(DOWNLOADS_CONTEXT)
+            .on_action(cx.listener(Self::paste_link))
+            .on_drop(cx.listener(Self::on_paths_dropped))
             .size_full()
             .min_h_0()
             .child(
@@ -590,6 +697,58 @@ impl Render for DownloadsView {
                     .children(countdown.map(|c| when_done::countdown_banner(&c, cx))),
             )
             .child(body)
+            .child(
+                div()
+                    .id("downloads-drop-target")
+                    .absolute()
+                    .inset_0()
+                    .drag_over::<ExternalPaths>(move |style, _, _, cx| {
+                        style
+                            .bg(drop_hint_bg)
+                            .border_2()
+                            .border_dashed()
+                            .border_color(drop_border)
+                            .rounded(cx.theme().radius_lg)
+                    })
+                    .child(
+                        div()
+                            .size_full()
+                            .invisible()
+                            .drag_over::<ExternalPaths>(|style, _, _, _| style.visible())
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                v_flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .px_8()
+                                    .py_6()
+                                    .rounded(cx.theme().radius_lg)
+                                    .bg(cx.theme().group_box)
+                                    .border_1()
+                                    .border_color(drop_border)
+                                    .child(
+                                        Icon::new(IconName::Download)
+                                            .large()
+                                            .text_color(drop_border),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_semibold()
+                                            .text_color(drop_fg)
+                                            .child(t("manage.downloads.drop.title")),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(drop_muted)
+                                            .child(t("manage.downloads.drop.description")),
+                                    ),
+                            ),
+                    ),
+            )
     }
 }
 
@@ -601,6 +760,7 @@ impl DownloadsView {
 
     pub(crate) fn summary_for_tests(&self, cx: &App) -> String {
         let app_status = models(cx).app_update.read(cx).status.clone();
-        self.summary(None, &app_status)
+        let web = models(cx).downloads.read(cx).web.clone();
+        self.summary(&web, None, &app_status)
     }
 }

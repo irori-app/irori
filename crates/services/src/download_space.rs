@@ -153,6 +153,13 @@ fn disk_key(existing: &Path) -> Option<String> {
 }
 
 impl Backend {
+    /// Available bytes on the disk holding `path` (or its nearest existing ancestor).
+    /// Reads the disk, so call it off the UI thread.
+    pub fn free_space_at(&self, path: &Path) -> Option<u64> {
+        let existing = path.ancestors().find(|p| p.is_dir())?;
+        fs4::available_space(existing).ok()
+    }
+
     /// What the queue still downloads to each disk, against the space free
     /// there. Reads the disks, so call it off the UI thread, and only when
     /// the queue changes.

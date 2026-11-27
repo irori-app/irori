@@ -139,202 +139,45 @@ impl DownloadsView {
     }
 
     pub(super) fn render_history(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        enum Entry<'a> {
+            Store(&'a queue::HistoryRow, Option<StatusKind>),
+            Web(&'a irori_services::WebDownload),
+        }
+
         let now = unix_now();
         let filter = self.history_filter;
-        let total = self.queue.history_in(filter).count();
-        let shown: Vec<_> = {
+        let web_finished = models(cx).downloads.read(cx).web.finished.clone();
+        let mut entries: Vec<(u64, usize, Entry<'_>)> = Vec::new();
+        let mut seq = 0usize;
+        {
             let statuses = models(cx).statuses.read(cx);
-            self.queue
-                .history_in(filter)
-                .take(self.history_shown)
-                .map(|row| (row, statuses.get(&row.item.id).map(|s| s.kind)))
-                .collect()
-        };
-        let rows = shown.into_iter().enumerate().map(|(ix, (row, status))| {
-            // Launching or already running: Play waits, or is not offered.
-            let launching = status == Some(StatusKind::Launching);
-            let playable = row.is_playable()
-                && !status.is_some_and(|k| k.is_busy() && k != StatusKind::Launching);
-            let theme = cx.theme();
-            let border = theme.border;
-            let id = row.item.id.clone();
-            let key = format!("{}-{}", id.key(), row.item.finished_at.unwrap_or(0));
-            let (icon, color, pill_bg, state) = match row.item.state {
-                DownloadState::Done => (
-                    IconName::CircleCheck,
-                    theme.success,
-                    theme.success.opacity(0.14),
-                    t("manage.downloads.history.done"),
-                ),
-                DownloadState::Failed => (
-                    IconName::CircleX,
-                    theme.danger,
-                    theme.danger.opacity(0.14),
-                    t("manage.downloads.history.failed"),
-                ),
-                _ => (
-                    IconName::Ban,
-                    theme.muted_foreground,
-                    theme.muted,
-                    t("manage.downloads.history.canceled"),
-                ),
-            };
-            let when = row
-                .item
-                .finished_at
-                .map(|at| format::relative_time(at, now).to_string())
-                .unwrap_or_default();
-            let meta = [
-                Some(queue::kind_label(&row.item.kind).to_string()),
-                format::size(row.item.download_size),
-                (!when.is_empty()).then_some(when),
-            ]
+            for row in self.queue.history_in(filter) {
+                let ts = row.item.finished_at.unwrap_or(0);
+                let status = statuses.get(&row.item.id).map(|s| s.kind);
+                entries.push((ts, seq, Entry::Store(row, status)));
+                seq += 1;
+            }
+        }
+        if filter.includes_links() {
+            for item in &web_finished {
+                let ts = item.finished_at.unwrap_or(0);
+                entries.push((ts, seq, Entry::Web(item)));
+                seq += 1;
+            }
+        }
+        entries.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        let total = entries.len();
+        let rows: Vec<AnyElement> = entries
             .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(" · ");
-            let (retry_id, remove_id, page_id, open_id, play_id) =
-                (id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
-            let play_title = row.item.title.clone();
-            let retryable = row.is_retryable();
-            let is_done = row.item.state == DownloadState::Done;
-            let open_key = format!("history-open-{key}");
-            let open_sel = open_key.clone();
-            h_flex()
-                .id(ElementId::Name(format!("history-{key}").into()))
-                .gap_3()
-                .px_4()
-                .py_3()
-                .when(ix > 0, |d| d.border_t_1().border_color(border))
-                .hover(|s| s.bg(theme.muted.opacity(0.35)))
-                .child(
-                    h_flex()
-                        .id(ElementId::Name(open_key.into()))
-                        .debug_selector(move || open_sel.clone())
-                        .flex_1()
-                        .min_w_0()
-                        .items_center()
-                        .gap_3()
-                        .cursor_pointer()
-                        .on_click(move |_, _, cx| navigate(Route::Game(open_id.clone()), cx))
-                        .child(GameCover::new(row.game.clone()).width(rems(3.5)))
-                        .child(
-                            v_flex()
-                                .flex_1()
-                                .min_w_0()
-                                .gap_1()
-                                .child(
-                                    h_flex()
-                                        .gap_2()
-                                        .items_center()
-                                        .min_w_0()
-                                        .child(
-                                            div()
-                                                .text_base()
-                                                .font_semibold()
-                                                .truncate()
-                                                .child(row.item.title.clone()),
-                                        )
-                                        .child(StoreBadge::new(id.runner).medium()),
-                                )
-                                .child(
-                                    h_flex()
-                                        .gap_2()
-                                        .items_center()
-                                        .min_w_0()
-                                        .child(
-                                            h_flex()
-                                                .gap_1()
-                                                .items_center()
-                                                .flex_shrink_0()
-                                                .px_2()
-                                                .py_0p5()
-                                                .rounded_full()
-                                                .bg(pill_bg)
-                                                .text_xs()
-                                                .font_medium()
-                                                .text_color(color)
-                                                .child(Icon::new(icon).xsmall().text_color(color))
-                                                .child(state),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(theme.muted_foreground)
-                                                .truncate()
-                                                .child(meta),
-                                        ),
-                                )
-                                .when_some(row.item.error.clone(), |this, err| {
-                                    this.child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme.danger)
-                                            .line_clamp(2)
-                                            .child(err),
-                                    )
-                                }),
-                        ),
-                )
-                .child(
-                    h_flex()
-                        .gap_1p5()
-                        .flex_shrink_0()
-                        .when(retryable, |this| {
-                            this.child(
-                                Button::new("retry")
-                                    .small()
-                                    .outline()
-                                    .icon(IconName::RotateCcw)
-                                    .label(t("manage.downloads.history.retry"))
-                                    .on_click(
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.retry(&retry_id, cx)
-                                        }),
-                                    ),
-                            )
-                        })
-                        .when(playable, |this| {
-                            this.child(
-                                Button::new("play")
-                                    .small()
-                                    .primary()
-                                    .icon(IconName::Play)
-                                    .label(t("manage.downloads.history.play"))
-                                    .loading(launching)
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        if !launching {
-                                            this.play(&play_id, &play_title, window, cx)
-                                        }
-                                    })),
-                            )
-                        })
-                        .when(is_done, |this| {
-                            this.child(
-                                Button::new("open")
-                                    .small()
-                                    .ghost()
-                                    .icon(IconName::ExternalLink)
-                                    .tooltip(t("manage.downloads.game_page"))
-                                    .accessibility_label(t("manage.downloads.game_page"))
-                                    .on_click(move |_, _, cx| {
-                                        navigate(Route::Game(page_id.clone()), cx)
-                                    }),
-                            )
-                        })
-                        .child(
-                            Button::new("forget")
-                                .ghost()
-                                .small()
-                                .icon(IconName::X)
-                                .tooltip(t("manage.downloads.history.remove"))
-                                .on_click(move |_, _, cx| {
-                                    let id = remove_id.clone();
-                                    backend_op(cx, move |b| b.remove_finished_download(&id));
-                                }),
-                        ),
-                )
-        });
+            .take(self.history_shown)
+            .enumerate()
+            .map(|(ix, (_, _, entry))| match entry {
+                Entry::Store(row, status) => {
+                    self.render_store_history_row(row, status, ix, now, cx)
+                }
+                Entry::Web(item) => self.render_completed_web_row(item, ix, now, cx),
+            })
+            .collect();
         let filters = ButtonGroup::new("history-filter")
             .small()
             .outline()
@@ -357,7 +200,16 @@ impl DownloadsView {
                             .ghost()
                             .small()
                             .label(t("manage.downloads.history.clear"))
-                            .on_click(|_, _, cx| backend_op(cx, |b| b.clear_finished_downloads())),
+                            .on_click(move |_, _, cx| {
+                                backend_op(cx, move |b| {
+                                    if filter.includes_store() {
+                                        b.clear_finished_downloads();
+                                    }
+                                    if filter.includes_links() {
+                                        b.clear_finished_web_downloads();
+                                    }
+                                })
+                            }),
                     ),
                 ),
             )
@@ -390,5 +242,197 @@ impl DownloadsView {
                     ),
                 )
             })
+    }
+
+    fn render_store_history_row(
+        &self,
+        row: &queue::HistoryRow,
+        status: Option<StatusKind>,
+        ix: usize,
+        now: u64,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        // Launching or already running: Play waits, or is not offered.
+        let launching = status == Some(StatusKind::Launching);
+        let playable =
+            row.is_playable() && !status.is_some_and(|k| k.is_busy() && k != StatusKind::Launching);
+        let theme = cx.theme();
+        let border = theme.border;
+        let id = row.item.id.clone();
+        let key = format!("{}-{}", id.key(), row.item.finished_at.unwrap_or(0));
+        let (icon, color, pill_bg, state) = match row.item.state {
+            DownloadState::Done => (
+                IconName::CircleCheck,
+                theme.success,
+                theme.success.opacity(0.14),
+                t("manage.downloads.history.done"),
+            ),
+            DownloadState::Failed => (
+                IconName::CircleX,
+                theme.danger,
+                theme.danger.opacity(0.14),
+                t("manage.downloads.history.failed"),
+            ),
+            _ => (
+                IconName::Ban,
+                theme.muted_foreground,
+                theme.muted,
+                t("manage.downloads.history.canceled"),
+            ),
+        };
+        let when = row
+            .item
+            .finished_at
+            .map(|at| format::relative_time(at, now).to_string())
+            .unwrap_or_default();
+        let meta = [
+            Some(queue::kind_label(&row.item.kind).to_string()),
+            format::size(row.item.download_size),
+            (!when.is_empty()).then_some(when),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ");
+        let (retry_id, remove_id, page_id, open_id, play_id) =
+            (id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
+        let play_title = row.item.title.clone();
+        let retryable = row.is_retryable();
+        let is_done = row.item.state == DownloadState::Done;
+        let open_key = format!("history-open-{key}");
+        let open_sel = open_key.clone();
+        h_flex()
+            .id(ElementId::Name(format!("history-{key}").into()))
+            .gap_3()
+            .px_4()
+            .py_3()
+            .when(ix > 0, |d| d.border_t_1().border_color(border))
+            .hover(|s| s.bg(theme.muted.opacity(0.35)))
+            .child(
+                h_flex()
+                    .id(ElementId::Name(open_key.into()))
+                    .debug_selector(move || open_sel.clone())
+                    .flex_1()
+                    .min_w_0()
+                    .items_center()
+                    .gap_3()
+                    .cursor_pointer()
+                    .on_click(move |_, _, cx| navigate(Route::Game(open_id.clone()), cx))
+                    .child(GameCover::new(row.game.clone()).width(rems(3.5)))
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_1()
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .items_center()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .text_base()
+                                            .font_semibold()
+                                            .truncate()
+                                            .child(row.item.title.clone()),
+                                    )
+                                    .child(StoreBadge::new(id.runner).medium()),
+                            )
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .items_center()
+                                    .min_w_0()
+                                    .child(
+                                        h_flex()
+                                            .gap_1()
+                                            .items_center()
+                                            .flex_shrink_0()
+                                            .px_2()
+                                            .py_0p5()
+                                            .rounded_full()
+                                            .bg(pill_bg)
+                                            .text_xs()
+                                            .font_medium()
+                                            .text_color(color)
+                                            .child(Icon::new(icon).xsmall().text_color(color))
+                                            .child(state),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(theme.muted_foreground)
+                                            .truncate()
+                                            .child(meta),
+                                    ),
+                            )
+                            .when_some(row.item.error.clone(), |this, err| {
+                                this.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.danger)
+                                        .line_clamp(2)
+                                        .child(err),
+                                )
+                            }),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .flex_shrink_0()
+                    .when(retryable, |this| {
+                        this.child(
+                            Button::new("retry")
+                                .small()
+                                .outline()
+                                .icon(IconName::RotateCcw)
+                                .label(t("manage.downloads.history.retry"))
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.retry(&retry_id, cx)),
+                                ),
+                        )
+                    })
+                    .when(playable, |this| {
+                        this.child(
+                            Button::new("play")
+                                .small()
+                                .primary()
+                                .icon(IconName::Play)
+                                .label(t("manage.downloads.history.play"))
+                                .loading(launching)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if !launching {
+                                        this.play(&play_id, &play_title, window, cx)
+                                    }
+                                })),
+                        )
+                    })
+                    .when(is_done, |this| {
+                        this.child(
+                            Button::new("open")
+                                .small()
+                                .ghost()
+                                .icon(IconName::ExternalLink)
+                                .tooltip(t("manage.downloads.game_page"))
+                                .accessibility_label(t("manage.downloads.game_page"))
+                                .on_click(move |_, _, cx| {
+                                    navigate(Route::Game(page_id.clone()), cx)
+                                }),
+                        )
+                    })
+                    .child(
+                        Button::new("forget")
+                            .ghost()
+                            .small()
+                            .icon(IconName::X)
+                            .tooltip(t("manage.downloads.history.remove"))
+                            .on_click(move |_, _, cx| {
+                                let id = remove_id.clone();
+                                backend_op(cx, move |b| b.remove_finished_download(&id));
+                            }),
+                    ),
+            )
+            .into_any_element()
     }
 }

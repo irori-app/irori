@@ -281,6 +281,13 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         | "maxWorkers"
         | "maxDownloadSpeed"
         | "downloadNoHttps"
+        | "iroriWebDownloads.defaultFolder"
+        | "iroriWebDownloads.maxConcurrent"
+        | "iroriWebDownloads.autoExtract"
+        | "iroriWebDownloads.deleteArchiveAfterExtract"
+        | "iroriWebDownloads.autoAddToLibrary"
+        | "iroriWebDownloads.bittorrent"
+        | "iroriWebDownloads.aria2Path"
         | "discordRPC"
         | "discordClientId"
         | "iroriSunshine.enabled"
@@ -369,6 +376,7 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             // General -> Integrations & downloads
             | "iroriNetworkTimeout"
             | "downloadNoHttps"
+            | "iroriWebDownloads.aria2Path"
             | "discordClientId"
             | "action.open-windows-files"
             // Controller

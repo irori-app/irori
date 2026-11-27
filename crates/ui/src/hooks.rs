@@ -2,6 +2,7 @@
 //! on (the concrete store crates, or another feature). The shell installs them
 //! at startup; feature crates call them.
 
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -77,6 +78,7 @@ type StorePageFn = Arc<dyn Fn(Runner, String, &mut Window, &mut App)>;
 type UnlocksFn = Arc<dyn Fn(GameId, Vec<irori_core::Achievement>, &mut App) -> bool>;
 type GameFn = Arc<dyn Fn(GameId, &mut Window, &mut App)>;
 type GameViewFn = Arc<dyn Fn(GameId, &mut Window, &mut App) -> AnyView>;
+type PathFn = Arc<dyn Fn(PathBuf, &mut Window, &mut App)>;
 type ViewFn = Arc<dyn Fn(&mut Window, &mut App) -> AnyView>;
 
 /// The library's suggestion to read the Steam library from the Steam client
@@ -133,6 +135,9 @@ pub struct Hooks {
     /// Install one game (its copy): the install sheet, or the store's own
     /// client for games Irori doesn't install (the game feature).
     pub install: Option<GameFn>,
+    /// Open the "Add game" dialog pre-filled for a local file or folder
+    /// (lives in the library feature, which the manage feature doesn't depend on).
+    pub add_to_library: Option<PathFn>,
 }
 
 impl Global for Hooks {}
@@ -310,6 +315,16 @@ pub fn install_game(id: GameId, window: &mut Window, cx: &mut App) {
     match cx.try_global::<Hooks>().and_then(|h| h.install.clone()) {
         Some(install) => install(id, window, cx),
         None => crate::navigate(crate::Route::Game(id), cx),
+    }
+}
+
+/// Open the "Add game" dialog pre-filled with `path` (a downloaded file or folder).
+pub fn add_to_library(path: PathBuf, window: &mut Window, cx: &mut App) {
+    if let Some(open) = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.add_to_library.clone())
+    {
+        open(path, window, cx);
     }
 }
 

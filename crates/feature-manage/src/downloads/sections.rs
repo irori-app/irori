@@ -477,13 +477,22 @@ impl DownloadsView {
                 .child(t("manage.downloads.measuring"))
                 .into_any_element()
         };
+        let web_speed = {
+            let w = &models(cx).downloads.read(cx).web;
+            if w.paused { 0 } else { w.total_speed }
+        };
+        let total_download_rate = match progress.download_speed {
+            Some(s) => Some(s.saturating_add(web_speed)),
+            None if web_speed > 0 => Some(web_speed),
+            None => None,
+        };
         h_flex()
             .gap_6()
             .items_end()
             .child(div().flex_1().min_w_0().h(rems(5.)).child(chart))
             .child(stat(
                 t("manage.downloads.stat.download"),
-                format::rate(progress.download_speed),
+                format::rate(total_download_rate),
                 Some(theme.chart_1),
             ))
             .child(stat(
