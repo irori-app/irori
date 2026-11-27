@@ -21,7 +21,9 @@ use serde_json::{Map, Value};
 
 use crate::play_status::EffectiveStatus;
 
-pub use eval::{CategoryIndex, HltbTimes, IndexKey, Inputs, Truth, count_matches, days_ago};
+pub use eval::{
+    CategoryIndex, HltbTimes, IndexKey, Inputs, Truth, count_matches, days_ago, matches_rules_only,
+};
 
 /// One category of either kind.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -34,7 +36,7 @@ pub enum CategoryRef {
 }
 
 /// How a category looks in lists: pinned ones come first (and get a shelf in
-/// Big Picture), and a colour marks it on covers and in menus.
+/// Big Picture), and a colour and icon mark it on tabs, covers and menus.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CategoryLook {
@@ -44,6 +46,10 @@ pub struct CategoryLook {
     /// shown without a colour.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub colour: Option<String>,
+    /// One of [`ICONS`]; a name this version doesn't know is kept and
+    /// falls back to the category kind's default icon.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     /// Fields a newer Irori wrote.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -51,13 +57,42 @@ pub struct CategoryLook {
 
 impl CategoryLook {
     pub fn is_empty(&self) -> bool {
-        !self.pinned && self.colour.is_none() && self.extra.is_empty()
+        !self.pinned && self.colour.is_none() && self.icon.is_none() && self.extra.is_empty()
     }
 }
 
 /// The colours a category can have, as stored. Screens map each to a theme
 /// colour of the same name.
 pub const COLOURS: [&str; 6] = ["red", "yellow", "green", "cyan", "blue", "magenta"];
+
+/// The curated icons a collection can have, as stored slugs. Screens map each
+/// to the matching Lucide `IconName`.
+pub const ICONS: [&str; 24] = [
+    "sparkles",
+    "flame",
+    "swords",
+    "skull",
+    "ghost",
+    "wand-sparkles",
+    "moon-star",
+    "crosshair",
+    "rocket",
+    "castle",
+    "chess-pawn",
+    "dices",
+    "puzzle",
+    "compass",
+    "pickaxe",
+    "coffee",
+    "book-open",
+    "car",
+    "trophy",
+    "users",
+    "music",
+    "gamepad-2",
+    "gem",
+    "crown",
+];
 
 /// Whether a game must pass every rule or one of them.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -371,8 +406,9 @@ impl<'de> Deserialize<'de> for Condition {
     }
 }
 
-/// A category filled from rules: games pass `rules` (all of them, or any,
-/// by `matching`) and none of `leave_out`.
+/// A category filled from rules and/or manual picks: games in `included_games`
+/// or passing `rules` (all of them, or any, by `matching`, unless `manual_only`
+/// leaves empty `rules` empty) and none of `leave_out` or `excluded_games`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SmartCategory {
     pub name: String,
@@ -380,6 +416,13 @@ pub struct SmartCategory {
     pub rules: Vec<Condition>,
     /// Games any of these match are left out.
     pub leave_out: Vec<Condition>,
+    /// Individual games (by `GameId::key()`) manually included in this category.
+    pub included_games: BTreeSet<String>,
+    /// Individual games (by `GameId::key()`) manually excluded from this category.
+    pub excluded_games: BTreeSet<String>,
+    /// When true and `rules` is empty, only `included_games` belong to this
+    /// category (rather than matching every game in the library).
+    pub manual_only: bool,
     pub look: CategoryLook,
     /// Fields a newer Irori wrote.
     pub extra: Map<String, Value>,
@@ -396,10 +439,18 @@ struct Stored {
     matching: Match,
     rules: Vec<Condition>,
     leave_out: Vec<Condition>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    included_games: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    excluded_games: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    manual_only: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pinned: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     colour: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    icon: Option<String>,
     #[serde(flatten)]
     extra: Map<String, Value>,
 }
@@ -411,8 +462,12 @@ impl Default for Stored {
             matching: Match::All,
             rules: Vec::new(),
             leave_out: Vec::new(),
+            included_games: BTreeSet::new(),
+            excluded_games: BTreeSet::new(),
+            manual_only: false,
             pinned: false,
             colour: None,
+            icon: None,
             extra: Map::new(),
         }
     }
@@ -430,8 +485,12 @@ impl Serialize for SmartCategory {
             matching: self.matching.clone(),
             rules: self.rules.clone(),
             leave_out: self.leave_out.clone(),
+            included_games: self.included_games.clone(),
+            excluded_games: self.excluded_games.clone(),
+            manual_only: self.manual_only,
             pinned: self.look.pinned,
             colour: self.look.colour.clone(),
+            icon: self.look.icon.clone(),
             extra,
         }
         .serialize(s)
@@ -447,9 +506,13 @@ impl<'de> Deserialize<'de> for SmartCategory {
                 matching: s.matching,
                 rules: s.rules,
                 leave_out: s.leave_out,
+                included_games: s.included_games,
+                excluded_games: s.excluded_games,
+                manual_only: s.manual_only,
                 look: CategoryLook {
                     pinned: s.pinned,
                     colour: s.colour,
+                    icon: s.icon,
                     extra: Map::new(),
                 },
                 extra: s.extra,
@@ -467,6 +530,7 @@ impl<'de> Deserialize<'de> for SmartCategory {
                         .get("colour")
                         .and_then(Value::as_str)
                         .map(str::to_owned),
+                    icon: value.get("icon").and_then(Value::as_str).map(str::to_owned),
                     extra: Map::new(),
                 },
                 unreadable: Some(value),
@@ -507,7 +571,7 @@ impl SmartCategory {
         self.unreadable.is_some()
     }
 
-    /// This category with the pin and colour of `look`, keeping the rest.
+    /// This category with the pin, colour and icon of `look`, keeping the rest.
     pub fn with_look(&self, look: CategoryLook) -> Self {
         let mut next = self.clone();
         if let Some(Value::Object(raw)) = &mut next.unreadable {
@@ -519,6 +583,10 @@ impl SmartCategory {
             match &look.colour {
                 Some(c) => raw.insert("colour".into(), Value::String(c.clone())),
                 None => raw.remove("colour"),
+            };
+            match &look.icon {
+                Some(i) => raw.insert("icon".into(), Value::String(i.clone())),
+                None => raw.remove("icon"),
             };
         }
         next.look = look;
@@ -575,5 +643,42 @@ impl crate::Backend {
             plays: crate::sessions::stats(),
             updates: self.updates(),
         }
+    }
+
+    /// Manually exclude `game_key` from smart category `smart_id`.
+    pub fn exclude_from_smart_category(&self, smart_id: &str, game_key: &str) {
+        self.userdata
+            .exclude_from_smart_category(smart_id, game_key);
+    }
+
+    /// Restore a manually excluded `game_key` to smart category `smart_id`.
+    pub fn restore_to_smart_category(&self, smart_id: &str, game_key: &str) {
+        self.userdata.restore_to_smart_category(smart_id, game_key);
+    }
+
+    /// Add `ids` to smart category `smart_id`, clearing any manual exclusion on
+    /// their copies and inserting into `included_games` whenever `pin_manually`
+    /// returns true (i.e. the game does not already match by rules).
+    pub fn add_to_smart_category_many(
+        &self,
+        smart_id: &str,
+        ids: &[irori_core::GameId],
+        pin_manually: impl Fn(&irori_core::GameId) -> bool,
+    ) {
+        self.userdata
+            .add_to_smart_category_many(smart_id, ids, pin_manually);
+    }
+
+    /// Remove `ids` from smart category `smart_id`, clearing manual inclusions on
+    /// their copies and inserting into `excluded_games` whenever
+    /// `exclude_rule_match` returns true (i.e. the game would still match by rules).
+    pub fn remove_from_smart_category_many(
+        &self,
+        smart_id: &str,
+        ids: &[irori_core::GameId],
+        exclude_rule_match: impl Fn(&irori_core::GameId) -> bool,
+    ) {
+        self.userdata
+            .remove_from_smart_category_many(smart_id, ids, exclude_rule_match);
     }
 }

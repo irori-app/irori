@@ -5,12 +5,15 @@ mod bulk;
 pub(crate) mod details;
 mod empty;
 mod frame;
+mod look;
 mod menus;
 mod panel;
 mod quick;
 pub(crate) mod remove;
 mod render_grid;
 mod render_list;
+mod sort;
+mod tabs_manager;
 mod toolbar;
 
 use std::collections::{HashMap, HashSet};
@@ -34,7 +37,9 @@ use gpui_kit::{
     Focusable, InteractiveElement as _, IntoElement, KeyDownEvent, Keystroke, ParentElement as _,
     Pixels, Render, SharedString, Size, Styled as _, Subscription, Window, canvas, div, px, rems,
 };
-use irori_core::settings::{Density, LibraryBackground, LibraryLayout, UiPrefs};
+use irori_core::settings::{
+    CoverShape, Density, FocusCoverSize, LibraryBackground, LibraryLayout, ListRowSize, UiPrefs,
+};
 use irori_core::{GameId, GameInfo, GameStatus, Runner, StatusKind};
 use irori_ui::components::{ArtBackdrop, EmptyState};
 use irori_ui::i18n::{t, t_args};
@@ -77,6 +82,10 @@ pub struct LibraryView {
     filters: Entity<FilterModel>,
     filters_panel: Entity<FiltersPanel>,
     pub(super) filters_open: bool,
+    pub(super) look_open: bool,
+    pub(super) sort_open: bool,
+    pub(super) sort_more_open: Option<bool>,
+    pub(super) tabs_manager_open: bool,
     tile_slider: Entity<SliderState>,
     scroll: VirtualListScrollHandle,
     images: Entity<LruImageCache>,
@@ -84,23 +93,36 @@ pub struct LibraryView {
     top: TopCache,
     /// What the empty library shows (see `empty.rs`), made once.
     found_sources: Option<gpui_kit::AnyView>,
+    /// Active top-strip tab whose per-tab visualization settings are live, or
+    /// `None` while custom Filters-popover criteria are active.
+    pub(super) active_tab: Option<crate::views::TabKey>,
     layout: LibraryLayout,
-    /// The view the user chose (`libraryLayout`); `layout` differs from it
-    /// while `libraryAutoLayout` switched with the window's width.
+    /// The view the user chose (`libraryLayout` or the active tab's saved
+    /// layout); `layout` differs from it while `libraryAutoLayout` switched
+    /// with the window's width.
     chosen_layout: LibraryLayout,
     /// Whether the window was wide enough for Focus at the last frame,
     /// while `libraryAutoLayout` is on.
     auto_wide: Option<bool>,
+    pub(super) cover_shape: CoverShape,
     tile_rem: f32,
+    pub(super) list_row_size: ListRowSize,
+    pub(super) focus_cover_size: FocusCoverSize,
+    /// Whether `tile_slider` needs syncing with `tile_rem` on the next frame
+    /// (set when switching tabs without a `&mut Window`).
+    pub(super) tile_slider_dirty: bool,
+    /// Suppresses recursive filter-observer sync while `apply_tab` updates the
+    /// filter model.
+    pub(super) suppress_filter_sync: bool,
     density: Density,
     /// The interface preferences, for the background behind the covers.
     ui_prefs: UiPrefs,
     /// Measured size of the scroll region (zero until the first paint).
     viewport: Size<Pixels>,
-    /// The header's measured room and quick controls.
-    quick: crate::quick::QuickLayout,
-    /// The quick controls drawn last.
-    quick_shown: &'static [crate::quick::QuickControl],
+    /// Cached game counts for the view tabs.
+    chip_counts: crate::chips::ChipCountCache,
+    /// Last interface language applied to the search placeholder.
+    search_placeholder_lang: Option<String>,
     /// Capacity last given to `images`.
     image_capacity: usize,
     frame: Frame,
@@ -163,7 +185,34 @@ impl LibraryView {
         // existed (a game page's mode chip) wins over them.
         crate::filters_panel::apply_pending(&filters, cx);
         let filters_panel = cx.new(|cx| FiltersPanel::new(filters.clone(), cx));
-        let tile_rem = ui.tile_size.clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
+        let art = irori_ui::art::art_store(cx);
+        let saved_views = crate::views::saved_views(cx);
+        let (active_tab, initial_prefs) = {
+            let saved = saved_views.read(cx).views();
+            let user = &m.library.read(cx).user;
+            let smart_ids = crate::views::smart_collection_ids(user);
+            let initial_filter = filters.read(cx).filter();
+            let tab =
+                crate::chips::active_tab_for(initial_filter, saved.active_tab.as_ref(), &smart_ids);
+            let prefs = tab
+                .as_ref()
+                .and_then(|k| saved.prefs_for(k))
+                .cloned()
+                .unwrap_or_default();
+            (tab, prefs)
+        };
+        let initial_layout = initial_prefs.layout.unwrap_or(ui.library_layout);
+        let cover_shape = initial_prefs.cover_shape.unwrap_or(ui.cover_shape);
+        let tile_rem = initial_prefs
+            .tile_size
+            .unwrap_or(ui.tile_size)
+            .clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
+        let list_row_size = initial_prefs
+            .list_row_size
+            .unwrap_or(ui.library_list_row_size);
+        let focus_cover_size = initial_prefs
+            .focus_cover_size
+            .unwrap_or(ui.library_focus_cover_size);
         let tile_slider = cx.new(|_| {
             SliderState::new()
                 .min(grid::MIN_TILE_REM)
@@ -171,8 +220,6 @@ impl LibraryView {
                 .step(0.5)
                 .default_value(tile_rem)
         });
-        let art = irori_ui::art::art_store(cx);
-        let saved_views = crate::views::saved_views(cx);
 
         let subscriptions = vec![
             cx.observe(&m.library, |this: &mut Self, library, cx| {
@@ -188,15 +235,43 @@ impl LibraryView {
             cx.observe(&m.downloads, |_, _, cx| cx.notify()),
             cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             cx.observe(&art, |_, _, cx| cx.notify()),
-            cx.observe(&filters, |_, _, cx| cx.notify()),
+            cx.observe(&filters, |this, filters, cx| {
+                this.sync_tab_from_filter(filters, cx);
+                cx.notify();
+            }),
             cx.observe(&saved_views, |_, _, cx| cx.notify()),
             cx.observe_in(&m.settings, window, |this, settings, window, cx| {
                 let ui = settings.read(cx).app.ui.clone();
-                if this.chosen_layout != ui.library_layout {
-                    // Switched from elsewhere (the palette, Settings).
+                let prev = this.ui_prefs.clone();
+                let tab_prefs = this
+                    .active_tab
+                    .as_ref()
+                    .and_then(|k| {
+                        crate::views::saved_views(cx)
+                            .read(cx)
+                            .views()
+                            .prefs_for(k)
+                            .cloned()
+                    })
+                    .unwrap_or_default();
+                if prev.library_layout != ui.library_layout && tab_prefs.layout.is_none() {
+                    // Switched from elsewhere (Settings → Appearance).
                     this.chosen_layout = ui.library_layout;
                     this.layout = ui.library_layout;
                     this.scroll_to_focused();
+                }
+                if prev.cover_shape != ui.cover_shape && tab_prefs.cover_shape.is_none() {
+                    this.cover_shape = ui.cover_shape;
+                }
+                if prev.library_list_row_size != ui.library_list_row_size
+                    && tab_prefs.list_row_size.is_none()
+                {
+                    this.list_row_size = ui.library_list_row_size;
+                }
+                if prev.library_focus_cover_size != ui.library_focus_cover_size
+                    && tab_prefs.focus_cover_size.is_none()
+                {
+                    this.focus_cover_size = ui.library_focus_cover_size;
                 }
                 if !ui.library_auto_layout {
                     this.auto_wide = None;
@@ -204,7 +279,10 @@ impl LibraryView {
                 this.density = ui.density;
                 this.ui_prefs = ui.clone();
                 let size = ui.tile_size.clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
-                if (size - this.tile_rem).abs() > f32::EPSILON {
+                if (prev.tile_size - ui.tile_size).abs() > f32::EPSILON
+                    && tab_prefs.tile_size.is_none()
+                    && (size - this.tile_rem).abs() > f32::EPSILON
+                {
                     this.tile_rem = size;
                     this.tile_slider
                         .update(cx, |s, cx| s.set_value(size, window, cx));
@@ -233,9 +311,7 @@ impl LibraryView {
                     }
                     SliderEvent::Release(v) => {
                         let size = slider_value(v);
-                        this.tile_rem = size;
-                        persist_ui(cx, move |ui| ui.tile_size = size);
-                        cx.notify();
+                        this.set_tile_size(size, cx);
                     }
                 },
             ),
@@ -248,21 +324,31 @@ impl LibraryView {
             filters,
             filters_panel,
             filters_open: false,
+            look_open: false,
+            sort_open: false,
+            sort_more_open: None,
+            tabs_manager_open: false,
             tile_slider,
             scroll: VirtualListScrollHandle::new(),
             images: LruImageCache::new(IMAGE_CACHE_CAPACITY, cx),
             games: FilteredGames::default(),
             top: TopCache::default(),
             found_sources: None,
-            layout: ui.library_layout,
-            chosen_layout: ui.library_layout,
+            active_tab,
+            layout: initial_layout,
+            chosen_layout: initial_layout,
             auto_wide: None,
+            cover_shape,
             tile_rem,
+            list_row_size,
+            focus_cover_size,
+            tile_slider_dirty: false,
+            suppress_filter_sync: false,
             density: ui.density,
             ui_prefs: ui.clone(),
             viewport: Size::default(),
-            quick: crate::quick::QuickLayout::default(),
-            quick_shown: &[],
+            chip_counts: Default::default(),
+            search_placeholder_lang: None,
             image_capacity: IMAGE_CACHE_CAPACITY,
             frame: Frame::default(),
             grouping: Grouping::None,
@@ -288,6 +374,11 @@ impl LibraryView {
     /// Current view criteria.
     pub fn filter(&self, cx: &App) -> ViewFilter {
         self.filters.read(cx).filter().clone()
+    }
+
+    /// Layout currently displayed by this library view.
+    pub(crate) fn current_layout(&self) -> LibraryLayout {
+        self.layout
     }
 
     /// Change the view criteria programmatically (e.g. "show updates" from a
@@ -366,10 +457,16 @@ impl LibraryView {
         cx.notify();
     }
 
-    /// The header's quick controls drawn last.
+    /// Whether the view tabs strip is shown.
     #[cfg(test)]
-    pub(crate) fn quick_controls_shown(&self) -> &'static [crate::quick::QuickControl] {
-        self.quick_shown
+    pub(crate) fn view_tabs_shown(&self) -> bool {
+        self.ui_prefs.library_quick_controls
+    }
+
+    /// Cached counts for the preset and saved-view tabs.
+    #[cfg(test)]
+    pub(crate) fn chip_counts(&self) -> &crate::chips::ChipCountMap {
+        &self.frame.chip_counts
     }
     /// Turn the header's quick controls on or off without saving it (tests
     /// share one settings file).
@@ -435,6 +532,44 @@ impl LibraryView {
         self.search.focus_handle(cx)
     }
 
+    #[cfg(test)]
+    pub(crate) fn current_cover_shape(&self) -> CoverShape {
+        self.cover_shape
+    }
+
+    #[cfg(test)]
+    pub(crate) fn current_list_row_size(&self) -> ListRowSize {
+        self.list_row_size
+    }
+
+    #[cfg(test)]
+    pub(crate) fn current_tile_rem(&self) -> f32 {
+        self.tile_rem
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_sort_for_test(
+        &mut self,
+        sort: irori_services::LibrarySort,
+        cx: &mut Context<Self>,
+    ) {
+        self.filters
+            .update(cx, |m, cx| m.update(|f| f.sort = sort, cx));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn close_sort_popover_for_test(&mut self, cx: &mut Context<Self>) {
+        self.sort_open = false;
+        self.sort_more_open = None;
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_layout_for_test(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
+        self.layout = layout;
+        cx.notify();
+    }
+
     /// Move keyboard focus to the search field.
     pub fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.search.update(cx, |s, cx| s.focus(window, cx));
@@ -486,7 +621,7 @@ impl LibraryView {
 
     // ---- rendering --------------------------------------------------------------
 
-    fn render_header(&mut self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_header(&mut self, _window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (total, refreshing) = {
             let lib = models(cx).library.read(cx);
             (lib.snapshot.len(), lib.refreshing)
@@ -515,7 +650,6 @@ impl LibraryView {
             (false, _) => t_args("library.common.games_other", &[("count", &count)]),
         };
 
-        let quick = self.render_quick_controls(&filter, window, cx);
         let actions = h_flex()
             .gap_2()
             .flex_shrink_0()
@@ -531,45 +665,52 @@ impl LibraryView {
                     .loading(refreshing)
                     .on_click(|_, _, cx| irori_ui::models::refresh_library(false, cx)),
             )
-            .child(if gog_signed_in {
-                // Importing GOG installers is a way to add games, so it lives
-                // in Add game's menu rather than as a header button of its own.
+            .child({
                 let view = cx.entity().downgrade();
                 Button::new("library-add-game")
                     .icon(IconName::Plus)
                     .label(t("library.header.add_game"))
                     .dropdown_caret(true)
-                    .dropdown_menu(move |menu, _, _| {
+                    .dropdown_menu(move |mut menu, _, _| {
                         let view = view.clone();
-                        menu.item(
-                            PopupMenuItem::new(t("library.header.add_game_item"))
-                                .icon(Icon::new(IconName::Plus))
+                        menu = menu
+                            .item(
+                                PopupMenuItem::new(t("library.header.add_game_item"))
+                                    .icon(Icon::new(IconName::Plus))
+                                    .on_click(|_, window, cx| {
+                                        dialogs::sideload::open_add_game_dialog(window, cx)
+                                    }),
+                            )
+                            .item(
+                                PopupMenuItem::new(t("library.sideload.scan_folder"))
+                                    .icon(Icon::new(IconName::FolderPlus))
+                                    .on_click(|_, window, cx| {
+                                        dialogs::folder::open_add_folder_dialog(window, cx)
+                                    }),
+                            );
+                        if gog_signed_in {
+                            menu = menu.item(
+                                PopupMenuItem::new(t("library.header.import_installers"))
+                                    .icon(Icon::new(IconName::FolderInput))
+                                    .on_click(move |_, _, cx| {
+                                        view.update(cx, |_, cx| {
+                                            cx.emit(LibraryEvent::RequestImportInstallers)
+                                        })
+                                        .ok();
+                                    }),
+                            );
+                        }
+                        menu.separator().item(
+                            PopupMenuItem::new(t("library.duplicates.open"))
+                                .icon(Icon::new(IconName::Copy))
                                 .on_click(|_, window, cx| {
-                                    dialogs::sideload::open_add_game_dialog(window, cx)
-                                }),
-                        )
-                        .item(
-                            PopupMenuItem::new(t("library.header.import_installers"))
-                                .icon(Icon::new(IconName::FolderInput))
-                                .on_click(move |_, _, cx| {
-                                    view.update(cx, |_, cx| {
-                                        cx.emit(LibraryEvent::RequestImportInstallers)
-                                    })
-                                    .ok();
+                                    dialogs::duplicates::open_duplicates_dialog(window, cx)
                                 }),
                         )
                     })
                     .into_any_element()
-            } else {
-                Button::new("library-add-game")
-                    .icon(IconName::Plus)
-                    .label(t("library.header.add_game"))
-                    .on_click(|_, window, cx| dialogs::sideload::open_add_game_dialog(window, cx))
-                    .into_any_element()
             });
 
-        // `PageHeader`'s layout, except that the title keeps its own width
-        // so the quick controls get the room between it and the buttons.
         let header = h_flex()
             .w_full()
             .gap_4()
@@ -593,7 +734,6 @@ impl LibraryView {
                             .child(description),
                     ),
             )
-            .children(quick)
             .child(actions);
 
         v_flex()
@@ -604,7 +744,7 @@ impl LibraryView {
             .child(header)
             .children(self.render_steam_hint(cx))
             .when(!self.frame.toolbar_in_list, |el| {
-                el.child(self.render_toolbar(&filter, cx))
+                el.child(self.render_toolbar_block(&filter, cx))
             })
             .child(irori_ui::tour::mark(
                 irori_ui::tour::anchors::LIBRARY_HEADER,
@@ -738,8 +878,18 @@ impl LibraryView {
         let list = div()
             .size_full()
             .on_scroll_wheel(cx.listener(|this, _, _, cx| {
-                if this.filters_open {
-                    this.filters_open = false;
+                if this.filters_open || this.look_open || this.sort_open || this.tabs_manager_open {
+                    if this.filters_open {
+                        this.filters_open = false;
+                        this.filters_panel
+                            .update(cx, |panel, _| panel.reset_more_open());
+                    }
+                    this.look_open = false;
+                    if this.sort_open {
+                        this.sort_open = false;
+                        this.sort_more_open = None;
+                    }
+                    this.tabs_manager_open = false;
                     cx.notify();
                 }
             }))

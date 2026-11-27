@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Il tourne en plein écran exclusif. Passez le jeu en fenêtre sans bordure ou en mode fenêtré pour utiliser l’overlay.",
   "shell.palette.year_in_review": "Ouvrir le Bilan de l’année",
   "shell.palette.year_in_review_keywords": "bilan récap annuel",
-  "shell.nav.views": "Vues",
   "shell.palette.show_view": "Afficher la vue : {name}",
   "shell.palette.show_category": "Afficher la catégorie : {name}",
   "shell.palette.new_smart_category": "Nouvelle catégorie intelligente…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Examiner et signaler",
   "shell.palette.latest_crash_report": "Voir le dernier rapport de plantage",
   "shell.palette.latest_crash_report_keywords": "crash plantage rapport journal log bug",
-  "shell.notice.manage_rollback": "Gérer / Revenir en arrière"
+  "shell.notice.manage_rollback": "Gérer / Revenir en arrière",
+  "shell.nav.pinned": "Épinglés"
 }

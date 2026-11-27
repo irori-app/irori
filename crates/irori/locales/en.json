@@ -220,7 +220,6 @@
   "shell.notice.overlay_fullscreen_message": "It runs in exclusive fullscreen. Switch the game to borderless or windowed to use the overlay.",
   "shell.palette.year_in_review": "Open the Year in review",
   "shell.palette.year_in_review_keywords": "recap wrapped annual summary",
-  "shell.nav.views": "Views",
   "shell.palette.show_view": "Show view: {name}",
   "shell.palette.show_category": "Show category: {name}",
   "shell.palette.new_smart_category": "New smart category…",
@@ -296,5 +295,6 @@
   "shell.notice.crashed_review_action": "Review & report",
   "shell.palette.latest_crash_report": "View latest crash report",
   "shell.palette.latest_crash_report_keywords": "crash report log panic backtrace bug",
-  "shell.notice.manage_rollback": "Manage / Rollback"
+  "shell.notice.manage_rollback": "Manage / Rollback",
+  "shell.nav.pinned": "Pinned"
 }

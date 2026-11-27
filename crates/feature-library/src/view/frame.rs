@@ -82,6 +82,8 @@ pub(super) struct Frame {
     pub(super) one_store: bool,
     /// The toolbar sits in the list under the top row, not in the header.
     pub(super) toolbar_in_list: bool,
+    /// Cached counts for the preset tabs and narrowing saved views.
+    pub(super) chip_counts: crate::chips::ChipCountMap,
 }
 
 impl Default for Frame {
@@ -100,6 +102,7 @@ impl Default for Frame {
             one_store: false,
             key: None,
             toolbar_in_list: false,
+            chip_counts: Default::default(),
         }
     }
 }
@@ -127,6 +130,34 @@ impl LibraryView {
         let filter = self.filters.read(cx).filter().clone();
         self.check_availability(&snapshot, cx);
         let missing = self.availability.missing().clone();
+
+        let lang = irori_ui::i18n::language();
+        if self.search_placeholder_lang.as_deref() != Some(lang.as_str()) {
+            let placeholder = t("library.search.placeholder");
+            self.search
+                .update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
+            self.search_placeholder_lang = Some(lang);
+        }
+
+        if std::mem::take(&mut self.tile_slider_dirty) {
+            let size = self.tile_rem;
+            self.tile_slider
+                .update(cx, |s, cx| s.set_value(size, window, cx));
+        }
+
+        if self.ui_prefs.library_quick_controls {
+            let smart_ids = crate::views::smart_collection_ids(&user);
+            let inputs = crate::chips::ChipCountInputs {
+                smart_ids: &smart_ids,
+                stores: &stores,
+                library: &snapshot,
+                user: &user,
+                categories: &categories,
+                updates: &updates,
+                missing: &missing,
+            };
+            self.frame.chip_counts = self.chip_counts.get(&inputs).clone();
+        }
 
         let games = self.games.get_in(
             &filter,
@@ -174,7 +205,7 @@ impl LibraryView {
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.
         let body_rem = f32::from(width) / f32::from(rem);
-        let focus_tile = layouts::focus_tile_rem(self.ui_prefs.library_focus_cover_size);
+        let focus_tile = layouts::focus_tile_rem(self.focus_cover_size);
         // Following the window's width switches the view for now; the
         // user's own choice stays what is saved.
         if self.ui_prefs.library_auto_layout {
@@ -200,16 +231,17 @@ impl LibraryView {
         };
         let available = list_rem - 2.0 * grid::EDGE_REM;
         let caption = self.ui_prefs.cover_caption;
-        let metrics = match self.layout {
+        let mut metrics = match self.layout {
             LibraryLayout::Focus => grid::focus_metrics(available, focus_tile, caption),
             _ => grid::grid_metrics_shaped(
                 available,
                 self.tile_rem,
                 self.density,
                 caption,
-                self.ui_prefs.cover_shape,
+                self.cover_shape,
             ),
         };
+        metrics.list_row_rem = grid::list_row_rem(self.list_row_size, self.density);
         // The top row isn't filtered, so the controls that filter sit under
         // it; without one (or with nothing to show) they stay in the header.
         let toolbar_in_list = top.is_some() && !games.is_empty();
@@ -295,7 +327,11 @@ impl LibraryView {
             t("library.heading.all")
         };
         self.frame.metrics = metrics;
-        self.frame.list_columns = grid::list_columns(available);
+        self.frame.list_columns = grid::list_columns_for(
+            available,
+            self.ui_prefs.library_list_columns,
+            self.list_row_size,
+        );
         self.frame.focus_rem = focus_rem;
         self.follow_selection();
         if std::mem::take(&mut self.scroll_pending) {

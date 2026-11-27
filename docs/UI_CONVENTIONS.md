@@ -89,7 +89,7 @@ cx.spawn_in(window, async move |this, cx| {
 
 - Add `min_w_0()` (and `min_h_0()` vertically) plus `truncate()` on every flex child containing text that can overflow. Keep one scroll owner per region.
 - Leave 30% to 40% horizontal room for longer languages such as German and Russian. Never trap translated text inside a fixed-width box.
-- Adaptive controls (such as the library header's `iroriUi.libraryQuickControls`) must compute visibility from measured widths using a `canvas` and pure tested functions (`crates/feature-library/src/quick.rs`, rendered by `crates/feature-library/src/view.rs` and `crates/feature-library/src/view/quick.rs`), never hardcoded pixel breakpoints.
+- Adaptive controls (such as the library header's `iroriUi.libraryQuickControls`) must compute visibility from measured widths using a `canvas` and pure tested functions (`crates/feature-library/src/chips.rs`, rendered by `crates/feature-library/src/view.rs` and `crates/feature-library/src/view/quick.rs`), never hardcoded pixel breakpoints.
 - Focus view column counts (`libraryFocusColumns`, `layouts::focus_columns_for`), cover sizes (`libraryFocusCoverSize`, `layouts::focus_tile_rem`), and automatic Grid/Focus switching (`libraryAutoLayout`, `layouts::wide_enough_for_focus`) use measured widths and switch only on threshold crossings without overwriting manual picks.
 
 ### Shared components (`crates/ui/src/components/`)

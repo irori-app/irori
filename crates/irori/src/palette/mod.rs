@@ -700,7 +700,10 @@ impl Palette {
                         &[("name", &entry.name)],
                     ))
                     .keywords([t("shell.palette.category_keywords")])
-                    .icon(irori_ui::categories::icon(&entry.category)),
+                    .icon(irori_ui::categories::icon_for(
+                        &entry.category,
+                        entry.icon.as_deref(),
+                    )),
                 PaletteTarget::Category(entry.category.clone()),
                 targets,
             );

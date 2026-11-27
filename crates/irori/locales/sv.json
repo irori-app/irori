@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Spelet körs i exklusiv helskärm. Byt till kantlöst fönster eller fönsterläge för att använda överlägget.",
   "shell.palette.year_in_review": "Öppna Året som gått",
   "shell.palette.year_in_review_keywords": "sammanfattning år recap",
-  "shell.nav.views": "Vyer",
   "shell.palette.show_view": "Visa vy: {name}",
   "shell.palette.show_category": "Visa kategori: {name}",
   "shell.palette.new_smart_category": "Ny smart kategori …",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Granska och rapportera",
   "shell.palette.latest_crash_report": "Visa senaste kraschrapporten",
   "shell.palette.latest_crash_report_keywords": "crash krasch rapport logg bugg",
-  "shell.notice.manage_rollback": "Hantera / Återställ"
+  "shell.notice.manage_rollback": "Hantera / Återställ",
+  "shell.nav.pinned": "Fästa"
 }

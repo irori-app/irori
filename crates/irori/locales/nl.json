@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "De game draait in exclusief volledig scherm. Zet hem op randloos of in een venster om de overlay te gebruiken.",
   "shell.palette.year_in_review": "Jaaroverzicht openen",
   "shell.palette.year_in_review_keywords": "overzicht recap jaar",
-  "shell.nav.views": "Weergaven",
   "shell.palette.show_view": "Weergave tonen: {name}",
   "shell.palette.show_category": "Categorie tonen: {name}",
   "shell.palette.new_smart_category": "Nieuwe slimme categorie…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Bekijken en melden",
   "shell.palette.latest_crash_report": "Laatste crashrapport bekijken",
   "shell.palette.latest_crash_report_keywords": "crash rapport log panic bug fout",
-  "shell.notice.manage_rollback": "Beheren / Terugdraaien"
+  "shell.notice.manage_rollback": "Beheren / Terugdraaien",
+  "shell.nav.pinned": "Vastgezet"
 }

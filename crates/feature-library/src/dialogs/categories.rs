@@ -447,9 +447,12 @@ impl CategoriesDialog {
                     .min_w_0()
                     .gap_2()
                     .child(
-                        Icon::new(irori_ui::categories::icon(&entry.category))
-                            .small()
-                            .text_color(colour.unwrap_or(muted)),
+                        Icon::new(irori_ui::categories::icon_for(
+                            &entry.category,
+                            entry.icon.as_deref(),
+                        ))
+                        .small()
+                        .text_color(colour.unwrap_or(muted)),
                     )
                     .child(
                         v_flex()
