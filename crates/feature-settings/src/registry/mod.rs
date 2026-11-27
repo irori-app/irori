@@ -16,6 +16,7 @@
 //! The registry drives rendering order, grouping and the settings search.
 
 mod fields_app;
+mod fields_controller;
 mod fields_general;
 mod fields_launch;
 mod fields_runtime;
@@ -32,6 +33,7 @@ pub use types::{
 
 const SECTIONS: &[&[FieldSpec]] = &[
     fields_general::FIELDS,
+    fields_controller::FIELDS,
     fields_app::APPEARANCE,
     fields_app::ADVANCED,
     fields_runtime::FIELDS,
