@@ -87,7 +87,7 @@ md-5 = "0.10"
 sha3 = "0.10"
 aes = "0.8"
 cbc = "0.1"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 keyring-core = "1"
 # async-io, like every other zbus user here: zbus' tokio backend makes a shared
 # D-Bus connection opened on a Tokio thread panic when GPUI's threads use it.
