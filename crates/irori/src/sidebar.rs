@@ -278,11 +278,35 @@ impl Render for SavedViewsNav {
         let radius = theme.radius;
         let (active_fg, fg) = (palette.selected_text, palette.text);
         let (active_icon, icon) = (palette.selected_icon, palette.icon);
+        let sidebar_surfaces =
+            irori_ui::glass::chrome_surfaces(&[theme.sidebar, theme.sidebar_accent], cx);
         let rows: Vec<AnyElement> = pinned
             .map(|(category, name, glyph, colour, selected)| {
                 let id = match &category {
                     CategoryRef::Manual(name) => format!("pinned-category:{name}"),
                     CategoryRef::Smart(id) => format!("pinned-smart-category:{id}"),
+                };
+                let row_icon_colour = match colour {
+                    Some(c) => irori_ui::style::legible(
+                        c,
+                        &sidebar_surfaces,
+                        irori_ui::style::ICON_CONTRAST,
+                        cx,
+                    ),
+                    None if selected => active_icon,
+                    None => icon,
+                };
+                let row_text_colour = if selected {
+                    colour.map_or(active_fg, |c| {
+                        irori_ui::style::legible(
+                            c,
+                            &sidebar_surfaces,
+                            irori_ui::style::TEXT_CONTRAST,
+                            cx,
+                        )
+                    })
+                } else {
+                    fg
                 };
                 h_flex()
                     .id(ElementId::Name(id.into()))
@@ -293,16 +317,12 @@ impl Render for SavedViewsNav {
                     .rounded(radius)
                     .cursor_pointer()
                     .text_sm()
-                    .text_color(if selected { active_fg } else { fg })
+                    .text_color(row_text_colour)
                     .when(selected, |d| d.bg(hover_bg).font_semibold())
                     .when(!selected, |d| {
                         d.hover(move |s| s.bg(hover_bg).text_color(active_fg))
                     })
-                    .child(Icon::new(glyph).small().text_color(if selected {
-                        active_icon
-                    } else {
-                        icon
-                    }))
+                    .child(Icon::new(glyph).small().text_color(row_icon_colour))
                     .child(div().flex_1().min_w_0().truncate().child(name))
                     .when_some(colour, |d, colour| {
                         d.child(div().flex_none().size_2().rounded_full().bg(colour))

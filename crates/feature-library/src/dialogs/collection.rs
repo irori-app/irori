@@ -21,18 +21,23 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Subscription, Window, div, px, rems, transparent_black,
+    Styled as _, Subscription, Window, div, px, rems,
 };
 use irori_services::search::tag_key;
 use irori_services::smart_categories::{
-    COLOURS, ICONS, IndexKey, count_matches, matches_rules_only,
+    IndexKey, count_matches, format_hex_colour, matches_rules_only,
 };
 use irori_services::{Condition, Match, Rule, SmartCategory};
+use irori_ui::components::{ColorWheel, ColorWheelLabels, ColorWheelPick, ColorWheelReset};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::style::{KeyboardFocusable as _, TEXT_CONTRAST, legible};
 use irori_ui::{backend, models};
 
 use super::categories::{NameError, validate_name};
+use super::collection_look::{
+    IconPickerPopover, collection_quick_swatches, initial_wheel_hex, render_colour_picker,
+    render_icon_picker,
+};
 use super::{dialog_width, text};
 use crate::views::{self, TabKey};
 
@@ -346,7 +351,11 @@ pub struct CollectionDialog {
     tag_input: Entity<InputState>,
     game_search: Entity<InputState>,
     colour: Option<String>,
+    color_wheel: Entity<ColorWheel>,
+    color_popover_open: bool,
     icon: Option<String>,
+    icon_popover: Entity<IconPickerPopover>,
+    icon_popover_open: bool,
     icon_customized: bool,
     picked: Vec<String>,
     included_games: BTreeSet<String>,
@@ -390,6 +399,61 @@ impl CollectionDialog {
         let game_search = cx.new(|cx| {
             InputState::new(window, cx).placeholder(t("library.collection.game_search_placeholder"))
         });
+        let initial_hex = initial_wheel_hex(colour.as_deref(), cx);
+        let fallback_hex = initial_wheel_hex(None, cx);
+        let quick_swatches = collection_quick_swatches(cx);
+        let weak_for_wheel = cx.entity().downgrade();
+        let color_wheel = cx.new(|cx| {
+            ColorWheel::new(
+                &initial_hex,
+                &fallback_hex,
+                ColorWheelReset::Clear {
+                    has_value: colour.is_some(),
+                },
+                None,
+                ColorWheelLabels::standard(
+                    t("library.categories.colour"),
+                    t("ui.category.colour.none"),
+                ),
+                quick_swatches,
+                move |pick, _released, _window, cx| {
+                    let _ = weak_for_wheel.update(cx, |this, cx| {
+                        match pick {
+                            ColorWheelPick::Hex(hex) => {
+                                this.colour = format_hex_colour(&hex);
+                            }
+                            ColorWheelPick::Named(name) => {
+                                this.colour = Some(name);
+                                this.color_popover_open = false;
+                            }
+                            ColorWheelPick::Cleared => {
+                                this.colour = None;
+                                this.color_popover_open = false;
+                            }
+                        }
+                        this.sync_icon_popover(cx);
+                        cx.notify();
+                    });
+                },
+                window,
+                cx,
+            )
+        });
+        let weak_for_icon = cx.entity().downgrade();
+        let icon_popover = cx.new(|cx| {
+            IconPickerPopover::new(
+                icon.as_deref(),
+                colour.clone(),
+                move |slug, _window, cx| {
+                    let _ = weak_for_icon.update(cx, |this, cx| {
+                        this.set_icon(slug, cx);
+                        this.icon_popover_open = false;
+                    });
+                },
+                window,
+                cx,
+            )
+        });
         let suggestions = {
             let lib = models(cx).library.read(cx);
             available_terms(&lib.snapshot)
@@ -427,7 +491,11 @@ impl CollectionDialog {
             tag_input,
             game_search,
             colour,
+            color_wheel,
+            color_popover_open: false,
             icon,
+            icon_popover,
+            icon_popover_open: false,
             icon_customized,
             picked,
             included_games,
@@ -436,6 +504,68 @@ impl CollectionDialog {
             preview: None,
             _subscriptions: subscriptions,
         }
+    }
+
+    fn sync_icon_popover(&self, cx: &mut Context<Self>) {
+        let icon = self.icon.clone();
+        let colour = self.colour.clone();
+        self.icon_popover
+            .update(cx, |p, cx| p.sync(icon.as_deref(), colour, cx));
+    }
+
+    fn set_icon(&mut self, slug: &str, cx: &mut Context<Self>) {
+        self.icon = (slug != "sparkles").then(|| slug.to_owned());
+        self.icon_customized = true;
+        self.sync_icon_popover(cx);
+        cx.notify();
+    }
+
+    fn set_colour(&mut self, colour: Option<String>, cx: &mut Context<Self>) {
+        self.colour = colour;
+        self.color_popover_open = false;
+        self.sync_icon_popover(cx);
+        cx.notify();
+    }
+
+    fn on_colour_popover_toggle(
+        &mut self,
+        open: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.color_popover_open = open;
+        if open {
+            let hex = initial_wheel_hex(self.colour.as_deref(), cx);
+            let fallback = initial_wheel_hex(None, cx);
+            let swatches = collection_quick_swatches(cx);
+            let has_value = self.colour.is_some();
+            self.color_wheel.update(cx, |w, cx| {
+                w.set_quick_swatches(swatches, cx);
+                w.rebind(
+                    t("library.categories.colour"),
+                    &hex,
+                    &fallback,
+                    ColorWheelReset::Clear { has_value },
+                    None,
+                    window,
+                    cx,
+                );
+            });
+        }
+        cx.notify();
+    }
+
+    fn on_icon_popover_toggle(&mut self, open: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.icon_popover_open = open;
+        if open {
+            let icon = self.icon.clone();
+            let colour = self.colour.clone();
+            self.icon_popover.update(cx, |p, cx| {
+                p.clear_search(window, cx);
+                p.sync(icon.as_deref(), colour, cx);
+            });
+        }
+        cx.notify();
     }
 
     fn sync_auto_icon(&mut self) {
@@ -595,134 +725,27 @@ impl CollectionDialog {
     }
 
     fn render_colour_picker(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
-        let border = theme.border;
-        let primary = theme.primary;
-        let muted = theme.muted_foreground;
-        let none_selected = self.colour.is_none();
-        h_flex()
-            .w_full()
-            .items_center()
-            .gap_2()
-            .child(
-                div()
-                    .text_xs()
-                    .font_medium()
-                    .text_color(muted)
-                    .child(t("library.categories.colour")),
-            )
-            .child(
-                h_flex()
-                    .items_center()
-                    .gap_1p5()
-                    .child(
-                        div()
-                            .id("collection-colour-none")
-                            .size(rems(1.25))
-                            .rounded_full()
-                            .border_2()
-                            .border_color(if none_selected { primary } else { border })
-                            .cursor_pointer()
-                            .keyboard_focusable(cx)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(Icon::new(IconName::X).xsmall().text_color(muted))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.colour = None;
-                                cx.notify();
-                            })),
-                    )
-                    .children(COLOURS.into_iter().map(|c| {
-                        let selected = self.colour.as_deref() == Some(c);
-                        let swatch = irori_ui::categories::colour(Some(c), cx).unwrap_or(muted);
-                        div()
-                            .id(SharedString::from(format!("collection-colour-{c}")))
-                            .size(rems(1.25))
-                            .rounded_full()
-                            .bg(swatch)
-                            .border_2()
-                            .border_color(if selected {
-                                primary
-                            } else {
-                                transparent_black()
-                            })
-                            .cursor_pointer()
-                            .keyboard_focusable(cx)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.colour = Some(c.to_owned());
-                                cx.notify();
-                            }))
-                    })),
-            )
-            .into_any_element()
+        render_colour_picker(
+            self.colour.as_deref(),
+            self.color_popover_open,
+            self.color_wheel.clone(),
+            |this, _, cx| this.set_colour(None, cx),
+            |this, c, _, cx| this.set_colour(Some(c.to_owned()), cx),
+            |this, open, window, cx| this.on_colour_popover_toggle(open, window, cx),
+            cx,
+        )
     }
 
     fn render_icon_picker(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
-        let primary = theme.primary;
-        let tint = irori_ui::categories::colour(self.colour.as_deref(), cx).unwrap_or(primary);
-        let active_fg = legible(tint, &[theme.background], TEXT_CONTRAST, cx);
-        let muted = theme.muted_foreground;
-        let fg = theme.foreground;
-        let border = theme.border;
-        let idle_bg = theme.secondary.opacity(0.32);
-        let hover_bg = theme.secondary.opacity(0.75);
-        let radius = theme.radius;
-        let active_slug = self.icon.as_deref().unwrap_or("sparkles");
-
-        v_flex()
-            .w_full()
-            .gap_1()
-            .child(
-                div()
-                    .text_xs()
-                    .font_medium()
-                    .text_color(muted)
-                    .child(t("library.collection.icon")),
-            )
-            .child(
-                h_flex()
-                    .id("collection-icon-picker")
-                    .debug_selector(|| "collection-icon-picker".into())
-                    .w_full()
-                    .flex_wrap()
-                    .gap_1()
-                    .children(ICONS.into_iter().map(|slug| {
-                        let selected = active_slug == slug;
-                        let glyph =
-                            irori_ui::categories::icon_by_name(Some(slug), IconName::Sparkles);
-                        div()
-                            .id(SharedString::from(format!("collection-icon-{slug}")))
-                            .debug_selector(move || format!("collection-icon-{slug}"))
-                            .size(rems(1.8))
-                            .rounded(radius)
-                            .border_1()
-                            .cursor_pointer()
-                            .keyboard_focusable(cx)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .when(selected, |el| {
-                                el.bg(tint.opacity(0.2))
-                                    .border_color(tint)
-                                    .text_color(active_fg)
-                            })
-                            .when(!selected, |el| {
-                                el.bg(idle_bg)
-                                    .border_color(border)
-                                    .text_color(muted)
-                                    .hover(move |s| s.bg(hover_bg).text_color(fg))
-                            })
-                            .child(Icon::new(glyph).small())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.icon = (slug != "sparkles").then(|| slug.to_owned());
-                                this.icon_customized = true;
-                                cx.notify();
-                            }))
-                    })),
-            )
-            .into_any_element()
+        render_icon_picker(
+            self.colour.as_deref(),
+            self.icon.as_deref(),
+            self.icon_popover_open,
+            self.icon_popover.clone(),
+            |this, slug, _, cx| this.set_icon(slug, cx),
+            |this, open, window, cx| this.on_icon_popover_toggle(open, window, cx),
+            cx,
+        )
     }
 
     fn render_manual_games_column(

@@ -11,14 +11,15 @@
 //! drops it from the library's category filter (the library never switches
 //! to "Uncategorized" on its own).
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
@@ -26,17 +27,19 @@ use gpui_kit::component::{
 use gpui_kit::component::{Icon, Selectable as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div,
+    Anchor, App, AppContext as _, Context, Entity, Focusable as _, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, Window, div,
 };
 use irori_core::GameId;
-use irori_services::smart_categories::COLOURS;
+use irori_services::smart_categories::format_hex_colour;
 use irori_services::{CategoryLook, CategoryRef};
 use irori_ui::categories::CategoryEntry;
+use irori_ui::components::{ColorWheel, ColorWheelLabels, ColorWheelPick, ColorWheelReset};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
+use super::collection_look::{collection_quick_swatches, initial_wheel_hex};
 use super::{dialog_width, text};
 use crate::filters_panel::active_filters;
 
@@ -104,6 +107,10 @@ pub struct CategoriesDialog {
     new_name: Entity<InputState>,
     editing: Option<(String, Entity<InputState>)>,
     confirm_delete: Option<CategoryRef>,
+    color_wheel: Entity<ColorWheel>,
+    open_colour_for: Option<CategoryRef>,
+    colour_target: Rc<RefCell<Option<CategoryRef>>>,
+    preview_colour: Option<(CategoryRef, Option<String>)>,
     _subscriptions: Vec<Subscription>,
     _editing_subscription: Option<Subscription>,
 }
@@ -112,6 +119,51 @@ impl CategoriesDialog {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let new_name = cx.new(|cx| {
             InputState::new(window, cx).placeholder(t("library.categories.new_placeholder"))
+        });
+        let colour_target: Rc<RefCell<Option<CategoryRef>>> = Rc::new(RefCell::new(None));
+        let target_for_cb = Rc::clone(&colour_target);
+        let weak_self = cx.entity().downgrade();
+        let fallback_hex = initial_wheel_hex(None, cx);
+        let swatches = collection_quick_swatches(cx);
+        let color_wheel = cx.new(|cx| {
+            ColorWheel::new(
+                &fallback_hex,
+                &fallback_hex,
+                ColorWheelReset::Clear { has_value: false },
+                None,
+                ColorWheelLabels::standard(
+                    t("library.categories.colour"),
+                    t("ui.category.colour.none"),
+                ),
+                swatches,
+                move |pick, released, _window, cx| {
+                    let Some(category) = target_for_cb.borrow().clone() else {
+                        return;
+                    };
+                    let next_colour = match &pick {
+                        ColorWheelPick::Hex(hex) => format_hex_colour(hex),
+                        ColorWheelPick::Named(name) => Some(name.clone()),
+                        ColorWheelPick::Cleared => None,
+                    };
+                    let close_popover =
+                        matches!(pick, ColorWheelPick::Named(_) | ColorWheelPick::Cleared);
+                    let _ = weak_self.update(cx, |this, cx| {
+                        if released {
+                            this.preview_colour = None;
+                            if close_popover {
+                                this.open_colour_for = None;
+                            }
+                            let next = next_colour.clone();
+                            Self::set_look(&category, move |l| l.colour = next, cx);
+                        } else {
+                            this.preview_colour = Some((category.clone(), next_colour.clone()));
+                        }
+                        cx.notify();
+                    });
+                },
+                window,
+                cx,
+            )
         });
         let library = models(cx).library.clone();
         let subscriptions = vec![
@@ -130,9 +182,50 @@ impl CategoriesDialog {
             new_name,
             editing: None,
             confirm_delete: None,
+            color_wheel,
+            open_colour_for: None,
+            colour_target,
+            preview_colour: None,
             _subscriptions: subscriptions,
             _editing_subscription: None,
         }
+    }
+
+    fn on_colour_popover_change(
+        &mut self,
+        category: CategoryRef,
+        name: String,
+        current: Option<String>,
+        open: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if open {
+            self.open_colour_for = Some(category.clone());
+            *self.colour_target.borrow_mut() = Some(category);
+            self.preview_colour = None;
+            let initial_hex = initial_wheel_hex(current.as_deref(), cx);
+            let fallback_hex = initial_wheel_hex(None, cx);
+            let swatches = collection_quick_swatches(cx);
+            self.color_wheel.update(cx, |w, cx| {
+                w.set_quick_swatches(swatches, cx);
+                w.rebind(
+                    name.into(),
+                    &initial_hex,
+                    &fallback_hex,
+                    ColorWheelReset::Clear {
+                        has_value: current.is_some(),
+                    },
+                    None,
+                    window,
+                    cx,
+                );
+            });
+        } else if self.open_colour_for.as_ref() == Some(&category) {
+            self.open_colour_for = None;
+            self.preview_colour = None;
+        }
+        cx.notify();
     }
 
     fn create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -278,31 +371,39 @@ impl CategoriesDialog {
                         Self::set_look(&pin_category, |l| l.pinned = !l.pinned, cx)
                     }),
             )
-            .child(
-                Button::new("colour")
-                    .small()
-                    .ghost()
-                    .icon(IconName::Palette)
-                    .tooltip(t("library.categories.colour"))
-                    .dropdown_menu(move |menu, _, _| {
-                        let none = std::iter::once(None);
-                        let colours = COLOURS.iter().map(|c| Some(c.to_string()));
-                        none.chain(colours).fold(menu, |menu, colour| {
-                            let category = colour_category.clone();
-                            let label = colour.as_deref().map_or_else(
-                                || t("ui.category.colour.none"),
-                                irori_ui::categories::colour_label,
-                            );
-                            let checked = colour == current;
-                            menu.item(PopupMenuItem::new(label).checked(checked).on_click(
-                                move |_, _, cx| {
-                                    let colour = colour.clone();
-                                    Self::set_look(&category, move |l| l.colour = colour, cx)
-                                },
-                            ))
-                        })
-                    }),
-            )
+            .child({
+                let row_key = match &entry.category {
+                    CategoryRef::Manual(name) => format!("manual-{name}"),
+                    CategoryRef::Smart(id) => format!("smart-{id}"),
+                };
+                let popover_id = SharedString::from(format!("category-colour-popover-{row_key}"));
+                let button_id = SharedString::from(format!("category-colour-btn-{row_key}"));
+                let colour_name = entry.name.clone();
+                let is_open = self.open_colour_for.as_ref() == Some(&entry.category);
+                let wheel = self.color_wheel.clone();
+                Popover::new(popover_id)
+                    .anchor(Anchor::BottomRight)
+                    .open(is_open)
+                    .trigger(
+                        Button::new(button_id)
+                            .small()
+                            .ghost()
+                            .icon(IconName::Palette)
+                            .selected(is_open)
+                            .tooltip(t("library.categories.colour")),
+                    )
+                    .on_open_change(cx.listener(move |this, open: &bool, window, cx| {
+                        this.on_colour_popover_change(
+                            colour_category.clone(),
+                            colour_name.clone(),
+                            current.clone(),
+                            *open,
+                            window,
+                            cx,
+                        );
+                    }))
+                    .content(move |_, _, _| wheel.clone())
+            })
             .child(edit)
             .child(
                 Button::new("delete")
@@ -431,7 +532,12 @@ impl CategoriesDialog {
             );
         }
 
-        let colour = irori_ui::categories::colour(entry.colour.as_deref(), cx);
+        let shown_colour = self
+            .preview_colour
+            .as_ref()
+            .filter(|(cat, _)| *cat == entry.category)
+            .map_or(entry.colour.as_deref(), |(_, c)| c.as_deref());
+        let colour = irori_ui::categories::colour(shown_colour, cx);
         let detail = if entry.is_smart() && !entry.readable {
             t("library.categories.unreadable")
         } else {

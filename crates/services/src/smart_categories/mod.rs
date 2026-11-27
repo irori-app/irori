@@ -61,37 +61,106 @@ impl CategoryLook {
     }
 }
 
-/// The colours a category can have, as stored. Screens map each to a theme
-/// colour of the same name.
-pub const COLOURS: [&str; 6] = ["red", "yellow", "green", "cyan", "blue", "magenta"];
+/// The curated named colours a category can have, as stored. Screens map the
+/// classic theme names to theme tokens and derive the extended hues to match
+/// the active theme. Custom colours are stored as lowercase `#rrggbb` strings
+/// (see [`parse_hex_colour`]).
+pub const COLOURS: [&str; 14] = [
+    "red", "orange", "amber", "yellow", "lime", "green", "teal", "cyan", "sky", "blue", "indigo",
+    "purple", "magenta", "pink",
+];
+
+/// Parse a `#rrggbb` custom category colour into a 24-bit RGB integer.
+pub fn parse_hex_colour(value: &str) -> Option<u32> {
+    let digits = value.trim().strip_prefix('#')?;
+    if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    u32::from_str_radix(digits, 16).ok()
+}
+
+/// Normalize a 6-digit hex colour (with or without leading `#`) to lowercase `#rrggbb`.
+pub fn format_hex_colour(value: &str) -> Option<String> {
+    let digits = value.trim().strip_prefix('#').unwrap_or(value.trim());
+    if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(format!("#{}", digits.to_ascii_lowercase()))
+}
 
 /// The curated icons a collection can have, as stored slugs. Screens map each
 /// to the matching Lucide `IconName`.
-pub const ICONS: [&str; 24] = [
-    "sparkles",
+pub const ICONS: [&str; 64] = [
+    // Combat & action
     "flame",
     "swords",
+    "shield",
+    "axe",
+    "bow-arrow",
+    "crosshair",
+    "bomb",
+    "zap",
+    "biohazard",
+    // Fantasy, horror & sci-fi
+    "sparkles",
+    "wand-sparkles",
+    "castle",
     "skull",
     "ghost",
-    "wand-sparkles",
     "moon-star",
-    "crosshair",
     "rocket",
-    "castle",
-    "chess-pawn",
+    "orbit",
+    "bot",
+    "flask-conical",
+    // Strategy, puzzle & adventure
+    "chess-knight",
     "dices",
     "puzzle",
+    "brain",
     "compass",
+    "map",
     "pickaxe",
-    "coffee",
-    "book-open",
-    "car",
-    "trophy",
-    "users",
-    "music",
+    "wrench",
+    "key",
+    "eye",
+    // Genres, vehicles & media
     "gamepad-2",
-    "gem",
+    "joystick",
+    "tv",
+    "car",
+    "plane",
+    "anchor",
+    "music",
+    "headphones",
+    "book-open",
+    "scroll-text",
+    "clapperboard",
+    "drama",
+    // Cozy, nature & creatures
+    "coffee",
+    "utensils",
+    "trees",
+    "sprout",
+    "flower-2",
+    "mountain",
+    "tent",
+    "snowflake",
+    "sun",
+    "paw-print",
+    "cat",
+    // Social, awards & organization
+    "users",
+    "trophy",
+    "medal",
     "crown",
+    "gem",
+    "heart",
+    "star",
+    "bookmark",
+    "clock",
+    "hourglass",
+    "circle-check",
+    "flag",
 ];
 
 /// Whether a game must pass every rule or one of them.

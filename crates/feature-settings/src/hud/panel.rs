@@ -1064,7 +1064,7 @@ impl HudPanel {
             }
         }
         if let Some(slot) = self.open_color_slot
-            && !self.color_wheel.read(cx).is_dragging()
+            && !self.color_wheel.read(cx).is_dragging(cx)
         {
             let hex = sanitize_hex6(slot.get(&profile.custom_colors), slot.fallback());
             let pair = color_pair_hex(slot, &profile.custom_colors);
