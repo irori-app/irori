@@ -2323,5 +2323,10 @@
   "settings.field.ui_cover_compat_badges.help": "Mostra le valutazioni ProtonDB e i badge Steam Deck Verified sulle copertine dei giochi non installati.",
   "settings.option.cover_caption.hover": "Al passaggio",
   "settings.field.ui_library_greeting.label": "Mostra saluto nell’intestazione della libreria",
-  "settings.field.ui_library_greeting.help": "Ti saluta in base all’ora in cima alla Libreria. Clicca sul tuo nome lì per modificarlo o nasconderlo."
+  "settings.field.ui_library_greeting.help": "Ti saluta in base all’ora in cima alla Libreria. Clicca sul tuo nome lì per modificarlo o nasconderlo.",
+  "settings.sidebar.setup": "Account e strumenti",
+  "settings.page.accounts": "Account",
+  "settings.page.wine_manager": "Wine e Proton",
+  "settings.page.wine_manager_macos": "Gestore di Wine",
+  "settings.page.emulators": "Emulatori"
 }

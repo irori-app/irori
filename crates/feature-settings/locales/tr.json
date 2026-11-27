@@ -2323,5 +2323,10 @@
   "settings.field.ui_cover_compat_badges.help": "Yüklü olmayan oyunların kapaklarında ProtonDB derecelendirmelerini ve Steam Deck Verified rozetlerini göster.",
   "settings.option.cover_caption.hover": "Üzerine gelince",
   "settings.field.ui_library_greeting.label": "Kütüphane başlığında selamlamayı göster",
-  "settings.field.ui_library_greeting.help": "Kütüphanenin üstünde günün saatine göre selam verir. Düzenlemek veya gizlemek için adına tıkla."
+  "settings.field.ui_library_greeting.help": "Kütüphanenin üstünde günün saatine göre selam verir. Düzenlemek veya gizlemek için adına tıkla.",
+  "settings.sidebar.setup": "Hesaplar ve araçlar",
+  "settings.page.accounts": "Hesaplar",
+  "settings.page.wine_manager": "Wine ve Proton",
+  "settings.page.wine_manager_macos": "Wine yöneticisi",
+  "settings.page.emulators": "Emülatörler"
 }

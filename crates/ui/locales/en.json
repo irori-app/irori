@@ -292,7 +292,7 @@
   "ui.tour.palette.body": "Press Ctrl+K (⌘K on a Mac) anywhere for the command palette: play or find a game, go to a page, or run any command.",
   "ui.tour.skip": "Skip the tour",
   "ui.tour.sidebar.title": "Everything has a place",
-  "ui.tour.sidebar.body": "The sidebar takes you to your library, downloads, stores, emulators, Wine and settings. Your saved views and pinned categories sit here too.",
+  "ui.tour.sidebar.body": "The sidebar takes you to your library, downloads, stores, stats and settings. Your saved views and pinned categories sit here too.",
   "ui.tour.back": "Back",
   "ui.tour.big_picture.title": "From the couch",
   "ui.tour.big_picture.body": "Big Picture is Irori for a TV and a controller. Press the controller’s Guide button, or open it here.",

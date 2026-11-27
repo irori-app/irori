@@ -2323,5 +2323,10 @@
   "settings.field.ui_cover_compat_badges.help": "在未安裝遊戲的封面上顯示 ProtonDB 評級與 Steam Deck 已驗證徽章。",
   "settings.option.cover_caption.hover": "僅游標停留時",
   "settings.field.ui_library_greeting.label": "在收藏庫標題列顯示問候語",
-  "settings.field.ui_library_greeting.help": "在收藏庫頂部依時段向你問好。點擊名字即可編輯或隱藏。"
+  "settings.field.ui_library_greeting.help": "在收藏庫頂部依時段向你問好。點擊名字即可編輯或隱藏。",
+  "settings.sidebar.setup": "帳號與工具",
+  "settings.page.accounts": "帳號",
+  "settings.page.wine_manager": "Wine 與 Proton",
+  "settings.page.wine_manager_macos": "Wine 管理員",
+  "settings.page.emulators": "模擬器"
 }

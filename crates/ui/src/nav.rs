@@ -38,10 +38,9 @@ impl Route {
         match self {
             Route::Library | Route::Game(_) | Route::GameSettings(..) => "library",
             Route::Downloads => "downloads",
-            Route::Settings(_) => "settings",
-            Route::WineManager => "wine",
-            Route::Emulators => "emulators",
-            Route::Accounts => "accounts",
+            Route::Settings(_) | Route::WineManager | Route::Emulators | Route::Accounts => {
+                "settings"
+            }
             Route::Stores => "stores",
             Route::Stats | Route::YearInReview(_) => "stats",
             Route::BigPicture => "big-picture",
@@ -239,5 +238,13 @@ mod tests {
     #[test]
     fn downloads_route_owns_downloads_section() {
         assert_eq!(Route::Downloads.section(), "downloads");
+    }
+
+    #[test]
+    fn management_routes_highlight_settings_section() {
+        assert_eq!(Route::Accounts.section(), "settings");
+        assert_eq!(Route::WineManager.section(), "settings");
+        assert_eq!(Route::Emulators.section(), "settings");
+        assert_eq!(Route::Settings("general".into()).section(), "settings");
     }
 }

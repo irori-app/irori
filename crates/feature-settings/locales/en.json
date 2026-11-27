@@ -2389,5 +2389,10 @@
   "settings.field.ui_cover_compat_badges.help": "Show ProtonDB ratings and Steam Deck Verified badges on covers of games that aren’t installed.",
   "settings.option.cover_caption.hover": "On hover",
   "settings.field.ui_library_greeting.label": "Show greeting in library header",
-  "settings.field.ui_library_greeting.help": "Greet you by time of day at the top of the Library. Click your name there to edit or hide it."
+  "settings.field.ui_library_greeting.help": "Greet you by time of day at the top of the Library. Click your name there to edit or hide it.",
+  "settings.sidebar.setup": "Accounts & tools",
+  "settings.page.accounts": "Accounts",
+  "settings.page.wine_manager": "Wine & Proton",
+  "settings.page.wine_manager_macos": "Wine manager",
+  "settings.page.emulators": "Emulators"
 }

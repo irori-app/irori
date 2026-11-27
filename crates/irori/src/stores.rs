@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui_kit::App;
+use gpui_kit::{App, AppContext as _};
 use irori_core::{DynStore, EventBus, SettingsFn, Store};
 use irori_services::{MultiAccountStore, SlotDirs};
 use irori_ui::hooks::{Hooks, ImportSummary};
@@ -192,6 +192,18 @@ pub fn hooks() -> Hooks {
         uninstall: Some(Arc::new(irori_game::open_uninstall_dialog)),
         game_setup: Some(Arc::new(irori_settings::setup_card)),
         found_sources: Some(Arc::new(irori_manage::found_sources_view)),
+        accounts_view: Some(Arc::new(|window, cx| {
+            cx.new(|cx| irori_manage::AccountsView::new(window, cx))
+                .into()
+        })),
+        wine_manager_view: Some(Arc::new(|window, cx| {
+            cx.new(|cx| irori_manage::WineManagerView::new(window, cx))
+                .into()
+        })),
+        emulators_view: Some(Arc::new(|window, cx| {
+            cx.new(|cx| irori_manage::EmulatorsView::new(window, cx))
+                .into()
+        })),
         play: Some(Arc::new(|id, window, cx| {
             irori_game::ops::play(&id, None, window, cx).detach()
         })),

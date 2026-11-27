@@ -2323,5 +2323,10 @@
   "settings.field.ui_cover_compat_badges.help": "설치되지 않은 게임의 커버에 ProtonDB 등급과 Steam Deck 완벽 호환 배지를 표시합니다.",
   "settings.option.cover_caption.hover": "마우스를 올릴 때",
   "settings.field.ui_library_greeting.label": "라이브러리 헤더에 인사말 표시",
-  "settings.field.ui_library_greeting.help": "라이브러리 상단에서 시간대에 맞춰 인사합니다. 이름을 클릭해 수정하거나 숨길 수 있습니다."
+  "settings.field.ui_library_greeting.help": "라이브러리 상단에서 시간대에 맞춰 인사합니다. 이름을 클릭해 수정하거나 숨길 수 있습니다.",
+  "settings.sidebar.setup": "계정 및 도구",
+  "settings.page.accounts": "계정",
+  "settings.page.wine_manager": "Wine 및 Proton",
+  "settings.page.wine_manager_macos": "Wine 관리자",
+  "settings.page.emulators": "에뮬레이터"
 }
