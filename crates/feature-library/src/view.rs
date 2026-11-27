@@ -8,7 +8,7 @@ mod frame;
 mod look;
 mod menus;
 mod panel;
-mod quick;
+pub(crate) mod quick;
 pub(crate) mod remove;
 mod render_grid;
 mod render_list;

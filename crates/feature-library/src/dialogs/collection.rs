@@ -10,6 +10,7 @@ use std::collections::{BTreeSet, HashSet};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
@@ -193,13 +194,15 @@ pub(crate) fn extract_terms(category: &SmartCategory) -> Vec<String> {
 }
 
 /// Build a [`SmartCategory`] from `base`, replacing its name, colour, icon,
-/// tag/genre rules, manually included games, and manually excluded games while
-/// preserving any unknown fields and `leave_out` rows.
+/// sidebar pin state, tag/genre rules, manually included games, and manually
+/// excluded games while preserving any unknown fields and `leave_out` rows.
+#[allow(clippy::too_many_arguments)] // Pure builder mirroring CollectionDialog fields.
 pub(crate) fn build_collection_category(
     base: &SmartCategory,
     name: String,
     colour: Option<String>,
     icon: Option<String>,
+    pinned: bool,
     terms: &[String],
     included_games: &BTreeSet<String>,
     excluded_games: &BTreeSet<String>,
@@ -207,6 +210,7 @@ pub(crate) fn build_collection_category(
     let mut next = base.clone();
     next.name = name;
     next.matching = Match::Any;
+    next.look.pinned = pinned;
     next.look.colour = colour;
     next.look.icon = icon.filter(|slug| slug != "sparkles");
     next.included_games = included_games.clone();
@@ -357,6 +361,7 @@ pub struct CollectionDialog {
     icon_popover: Entity<IconPickerPopover>,
     icon_popover_open: bool,
     icon_customized: bool,
+    pinned: bool,
     picked: Vec<String>,
     included_games: BTreeSet<String>,
     excluded_games: BTreeSet<String>,
@@ -375,6 +380,7 @@ impl CollectionDialog {
     ) -> Self {
         let picked = extract_terms(&base);
         let colour = base.look.colour.clone();
+        let pinned = base.look.pinned;
         let icon_customized = base.look.icon.is_some();
         let icon =
             base.look.icon.clone().or_else(|| {
@@ -497,6 +503,7 @@ impl CollectionDialog {
             icon_popover,
             icon_popover_open: false,
             icon_customized,
+            pinned,
             picked,
             included_games,
             excluded_games,
@@ -654,6 +661,7 @@ impl CollectionDialog {
             text(&self.name, cx),
             self.colour.clone(),
             self.icon.clone(),
+            self.pinned,
             &self.picked,
             &self.included_games,
             &self.excluded_games,
@@ -725,7 +733,7 @@ impl CollectionDialog {
     }
 
     fn render_colour_picker(&self, cx: &mut Context<Self>) -> AnyElement {
-        render_colour_picker(
+        let picker = render_colour_picker(
             self.colour.as_deref(),
             self.color_popover_open,
             self.color_wheel.clone(),
@@ -733,7 +741,29 @@ impl CollectionDialog {
             |this, c, _, cx| this.set_colour(Some(c.to_owned()), cx),
             |this, open, window, cx| this.on_colour_popover_toggle(open, window, cx),
             cx,
-        )
+        );
+        h_flex()
+            .w_full()
+            .items_center()
+            .justify_between()
+            .flex_wrap()
+            .gap_3()
+            .child(div().flex_1().min_w_0().child(picker))
+            .child(
+                div()
+                    .flex_none()
+                    .debug_selector(|| "collection-pin-sidebar".into())
+                    .child(
+                        Checkbox::new("collection-pin-sidebar")
+                            .label(t("library.categories.pin"))
+                            .checked(self.pinned)
+                            .on_change(cx.listener(|this, checked: &bool, _, cx| {
+                                this.pinned = *checked;
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn render_icon_picker(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -1423,6 +1453,7 @@ mod tests {
             "Souls & Action".into(),
             Some("red".into()),
             Some("flame".into()),
+            true,
             &[
                 "Souls-like".into(),
                 "souls-like".into(),
@@ -1436,6 +1467,7 @@ mod tests {
         assert!(!built.manual_only);
         assert_eq!(built.name, "Souls & Action");
         assert_eq!(built.matching, Match::Any);
+        assert!(built.look.pinned);
         assert_eq!(built.look.colour.as_deref(), Some("red"));
         assert_eq!(built.look.icon.as_deref(), Some("flame"));
         assert_eq!(built.included_games, included);
@@ -1461,12 +1493,14 @@ mod tests {
             "Weekend Backlog".into(),
             None,
             Some("sparkles".into()),
+            false,
             &[],
             &included,
             &BTreeSet::new(),
         );
         assert!(is_simple_tag_collection(&manual));
         assert!(manual.manual_only);
+        assert!(!manual.look.pinned);
         assert!(manual.rules.is_empty());
         assert_eq!(manual.look.icon, None);
         assert_eq!(manual.included_games, included);

@@ -286,6 +286,8 @@ impl Render for SavedViewsNav {
                     CategoryRef::Manual(name) => format!("pinned-category:{name}"),
                     CategoryRef::Smart(id) => format!("pinned-smart-category:{id}"),
                 };
+                let selector = id.clone();
+                let menu_category = category.clone();
                 let row_icon_colour = match colour {
                     Some(c) => irori_ui::style::legible(
                         c,
@@ -310,6 +312,7 @@ impl Render for SavedViewsNav {
                 };
                 h_flex()
                     .id(ElementId::Name(id.into()))
+                    .debug_selector(move || selector.clone())
                     .keyboard_focusable(cx)
                     .h(rems(2.25))
                     .px_3()
@@ -328,6 +331,9 @@ impl Render for SavedViewsNav {
                         d.child(div().flex_none().size_2().rounded_full().bg(colour))
                     })
                     .on_click(move |_, _, cx| irori_library::show_category(category.clone(), cx))
+                    .context_menu(move |menu, _, cx| {
+                        irori_library::pinned_category_menu(menu, &menu_category, cx)
+                    })
                     .into_any_element()
             })
             .collect();

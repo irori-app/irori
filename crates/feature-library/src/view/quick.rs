@@ -13,9 +13,10 @@ use gpui_kit::component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMen
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, px, rems, transparent_black,
+    AnyElement, App, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, div, px, rems, transparent_black,
 };
+use irori_services::CategoryRef;
 use irori_ui::i18n::t;
 use irori_ui::models;
 use irori_ui::style::KeyboardFocusable as _;
@@ -28,16 +29,65 @@ use crate::dialogs::collection::{
 use crate::filter::ViewFilter;
 use crate::views::{self, TabKey};
 
+/// Context menu for a pinned category or collection row in the sidebar.
+pub fn pinned_category_menu(mut menu: PopupMenu, category: &CategoryRef, cx: &App) -> PopupMenu {
+    if let CategoryRef::Smart(id) = category
+        && let Some(cat) = models(cx).library.read(cx).user.smart_categories.get(id)
+        && !cat.is_unreadable()
+    {
+        if is_simple_tag_collection(cat) {
+            let edit_id = id.clone();
+            menu = menu.item(
+                PopupMenuItem::new(t("library.collection.edit"))
+                    .icon(Icon::new(IconName::Pencil))
+                    .on_click(move |_, window, cx| {
+                        open_collection_dialog(Some(edit_id.clone()), window, cx)
+                    }),
+            );
+        }
+        let rules_id = id.clone();
+        menu = menu
+            .item(
+                PopupMenuItem::new(t("library.categories.edit_rules"))
+                    .icon(Icon::new(IconName::Settings2))
+                    .on_click(move |_, window, cx| {
+                        crate::dialogs::smart::open_smart_category_editor(
+                            Some(rules_id.clone()),
+                            None,
+                            window,
+                            cx,
+                        )
+                    }),
+            )
+            .separator();
+    }
+    let unpin_category = category.clone();
+    menu.item(
+        PopupMenuItem::new(t("library.categories.unpin"))
+            .icon(Icon::new(IconName::PinOff))
+            .on_click(move |_, _, cx| crate::set_category_pinned(&unpin_category, false, cx)),
+    )
+}
+
 /// Context and "⋯" menu for a dynamic collection tab.
 fn collection_tab_menu(
     mut menu: PopupMenu,
     id: String,
     is_simple: bool,
     smart_ids: Vec<String>,
+    cx: &App,
 ) -> PopupMenu {
+    let pinned = models(cx)
+        .library
+        .read(cx)
+        .user
+        .smart_categories
+        .get(&id)
+        .is_some_and(|cat| cat.look.pinned);
     let tab_key = TabKey::Collection(id.clone());
     let edit_id = id.clone();
     let rules_id = id.clone();
+    let pin_cat = CategoryRef::Smart(id.clone());
     let del_id = id;
     let left_key = tab_key.clone();
     let left_smart = smart_ids.clone();
@@ -65,6 +115,19 @@ fn collection_tab_menu(
                     cx,
                 )
             }),
+    )
+    .item(
+        PopupMenuItem::new(if pinned {
+            t("library.categories.unpin")
+        } else {
+            t("library.categories.pin")
+        })
+        .icon(Icon::new(if pinned {
+            IconName::PinOff
+        } else {
+            IconName::Pin
+        }))
+        .on_click(move |_, _, cx| crate::set_category_pinned(&pin_cat, !pinned, cx)),
     )
     .separator()
     .item(
@@ -275,12 +338,13 @@ impl LibraryView {
                                             .ghost()
                                             .icon(IconName::Ellipsis)
                                             .tooltip(t("library.views.tab_menu"))
-                                            .dropdown_menu(move |menu, _, _| {
+                                            .dropdown_menu(move |menu, _, cx| {
                                                 collection_tab_menu(
                                                     menu,
                                                     menu_id.clone(),
                                                     is_simple,
                                                     menu_smart.clone(),
+                                                    cx,
                                                 )
                                             }),
                                         ),
@@ -288,12 +352,13 @@ impl LibraryView {
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.apply_tab(click_key.clone(), Some(window), cx)
                                 }))
-                                .context_menu(move |menu, _, _| {
+                                .context_menu(move |menu, _, cx| {
                                     collection_tab_menu(
                                         menu,
                                         ctx_id.clone(),
                                         is_simple,
                                         ctx_smart.clone(),
+                                        cx,
                                     )
                                 })
                                 .into_any_element(),
