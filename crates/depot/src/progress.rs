@@ -156,11 +156,13 @@ impl Meter {
 
     pub fn sample(&mut self) -> Progress {
         let now = Instant::now();
-        let done = self
-            .stats
-            .done
-            .load(Ordering::Relaxed)
-            .min(self.stats.total);
+        let raw_done = self.stats.done.load(Ordering::Relaxed);
+        let total = self.stats.total;
+        let done = if total == 0 {
+            raw_done
+        } else {
+            raw_done.min(total)
+        };
         let received = self.stats.received.load(Ordering::Relaxed);
         let written = self.stats.written.load(Ordering::Relaxed);
         self.samples.push_back((now, done, received, written));
@@ -182,16 +184,15 @@ impl Meter {
             }
         };
         let done_rate = rate(done, done0);
-        let total = self.stats.total;
         Progress {
             percent: if total == 0 {
-                100.0
+                if done == 0 { 100.0 } else { 0.0 }
             } else {
                 (done as f64 * 100.0 / total as f64) as f32
             },
             bytes_done: done,
             bytes_total: total,
-            eta_secs: (done_rate > 0).then(|| (total - done) / done_rate),
+            eta_secs: (total > 0 && done_rate > 0).then(|| total.saturating_sub(done) / done_rate),
             download_speed: rate(received, received0),
             disk_speed: rate(written, written0),
             bottleneck: self.stats.bottleneck(),

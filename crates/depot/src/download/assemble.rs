@@ -8,10 +8,8 @@ use std::time::Instant;
 use futures::{StreamExt as _, TryStreamExt as _};
 use tokio::io::{AsyncSeekExt as _, AsyncWriteExt as _};
 
-use super::support::{
-    PartCheckpoint, decode, file_len, hash_file_tail, parts_fingerprint, read_at, redact,
-    set_executable, stalled,
-};
+use super::journal::{Journal, PartCheckpoint, hash_file_tail, parts_fingerprint};
+use super::support::{decode, file_len, read_at, redact, set_executable, stalled};
 use super::{CHECKERS, Ctx, Error, Kind, STALL};
 use crate::adapt::Watchdog;
 use crate::hash::{Digest, hash_file};
@@ -40,7 +38,9 @@ impl Ctx {
         let mut pending = Vec::new();
         let mut to_hash = Vec::new();
         for (i, f) in files.iter().enumerate() {
-            if on_disk[i] != Some(f.size) {
+            if (self.allow_unknown_size && f.size == 0 && f.is_stream())
+                || on_disk[i] != Some(f.size)
+            {
                 pending.push(i);
             } else if self.journal.as_ref().is_some_and(|j| j.has(f)) {
                 self.skip(f);
@@ -389,7 +389,7 @@ impl Ctx {
             }
             return Err(e);
         }
-        tokio::fs::rename(&part, dest).await?;
+        irori_core::fs_part::finalize_part_async(&part, dest).await?;
         uncommitted.written = 0;
         Ok(())
     }
@@ -567,7 +567,10 @@ impl Ctx {
 
     /// The raw bytes of `chunk` from `url`.
     async fn request_chunk(&self, chunk: &Chunk, url: &str) -> Result<Vec<u8>, Error> {
-        let mut req = self.client.get(url);
+        let mut req = self
+            .client
+            .get(url)
+            .header(reqwest::header::ACCEPT_ENCODING, "identity");
         if let Some((start, len)) = chunk.range {
             req = req.header(
                 reqwest::header::RANGE,
@@ -659,7 +662,7 @@ async fn validate_checkpoint(
 async fn save_part_checkpoint(
     out: &mut tokio::io::BufWriter<tokio::fs::File>,
     part: &Path,
-    journal: &super::support::Journal,
+    journal: &Journal,
     f: &FileEntry,
     fingerprint: &str,
     parts_done: usize,

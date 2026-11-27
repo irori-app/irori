@@ -2,6 +2,8 @@
 //! resumes interrupted work and verifies everything it writes.
 
 mod assemble;
+mod journal;
+mod segmented;
 mod stream;
 mod support;
 
@@ -15,9 +17,11 @@ use futures::StreamExt as _;
 use futures::future::BoxFuture;
 use tokio_util::sync::CancellationToken;
 
-use self::support::{
-    ChunkCache, Journal, RateLimiter, Signing, Waiting, check_free_space, disk_sizes, is_disk_full,
-};
+use self::journal::Journal;
+pub use self::segmented::partial_bytes;
+use self::segmented::{SEGMENT_MIN_SIZE, SEGMENT_TARGET_SIZE};
+pub use self::support::SharedRateLimiter;
+use self::support::{ChunkCache, Signing, Waiting, check_free_space, disk_sizes, is_disk_full};
 use crate::adapt::{self, Gate, Hosts, Signals, Slump, Tuner, Window, classify};
 use crate::path;
 use crate::plan::FileEntry;
@@ -62,6 +66,12 @@ pub struct Options {
     pub retries: u32,
     /// Signs chunk addresses instead of using [`Chunk::urls`].
     pub signer: Option<Signer>,
+    /// Shared dynamic bandwidth limiter (takes precedence over
+    /// [`Self::max_bytes_per_sec`] when set, allowing live speed changes).
+    pub rate_limiter: Option<SharedRateLimiter>,
+    /// Allow whole-file streams whose size is unknown (`0`) because the server
+    /// did not announce `Content-Length`.
+    pub allow_unknown_size: bool,
 }
 
 impl Default for Options {
@@ -73,6 +83,8 @@ impl Default for Options {
             cache_bytes: 0,
             retries: 5,
             signer: None,
+            rate_limiter: None,
+            allow_unknown_size: false,
         }
     }
 }
@@ -226,13 +238,17 @@ pub async fn download(
     let tuner = Tuner::new(max);
     let caller_cancel = cancel;
     let cancel = caller_cancel.child_token();
+    let limiter = opts.rate_limiter.clone().or_else(|| {
+        (opts.max_bytes_per_sec > 0).then(|| SharedRateLimiter::new(opts.max_bytes_per_sec))
+    });
     let ctx = Arc::new(Ctx {
         client: client.clone(),
         root: job.root.to_path_buf(),
         requests: Gate::new(tuner.limit()),
         assemble_slots: tokio::sync::Semaphore::new(max.min(8)),
+        max_workers: max,
         hosts: Hosts::default(),
-        limiter: (opts.max_bytes_per_sec > 0).then(|| RateLimiter::new(opts.max_bytes_per_sec)),
+        limiter,
         cache: ChunkCache::new(
             job.files,
             if opts.cache_bytes == 0 {
@@ -251,6 +267,10 @@ pub async fn download(
             .map(|s| Signing::new(s.0.clone(), job.files)),
         prefetch: (max / 4).clamp(4, 8),
         recycle: Recycle::default(),
+        allow_unknown_size: opts.allow_unknown_size,
+        segment_min_size: SEGMENT_MIN_SIZE,
+        segment_target_size: SEGMENT_TARGET_SIZE,
+        sparse_fn: irori_core::fs_part::set_sparse_if_supported,
     });
 
     // Owned items keep the future `Send` (borrowing closures trip up
@@ -291,10 +311,9 @@ pub async fn download(
             }
         }
     };
-    let limit = (opts.max_bytes_per_sec > 0).then_some(opts.max_bytes_per_sec);
     let result = with_progress(stats, progress, async {
         tokio::pin!(work);
-        let tune_fut = tune(&ctx, tuner, limit);
+        let tune_fut = tune(&ctx, tuner);
         tokio::pin!(tune_fut);
         tokio::select! {
             biased;
@@ -364,7 +383,7 @@ pub(crate) async fn with_progress<F: std::future::Future>(
 
 /// Size the request gate to what the connection takes, and tell what
 /// holds the download back. Runs until dropped.
-async fn tune(ctx: &Ctx, mut tuner: Tuner, limit: Option<u64>) {
+async fn tune(ctx: &Ctx, mut tuner: Tuner) {
     use std::sync::atomic::Ordering::Relaxed;
     let stats = &ctx.stats;
     let snapshot = || {
@@ -392,6 +411,11 @@ async fn tune(ctx: &Ctx, mut tuner: Tuner, limit: Option<u64>) {
         last = now;
         let rate = received as f64 / secs;
         let contended = ctx.requests.take_contended();
+        let limit = ctx
+            .limiter
+            .as_ref()
+            .map(SharedRateLimiter::limit)
+            .filter(|&l| l > 0);
         let throttled =
             stats.throttling.load(Relaxed) > 0 || limit.is_some_and(|l| rate >= l as f64 * 0.85);
         let n = tuner.step(Window {
@@ -437,8 +461,10 @@ struct Ctx {
     requests: Gate,
     /// Caps concurrent multi-chunk `assemble` writers so small streams are not starved.
     assemble_slots: tokio::sync::Semaphore,
+    /// Maximum worker concurrency configured for this download.
+    max_workers: usize,
     hosts: Hosts,
-    limiter: Option<RateLimiter>,
+    limiter: Option<SharedRateLimiter>,
     cache: ChunkCache,
     stats: Arc<Stats>,
     cancel: CancellationToken,
@@ -448,6 +474,10 @@ struct Ctx {
     /// Chunks fetched ahead of the one being written, per file.
     prefetch: usize,
     recycle: Recycle,
+    allow_unknown_size: bool,
+    segment_min_size: u64,
+    segment_target_size: u64,
+    sparse_fn: fn(&std::fs::File) -> bool,
 }
 
 /// Connections being replaced after the download slumped ([`Slump`]).
@@ -488,18 +518,35 @@ impl Ctx {
 
     /// Wait out failure number `failures` (1-based) of a request.
     async fn backoff(&self, failures: u32) -> Result<(), Error> {
+        self.backoff_cancellable(failures, &self.cancel).await
+    }
+
+    async fn backoff_cancellable(
+        &self,
+        failures: u32,
+        cancel: &CancellationToken,
+    ) -> Result<(), Error> {
         let delay = BACKOFF
             .saturating_mul(1 << failures.min(8))
             .min(MAX_BACKOFF);
         let _waiting = Waiting::new(&self.stats.backing_off);
         tokio::select! {
-            _ = self.cancel.cancelled() => Err(Error::Cancelled),
+            biased;
+            _ = cancel.cancelled() => Err(Error::Cancelled),
             _ = tokio::time::sleep(delay) => Ok(()),
         }
     }
 
     /// Wait for the speed limit to allow `n` more bytes; returns the wait.
     async fn throttle(&self, n: usize) -> Result<Duration, Error> {
+        self.throttle_cancellable(n, &self.cancel).await
+    }
+
+    async fn throttle_cancellable(
+        &self,
+        n: usize,
+        cancel: &CancellationToken,
+    ) -> Result<Duration, Error> {
         let Some(limiter) = &self.limiter else {
             return Ok(Duration::ZERO);
         };
@@ -509,7 +556,8 @@ impl Ctx {
         }
         let _waiting = Waiting::new(&self.stats.throttling);
         tokio::select! {
-            _ = self.cancel.cancelled() => Err(Error::Cancelled),
+            biased;
+            _ = cancel.cancelled() => Err(Error::Cancelled),
             _ = tokio::time::sleep(wait) => Ok(wait),
         }
     }
@@ -518,12 +566,118 @@ impl Ctx {
     fn score<T>(&self, url: &str, result: &Result<T, Error>, bytes: u64, elapsed: Duration) {
         match result {
             Ok(_) => self.hosts.record_ok(url, bytes, elapsed),
-            Err(e) if e.kind() == Kind::Transient => {
+            Err(e) => self.score_err(url, e),
+        }
+    }
+
+    fn score_err(&self, url: &str, e: &Error) {
+        match e.kind() {
+            Kind::Transient => {
                 self.hosts.record_failure(url);
                 self.stats.add_failure();
             }
-            Err(e) if e.kind() == Kind::Corrupt => self.hosts.record_failure(url),
-            Err(_) => {}
+            Kind::Corrupt => self.hosts.record_failure(url),
+            _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct TestSegmentConfig {
+    pub min_size: u64,
+    pub target_size: u64,
+    pub sparse_fn: fn(&std::fs::File) -> bool,
+}
+
+#[cfg(test)]
+pub(crate) async fn download_with_test_config(
+    client: &reqwest::Client,
+    job: Job<'_>,
+    opts: &Options,
+    progress: ProgressFn,
+    cancel: &CancellationToken,
+    seg: TestSegmentConfig,
+) -> Result<Finished> {
+    tokio::fs::create_dir_all(job.root).await?;
+    let journal = match &opts.journal {
+        Some(p) => Some(Journal::open(p).await?),
+        None => None,
+    };
+    let (on_disk, partial_credit) = disk_sizes(job.root, job.files, journal.as_ref()).await?;
+    check_free_space(job.root, job.files, &on_disk, &partial_credit)?;
+    let total = job.files.iter().map(|f| f.size).sum();
+    let stats = Arc::new(Stats::new(total));
+    let max = if opts.workers == 0 {
+        adapt::DEFAULT_MAX
+    } else {
+        opts.workers
+    };
+    let tuner = Tuner::new(max);
+    let caller_cancel = cancel;
+    let cancel = caller_cancel.child_token();
+    let limiter = opts.rate_limiter.clone().or_else(|| {
+        (opts.max_bytes_per_sec > 0).then(|| SharedRateLimiter::new(opts.max_bytes_per_sec))
+    });
+    let ctx = Arc::new(Ctx {
+        client: client.clone(),
+        root: job.root.to_path_buf(),
+        requests: Gate::new(tuner.limit()),
+        assemble_slots: tokio::sync::Semaphore::new(max.min(8)),
+        max_workers: max,
+        hosts: Hosts::default(),
+        limiter,
+        cache: ChunkCache::new(job.files, 64 << 20),
+        stats: stats.clone(),
+        cancel: cancel.clone(),
+        journal,
+        retries: opts.retries,
+        signing: opts
+            .signer
+            .as_ref()
+            .map(|s| Signing::new(s.0.clone(), job.files)),
+        prefetch: (max / 4).clamp(4, 8),
+        recycle: Recycle::default(),
+        allow_unknown_size: opts.allow_unknown_size,
+        segment_min_size: seg.min_size,
+        segment_target_size: seg.target_size,
+        sparse_fn: seg.sparse_fn,
+    });
+    let files: Arc<[FileEntry]> = job.files.into();
+    let work = {
+        let ctx = ctx.clone();
+        async move {
+            let pending = ctx.check_existing(&files, &on_disk).await?;
+            for i in pending {
+                if ctx.cancel.is_cancelled() {
+                    return Err(Error::Cancelled);
+                }
+                ctx.process_file(&files[i]).await?;
+            }
+            if ctx.cancel.is_cancelled() {
+                Err(Error::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    };
+    let result = with_progress(stats, progress, async {
+        tokio::pin!(work);
+        let tune_fut = tune(&ctx, tuner);
+        tokio::pin!(tune_fut);
+        tokio::select! {
+            biased;
+            r = &mut work => r,
+            () = caller_cancel.cancelled() => {
+                let _ = tokio::time::timeout(CANCEL_DRAIN, &mut work).await;
+                Err(Error::Cancelled)
+            }
+            () = &mut tune_fut => unreachable!(),
+        }
+    })
+    .await;
+    match result {
+        Ok(()) => Ok(Finished::Done),
+        Err(_) if caller_cancel.is_cancelled() => Ok(Finished::Cancelled),
+        Err(e) => Err(anyhow::Error::from(e)),
     }
 }

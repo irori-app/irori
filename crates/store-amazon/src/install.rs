@@ -204,7 +204,11 @@ impl AmazonStore {
 fn remove_listed(dir: &Path, manifest: &Manifest) -> Result<()> {
     for f in &manifest.files {
         let p = irori_depot::path::join(dir, &f.path);
-        for p in [irori_depot::path::part_path(&p), p] {
+        for p in [
+            irori_depot::path::part_path(&p),
+            irori_depot::path::seg_path(&p),
+            p,
+        ] {
             match std::fs::remove_file(&p) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -240,6 +244,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("saves")).unwrap();
         std::fs::write(dir.join("bin/game.exe"), b"x").unwrap();
         std::fs::write(dir.join("bin/data.pak.irori-part"), b"x").unwrap();
+        std::fs::write(dir.join("bin/data.pak.irori-part.seg"), b"{}").unwrap();
         std::fs::write(dir.join("saves/slot1"), b"x").unwrap();
         let manifest = Manifest {
             files: vec![

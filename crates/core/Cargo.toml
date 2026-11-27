@@ -30,6 +30,14 @@ hex.workspace = true
 [target.'cfg(unix)'.dependencies]
 nix.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+# `DeviceIoControl(FSCTL_SET_SPARSE)` for multi-range download sparse files (`fs_part`).
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+] }
+
 [dev-dependencies]
 tempfile = "3"
 

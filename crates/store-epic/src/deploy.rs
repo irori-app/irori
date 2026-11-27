@@ -99,7 +99,11 @@ pub(crate) fn delete_listed(
             continue;
         };
         let p = irori_depot::path::join(dir, &rel);
-        for p in [irori_depot::path::part_path(&p), p] {
+        for p in [
+            irori_depot::path::part_path(&p),
+            irori_depot::path::seg_path(&p),
+            p,
+        ] {
             match std::fs::remove_file(&p) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

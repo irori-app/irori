@@ -306,14 +306,17 @@ fn legacy_part_path(dest: &Path) -> PathBuf {
 }
 
 async fn local_len(dest: &Path) -> u64 {
-    for p in [
-        dest.to_path_buf(),
-        irori_depot::path::part_path(dest),
-        legacy_part_path(dest),
-    ] {
-        if let Ok(m) = tokio::fs::metadata(&p).await {
-            return m.len();
-        }
+    if let Ok(m) = tokio::fs::metadata(dest).await {
+        return m.len();
+    }
+    let d = dest.to_path_buf();
+    if let Ok(Some(bytes)) =
+        tokio::task::spawn_blocking(move || irori_depot::partial_bytes(&d)).await
+    {
+        return bytes;
+    }
+    if let Ok(m) = tokio::fs::metadata(legacy_part_path(dest)).await {
+        return m.len();
     }
     0
 }
@@ -417,6 +420,7 @@ impl ZoomStore {
             // Continue partial files of earlier versions.
             let (old, new) = (legacy_part_path(&dest), irori_depot::path::part_path(&dest));
             if old.is_file() && !new.exists() {
+                let _ = tokio::fs::remove_file(irori_depot::path::seg_path(&dest)).await;
                 let _ = tokio::fs::rename(&old, &new).await;
             }
             let size = match mapping::exact_size(f) {
@@ -430,7 +434,7 @@ impl ZoomStore {
         }
         let settings = (self.settings)();
         let finished = irori_depot::download(
-            irori_core::http::client(),
+            irori_core::http::download_client(),
             irori_depot::Job {
                 root: &staging,
                 files: &entries,

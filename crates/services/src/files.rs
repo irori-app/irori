@@ -223,7 +223,7 @@ impl Backend {
             b.bus.emit(Event::DownloadQueueChanged);
         });
         irori_depot::download(
-            irori_core::http::client(),
+            irori_core::http::download_client(),
             Job {
                 root: &item.folder,
                 files: &[entry],

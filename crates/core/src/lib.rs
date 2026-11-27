@@ -12,6 +12,7 @@ pub mod crash;
 pub mod dll_override;
 pub mod events;
 pub mod fs_guard;
+pub mod fs_part;
 pub mod game;
 pub mod game_mode;
 pub mod github_releases;

@@ -96,7 +96,7 @@ pub fn download_client() -> &'static reqwest::Client {
             .connect_timeout(t.connect)
             .read_timeout(t.total)
             .pool_idle_timeout(Duration::from_secs(30))
-            .pool_max_idle_per_host(4)
+            .pool_max_idle_per_host(32)
             .build()
             .expect("download client")
     })

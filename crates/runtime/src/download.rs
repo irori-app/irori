@@ -195,7 +195,7 @@ pub async fn download_hashed(
     let result = download_inner(url, &part, progress, cancel, kind).await;
     match result {
         Ok((bytes, digest)) => {
-            tokio::fs::rename(&part, dest)
+            irori_core::fs_part::finalize_part_async(&part, dest)
                 .await
                 .with_context(|| format!("saving {}", dest.display()))?;
             Ok(Downloaded {

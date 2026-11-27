@@ -46,6 +46,13 @@ pub fn part_path(dest: &Path) -> PathBuf {
     dest.with_file_name(name)
 }
 
+/// Sidecar metadata for a multi-range segmented `.irori-part` download.
+pub fn seg_path(dest: &Path) -> PathBuf {
+    let mut name = dest.file_name().unwrap_or_default().to_os_string();
+    name.push(".irori-part.seg");
+    dest.with_file_name(name)
+}
+
 /// Remove now-empty parent directories of `rel` up to (excluding) `root`.
 pub fn prune_empty_parents(root: &Path, rel: &str) {
     let mut dir = join(root, rel);
@@ -85,6 +92,7 @@ mod tests {
         let file = join(root, "a/b/c.txt");
         assert_eq!(file, root.join("a").join("b").join("c.txt"));
         assert_eq!(part_path(&file), root.join("a/b/c.txt.irori-part"));
+        assert_eq!(seg_path(&file), root.join("a/b/c.txt.irori-part.seg"));
         std::fs::create_dir_all(root.join("a/b")).unwrap();
         std::fs::write(root.join("a/keep"), b"").unwrap();
         prune_empty_parents(root, "a/b/c.txt");

@@ -1,69 +1,22 @@
 //! Supporting utilities for the download engine: disk space checks, chunk
-//! signing, chunk cache, rate limiting, resume journal, and codec helpers.
+//! signing, chunk cache, dynamic rate limiting, and codec helpers.
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context as _, Result, bail};
-use serde::{Deserialize, Serialize};
-use tokio::io::AsyncWriteExt as _;
+use anyhow::{Result, bail};
 use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 
+use super::journal::{Journal, parts_fingerprint};
+use super::segmented::load_segment_state_sync;
 use super::{Error, SIGN_BATCH, SIGN_TIMEOUT, STALL, UrlSigner};
 use crate::adapt;
-use crate::hash::Digest;
 use crate::path;
 use crate::plan::{Codec, FileEntry};
-
-/// Tail window hashed for [`PartCheckpoint::tail_sha256`] validation on resume.
-pub(super) const TAIL_HASH_WINDOW: u64 = 64 * 1024;
-
-/// Stable digest identifying a file's size, target hash, and chunk/part layout.
-pub(super) fn parts_fingerprint(f: &FileEntry) -> String {
-    use sha2::Digest as _;
-    let mut h = sha2::Sha256::new();
-    h.update(f.size.to_le_bytes());
-    if let Some(hash) = &f.hash {
-        h.update([1u8]);
-        h.update(hash.to_string().as_bytes());
-    } else {
-        h.update([0u8]);
-    }
-    h.update((f.parts.len() as u64).to_le_bytes());
-    for p in &f.parts {
-        h.update((p.chunk.key.len() as u64).to_le_bytes());
-        h.update(p.chunk.key.as_bytes());
-        h.update(p.offset.to_le_bytes());
-        h.update(p.size.to_le_bytes());
-        h.update(p.chunk.size.to_le_bytes());
-        h.update(p.chunk.download_size.to_le_bytes());
-        match p.chunk.range {
-            Some((start, len)) => {
-                h.update([1u8]);
-                h.update(start.to_le_bytes());
-                h.update(len.to_le_bytes());
-            }
-            None => h.update([0u8]),
-        }
-    }
-    hex::encode(h.finalize())
-}
-
-/// SHA-256 hex digest of `[bytes_done - 64 KiB .. bytes_done]` in `path`.
-pub(super) fn hash_file_tail(path: &Path, bytes_done: u64) -> std::io::Result<String> {
-    use sha2::Digest as _;
-    use std::io::{Read as _, Seek as _};
-    let start = bytes_done.saturating_sub(TAIL_HASH_WINDOW);
-    let len = usize::try_from(bytes_done - start).map_err(std::io::Error::other)?;
-    let mut file = std::fs::File::open(path)?;
-    file.seek(std::io::SeekFrom::Start(start))?;
-    let mut buf = vec![0u8; len];
-    file.read_exact(&mut buf)?;
-    Ok(hex::encode(sha2::Sha256::digest(&buf)))
-}
 
 /// Sizes of the files already below `root`, alongside valid partial-file byte
 /// credits for free-space checks.
@@ -114,7 +67,15 @@ pub(super) async fn disk_sizes(
                     .map(|m| m.len())
                     .unwrap_or(0);
                 if is_stream {
-                    part_len.min(size)
+                    let seg = path::seg_path(&dest);
+                    if let Some(state) = load_segment_state_sync(&seg)
+                        && state.is_valid_for(size, None)
+                        && part_len == size
+                    {
+                        state.downloaded_bytes().min(size)
+                    } else {
+                        part_len.min(size)
+                    }
                 } else {
                     match cp_bytes {
                         Some(cp) if part_len >= cp => cp,
@@ -183,18 +144,18 @@ pub(super) fn stalled(url: &str) -> Error {
 }
 
 /// Counts a task in a gauge while it lives.
-pub(super) struct Waiting<'a>(&'a std::sync::atomic::AtomicU64);
+pub(super) struct Waiting<'a>(&'a AtomicU64);
 
 impl<'a> Waiting<'a> {
-    pub(super) fn new(gauge: &'a std::sync::atomic::AtomicU64) -> Self {
-        gauge.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    pub(super) fn new(gauge: &'a AtomicU64) -> Self {
+        gauge.fetch_add(1, Ordering::Relaxed);
         Self(gauge)
     }
 }
 
 impl Drop for Waiting<'_> {
     fn drop(&mut self) {
-        self.0.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        self.0.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -375,29 +336,88 @@ pub(super) async fn set_executable(p: &Path) {
 #[cfg(not(unix))]
 pub(super) async fn set_executable(_: &Path) {}
 
+/// Dynamically adjustable, shareable download bandwidth limiter.
+///
+/// Can be passed in [`crate::Options::rate_limiter`] across concurrent downloads
+/// and updated live with [`Self::set_limit`]. A limit of `0` means unlimited.
+#[derive(Clone)]
+pub struct SharedRateLimiter(Arc<RateLimiter>);
+
+impl std::fmt::Debug for SharedRateLimiter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedRateLimiter")
+            .field("bytes_per_sec", &self.limit())
+            .finish()
+    }
+}
+
+impl SharedRateLimiter {
+    /// Create a shared limiter capped at `bytes_per_sec` (`0` = unlimited).
+    pub fn new(bytes_per_sec: u64) -> Self {
+        Self(Arc::new(RateLimiter::new(bytes_per_sec)))
+    }
+
+    /// Update the speed cap in bytes per second (`0` = unlimited). Removing the
+    /// cap resets the virtual clock so subsequent transfers start immediately.
+    pub fn set_limit(&self, bytes_per_sec: u64) {
+        self.0.set_limit(bytes_per_sec);
+    }
+
+    /// Current speed cap in bytes per second (`0` = unlimited).
+    pub fn limit(&self) -> u64 {
+        self.0.limit()
+    }
+
+    /// Reserve `n` bytes, returning how long the caller should sleep.
+    pub fn reserve(&self, n: u64) -> Duration {
+        self.0.reserve(n)
+    }
+}
+
 /// Token bucket over virtual time: each reservation pushes the next free
 /// moment forward by its transfer time.
 pub(super) struct RateLimiter {
-    bytes_per_sec: f64,
+    bytes_per_sec: AtomicU64,
     next: std::sync::Mutex<Instant>,
 }
 
 impl RateLimiter {
     pub(super) fn new(bytes_per_sec: u64) -> Self {
         Self {
-            bytes_per_sec: bytes_per_sec as f64,
+            bytes_per_sec: AtomicU64::new(bytes_per_sec),
             next: std::sync::Mutex::new(Instant::now()),
+        }
+    }
+
+    pub(super) fn limit(&self) -> u64 {
+        self.bytes_per_sec.load(Ordering::Relaxed)
+    }
+
+    pub(super) fn set_limit(&self, bytes_per_sec: u64) {
+        let prev = self.bytes_per_sec.swap(bytes_per_sec, Ordering::Relaxed);
+        if bytes_per_sec == 0 || (prev > 0 && bytes_per_sec > prev) {
+            let mut next = self.next.lock().unwrap_or_else(|e| e.into_inner());
+            let now = Instant::now();
+            if bytes_per_sec == 0 {
+                *next = now;
+            } else {
+                *next = (*next).min(now);
+            }
         }
     }
 
     /// How long to wait before sending `n` bytes. Unused capacity carries
     /// over for up to one second.
     pub(super) fn reserve(&self, n: u64) -> Duration {
+        let bps = self.bytes_per_sec.load(Ordering::Relaxed);
+        if bps == 0 {
+            return Duration::ZERO;
+        }
         let mut next = self.next.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         let floor = now.checked_sub(Duration::from_secs(1)).unwrap_or(now);
         let start = (*next).max(floor);
-        *next = start + Duration::from_secs_f64(n as f64 / self.bytes_per_sec);
+        *next = start + Duration::from_secs_f64(n as f64 / bps as f64);
         next.saturating_duration_since(now)
     }
 }
@@ -406,7 +426,7 @@ impl RateLimiter {
 pub(super) struct ChunkCache {
     slots: std::sync::Mutex<HashMap<String, Slot>>,
     budget: u64,
-    bytes: std::sync::atomic::AtomicU64,
+    bytes: AtomicU64,
 }
 
 struct Slot {
@@ -452,18 +472,17 @@ impl ChunkCache {
     }
 
     pub(super) fn add_bytes(&self, n: u64) {
-        self.bytes
-            .fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+        self.bytes.fetch_add(n, Ordering::Relaxed);
     }
 
     fn drop_bytes(&self, slot: &Slot) {
         if slot.cell.initialized() {
             let n = slot.cell.get().map_or(slot.size, |d| d.len() as u64);
-            let _ = self.bytes.try_update(
-                std::sync::atomic::Ordering::Relaxed,
-                std::sync::atomic::Ordering::Relaxed,
-                |b| Some(b.saturating_sub(n)),
-            );
+            let _ = self
+                .bytes
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |b| {
+                    Some(b.saturating_sub(n))
+                });
         }
     }
 
@@ -479,9 +498,7 @@ impl ChunkCache {
             if let Some(slot) = slots.remove(key) {
                 self.drop_bytes(&slot);
             }
-        } else if self.bytes.load(std::sync::atomic::Ordering::Relaxed) > self.budget
-            && slot.cell.initialized()
-        {
+        } else if self.bytes.load(Ordering::Relaxed) > self.budget && slot.cell.initialized() {
             let old = std::mem::take(&mut slot.cell);
             let size = slot.size;
             self.drop_bytes(&Slot {
@@ -493,223 +510,9 @@ impl ChunkCache {
     }
 }
 
-/// Persisted progress of an in-flight multi-chunk `.irori-part` file.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) struct PartCheckpoint {
-    pub(super) path: String,
-    pub(super) size: u64,
-    pub(super) parts_fingerprint: String,
-    pub(super) parts_done: usize,
-    pub(super) bytes_done: u64,
-    pub(super) tail_sha256: String,
-}
-
-/// Finished files and partial multi-chunk checkpoints of an interrupted download.
-pub(super) struct Journal {
-    done: HashMap<String, (u64, Option<Digest>)>,
-    checkpoints: std::sync::Mutex<HashMap<String, PartCheckpoint>>,
-    file: tokio::sync::Mutex<Option<tokio::fs::File>>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum JournalRecord {
-    Done {
-        path: String,
-        size: u64,
-        hash: Option<Digest>,
-    },
-    Checkpoint(PartCheckpoint),
-    ClearCheckpoint {
-        path: String,
-    },
-}
-
-/// Legacy journal line written by older versions (no `kind` tag).
-#[derive(Deserialize)]
-struct LegacyJournalEntry {
-    path: String,
-    size: u64,
-    hash: Option<Digest>,
-}
-
-impl Journal {
-    pub(super) async fn open(path: &Path) -> Result<Self> {
-        let mut done = HashMap::new();
-        let mut checkpoints = HashMap::new();
-        let mut raw_lines = 0usize;
-        let existed = match tokio::fs::read_to_string(path).await {
-            Ok(text) => {
-                for line in text.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    raw_lines += 1;
-                    if let Ok(record) = serde_json::from_str::<JournalRecord>(trimmed) {
-                        match record {
-                            JournalRecord::Done { path, size, hash } => {
-                                checkpoints.remove(&path);
-                                done.insert(path, (size, hash));
-                            }
-                            JournalRecord::Checkpoint(cp) => {
-                                checkpoints.insert(cp.path.clone(), cp);
-                            }
-                            JournalRecord::ClearCheckpoint { path } => {
-                                checkpoints.remove(&path);
-                            }
-                        }
-                    } else if let Ok(legacy) = serde_json::from_str::<LegacyJournalEntry>(trimmed) {
-                        checkpoints.remove(&legacy.path);
-                        done.insert(legacy.path, (legacy.size, legacy.hash));
-                    }
-                }
-                true
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
-            Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
-        };
-        if let Some(dir) = path.parent() {
-            tokio::fs::create_dir_all(dir).await?;
-        }
-        // Compact superseded checkpoints, clears, and truncated trailing lines.
-        if existed && raw_lines > done.len() + checkpoints.len() {
-            compact_journal(path, &done, &checkpoints).await;
-        }
-        let file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .await
-            .with_context(|| format!("opening {}", path.display()))?;
-        Ok(Self {
-            done,
-            checkpoints: std::sync::Mutex::new(checkpoints),
-            file: tokio::sync::Mutex::new(Some(file)),
-        })
-    }
-
-    pub(super) fn has(&self, f: &FileEntry) -> bool {
-        self.done
-            .get(&f.path)
-            .is_some_and(|(size, hash)| *size == f.size && *hash == f.hash)
-    }
-
-    pub(super) fn checkpoint(&self, path: &str) -> Option<PartCheckpoint> {
-        self.checkpoints
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(path)
-            .cloned()
-    }
-
-    pub(super) async fn save_checkpoint(&self, cp: PartCheckpoint) {
-        self.checkpoints
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(cp.path.clone(), cp.clone());
-        self.append(&JournalRecord::Checkpoint(cp), true).await;
-    }
-
-    pub(super) async fn clear_checkpoint(&self, path: &str) {
-        let removed = self
-            .checkpoints
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(path)
-            .is_some();
-        if removed {
-            self.append(
-                &JournalRecord::ClearCheckpoint {
-                    path: path.to_string(),
-                },
-                true,
-            )
-            .await;
-        }
-    }
-
-    pub(super) async fn record(&self, f: &FileEntry) {
-        self.checkpoints
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&f.path);
-        let entry = JournalRecord::Done {
-            path: f.path.clone(),
-            size: f.size,
-            hash: f.hash.clone(),
-        };
-        self.append(&entry, false).await;
-    }
-
-    async fn append(&self, record: &JournalRecord, sync: bool) {
-        let Ok(mut line) = serde_json::to_vec(record) else {
-            return;
-        };
-        line.push(b'\n');
-        let mut guard = self.file.lock().await;
-        if let Some(file) = guard.as_mut() {
-            let res = async {
-                file.write_all(&line).await?;
-                file.flush().await?;
-                if sync {
-                    file.sync_data().await?;
-                }
-                Ok::<_, std::io::Error>(())
-            }
-            .await;
-            if let Err(e) = res {
-                tracing::warn!("download journal: {e}");
-                *guard = None;
-            }
-        }
-    }
-}
-
-async fn compact_journal(
-    path: &Path,
-    done: &HashMap<String, (u64, Option<Digest>)>,
-    checkpoints: &HashMap<String, PartCheckpoint>,
-) {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".compact");
-    let tmp = path.with_file_name(name);
-    let mut buf = Vec::new();
-    for (p, (size, hash)) in done {
-        if let Ok(line) = serde_json::to_vec(&JournalRecord::Done {
-            path: p.clone(),
-            size: *size,
-            hash: hash.clone(),
-        }) {
-            buf.extend_from_slice(&line);
-            buf.push(b'\n');
-        }
-    }
-    for cp in checkpoints.values() {
-        if let Ok(line) = serde_json::to_vec(&JournalRecord::Checkpoint(cp.clone())) {
-            buf.extend_from_slice(&line);
-            buf.push(b'\n');
-        }
-    }
-    let write_res = async {
-        let mut f = tokio::fs::File::create(&tmp).await?;
-        f.write_all(&buf).await?;
-        f.flush().await?;
-        f.sync_data().await?;
-        drop(f);
-        tokio::fs::rename(&tmp, path).await?;
-        Ok::<_, std::io::Error>(())
-    }
-    .await;
-    if let Err(e) = write_res {
-        tracing::warn!("compacting download journal {}: {e}", path.display());
-        let _ = tokio::fs::remove_file(&tmp).await;
-    }
-}
-
 #[cfg(test)]
 mod redact_tests {
-    use super::{Error, is_disk_full, redact};
+    use super::{Error, SharedRateLimiter, is_disk_full, redact};
 
     #[test]
     fn keeps_only_the_server() {
@@ -733,5 +536,27 @@ mod redact_tests {
         assert!(is_disk_full(&wrapped));
         let other = Error::Io(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
         assert!(!is_disk_full(&other));
+    }
+
+    #[test]
+    fn shared_rate_limiter_resets_when_unlimited() {
+        let limiter = SharedRateLimiter::new(1024);
+        assert_eq!(limiter.limit(), 1024);
+        let wait = limiter.reserve(4096);
+        assert!(wait > std::time::Duration::from_secs(1), "{wait:?}");
+        // Raising a low non-zero cap clamps future backlog to `now` too.
+        limiter.set_limit(1024);
+        assert!(limiter.reserve(4096) > std::time::Duration::from_secs(1));
+        limiter.set_limit(10_000_000);
+        assert!(limiter.reserve(1024) < std::time::Duration::from_millis(10));
+        // Removing the limit clears backlog immediately.
+        limiter.set_limit(1024);
+        assert!(limiter.reserve(4096) > std::time::Duration::from_secs(1));
+        limiter.set_limit(0);
+        assert_eq!(limiter.limit(), 0);
+        assert_eq!(limiter.reserve(1024 * 1024), std::time::Duration::ZERO);
+        // Re-enabling starts fresh from `now` rather than inheriting the old 4s backlog.
+        limiter.set_limit(10_000_000);
+        assert!(limiter.reserve(1024) < std::time::Duration::from_millis(10));
     }
 }

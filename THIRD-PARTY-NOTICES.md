@@ -13,6 +13,7 @@ Several Rust crates in this workspace implement clean protocol support ported fr
 | `crates/amazon` | [imLinguin/nile](https://github.com/imLinguin/nile) | GPL-3.0 | Amazon Games authentication, signed manifests, and SDK handling |
 | `crates/msixvc` | [domsvoboda/nexus-launcher](https://github.com/domsvoboda/nexus-launcher) (Xodus) | MIT | MSIXVC package parsing, AES-XTS decryption, and streaming installation |
 | `crates/msstore` | [domsvoboda/nexus-launcher](https://github.com/domsvoboda/nexus-launcher) (Xodus) | MIT | Microsoft Store and Xbox Live device auth, tokens, licensing, and catalog APIs |
+| `crates/core` (`src/fs_part.rs`) | [agalwood/Motrix](https://github.com/agalwood/Motrix) (`packages/finalize-fs`) | MIT | Resilient `.irori-part` finalization with Windows lock retry backoff and download filename sanitization |
 
 ## Vendored and Patched Crates
 

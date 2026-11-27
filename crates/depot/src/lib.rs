@@ -21,7 +21,10 @@ mod progress;
 pub mod test_server;
 mod verify;
 
-pub use download::{Finished, Job, Options, SIGN_BATCH, Signer, UrlSigner, download};
+pub use download::{
+    Finished, Job, Options, SIGN_BATCH, SharedRateLimiter, Signer, UrlSigner, download,
+    partial_bytes,
+};
 pub use hash::{Algorithm, Digest};
 pub use plan::{Chunk, Codec, Decoder, Diff, FileEntry, Part, Reuse, diff};
 pub use progress::{Progress, ProgressFn, ignore as ignore_progress};
@@ -30,5 +33,7 @@ pub use verify::{Problem, Verified, verify};
 
 #[cfg(test)]
 mod resume_tests;
+#[cfg(test)]
+mod segmented_tests;
 #[cfg(test)]
 mod tests;
