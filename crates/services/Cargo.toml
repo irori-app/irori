@@ -22,9 +22,14 @@ irori-reshade.workspace = true
 # files (`file_achievements`).
 irori-steam-api.workspace = true
 anyhow.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["net"] }
 reqwest.workspace = true
 tokio-util.workspace = true
+# Local loopback WebSocket JSON-RPC to the on-demand `aria2c` process (`web_downloads`):
+# localhost-only, so no TLS.
+tokio-tungstenite.workspace = true
+url.workspace = true
+sha1.workspace = true
 # Watches the files a store writes on an unlock while a game runs.
 notify.workspace = true
 futures.workspace = true

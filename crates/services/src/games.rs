@@ -2281,7 +2281,14 @@ fn format_shell_execute_parameters(spec: &process::CommandSpec) -> String {
     let mut parts: Vec<String> = spec
         .args
         .iter()
-        .map(|arg| process::windows_arg(&arg.to_string_lossy()))
+        .map(|arg| {
+            let s = arg.to_string_lossy();
+            if s.is_empty() || s.contains([' ', '\t', '"']) {
+                process::windows_arg(&s)
+            } else {
+                s.into_owned()
+            }
+        })
         .collect();
     parts.extend(
         spec.raw_args
@@ -2289,6 +2296,18 @@ fn format_shell_execute_parameters(spec: &process::CommandSpec) -> String {
             .map(|raw| raw.to_string_lossy().into_owned()),
     );
     parts.join(" ")
+}
+
+#[cfg(windows)]
+pub(crate) async fn run_windows_command_spec(
+    spec: &process::CommandSpec,
+    cancel: CancellationToken,
+) -> Result<ExecResult> {
+    match process::run(spec, RunOptions::default().cancel(cancel.clone())).await {
+        Ok(res) => Ok(res),
+        Err(err) if is_elevation_required(&err) => run_elevated_windows(spec, cancel).await,
+        Err(err) => Err(err),
+    }
 }
 
 #[cfg(windows)]
@@ -2301,11 +2320,7 @@ async fn run_windows_installer(installer: &Path, cancel: CancellationToken) -> R
     if let Some(dir) = installer.parent().filter(|p| !p.as_os_str().is_empty()) {
         spec = spec.cwd(dir);
     }
-    match process::run(&spec, RunOptions::default().cancel(cancel.clone())).await {
-        Ok(res) => Ok(res),
-        Err(err) if is_elevation_required(&err) => run_elevated_windows(&spec, cancel).await,
-        Err(err) => Err(err),
-    }
+    run_windows_command_spec(&spec, cancel).await
 }
 
 #[cfg(windows)]
@@ -2560,7 +2575,20 @@ mod tests {
             .raw_arg(r"/D=C:\Games\My Game");
         assert_eq!(
             format_shell_execute_parameters(&spec),
-            r#""/S" "C:\My Folder\pkg.msi" /D=C:\Games\My Game"#
+            r#"/S "C:\My Folder\pkg.msi" /D=C:\Games\My Game"#
+        );
+
+        let msi = CommandSpec::new("msiexec").args([
+            "/i",
+            r"C:\My Folder\game.msi",
+            "/qn",
+            "/norestart",
+            r"INSTALLDIR=C:\Games\My Game",
+            "",
+        ]);
+        assert_eq!(
+            format_shell_execute_parameters(&msi),
+            r#"/i "C:\My Folder\game.msi" /qn /norestart "INSTALLDIR=C:\Games\My Game" """#
         );
     }
 }

@@ -56,6 +56,7 @@ Store protocol parsers, cryptography wrappers, archive handlers, script interpre
 - `crates/xbox` (`crates/xbox/src/lib.rs`)
 - `crates/extras/src/shortcuts/pe_icon.rs`
 - `crates/services/src/troubleshoot/pe.rs`
+- `crates/services/src/web_downloads/torrent_meta.rs`
 
 ## Filesystem and Install Script Guardrails
 
@@ -86,6 +87,7 @@ Network requests fall into two categories:
 
 1. Store backends you sign in to or use: Steam, Epic Games, GOG, Amazon Games, itch.io, Xbox / Microsoft Store, and ZOOM Platform. These domains are contacted only when signing in, refreshing libraries, downloading or updating games, checking cloud saves, or fetching runtime components.
 2. Optional or user-triggered integrations: IGDB, SteamGridDB, VNDB, LaunchBox, ProtonDB, PCGamingWiki, AreWeAntiCheatYet, HowLongToBeat, RetroAchievements, Lutris API, ReShade, RenoDX, and GitHub Releases (for runtime or update checks). Integrations that enrich metadata or check external databases only query those services when enabled or triggered by the user.
+3. Opt-in BitTorrent downloads (`iroriWebDownloads.bittorrent`, disabled by default): when explicitly enabled by the user, Irori launches an external `aria2c` process on demand bound exclusively to loopback (`127.0.0.1`, `rpc-listen-all=false`) and authenticated with a random per-session `rpc-secret` stored in a `0o600` config file under Irori's cache directory (never passed in command-line arguments). Irori communicates with `aria2c` over local WebSocket JSON-RPC, enforces `--seed-time=0` and immediate download removal on `aria2.onBtDownloadComplete` so completed torrents do not seed, and shuts `aria2c` down when idle, offline, or exiting. Because BitTorrent is a peer-to-peer protocol, downloading a torrent or magnet link exposes your IP address to peers and trackers participating in that swarm.
 
 ## Verifying Release Artifacts
 

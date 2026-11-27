@@ -342,3 +342,90 @@ impl Default for OptiscalerDefaults {
         }
     }
 }
+
+/// Default concurrency for direct-link and BitTorrent downloads
+/// (`iroriWebDownloads.maxConcurrent`).
+pub const DEFAULT_WEB_DOWNLOAD_CONCURRENT: u32 = 3;
+
+/// Settings for direct HTTP/HTTPS link and opt-in BitTorrent downloads
+/// (`iroriWebDownloads`). Irori-only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WebDownloadPrefs {
+    /// Where downloaded files are saved (`""` resolves to portable `Downloads`,
+    /// the OS Downloads folder's `Irori` subfolder, `~/Downloads/Irori`, or
+    /// `defaultInstallPath`).
+    pub default_folder: String,
+    /// Active concurrent web downloads (`1..=5`, default `3`).
+    pub max_concurrent: u32,
+    /// Extract downloaded archives automatically on completion.
+    pub auto_extract: bool,
+    /// Move the original archive to Trash after a verified extraction.
+    pub delete_archive_after_extract: bool,
+    /// Register detected portable games in the library automatically.
+    pub auto_add_to_library: bool,
+    /// Opt-in BitTorrent support (`.torrent` files and `magnet:` links via local `aria2c`).
+    pub bittorrent: bool,
+    /// Custom path to the `aria2c` executable (`""` = automatic discovery).
+    pub aria2_path: String,
+}
+
+impl Default for WebDownloadPrefs {
+    fn default() -> Self {
+        Self {
+            default_folder: String::new(),
+            max_concurrent: DEFAULT_WEB_DOWNLOAD_CONCURRENT,
+            auto_extract: true,
+            delete_archive_after_extract: false,
+            auto_add_to_library: true,
+            bittorrent: false,
+            aria2_path: String::new(),
+        }
+    }
+}
+
+impl WebDownloadPrefs {
+    /// [`Self::max_concurrent`] clamped to the supported `1..=5` range.
+    pub fn clamped_max_concurrent(&self) -> usize {
+        self.max_concurrent.clamp(1, 5) as usize
+    }
+
+    /// Resolve the effective download folder from this setting and platform defaults.
+    pub fn resolved_default_folder(&self, default_install_path: &str) -> std::path::PathBuf {
+        resolve_web_download_folder_with(
+            &self.default_folder,
+            crate::paths::portable_root(),
+            dirs::download_dir(),
+            dirs::home_dir(),
+            default_install_path,
+        )
+    }
+}
+
+/// Pure folder resolution helper for [`WebDownloadPrefs::resolved_default_folder`].
+pub(crate) fn resolve_web_download_folder_with(
+    configured: &str,
+    portable_root: Option<std::path::PathBuf>,
+    os_downloads: Option<std::path::PathBuf>,
+    home_dir: Option<std::path::PathBuf>,
+    default_install_path: &str,
+) -> std::path::PathBuf {
+    let trimmed = configured.trim();
+    if !trimmed.is_empty() {
+        return crate::paths::expand_home(trimmed);
+    }
+    if let Some(root) = portable_root {
+        return root.join("Downloads");
+    }
+    if let Some(downloads) = os_downloads {
+        return downloads.join("Irori");
+    }
+    if let Some(home) = home_dir {
+        return home.join("Downloads").join("Irori");
+    }
+    let install = default_install_path.trim();
+    if !install.is_empty() {
+        return crate::paths::expand_home(install);
+    }
+    crate::paths::Paths::get().data.join("downloads")
+}

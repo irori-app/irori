@@ -8,6 +8,7 @@ use irori_core::GameId;
 
 use crate::Backend;
 use crate::downloads::{DownloadItem, DownloadKind, DownloadState};
+use crate::web_downloads::{WebDownload, WebDownloadState};
 
 /// One disk the queue downloads to, or an installed-games disk shown when idle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +68,29 @@ fn remaining(total: u64, percent: Option<f32>) -> u64 {
         }
         _ => total,
     }
+}
+
+/// Remaining bytes of active web and BitTorrent downloads with a known size.
+pub(crate) fn web_queue_needs(active: &[WebDownload]) -> Vec<(PathBuf, u64)> {
+    active
+        .iter()
+        .filter_map(|item| {
+            if item.destination.as_os_str().is_empty() || item.bytes_total == 0 {
+                return None;
+            }
+            if !matches!(
+                item.state,
+                WebDownloadState::Queued
+                    | WebDownloadState::FetchingMetadata
+                    | WebDownloadState::Running
+                    | WebDownloadState::Paused
+            ) {
+                return None;
+            }
+            let left = item.remaining_bytes();
+            (left > 0).then(|| (item.destination.clone(), left))
+        })
+        .collect()
 }
 
 /// Add the needs up per disk, in the order the queue reaches each disk.
@@ -134,13 +158,14 @@ impl Backend {
     /// the queue changes.
     pub fn download_disks(&self) -> Vec<QueueDisk> {
         let active = self.downloads().active;
-        let needs = queue_needs(&active, |id| {
+        let mut needs = queue_needs(&active, |id| {
             self.statuses
                 .get(id)
                 .and_then(|s| s.progress)
                 .or_else(|| active.iter().find(|i| &i.id == id).and_then(|i| i.progress))
                 .and_then(|p| p.percent)
         });
+        needs.extend(web_queue_needs(&self.web_downloads().active));
         per_disk(needs, this_disk)
     }
 
