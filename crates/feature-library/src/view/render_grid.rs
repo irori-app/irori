@@ -8,9 +8,10 @@ use gpui_kit::AnimationExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::ContextMenuExt as _;
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, ThemeStyled as _, h_flex, v_flex,
+    ActiveTheme as _, Icon, Sizable as _, Size, StyledExt as _, ThemeStyled as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -132,14 +133,14 @@ impl LibraryView {
         let key = id.key();
         let state = self.state_for(game, in_recent, cx);
         let status = models(cx).statuses.read(cx).get(&id).cloned();
-        let (show_badges, cover_categories) = {
+        let (show_badges, badges_always, cover_categories) = {
             let ui = &models(cx).settings.read(cx).app.ui;
             (
                 store_badges_shown(ui, self.frame.one_store),
+                ui.store_badges_always,
                 ui.cover_categories,
             )
         };
-        let badges_always = self.ui_prefs.store_badges_always;
         let focus_view = self.layout == LibraryLayout::Focus;
         let (corners, caption_kind, hover, favourite_star) = (
             self.ui_prefs.cover_corners,
@@ -301,22 +302,49 @@ impl LibraryView {
             .then(|| self.compat.get(&id))
             .flatten();
         // Focus covers are small, and the page beside them has the actions.
+        // Wide banners span much more horizontal space than portrait or square
+        // covers, so their hover buttons step up slightly to stay proportional.
+        let banner = cover_shape == CoverShape::Banner;
         let actions = (active && busy.is_none() && !selecting && !focus_view).then(|| {
             let primary = commands::primary(&state).map(|command| {
                 let label = command.label(&state);
+                let command_icon = command.icon(&state);
                 let id = id.clone();
+                let primary_key = key.clone();
                 let button = Button::new(ElementId::Name(format!("tile-primary:{key}").into()))
+                    .debug_selector(move || format!("tile-primary:{primary_key}"))
                     .w_full()
                     .rounded_full()
-                    .px_4()
                     .shadow_md()
-                    .icon(command.icon(&state))
-                    .label(label)
                     .loading(state.launching)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
                         this.run_command(&id, command.clone(), window, cx)
                     }));
+                let button = if banner {
+                    let icon = if state.launching {
+                        Spinner::new()
+                            .with_size(Size::Size(window.rem_size() * 1.25))
+                            .into_any_element()
+                    } else {
+                        Icon::new(command_icon).size_5().into_any_element()
+                    };
+                    button
+                        .large()
+                        .h(rems(2.5))
+                        .px_5()
+                        .accessibility_label(label.clone())
+                        .child(icon)
+                        .child(
+                            div()
+                                .min_w_0()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .child(label),
+                        )
+                } else {
+                    button.px_4().icon(command_icon).label(label)
+                };
                 if matches!(state.status, Some(StatusKind::Playing)) {
                     button
                 } else {
@@ -328,25 +356,29 @@ impl LibraryView {
                 .bottom_0()
                 .left_0()
                 .right_0()
-                .h(rems(4.75))
+                .h(rems(if banner { 5.5 } else { 4.75 }))
                 .rounded_b(radius)
                 .bg(actions_scrim)
                 .flex()
                 .items_end()
                 .justify_center()
-                .p_2p5()
+                .when_else(banner, |el| el.p_3(), |el| el.p_2p5())
                 .child(
                     h_flex()
                         .w_full()
-                        .max_w(rems(13.25))
+                        .max_w(rems(if banner { 16.5 } else { 13.25 }))
                         .min_w_0()
-                        .gap_2()
+                        .when_else(banner, |el| el.gap_2p5(), |el| el.gap_2())
                         .items_center()
                         .justify_center()
-                        .children(
-                            primary.map(|b| div().flex_1().max_w(rems(10.5)).min_w_0().child(b)),
-                        )
-                        .child(self.cover_more_button(game, in_recent, cx)),
+                        .children(primary.map(|b| {
+                            div()
+                                .flex_1()
+                                .max_w(rems(if banner { 13.25 } else { 10.5 }))
+                                .min_w_0()
+                                .child(b)
+                        }))
+                        .child(self.cover_more_button(game, in_recent, banner, cx)),
                 )
         });
 
@@ -363,6 +395,7 @@ impl LibraryView {
             spread_radius: px(-6.),
             inset: false,
         });
+        let draw_badges = show_badges && (active || badges_always) && !selecting;
         let has_top_right_markers = copies > 1
             || (state.has_update && state.installed && !state.sideload)
             || (state.favourite && favourite_star);
@@ -372,8 +405,6 @@ impl LibraryView {
                 linear_color_stop(bg_color.opacity(0.84), 0.0),
                 linear_color_stop(bg_color.opacity(0.0), 1.0),
             );
-            let badges_at_top =
-                show_badges && (active || badges_always) && !selecting && !focus_view;
             div()
                 .absolute()
                 .top_0()
@@ -383,11 +414,9 @@ impl LibraryView {
                 .bg(fade)
                 .pl_2()
                 .pb_4()
-                .when(badges_at_top, |el| el.pt_10().pr_2())
-                .when(!badges_at_top && has_top_right_markers, |el| {
-                    el.pt_2().pr_8()
-                })
-                .when(!badges_at_top && !has_top_right_markers, |el| {
+                .when(draw_badges, |el| el.pt_10().pr_2())
+                .when(!draw_badges && has_top_right_markers, |el| el.pt_2().pr_8())
+                .when(!draw_badges && !has_top_right_markers, |el| {
                     el.pt_2().pr_2()
                 })
                 .child(
@@ -425,33 +454,32 @@ impl LibraryView {
                         .border_color(primary_color.opacity(if selected { 1. } else { 0.85 })),
                 )
             })
-            .when(
-                show_badges && (active || badges_always) && !selecting && !focus_view,
-                |el| {
-                    // An entry of several stores' copies names every store,
-                    // the first few and a count of the rest.
-                    let row = badge_row(irori_ui::copies::badge_marks(game, cx), MAX_BADGES);
-                    let pill = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
-                    el.child(
-                        h_flex()
-                            .absolute()
-                            .top_2()
-                            .left_2()
-                            .right_2()
-                            .gap_1p5()
-                            .items_center()
-                            .flex_wrap()
-                            .children(
-                                row.shown
-                                    .into_iter()
-                                    .map(|mark| cover_store_mark(mark, scrim)),
-                            )
-                            .when(row.more > 0, |el| {
-                                el.child(pill(StoreBadge::more(row.more)))
-                            }),
-                    )
-                },
-            )
+            .when(draw_badges, |el| {
+                // An entry of several stores' copies names every store,
+                // the first few and a count of the rest.
+                let row = badge_row(irori_ui::copies::badge_marks(game, cx), MAX_BADGES);
+                let pill = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
+                let badge_key = key.clone();
+                el.child(
+                    h_flex()
+                        .debug_selector(move || format!("tile-badges:{badge_key}"))
+                        .absolute()
+                        .top_2()
+                        .left_2()
+                        .right_2()
+                        .gap_1p5()
+                        .items_center()
+                        .flex_wrap()
+                        .children(
+                            row.shown
+                                .into_iter()
+                                .map(|mark| cover_store_mark(mark, scrim)),
+                        )
+                        .when(row.more > 0, |el| {
+                            el.child(pill(StoreBadge::more(row.more)))
+                        }),
+                )
+            })
             .child(markers)
             .when(
                 actions.is_none() && status_overlay.is_none() && compat_badge.is_none(),

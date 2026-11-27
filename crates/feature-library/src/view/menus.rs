@@ -9,7 +9,7 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, WindowExt as _};
 use gpui_kit::{
     App, Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
+    StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, rems,
 };
 use irori_core::{GameId, GameInfo};
 use irori_services::CategoryRef;
@@ -550,14 +550,16 @@ impl LibraryView {
     }
 
     /// Translucent circular "…" button paired with the hover action capsule on
-    /// grid cover tiles (medium height matched to `tile-primary`).
+    /// grid cover tiles (height matched to `tile-primary`).
     pub(super) fn cover_more_button(
         &self,
         game: &Arc<GameInfo>,
         in_recent: bool,
+        large: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let key = game.id().key();
+        let more_key = key.clone();
         let view = cx.entity().downgrade();
         let open_view = view.clone();
         let menu_game = game.clone();
@@ -565,8 +567,22 @@ impl LibraryView {
         let theme = cx.theme();
         let bg = theme.background.opacity(0.76);
         let border = theme.foreground.opacity(0.2);
+        let button = Button::new(ElementId::Name(format!("tile-more:{key}").into()))
+            .ghost()
+            .rounded_full()
+            .tooltip(t("library.tile.more_actions"));
+        let button = if large {
+            button
+                .size(rems(2.5))
+                .p_0()
+                .accessibility_label(t("library.tile.more_actions"))
+                .child(Icon::new(IconName::Ellipsis).size_5())
+        } else {
+            button.icon(IconName::Ellipsis)
+        };
         div()
             .id(ElementId::Name(format!("tile-more-wrap:{key}").into()))
+            .debug_selector(move || format!("tile-more-wrap:{more_key}"))
             .flex_shrink_0()
             .rounded_full()
             .bg(bg)
@@ -575,11 +591,7 @@ impl LibraryView {
             .shadow_md()
             .on_click(|_, _, cx| cx.stop_propagation())
             .child(
-                Button::new(ElementId::Name(format!("tile-more:{key}").into()))
-                    .ghost()
-                    .rounded_full()
-                    .icon(IconName::Ellipsis)
-                    .tooltip(t("library.tile.more_actions"))
+                button
                     .dropdown_menu(move |menu, window, cx| {
                         game_menu(menu, &view, &menu_game, in_recent, window, cx)
                     })
