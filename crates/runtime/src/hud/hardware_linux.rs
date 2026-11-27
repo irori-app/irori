@@ -312,7 +312,7 @@ pub fn shorten_cpu_label(raw: &str) -> String {
     if stripped.is_empty() {
         "CPU".to_string()
     } else {
-        stripped.to_string()
+        abbreviate_ryzen_tier(stripped)
     }
 }
 
@@ -356,6 +356,22 @@ fn strip_prefix_ci<'a>(orig: &'a str, lower: &str, prefix_lower: &str) -> Option
     lower
         .starts_with(prefix_lower)
         .then(|| orig[prefix_lower.len()..].trim())
+}
+
+/// Abbreviate `"Ryzen <3|5|7|9> <model>"` to `"R<tier> <model>"` so the model
+/// number fits inside MangoHud's column 1 without being cut off by truncation.
+fn abbreviate_ryzen_tier(s: &str) -> String {
+    let lower = s.to_ascii_lowercase();
+    if let Some(after_ryzen) = strip_prefix_ci(s, &lower, "ryzen ") {
+        let mut parts = after_ryzen.splitn(2, char::is_whitespace);
+        if let (Some(tier), Some(rest)) = (parts.next(), parts.next()) {
+            let rest = rest.trim();
+            if matches!(tier, "3" | "5" | "7" | "9") && !rest.is_empty() {
+                return format!("R{tier} {rest}");
+            }
+        }
+    }
+    s.to_string()
 }
 
 /// Shorten a GPU model name by stripping redundant vendor/series prefixes.
@@ -985,11 +1001,28 @@ Model\t\t: Raspberry Pi 5 Model B Rev 1.0
         );
         assert_eq!(
             shorten_cpu_label("AMD Ryzen 7 7800X3D 8-Core Processor"),
-            "Ryzen 7 7800X3D"
+            "R7 7800X3D"
         );
         assert_eq!(
             shorten_cpu_label("AMD Ryzen 7 7840U w/ Radeon 780M Graphics"),
-            "Ryzen 7 7840U"
+            "R7 7840U"
+        );
+        assert_eq!(
+            shorten_cpu_label("AMD Ryzen 5 5600X 6-Core Processor"),
+            "R5 5600X"
+        );
+        assert_eq!(
+            shorten_cpu_label("AMD Ryzen 9 9950X3D 16-Core Processor"),
+            "R9 9950X3D"
+        );
+        assert_eq!(
+            shorten_cpu_label("AMD Ryzen 3 3100 4-Core Processor"),
+            "R3 3100"
+        );
+        assert_eq!(shorten_cpu_label("AMD Ryzen 7"), "Ryzen 7");
+        assert_eq!(
+            shorten_cpu_label("Intel(R) Core(TM) Ultra 9 285K"),
+            "Ultra 9 285K"
         );
 
         assert_eq!(shorten_gpu_label("AMD Radeon RX 9070 XT"), "RX 9070 XT");

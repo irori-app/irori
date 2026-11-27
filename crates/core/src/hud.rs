@@ -1110,6 +1110,11 @@ pub fn sanitize_game_id_for_filename(id: &str) -> String {
     }
 }
 
+/// Maximum character length for MangoHud `gpu_text` / `cpu_text` labels so
+/// they stay inside column 1 of MangoHud's 3-column vertical ImGui table
+/// without overlapping column 2 values (even at `100%` or with `hud_compact`).
+pub const MAX_HUD_LABEL_CHARS: usize = 11;
+
 /// Strip MangoHud config delimiters and control characters from custom GPU/CPU labels.
 pub fn sanitize_hud_label(label: &str) -> String {
     label
@@ -1118,6 +1123,30 @@ pub fn sanitize_hud_label(label: &str) -> String {
         .collect::<String>()
         .trim()
         .to_string()
+}
+
+/// Truncate a sanitized HUD hardware label to at most [`MAX_HUD_LABEL_CHARS`]
+/// characters, appending ASCII `"..."` (MangoHud's default font atlas omits
+/// Unicode `U+2026`) and trimming dangling separators before the ellipsis.
+pub fn truncate_hud_label(label: &str) -> String {
+    const ELLIPSIS: &str = "...";
+    const PREFIX_CHARS: usize = MAX_HUD_LABEL_CHARS - ELLIPSIS.len();
+
+    let trimmed = label.trim();
+    if trimmed.chars().count() <= MAX_HUD_LABEL_CHARS {
+        return trimmed.to_string();
+    }
+
+    let raw_prefix: String = trimmed.chars().take(PREFIX_CHARS).collect();
+    let clean_prefix = raw_prefix.trim_end_matches(|c: char| {
+        c.is_whitespace() || matches!(c, '/' | '\\' | '-' | '_' | ':' | '.' | '(' | '[')
+    });
+    let prefix = if clean_prefix.is_empty() {
+        raw_prefix.as_str()
+    } else {
+        clean_prefix
+    };
+    format!("{prefix}{ELLIPSIS}")
 }
 
 /// Normalize a hex color string to 6 uppercase ASCII hex digits (`RRGGBB`),
@@ -1158,6 +1187,21 @@ mod tests {
             sanitize_hud_label("RX 9070 XT #1=fast,ok;+yes\r\n"),
             "RX 9070 XT 1fastokyes"
         );
+    }
+
+    #[test]
+    fn truncate_hud_label_caps_long_labels_with_ascii_ellipsis() {
+        assert_eq!(truncate_hud_label(""), "");
+        assert_eq!(truncate_hud_label("RX 9070 XT"), "RX 9070 XT");
+        assert_eq!(truncate_hud_label("RTX 4070 Ti"), "RTX 4070 Ti");
+        assert_eq!(truncate_hud_label("R7 7800X3D"), "R7 7800X3D");
+        assert_eq!(truncate_hud_label("RX 6600/6600 XT/6600M"), "RX 6600...");
+        assert_eq!(truncate_hud_label("RX 9070/9070 XT/9070 GRE"), "RX 9070...");
+        assert_eq!(truncate_hud_label("RX 6600 - TEST TEST TEST"), "RX 6600...");
+        assert_eq!(truncate_hud_label("RTX 4070 Super"), "RTX 4070...");
+        assert_eq!(truncate_hud_label("Placa Vídeo Dedicada"), "Placa Ví...");
+        assert_eq!(truncate_hud_label("////////////"), "////////...");
+        assert!(truncate_hud_label("RX 6600/6600 XT/6600M").chars().count() <= MAX_HUD_LABEL_CHARS);
     }
 
     #[test]
