@@ -118,12 +118,12 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
     }
     if let Some(limit) = profile.fps_limit.filter(|&v| v > 0) {
         let _ = writeln!(out, "fps_limit={limit}");
-        let _ = writeln!(
-            out,
-            "fps_limit_method={}",
-            profile.fps_limit_method.as_mangohud_value()
-        );
     }
+    let _ = writeln!(
+        out,
+        "fps_limit_method={}",
+        profile.fps_limit_method.as_mangohud_value()
+    );
 
     // (b) Palette colors + optional FPS color change
     if let Some(colors) = resolve_effective_colors(profile, ctx) {
@@ -438,7 +438,8 @@ mod tests {
             );
         }
         assert!(!conf.contains("table_columns"));
-        assert!(!conf.contains("fps_limit"));
+        assert!(!l.iter().any(|line| line.starts_with("fps_limit=")));
+        assert!(l.contains(&"fps_limit_method=late"));
 
         let presets = render_mangohud_presets(&p);
         let p1 = preset_section(&presets, 1);
@@ -545,7 +546,19 @@ mod tests {
         assert_eq!(l[0], "legacy_layout=false");
         assert_eq!(l[1], "preset=2,3,4,1");
         assert!(l.contains(&"position=bottom-right"));
-        assert!(!conf.contains("fps_limit"));
+        assert!(!l.iter().any(|line| line.starts_with("fps_limit=")));
+        assert!(l.contains(&"fps_limit_method=late"));
+
+        p.fps_limit = None;
+        p.fps_limit_method = FpsLimitMethod::Early;
+        let conf_uncapped_early = render_mangohud_conf(&p, &ConfRenderContext::default());
+        let l_uncapped_early = lines(&conf_uncapped_early);
+        assert!(
+            !l_uncapped_early
+                .iter()
+                .any(|line| line.starts_with("fps_limit="))
+        );
+        assert!(l_uncapped_early.contains(&"fps_limit_method=early"));
 
         let presets = render_mangohud_presets(&p);
         let p2 = preset_section(&presets, 2);

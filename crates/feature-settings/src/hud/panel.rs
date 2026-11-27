@@ -99,6 +99,7 @@ pub struct HudPanel {
     scope: HudPanelScope,
     backend: HudBackend,
     pinned_preview: bool,
+    pub(super) steam_expanded: bool,
     active_tab: HudTab,
     global: GlobalHudSettings,
     game: GameHudSettings,
@@ -459,10 +460,12 @@ impl HudPanel {
         let theme = cx.theme();
         let theme_stamp = (theme.background, theme.foreground, theme.primary);
 
+        let steam_expanded = matches!(scope, HudPanelScope::PerGame { is_steam: true, .. });
         let panel = Self {
             scope,
             backend: hud_backend,
             pinned_preview: false,
+            steam_expanded,
             active_tab: HudTab::Metrics,
             global,
             game,
@@ -548,15 +551,11 @@ impl HudPanel {
 
     fn scope_notice(&self) -> Option<(&'static str, &SharedString)> {
         match self.scope {
-            HudPanelScope::Global => Some((
-                "hud-global-stores-notice",
-                &self.labels.global_stores_notice,
-            )),
             HudPanelScope::PerGame { .. } if self.is_third_party_launcher() => Some((
                 "hud-launcher-restart-notice",
                 &self.labels.launcher_restart_notice,
             )),
-            HudPanelScope::PerGame { .. } => None,
+            HudPanelScope::Global | HudPanelScope::PerGame { .. } => None,
         }
     }
 
@@ -1145,9 +1144,6 @@ impl Render for HudPanel {
         let steam_preview = self.is_steam()
             && self.display.steam_snippet.is_some()
             && self.game.mode != GameHudMode::Disabled;
-        let steam_disabled_snippet = (self.is_steam() && self.game.mode == GameHudMode::Disabled)
-            .then(|| self.display.steam_snippet.clone())
-            .flatten();
 
         let render_mangohud_tab_body = |this: &Self, cx: &mut Context<Self>| match this.active_tab {
             HudTab::Metrics => this.render_metrics_tab(cx),
@@ -1175,7 +1171,7 @@ impl Render for HudPanel {
                                 .flex_shrink_0()
                                 .gap_2()
                                 .children(self.render_missing_mangohud())
-                                .child(self.render_preview_row(cx)),
+                                .child(self.preview.clone()),
                         )
                         .child(
                             div()
@@ -1190,6 +1186,7 @@ impl Render for HudPanel {
                                         .gap_2()
                                         .children(self.render_scope_notice(cx))
                                         .children(self.render_steam_empty_notice(cx))
+                                        .children(self.render_steam_launch_bar(cx))
                                         .child(self.render_top_quick_card(cx))
                                         .child(self.render_tab_bar(cx))
                                         .child(tab_body),
@@ -1210,10 +1207,8 @@ impl Render for HudPanel {
                             .children(self.render_missing_mangohud())
                             .children(self.render_scope_notice(cx))
                             .children(self.render_steam_empty_notice(cx))
-                            .when(steam_preview, |v| v.child(self.render_preview_row(cx)))
-                            .when_some(steam_disabled_snippet.clone(), |v, snippet| {
-                                v.child(self.render_steam_launch_card(snippet, cx))
-                            })
+                            .when(steam_preview, |v| v.child(self.preview.clone()))
+                            .children(self.render_steam_launch_bar(cx))
                             .child(self.render_mode_section(cx))
                             .children(self.render_opengl_section(cx)),
                     )
@@ -1230,12 +1225,8 @@ impl Render for HudPanel {
                             .gap_2()
                             .children(self.render_scope_notice(cx))
                             .children(self.render_steam_empty_notice(cx))
-                            .when(editing || steam_preview, |v| {
-                                v.child(self.render_preview_row(cx))
-                            })
-                            .when_some(steam_disabled_snippet, |v, snippet| {
-                                v.child(self.render_steam_launch_card(snippet, cx))
-                            })
+                            .when(editing || steam_preview, |v| v.child(self.preview.clone()))
+                            .children(self.render_steam_launch_bar(cx))
                             .child(self.render_mode_section(cx))
                             .child(self.render_metal_section(cx)),
                     )
@@ -1252,16 +1243,15 @@ impl Render for HudPanel {
                 .children(self.render_scope_notice(cx))
                 .children(self.render_steam_empty_notice(cx))
                 .when(!editing, |v| {
-                    v.when(steam_preview, |v| v.child(self.render_preview_row(cx)))
-                        .when_some(steam_disabled_snippet.clone(), |v, snippet| {
-                            v.child(self.render_steam_launch_card(snippet, cx))
-                        })
+                    v.when(steam_preview, |v| v.child(self.preview.clone()))
+                        .children(self.render_steam_launch_bar(cx))
                         .child(self.render_mode_section(cx))
                         .children(self.render_opengl_section(cx))
                 })
                 .when(editing, |v| {
                     let tab_body = render_mangohud_tab_body(self, cx);
-                    v.child(self.render_preview_row(cx))
+                    v.child(self.preview.clone())
+                        .children(self.render_steam_launch_bar(cx))
                         .child(self.render_top_quick_card(cx))
                         .child(self.render_tab_bar(cx))
                         .child(tab_body)
@@ -1272,12 +1262,8 @@ impl Render for HudPanel {
                 .gap_2()
                 .children(self.render_scope_notice(cx))
                 .children(self.render_steam_empty_notice(cx))
-                .when(editing || steam_preview, |v| {
-                    v.child(self.render_preview_row(cx))
-                })
-                .when_some(steam_disabled_snippet, |v, snippet| {
-                    v.child(self.render_steam_launch_card(snippet, cx))
-                })
+                .when(editing || steam_preview, |v| v.child(self.preview.clone()))
+                .children(self.render_steam_launch_bar(cx))
                 .child(self.render_mode_section(cx))
                 .child(self.render_metal_section(cx))
                 .into_any_element(),

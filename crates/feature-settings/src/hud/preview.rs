@@ -776,29 +776,32 @@ impl Render for HudPreview {
                     .on_click(cx.listener(|this, _, _, cx| this.step_cycle(-1, cx))),
             )
             .child(
+                h_flex()
+                    .items_center()
+                    .gap_1()
+                    .px_1p5()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(self.labels.cycle.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_semibold()
+                            .font_family(mono_font)
+                            .child(self.cycle_counter.clone()),
+                    ),
+            )
+            .child(
                 Button::new("hud-preview-cycle-next")
                     .ghost()
                     .xsmall()
+                    .icon(IconName::ChevronRight)
+                    .accessibility_label(self.labels.cycle_next.clone())
                     .tooltip(self.labels.cycle_next.clone())
-                    .on_click(cx.listener(|this, _, _, cx| this.step_cycle(1, cx)))
-                    .child(
-                        h_flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(muted_fg)
-                                    .child(self.labels.cycle.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_semibold()
-                                    .font_family(mono_font)
-                                    .child(self.cycle_counter.clone()),
-                            ),
-                    ),
+                    .on_click(cx.listener(|this, _, _, cx| this.step_cycle(1, cx))),
             );
 
         let header = h_flex()
@@ -809,15 +812,15 @@ impl Render for HudPreview {
             .gap_2()
             .child(
                 h_flex()
+                    .flex_wrap()
                     .gap_2()
                     .items_center()
-                    .flex_1()
                     .min_w_0()
                     .child(
                         div()
                             .text_sm()
                             .font_medium()
-                            .truncate()
+                            .flex_shrink_0()
                             .child(self.labels.title.clone()),
                     )
                     .when(is_mangohud && self.cache.no_display, |row| {
@@ -882,7 +885,6 @@ impl Render for HudPreview {
         // positions readable when only a line or two is enabled.
         let mut stage = v_flex()
             .w_full()
-            .flex_1()
             .min_h(rems(7.))
             .rounded(theme.radius)
             .bg(self.scene.background())
@@ -914,7 +916,6 @@ impl Render for HudPreview {
 
         v_flex()
             .w_full()
-            .h_full()
             .p_4()
             .gap_3()
             .rounded(radius)
