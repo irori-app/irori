@@ -1640,6 +1640,7 @@
   "settings.optiscaler.overwrite.description_reshade": "{file} is already in “{title}” and looks like ReShade. Overwriting it will replace ReShade unless you pick another proxy file such as winmm.dll, version.dll or OptiScaler.asi. Do you want to overwrite it anyway?",
   "settings.optiscaler.overwrite.description_unknown": "{file} is already in “{title}” and is not managed by Irori. Another mod or custom DLL may use it, so you can pick another proxy file such as winmm.dll, version.dll or OptiScaler.asi instead. Do you want to overwrite it anyway?",
   "settings.optiscaler.overwrite.confirm": "Overwrite anyway",
+  "settings.optiscaler.error.arch": "OptiScaler only supports 64-bit games, and this game’s program isn’t 64-bit.",
   "settings.optiscaler.error.dll_taken": "{file} is already in the game folder and isn’t OptiScaler’s, so Irori left it alone. Another mod such as ReShade may use it. Pick another proxy file such as winmm.dll, version.dll or OptiScaler.asi and try again.",
   "settings.tools.group.translation_layers": "Graphics translation layers",
   "settings.tools.group.winetricks": "Winetricks components",

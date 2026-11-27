@@ -112,7 +112,7 @@ pub enum ReshadeError {
     NoApi,
     #[error("Irori can't install ReShade for games that use {}", .0.label())]
     Unsupported(Api),
-    #[error("ReShade has no build for the game's processor architecture")]
+    #[error("No compatible build for the game's processor architecture")]
     UnsupportedArch,
     #[error("{name} already exists in the game folder and isn't ReShade's")]
     DllTaken { name: String },
