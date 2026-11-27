@@ -207,6 +207,18 @@ impl Backend {
     /// Download and verify Windows `aria2c.exe` into `<data>/tools/aria2`.
     pub async fn install_aria2(&self, cancel: CancellationToken) -> Result<PathBuf> {
         self.ensure_online()?;
+        let bt_active = {
+            let state = self.web_downloads.lock();
+            state
+                .active
+                .iter()
+                .any(|item| item.kind.is_bittorrent() && item.state.is_network_active())
+        };
+        if bt_active {
+            bail!("Pause or finish active BitTorrent downloads before updating aria2c");
+        }
+        self.cancel_torrent_preview();
+        self.aria2.shutdown().await;
         aria2_download::install(&cancel).await
     }
 

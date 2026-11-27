@@ -112,6 +112,53 @@ impl AddDownloadDialog {
                     .into_any_element(),
             );
         }
+        if let Some(Aria2Status::Ready {
+            update_available: true,
+            ..
+        }) = &self.aria2_status
+        {
+            return Some(
+                h_flex()
+                    .p_3()
+                    .gap_3()
+                    .items_center()
+                    .justify_between()
+                    .rounded(radius_lg)
+                    .bg(bg)
+                    .border_1()
+                    .border_color(border)
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_medium()
+                                    .child(t("manage.downloads.add.bt.aria2_update_title")),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .child(t("manage.downloads.add.bt.aria2_update_body")),
+                            ),
+                    )
+                    .child(
+                        Button::new("add-aria2-update")
+                            .outline()
+                            .small()
+                            .label(t("manage.downloads.add.bt.update_aria2"))
+                            .loading(self.installing_aria2)
+                            .disabled(self.installing_aria2)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.install_aria2(window, cx)),
+                            ),
+                    )
+                    .into_any_element(),
+            );
+        }
         let Some(Aria2Status::Missing {
             can_auto_install,
             install_hint,

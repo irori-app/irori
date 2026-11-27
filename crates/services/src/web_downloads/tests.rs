@@ -518,6 +518,7 @@ async fn aria2_download_verifies_sha256_and_extracts_only_aria2c_exe() {
         &server.url(""),
         aria2_download::ARCHIVE_NAME,
         &bad_sha,
+        aria2_download::VERSION,
         dir.path(),
         &cancel,
     )
@@ -525,11 +526,13 @@ async fn aria2_download_verifies_sha256_and_extracts_only_aria2c_exe() {
     .unwrap_err();
     assert!(format!("{err:#}").contains("SHA-256"), "{err:#}");
     assert!(!dir.path().join("aria2c.exe").exists());
+    assert!(!dir.path().join(aria2_download::VERSION_FILE).exists());
 
     let installed = aria2_download::install_from(
         &server.url(""),
         aria2_download::ARCHIVE_NAME,
         &good_sha,
+        aria2_download::VERSION,
         dir.path(),
         &cancel,
     )
@@ -537,12 +540,79 @@ async fn aria2_download_verifies_sha256_and_extracts_only_aria2c_exe() {
     .unwrap();
     assert_eq!(installed, dir.path().join("aria2c.exe"));
     assert_eq!(std::fs::read(&installed).unwrap(), b"MZ aria2");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join(aria2_download::VERSION_FILE))
+            .unwrap()
+            .trim(),
+        aria2_download::VERSION
+    );
     assert!(!dir.path().parent().unwrap().join("evil.exe").exists());
-    let entries: Vec<_> = std::fs::read_dir(dir.path())
+    let mut entries: Vec<_> = std::fs::read_dir(dir.path())
         .unwrap()
-        .map(|e| e.unwrap().file_name())
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
-    assert_eq!(entries, ["aria2c.exe"]);
+    entries.sort();
+    assert_eq!(entries, ["aria2c.exe", "version.txt"]);
+}
+
+#[test]
+fn managed_aria2_version_marker_flags_outdated_installs_for_update() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = if cfg!(windows) {
+        "aria2c.exe"
+    } else {
+        "aria2c"
+    };
+    let exe = dir.path().join(bin);
+    std::fs::write(&exe, b"stub").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mut perms = std::fs::metadata(&exe).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&exe, perms).unwrap();
+    }
+
+    // Legacy install without version.txt offers an update when auto-update is supported.
+    let legacy = aria2_download::discover_managed_aria2(dir.path(), bin, "1.37.0", true).unwrap();
+    assert!(matches!(
+        legacy,
+        super::model::Aria2Status::Ready {
+            update_available: true,
+            ..
+        }
+    ));
+
+    // Current version.txt clears update_available.
+    std::fs::write(dir.path().join(aria2_download::VERSION_FILE), "1.37.0\n").unwrap();
+    let current = aria2_download::discover_managed_aria2(dir.path(), bin, "1.37.0", true).unwrap();
+    assert!(matches!(
+        current,
+        super::model::Aria2Status::Ready {
+            update_available: false,
+            ..
+        }
+    ));
+
+    // When Irori bumps VERSION in the future, existing installs are flagged for update.
+    let outdated = aria2_download::discover_managed_aria2(dir.path(), bin, "1.38.0", true).unwrap();
+    assert!(matches!(
+        outdated,
+        super::model::Aria2Status::Ready {
+            update_available: true,
+            ..
+        }
+    ));
+
+    // Platforms without one-click installer never advertise an in-app update button.
+    let no_auto = aria2_download::discover_managed_aria2(dir.path(), bin, "1.38.0", false).unwrap();
+    assert!(matches!(
+        no_auto,
+        super::model::Aria2Status::Ready {
+            update_available: false,
+            ..
+        }
+    ));
 }
 
 #[test]

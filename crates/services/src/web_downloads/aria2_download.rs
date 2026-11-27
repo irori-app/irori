@@ -29,6 +29,8 @@ pub const SOURCE_PAGE: &str = "https://github.com/aria2/aria2/releases/tag/relea
 pub const ARCHIVE_NAME: &str = "aria2-1.37.0-win-64bit-build1.zip";
 /// Verified SHA-256 of `aria2-1.37.0-win-64bit-build1.zip` from `aria2/aria2` `release-1.37.0`.
 pub const ARCHIVE_SHA256: &str = "67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288";
+/// Sidecar marker storing the installed managed `aria2c.exe` version.
+pub const VERSION_FILE: &str = "version.txt";
 
 /// Directory holding Irori's downloaded `aria2c` binary.
 pub fn managed_dir() -> PathBuf {
@@ -55,15 +57,25 @@ pub async fn install(cancel: &CancellationToken) -> Result<PathBuf> {
     }
     let file = archive_name(std::env::consts::ARCH)
         .context("No official aria2 build is available for this architecture")?;
-    install_from(SOURCE_BASE, file, ARCHIVE_SHA256, &managed_dir(), cancel).await
+    install_from(
+        SOURCE_BASE,
+        file,
+        ARCHIVE_SHA256,
+        VERSION,
+        &managed_dir(),
+        cancel,
+    )
+    .await
 }
 
-/// Download `file` from `base`, verify it against `expected_sha256`, and unpack
-/// only `aria2c.exe` into `dest/aria2c.exe`. Cleans up temporary files on error.
+/// Download `file` from `base`, verify it against `expected_sha256`, unpack
+/// only `aria2c.exe` into `dest/aria2c.exe`, and record `version` in
+/// `dest/version.txt`. Cleans up temporary files on error.
 pub(crate) async fn install_from(
     base: &str,
     file: &str,
     expected_sha256: &str,
+    version: &str,
     dest: &Path,
     cancel: &CancellationToken,
 ) -> Result<PathBuf> {
@@ -81,12 +93,17 @@ pub(crate) async fn install_from(
     .context("Couldn't download aria2");
 
     let program = dest.join("aria2c.exe");
+    let version_owned = version.trim().to_string();
     let result = match download_result {
         Ok(got) if download::checksum_matches(expected_sha256, &got.digest) => {
-            let (archive_path, target_path) = (archive.clone(), program.clone());
-            tokio::task::spawn_blocking(move || extract_program(&archive_path, &target_path))
-                .await
-                .context("aria2 extraction task failed")?
+            let (archive_path, target_path, dest_dir) =
+                (archive.clone(), program.clone(), dest.to_path_buf());
+            tokio::task::spawn_blocking(move || -> Result<()> {
+                extract_program(&archive_path, &target_path)?;
+                write_version_marker(&dest_dir, &version_owned)
+            })
+            .await
+            .context("aria2 extraction task failed")?
         }
         Ok(_) => Err(anyhow::anyhow!(
             "The downloaded aria2 archive does not match its expected SHA-256 checksum, so it was rejected"
@@ -95,6 +112,53 @@ pub(crate) async fn install_from(
     };
     let _ = tokio::fs::remove_dir_all(&staging).await;
     result.map(|()| program)
+}
+
+fn write_version_marker(dest: &Path, version: &str) -> Result<()> {
+    let marker = dest.join(VERSION_FILE);
+    let partial = dest.join(format!("{VERSION_FILE}.part"));
+    let written = (|| -> Result<()> {
+        let mut out = std::fs::File::create(&partial)
+            .with_context(|| format!("creating {}", partial.display()))?;
+        std::io::Write::write_all(&mut out, format!("{version}\n").as_bytes())?;
+        out.sync_all()?;
+        Ok(())
+    })();
+    if let Err(err) = written {
+        let _ = std::fs::remove_file(&partial);
+        return Err(err).context("Couldn't write aria2 version marker");
+    }
+    if let Err(err) = irori_core::fs_part::finalize_part(&partial, &marker) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(err).context("Couldn't finalize aria2 version marker");
+    }
+    Ok(())
+}
+
+/// Whether `dir/version.txt` matches `expected_version`.
+pub(crate) fn managed_version_is_current(dir: &Path, expected_version: &str) -> bool {
+    std::fs::read_to_string(dir.join(VERSION_FILE))
+        .ok()
+        .is_some_and(|raw| raw.trim() == expected_version.trim())
+}
+
+/// Inspect Irori's managed `aria2` directory and flag updates when the stored
+/// version marker is missing or older than `expected_version`.
+pub(crate) fn discover_managed_aria2(
+    dir: &Path,
+    bin: &str,
+    expected_version: &str,
+    can_auto_update: bool,
+) -> Option<Aria2Status> {
+    let managed = dir.join(bin);
+    if !is_program(&managed) {
+        return None;
+    }
+    Some(Aria2Status::Ready {
+        path: managed,
+        on_host: false,
+        update_available: can_auto_update && !managed_version_is_current(dir, expected_version),
+    })
 }
 
 /// Extract ONLY `aria2c.exe` out of `archive` into `program`.
@@ -161,6 +225,7 @@ pub async fn discover_aria2(custom_path: &str) -> Aria2Status {
             return Aria2Status::Ready {
                 path: candidate,
                 on_host: false,
+                update_available: false,
             };
         }
         let nested = candidate.join(bin);
@@ -168,16 +233,13 @@ pub async fn discover_aria2(custom_path: &str) -> Aria2Status {
             return Aria2Status::Ready {
                 path: nested,
                 on_host: false,
+                update_available: false,
             };
         }
     }
 
-    let managed = managed_dir().join(bin);
-    if is_program(&managed) {
-        return Aria2Status::Ready {
-            path: managed,
-            on_host: false,
-        };
+    if let Some(status) = discover_managed_aria2(&managed_dir(), bin, VERSION, offered()) {
+        return status;
     }
 
     if host::is_flatpak() {
@@ -186,6 +248,7 @@ pub async fn discover_aria2(custom_path: &str) -> Aria2Status {
             return Aria2Status::Ready {
                 path: bundled,
                 on_host: false,
+                update_available: false,
             };
         }
     }
@@ -196,6 +259,7 @@ pub async fn discover_aria2(custom_path: &str) -> Aria2Status {
         return Aria2Status::Ready {
             path: found,
             on_host: false,
+            update_available: false,
         };
     }
 
@@ -206,6 +270,7 @@ pub async fn discover_aria2(custom_path: &str) -> Aria2Status {
         return Aria2Status::Ready {
             path: found,
             on_host: false,
+            update_available: false,
         };
     }
 
@@ -215,6 +280,7 @@ pub async fn discover_aria2(custom_path: &str) -> Aria2Status {
         return Aria2Status::Ready {
             path: host_path,
             on_host: true,
+            update_available: false,
         };
     }
 

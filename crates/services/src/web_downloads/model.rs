@@ -280,6 +280,9 @@ pub enum Aria2Status {
     Ready {
         path: PathBuf,
         on_host: bool,
+        /// `true` when Irori's managed Windows `aria2c.exe` is older than the
+        /// currently pinned [`crate::web_downloads::aria2_download::VERSION`].
+        update_available: bool,
     },
     Missing {
         can_auto_install: bool,

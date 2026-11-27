@@ -432,7 +432,7 @@ impl Aria2Supervisor {
         }
 
         let (program, on_host) = match discover_aria2(custom_path).await {
-            Aria2Status::Ready { path, on_host } => (path, on_host),
+            Aria2Status::Ready { path, on_host, .. } => (path, on_host),
             Aria2Status::Missing { install_hint, .. } => {
                 bail!("aria2c was not found. {install_hint}")
             }
