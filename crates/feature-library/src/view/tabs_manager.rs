@@ -10,7 +10,8 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, StyledExt as _,
+    h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -128,12 +129,13 @@ impl LibraryView {
                         let hidden = saved.is_tab_hidden(key);
                         let row_slug = tab_row_key(key);
 
-                        let (icon, icon_color, label, kind_label, count): (
+                        let (icon, icon_color, label, kind_label, count, pinned): (
                             IconName,
                             Option<gpui_kit::Hsla>,
                             SharedString,
                             SharedString,
                             Option<usize>,
+                            bool,
                         ) = match key {
                             TabKey::All => (
                                 PresetChip::All.icon(),
@@ -141,6 +143,7 @@ impl LibraryView {
                                 PresetChip::All.label(),
                                 t("library.tabs.kind.preset"),
                                 counts.preset(PresetChip::All),
+                                false,
                             ),
                             TabKey::Installed => (
                                 PresetChip::Installed.icon(),
@@ -148,6 +151,7 @@ impl LibraryView {
                                 PresetChip::Installed.label(),
                                 t("library.tabs.kind.preset"),
                                 counts.preset(PresetChip::Installed),
+                                false,
                             ),
                             TabKey::Favorites => (
                                 PresetChip::Favourites.icon(),
@@ -155,6 +159,7 @@ impl LibraryView {
                                 PresetChip::Favourites.label(),
                                 t("library.tabs.kind.preset"),
                                 counts.preset(PresetChip::Favourites),
+                                false,
                             ),
                             TabKey::RecentlyAdded => (
                                 PresetChip::RecentlyAdded.icon(),
@@ -162,6 +167,7 @@ impl LibraryView {
                                 PresetChip::RecentlyAdded.label(),
                                 t("library.tabs.kind.preset"),
                                 counts.preset(PresetChip::RecentlyAdded),
+                                false,
                             ),
                             TabKey::Collection(id) => {
                                 let cat = user.smart_categories.get(id)?;
@@ -177,6 +183,7 @@ impl LibraryView {
                                     cat.name.clone().into(),
                                     t("library.tabs.kind.collection"),
                                     Some(counts.collection(id)),
+                                    cat.look.pinned,
                                 )
                             }
                             TabKey::View(_) => return None,
@@ -271,9 +278,38 @@ impl LibraryView {
                         }
 
                         if let TabKey::Collection(id) = key {
+                            let pin_id = id.clone();
                             let edit_id = id.clone();
                             let del_id = id.clone();
                             let edit_view = view.clone();
+                            actions.push(
+                                Button::new(SharedString::from(format!("tab-pin-{row_slug}")))
+                                    .debug_selector({
+                                        let slug = row_slug.clone();
+                                        move || format!("tab-pin-{slug}")
+                                    })
+                                    .xsmall()
+                                    .ghost()
+                                    .icon(if pinned {
+                                        IconName::PinOff
+                                    } else {
+                                        IconName::Pin
+                                    })
+                                    .selected(pinned)
+                                    .tooltip(if pinned {
+                                        t("library.categories.unpin")
+                                    } else {
+                                        t("library.categories.pin")
+                                    })
+                                    .on_click(move |_, _, cx| {
+                                        crate::set_category_pinned(
+                                            &irori_services::CategoryRef::Smart(pin_id.clone()),
+                                            !pinned,
+                                            cx,
+                                        );
+                                    })
+                                    .into_any_element(),
+                            );
                             actions.push(
                                 Button::new(SharedString::from(format!("tab-edit-{row_slug}")))
                                     .xsmall()
@@ -380,7 +416,7 @@ impl LibraryView {
                 v_flex()
                     .id("library-edit-tabs-panel")
                     .debug_selector(|| "library-edit-tabs-panel".into())
-                    .w(rems(23.))
+                    .w(rems(25.))
                     .gap_2p5()
                     .child(
                         v_flex()

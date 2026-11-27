@@ -624,9 +624,17 @@ impl AppShell {
                 cx,
             ))
             .when(!collapsed, |d| {
-                d.child(self.saved_views.clone()).child(self.recent.clone())
+                d.child(
+                    v_flex()
+                        .id("sidebar-scroll")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .child(self.saved_views.clone())
+                        .child(self.recent.clone()),
+                )
             })
-            .child(div().flex_1())
+            .when(collapsed, |d| d.child(div().flex_1()))
             .child(item(
                 "nav-settings",
                 "shell.nav.settings",

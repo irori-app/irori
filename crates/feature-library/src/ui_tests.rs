@@ -3505,3 +3505,118 @@ fn wide_banner_scales_cover_action_buttons_only_for_banner_shape(cx: &mut TestAp
         "banner more button must remain circular, got {banner_more:?}"
     );
 }
+
+#[gpui_kit::test]
+fn collection_pin_to_sidebar_toggles_and_preserves_look(cx: &mut TestAppContext) {
+    use crate::dialogs::collection::open_collection_dialog;
+    use gpui_kit::component::WindowExt as _;
+    use irori_services::{CategoryLook, CategoryRef, Match, Rule, SmartCategory};
+
+    let backend = start(cx);
+    let (window, _view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1400.), px(900.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        for _ in 0..3 {
+            cx.update_window(window, |_, window, cx| {
+                window.refresh();
+                let _ = window.draw(cx);
+            })
+            .unwrap();
+            cx.run_until_parked();
+        }
+    };
+    settle(cx);
+
+    let mut zombies = SmartCategory::new(
+        "Zombies",
+        Match::Any,
+        vec![Rule::Tags {
+            tags: vec!["Zombies".into()],
+        }],
+        vec![],
+    );
+    zombies.look = CategoryLook {
+        pinned: false,
+        colour: Some("red".into()),
+        icon: Some("skull".into()),
+        ..Default::default()
+    };
+    let col_id = backend
+        .userdata
+        .save_smart_category(Some("s-zombies"), zombies);
+    settle(cx);
+
+    // 1. Toggle pinning from the Edit tabs popover and verify look fields stay intact.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let trigger = vcx
+            .debug_bounds("library-edit-tabs-trigger")
+            .expect("Edit tabs trigger rendered");
+        vcx.simulate_click(trigger.center(), Default::default());
+    }
+    settle(cx);
+
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let pin_btn = vcx
+            .debug_bounds("tab-pin-col-s-zombies")
+            .expect("pin button rendered for collection row");
+        vcx.simulate_click(pin_btn.center(), Default::default());
+    }
+    settle(cx);
+
+    let entry = cx.read(|cx| {
+        crate::category_list(cx)
+            .into_iter()
+            .find(|e| e.category == CategoryRef::Smart(col_id.clone()))
+            .expect("Zombies entry exists")
+    });
+    assert!(entry.pinned, "clicking pin button must pin collection");
+    assert_eq!(entry.colour.as_deref(), Some("red"));
+    assert_eq!(entry.icon.as_deref(), Some("skull"));
+
+    // 2. Unpin via the public helper (used by tab menu and sidebar context menu).
+    cx.update(|cx| {
+        crate::set_category_pinned(&CategoryRef::Smart(col_id.clone()), false, cx);
+    });
+    settle(cx);
+    let entry = cx.read(|cx| {
+        crate::category_list(cx)
+            .into_iter()
+            .find(|e| e.category == CategoryRef::Smart(col_id.clone()))
+            .expect("Zombies entry exists")
+    });
+    assert!(!entry.pinned, "unpinning must clear pinned flag");
+    assert_eq!(entry.colour.as_deref(), Some("red"));
+    assert_eq!(entry.icon.as_deref(), Some("skull"));
+
+    // 3. Edit collection dialog renders the sidebar pin checkbox.
+    cx.update_window(window, |_, window, cx| {
+        open_collection_dialog(Some(col_id.clone()), window, cx);
+    })
+    .unwrap();
+    settle(cx);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(
+            vcx.debug_bounds("collection-pin-sidebar").is_some(),
+            "collection dialog must render Pin to the sidebar checkbox"
+        );
+    }
+    cx.update_window(window, |_, window, cx| window.close_dialog(cx))
+        .unwrap();
+    settle(cx);
+}

@@ -79,6 +79,7 @@ pub use view::LibraryView;
 pub use view::details::{
     edit_picked_metadata, link_picked_to_steam, picked_count, refresh_picked_details,
 };
+pub use view::quick::pinned_category_menu;
 pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
@@ -402,6 +403,25 @@ pub fn set_grouping(group: Grouping, cx: &mut App) {
 pub fn category_list(cx: &App) -> Vec<irori_ui::categories::CategoryEntry> {
     let library = irori_ui::models(cx).library.read(cx);
     irori_ui::categories::entries(&library.user, &library.categories)
+}
+
+/// Pin or unpin a category (manual or dynamic collection) in the sidebar.
+pub fn set_category_pinned(category: &irori_services::CategoryRef, pinned: bool, cx: &App) {
+    let mut look = irori_ui::models(cx)
+        .library
+        .read(cx)
+        .user
+        .category_look(category);
+    if look.pinned == pinned {
+        return;
+    }
+    look.pinned = pinned;
+    let category = category.clone();
+    let b = irori_ui::backend(cx);
+    irori_ui::state::run_infallible(cx, async move {
+        b.userdata.set_category_look(&category, look);
+    })
+    .detach();
 }
 
 /// Show the library's games in `category` alone, as a palette row or a
