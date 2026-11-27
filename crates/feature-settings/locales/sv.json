@@ -2318,5 +2318,15 @@
   "settings.crash.recent_help": "Rapporter från oväntade avslut stannar här tills du tar bort dem.",
   "settings.crash.review_action": "Granska och rapportera",
   "settings.crash.delete": "Ta bort rapport",
-  "settings.crash.delete_failed": "Kunde inte ta bort kraschrapporten"
+  "settings.crash.delete_failed": "Kunde inte ta bort kraschrapporten",
+  "settings.field.ui_cover_compat_badges.label": "ProtonDB- och Steam Deck-märken på omslag",
+  "settings.field.ui_cover_compat_badges.help": "Visa ProtonDB-betyg och Steam Deck Verified-märken på omslag för spel som inte är installerade.",
+  "settings.option.cover_caption.hover": "Vid hovring",
+  "settings.field.ui_library_greeting.label": "Visa hälsning i biblioteksrubriken",
+  "settings.field.ui_library_greeting.help": "Hälsar dig efter tid på dygnet överst i Biblioteket. Klicka på ditt namn där för att ändra eller dölja det.",
+  "settings.sidebar.setup": "Konton och verktyg",
+  "settings.page.accounts": "Konton",
+  "settings.page.wine_manager": "Wine och Proton",
+  "settings.page.wine_manager_macos": "Wine-hanterare",
+  "settings.page.emulators": "Emulatorer"
 }

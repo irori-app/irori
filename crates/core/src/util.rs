@@ -79,6 +79,24 @@ pub fn is_executable(path: &std::path::Path) -> bool {
     }
 }
 
+/// Whether `path` is a readable directory the current user can write to.
+///
+/// On Unix, uses `access(W_OK)` so root-owned `0755` mounts (such as `/srv` or
+/// `/swap`) are excluded without creating probe files. On other platforms,
+/// verifies the directory can be opened; read-only mount flags are checked
+/// separately by callers.
+pub fn is_dir_writable(path: &std::path::Path) -> bool {
+    #[cfg(unix)]
+    {
+        nix::unistd::access(path, nix::unistd::AccessFlags::W_OK).is_ok()
+            && std::fs::read_dir(path).is_ok()
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::read_dir(path).is_ok()
+    }
+}
+
 pub fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -126,5 +144,12 @@ mod tests {
     fn durations() {
         assert_eq!(format_duration(3725), "1h 2m");
         assert_eq!(format_playtime(125), "2 h 5 min");
+    }
+
+    #[test]
+    fn dir_writability_detects_writable_tempdir_and_missing_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(is_dir_writable(dir.path()));
+        assert!(!is_dir_writable(&dir.path().join("does-not-exist")));
     }
 }

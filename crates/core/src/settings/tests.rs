@@ -657,3 +657,85 @@ fn web_download_prefs_default_round_trip_and_folder_fallbacks() {
         PathBuf::from("/games")
     );
 }
+
+#[test]
+fn list_columns_defaults_and_round_trip() {
+    let cols = ListColumns::default();
+    assert!(cols.store);
+    assert!(!cols.size);
+    assert!(cols.playtime);
+    assert!(cols.last_played);
+    assert!(cols.status);
+    assert_eq!(cols.compat, cfg!(target_os = "linux"));
+    let ui: UiPrefs = serde_json::from_str("{}").unwrap();
+    assert_eq!(ui.library_list_columns, cols);
+    assert_eq!(ui.cover_compat_badges, cfg!(target_os = "linux"));
+    let custom = UiPrefs {
+        cover_compat_badges: !cfg!(target_os = "linux"),
+        library_list_columns: ListColumns {
+            store: false,
+            size: true,
+            playtime: false,
+            last_played: true,
+            status: false,
+            compat: true,
+        },
+        ..UiPrefs::default()
+    };
+    let value = serde_json::to_value(&custom).unwrap();
+    assert_eq!(value["libraryListColumns"]["size"], Value::Bool(true));
+    assert_eq!(value["libraryListColumns"]["store"], Value::Bool(false));
+    assert_eq!(value["libraryListColumns"]["compat"], Value::Bool(true));
+    assert_eq!(
+        value["coverCompatBadges"],
+        Value::Bool(!cfg!(target_os = "linux"))
+    );
+    let back: UiPrefs = serde_json::from_value(value).unwrap();
+    assert_eq!(back.library_list_columns, custom.library_list_columns);
+    assert_eq!(back.cover_compat_badges, custom.cover_compat_badges);
+}
+
+#[test]
+fn list_row_size_defaults_round_trips_and_falls_back_on_unknown() {
+    let ui: UiPrefs = serde_json::from_str("{}").unwrap();
+    assert_eq!(ui.library_list_row_size, ListRowSize::Medium);
+    let ui: UiPrefs = serde_json::from_str(r#"{"libraryListRowSize":"compact"}"#).unwrap();
+    assert_eq!(ui.library_list_row_size, ListRowSize::Compact);
+    let ui: UiPrefs = serde_json::from_str(r#"{"libraryListRowSize":"large"}"#).unwrap();
+    assert_eq!(ui.library_list_row_size, ListRowSize::Large);
+    let value = serde_json::to_value(&ui).unwrap();
+    assert_eq!(value["libraryListRowSize"], Value::String("large".into()));
+    let unknown: UiPrefs = serde_json::from_str(r#"{"libraryListRowSize":"giant"}"#).unwrap();
+    assert_eq!(unknown.library_list_row_size, ListRowSize::Medium);
+}
+
+#[test]
+fn greeting_and_hover_caption_defaults_and_round_trip() {
+    let ui: UiPrefs = serde_json::from_str("{}").unwrap();
+    assert!(ui.library_greeting);
+    assert_eq!(ui.greeting_name, None);
+    assert_eq!(ui.library_focus_cover_caption, None);
+    assert_eq!(ui.focus_cover_caption(), CoverCaption::Full);
+
+    let custom = UiPrefs {
+        cover_caption: CoverCaption::Hover,
+        library_focus_cover_caption: Some(CoverCaption::Title),
+        library_greeting: false,
+        greeting_name: Some("Alex".into()),
+        ..UiPrefs::default()
+    };
+    assert_eq!(custom.focus_cover_caption(), CoverCaption::Title);
+    let value = serde_json::to_value(&custom).unwrap();
+    assert_eq!(value["coverCaption"], Value::String("hover".into()));
+    assert_eq!(
+        value["libraryFocusCoverCaption"],
+        Value::String("title".into())
+    );
+    assert_eq!(value["libraryGreeting"], Value::Bool(false));
+    assert_eq!(value["greetingName"], Value::String("Alex".into()));
+    let back: UiPrefs = serde_json::from_value(value).unwrap();
+    assert_eq!(back.cover_caption, CoverCaption::Hover);
+    assert_eq!(back.library_focus_cover_caption, Some(CoverCaption::Title));
+    assert!(!back.library_greeting);
+    assert_eq!(back.greeting_name.as_deref(), Some("Alex"));
+}

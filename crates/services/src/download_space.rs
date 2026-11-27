@@ -2,19 +2,26 @@
 //! free there, so the downloads page can say a disk won't hold the queue
 //! before the download that fills it starts.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use irori_core::GameId;
 
 use crate::Backend;
 use crate::downloads::{DownloadItem, DownloadKind, DownloadState};
+use crate::drives::{
+    DetectedDrive, extra_drives_for_snapshot, resolve_disk_label, snapshot_system_disks,
+};
 use crate::web_downloads::{WebDownload, WebDownloadState};
 
-/// One disk the queue downloads to, or an installed-games disk shown when idle.
+/// One disk the queue downloads to, or an install drive shown when idle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueDisk {
-    /// The first folder on this disk, to name it by.
+    /// The first folder on this disk (or mount root for an auto-detected drive).
     pub folder: PathBuf,
+    /// Formatted disk label (for example `C: System`, `D: Asgard`,
+    /// `/ · Reletech P400 EVO 2TB`, `/mnt/Asgard`), when resolved.
+    pub label: Option<String>,
     /// Bytes the queue still downloads there.
     pub needed: u64,
     /// Bytes free there, when they could be read.
@@ -27,6 +34,16 @@ impl QueueDisk {
     /// The disk holds less than the queue still downloads to it.
     pub fn is_short(&self) -> bool {
         self.free.is_some_and(|free| free < self.needed)
+    }
+
+    /// Concise display label for the UI: the resolved disk name when known,
+    /// otherwise the folder path.
+    pub fn display_label(&self) -> String {
+        self.label
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| self.folder.display().to_string())
     }
 }
 
@@ -111,6 +128,7 @@ pub(crate) fn per_disk(
                 key,
                 QueueDisk {
                     folder,
+                    label: None,
                     needed: bytes,
                     free,
                     total,
@@ -152,6 +170,35 @@ fn disk_key(existing: &Path) -> Option<String> {
     }
 }
 
+/// Combine configured install disks with auto-detected extra writable drives,
+/// preserving configured disks first and skipping any extra drive whose
+/// underlying disk key is already present.
+pub(crate) fn merge_install_disks(
+    mut configured: Vec<QueueDisk>,
+    extras: Vec<DetectedDrive>,
+    key_of: impl Fn(&Path) -> Option<String>,
+) -> Vec<QueueDisk> {
+    let mut seen_keys: HashSet<String> = configured
+        .iter()
+        .filter_map(|d| key_of(&d.folder))
+        .collect();
+    for drive in extras {
+        if let Some(key) = key_of(&drive.mount)
+            && !seen_keys.insert(key)
+        {
+            continue;
+        }
+        configured.push(QueueDisk {
+            folder: drive.mount,
+            label: Some(drive.disk_label),
+            needed: 0,
+            free: Some(drive.free),
+            total: Some(drive.total),
+        });
+    }
+    configured
+}
+
 impl Backend {
     /// Available bytes on the disk holding `path` (or its nearest existing ancestor).
     /// Reads the disk, so call it off the UI thread.
@@ -173,24 +220,43 @@ impl Backend {
                 .and_then(|p| p.percent)
         });
         needs.extend(web_queue_needs(&self.web_downloads().active));
-        per_disk(needs, this_disk)
+        if needs.is_empty() {
+            return Vec::new();
+        }
+        let system_disks = snapshot_system_disks();
+        let mut disks = per_disk(needs, this_disk);
+        for disk in &mut disks {
+            disk.label = resolve_disk_label(&disk.folder, &system_disks);
+        }
+        disks
     }
 
-    /// Free and total space for the configured game install folders, grouped
-    /// per physical disk. Reads the disks, so call it off the UI thread.
+    /// Free and total space for configured game install folders plus
+    /// auto-detected main writable drives, grouped per physical disk. Reads the
+    /// disks, so call it off the UI thread.
     pub fn install_disks(&self) -> Vec<QueueDisk> {
-        let folders: Vec<(PathBuf, u64)> = self
+        let configured_paths: Vec<PathBuf> = self
             .settings
             .app()
             .library_folders()
             .into_iter()
             .filter(|f| !f.path.trim().is_empty())
-            .map(|f| (irori_core::paths::expand_home(&f.path), 0))
+            .map(|f| irori_core::paths::expand_home(&f.path))
             .collect();
-        per_disk(folders, this_disk)
+        let system_disks = snapshot_system_disks();
+        let folders: Vec<(PathBuf, u64)> =
+            configured_paths.iter().cloned().map(|p| (p, 0)).collect();
+        let mut configured: Vec<QueueDisk> = per_disk(folders, this_disk)
             .into_iter()
             .filter(|d| d.free.is_some())
-            .collect()
+            .collect();
+        for disk in &mut configured {
+            disk.label = resolve_disk_label(&disk.folder, &system_disks);
+        }
+        let extras = extra_drives_for_snapshot(&system_disks, &configured_paths);
+        merge_install_disks(configured, extras, |path| {
+            path.ancestors().find(|p| p.is_dir()).and_then(disk_key)
+        })
     }
 }
 
@@ -290,5 +356,59 @@ mod tests {
             disk_key(Path::new(r"C:\Games")),
             disk_key(Path::new(r"D:\Games"))
         );
+    }
+
+    #[test]
+    fn merges_configured_and_extra_drives_without_duplicate_keys() {
+        let configured = vec![QueueDisk {
+            folder: PathBuf::from("/home/edward/Games/Heroic"),
+            label: Some("/ · Reletech P400 EVO 2TB".into()),
+            needed: 0,
+            free: Some(1_300),
+            total: Some(1_900),
+        }];
+        let extras = vec![
+            DetectedDrive {
+                label: "/mnt/alias".into(),
+                disk_label: "/mnt/alias".into(),
+                suggested_base: "/mnt/alias/Games/Irori".into(),
+                total: 1_900,
+                free: 1_300,
+                mount: PathBuf::from("/mnt/alias"),
+            },
+            DetectedDrive {
+                label: "/mnt/Asgard".into(),
+                disk_label: "/mnt/Asgard".into(),
+                suggested_base: "/mnt/Asgard/Games/Irori".into(),
+                total: 938,
+                free: 177,
+                mount: PathBuf::from("/mnt/Asgard"),
+            },
+        ];
+        let merged = merge_install_disks(configured, extras, |p| {
+            if p.starts_with("/home") || p.starts_with("/mnt/alias") {
+                Some("dev0".into())
+            } else {
+                Some("dev1".into())
+            }
+        });
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].display_label(), "/ · Reletech P400 EVO 2TB");
+        assert_eq!(merged[1].display_label(), "/mnt/Asgard");
+        assert_eq!(merged[1].folder, PathBuf::from("/mnt/Asgard"));
+        assert_eq!(merged[1].free, Some(177));
+        assert_eq!(merged[1].total, Some(938));
+    }
+
+    #[test]
+    fn display_label_falls_back_to_folder_when_label_missing() {
+        let disk = QueueDisk {
+            folder: PathBuf::from("/games"),
+            label: None,
+            needed: 0,
+            free: Some(10),
+            total: Some(20),
+        };
+        assert_eq!(disk.display_label(), "/games");
     }
 }

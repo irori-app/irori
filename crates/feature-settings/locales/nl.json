@@ -2318,5 +2318,15 @@
   "settings.crash.recent_help": "Rapporten van onverwachte afsluitingen blijven hier totdat je ze verwijdert.",
   "settings.crash.review_action": "Bekijken en melden",
   "settings.crash.delete": "Rapport verwijderen",
-  "settings.crash.delete_failed": "Kan het crashrapport niet verwijderen"
+  "settings.crash.delete_failed": "Kan het crashrapport niet verwijderen",
+  "settings.field.ui_cover_compat_badges.label": "ProtonDB- en Steam Deck-badges op hoezen",
+  "settings.field.ui_cover_compat_badges.help": "Toon ProtonDB-beoordelingen en Steam Deck Verified-badges op hoezen van niet-geïnstalleerde games.",
+  "settings.option.cover_caption.hover": "Bij aanwijzen",
+  "settings.field.ui_library_greeting.label": "Begroeting tonen in de bibliotheekkop",
+  "settings.field.ui_library_greeting.help": "Begroet je op tijdstip bovenaan de Bibliotheek. Klik daar op je naam om die aan te passen of te verbergen.",
+  "settings.sidebar.setup": "Accounts & tools",
+  "settings.page.accounts": "Accounts",
+  "settings.page.wine_manager": "Wine en Proton",
+  "settings.page.wine_manager_macos": "Wine-beheer",
+  "settings.page.emulators": "Emulators"
 }

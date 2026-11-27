@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use irori_core::settings::{CoverCaption, CoverShape, Density};
+use irori_core::settings::{CoverCaption, CoverShape, Density, ListColumns, ListRowSize};
 
 /// Gap between tiles, in rem.
 pub const GAP_REM: f32 = 1.25;
@@ -17,7 +17,59 @@ pub fn caption_rem(caption: CoverCaption) -> f32 {
     match caption {
         CoverCaption::Full => CAPTION_REM,
         CoverCaption::Title => TITLE_ONLY_REM,
-        CoverCaption::None => 0.0,
+        CoverCaption::Hover | CoverCaption::None => 0.0,
+    }
+}
+
+/// Base width of secondary "Continue playing" cards when 4 or more games
+/// scroll horizontally, in rem. The most recently played card is 1.5× wider.
+pub const TOP_CARD_BASE_REM: f32 = 16.0;
+/// Cap on a "Continue playing" card's height so a single wide banner never
+/// grows overly tall, in rem.
+pub const TOP_CARD_MAX_HEIGHT_REM: f32 = 14.5;
+/// Floor on a "Continue playing" card's height on narrow windows, in rem.
+pub const TOP_CARD_MIN_HEIGHT_REM: f32 = 10.5;
+
+/// Width of each "Continue playing" card and the row's shared card height (in
+/// rem) for `count` games across `available_rem` horizontal room:
+/// - 1 game: 100% of available width
+/// - 2 games: 60% / 40%
+/// - 3 games: 50% / 25% / 25%
+/// - 4+ games: first 1.5× [`TOP_CARD_BASE_REM`], rest [`TOP_CARD_BASE_REM`],
+///   scrolling horizontally
+///
+/// The height follows 16:9 capped at [`TOP_CARD_MAX_HEIGHT_REM`].
+pub fn top_card_widths(count: usize, available_rem: f32) -> (Vec<f32>, f32) {
+    let available = available_rem.max(TOP_CARD_BASE_REM);
+    let ratio = 9.0 / 16.0;
+    match count {
+        0 => (Vec::new(), 0.0),
+        1 => {
+            let h = (available * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, TOP_CARD_MAX_HEIGHT_REM);
+            (vec![available], h)
+        }
+        2 => {
+            let usable = (available - GAP_REM).max(TOP_CARD_BASE_REM * 2.0);
+            let w0 = usable * 0.6;
+            let w1 = usable - w0;
+            let h = (w1 * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, TOP_CARD_MAX_HEIGHT_REM);
+            (vec![w0, w1], h)
+        }
+        3 => {
+            let usable = (available - 2.0 * GAP_REM).max(TOP_CARD_BASE_REM * 2.0);
+            let w0 = usable * 0.5;
+            let side = (usable - w0) * 0.5;
+            let h = (w0 * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, 13.0);
+            (vec![w0, side, side], h)
+        }
+        n => {
+            let first = TOP_CARD_BASE_REM * 1.5;
+            let mut widths = Vec::with_capacity(n);
+            widths.push(first);
+            widths.resize(n, TOP_CARD_BASE_REM);
+            let h = (first * ratio).clamp(TOP_CARD_MIN_HEIGHT_REM, 12.0);
+            (widths, h)
+        }
     }
 }
 /// Space above each row so a focused tile's ring is not clipped, in rem.
@@ -34,31 +86,71 @@ pub const COVER_RATIO: f32 = 1.5;
 pub const MIN_TILE_REM: f32 = 7.0;
 pub const MAX_TILE_REM: f32 = 16.0;
 
-/// List column widths, in rem (store, size, playtime, last played, status, actions).
-pub const LIST_COLUMNS: [f32; 6] = [6.0, 5.5, 6.0, 7.5, 8.0, 10.0];
+/// List column widths, in rem (store, size, playtime, last played, status,
+/// compat, actions).
+pub const LIST_COLUMNS: [f32; 7] = [6.0, 5.5, 6.0, 7.5, 8.0, 7.5, 10.0];
 /// Width of a list row's thumbnail, in rem.
 pub const LIST_THUMB_REM: f32 = 2.25;
 /// Gap between list cells (`gap_4`), in rem.
 const LIST_GAP_REM: f32 = 1.0;
 /// Narrowest the title column gets before a data column is dropped, in rem.
 const LIST_TITLE_MIN_REM: f32 = 12.0;
-/// Data columns in the order narrow lists drop them: size, store, playtime,
-/// last played. Status and the actions always stay.
-const LIST_DROP_ORDER: [usize; 4] = [1, 0, 2, 3];
+/// Data columns in the order narrow lists drop them: size, compat, store,
+/// playtime, last played. Status (if enabled) and the actions always stay.
+const LIST_DROP_ORDER: [usize; 5] = [1, 5, 0, 2, 3];
+
+/// Height of one list-layout row for `size` and `density`, in rem.
+pub fn list_row_rem(size: ListRowSize, density: Density) -> f32 {
+    let base = match size {
+        ListRowSize::Compact => LIST_ROW_REM,
+        ListRowSize::Medium => 5.0,
+        ListRowSize::Large => 6.5,
+    };
+    base * density.row_scale()
+}
+
+/// Width of a list row's thumbnail for `size`, in rem.
+pub fn list_thumb_rem(size: ListRowSize) -> f32 {
+    match size {
+        ListRowSize::Compact => LIST_THUMB_REM,
+        ListRowSize::Medium => 3.0,
+        ListRowSize::Large => 3.9,
+    }
+}
+
+/// Width of a list row's thumbnail for `size` and `density`, in rem. Scales
+/// down alongside compact row heights so a 2:3 cover never overflows its row.
+pub fn list_thumb_rem_at(size: ListRowSize, density: Density) -> f32 {
+    list_thumb_rem(size) * density.row_scale().min(1.0)
+}
 
 /// Which of [`LIST_COLUMNS`] fit in `available_rem` beside the thumbnail and a
-/// readable title.
-pub fn list_columns(available_rem: f32) -> [bool; 6] {
-    let needed = |shown: &[bool; 6]| {
+/// readable title, keeping only columns enabled in `chosen`, sized for a list
+/// row thumbnail of `row_size`.
+pub fn list_columns_for(
+    available_rem: f32,
+    chosen: ListColumns,
+    row_size: ListRowSize,
+) -> [bool; 7] {
+    let thumb = list_thumb_rem(row_size);
+    let needed = |shown: &[bool; 7]| {
         let columns: f32 = LIST_COLUMNS
             .iter()
             .zip(shown)
             .filter(|(_, shown)| **shown)
             .map(|(w, _)| w + LIST_GAP_REM)
             .sum();
-        LIST_THUMB_REM + LIST_GAP_REM + LIST_TITLE_MIN_REM + columns
+        thumb + LIST_GAP_REM + LIST_TITLE_MIN_REM + columns
     };
-    let mut shown = [true; 6];
+    let mut shown = [
+        chosen.store,
+        chosen.size,
+        chosen.playtime,
+        chosen.last_played,
+        chosen.status,
+        chosen.compat,
+        true,
+    ];
     for column in LIST_DROP_ORDER {
         if needed(&shown) <= available_rem {
             break;
@@ -322,8 +414,10 @@ mod tests {
     fn rows_leave_room_for_the_caption_shown() {
         let full = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Full);
         let title = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Title);
+        let hover = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::Hover);
         let none = grid_metrics_for(60.0, 11.0, Density::Comfortable, CoverCaption::None);
         assert_eq!(full, grid_metrics(60.0, 11.0));
+        assert_eq!(hover, none);
         assert!((full.row_rem - title.row_rem - (CAPTION_REM - TITLE_ONLY_REM)).abs() < 1e-4);
         assert!((full.row_rem - none.row_rem - CAPTION_REM).abs() < 1e-4);
         assert_eq!((full.columns, full.tile_rem), (none.columns, none.tile_rem));
@@ -509,10 +603,125 @@ mod tests {
 
     #[test]
     fn narrow_lists_drop_columns_in_order() {
-        assert_eq!(list_columns(80.0), [true; 6]);
-        assert_eq!(list_columns(60.0), [true, false, true, true, true, true]);
-        assert_eq!(list_columns(51.0), [false, false, true, true, true, true]);
-        assert_eq!(list_columns(50.0), [false, false, false, true, true, true]);
-        assert_eq!(list_columns(20.0), [false, false, false, false, true, true]);
+        let cols = |w, chosen| list_columns_for(w, chosen, ListRowSize::Medium);
+        let all = ListColumns {
+            store: true,
+            size: true,
+            playtime: true,
+            last_played: true,
+            status: true,
+            compat: true,
+        };
+        assert_eq!(cols(90.0, all), [true; 7]);
+        assert_eq!(cols(69.0, all), [true, false, true, true, true, true, true]);
+        assert_eq!(
+            cols(60.0, all),
+            [true, false, true, true, true, false, true]
+        );
+        assert_eq!(
+            cols(52.0, all),
+            [false, false, true, true, true, false, true]
+        );
+        assert_eq!(
+            cols(50.0, all),
+            [false, false, false, true, true, false, true]
+        );
+        assert_eq!(
+            cols(20.0, all),
+            [false, false, false, false, true, false, true]
+        );
+        // Respects disabled columns even on wide windows, including status.
+        let default = ListColumns::default();
+        assert_eq!(
+            cols(90.0, default),
+            [
+                true,
+                false,
+                true,
+                true,
+                true,
+                cfg!(target_os = "linux"),
+                true
+            ]
+        );
+        let minimal = ListColumns {
+            store: false,
+            size: true,
+            playtime: false,
+            last_played: false,
+            status: false,
+            compat: true,
+        };
+        assert_eq!(
+            cols(90.0, minimal),
+            [false, true, false, false, false, true, true]
+        );
+    }
+
+    #[test]
+    fn list_row_size_scales_row_height_and_thumbnail() {
+        let compact_row = list_row_rem(ListRowSize::Compact, Density::Comfortable);
+        let medium_row = list_row_rem(ListRowSize::Medium, Density::Comfortable);
+        let large_row = list_row_rem(ListRowSize::Large, Density::Comfortable);
+        assert!((compact_row - 3.75).abs() < 1e-4);
+        assert!((medium_row - 5.0).abs() < 1e-4);
+        assert!((large_row - 6.5).abs() < 1e-4);
+        assert!(
+            list_row_rem(ListRowSize::Large, Density::Compact)
+                < list_row_rem(ListRowSize::Large, Density::Comfortable)
+        );
+        assert!((list_thumb_rem(ListRowSize::Compact) - 2.25).abs() < 1e-4);
+        assert!((list_thumb_rem(ListRowSize::Medium) - 3.0).abs() < 1e-4);
+        assert!((list_thumb_rem(ListRowSize::Large) - 3.9).abs() < 1e-4);
+        // Every (ListRowSize, Density) combination leaves vertical room for
+        // the 2:3 thumbnail so covers never clip outside their row.
+        for size in [
+            ListRowSize::Compact,
+            ListRowSize::Medium,
+            ListRowSize::Large,
+        ] {
+            for density in [Density::Compact, Density::Comfortable, Density::Spacious] {
+                let row = list_row_rem(size, density);
+                let thumb_h = list_thumb_rem_at(size, density) * COVER_RATIO;
+                assert!(
+                    thumb_h + 0.25 <= row,
+                    "thumb height {thumb_h} overflows row height {row} for ({size:?}, {density:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn top_card_widths_scale_dynamically_by_count() {
+        assert_eq!(top_card_widths(0, 60.0), (vec![], 0.0));
+
+        // 1 game: fills full width, height capped at 16:9 max.
+        let (w1, h1) = top_card_widths(1, 60.0);
+        assert_eq!(w1, vec![60.0]);
+        assert!((h1 - TOP_CARD_MAX_HEIGHT_REM).abs() < 1e-4);
+
+        // 2 games: 60% / 40% of usable width.
+        let (w2, h2) = top_card_widths(2, 61.25);
+        assert_eq!(w2.len(), 2);
+        assert!((w2[0] - 36.0).abs() < 1e-4);
+        assert!((w2[1] - 24.0).abs() < 1e-4);
+        assert!((TOP_CARD_MIN_HEIGHT_REM..=TOP_CARD_MAX_HEIGHT_REM).contains(&h2));
+
+        // 3 games: 50% / 25% / 25%.
+        let (w3, h3) = top_card_widths(3, 62.5);
+        assert_eq!(w3.len(), 3);
+        assert!((w3[0] - 30.0).abs() < 1e-4);
+        assert!((w3[1] - 15.0).abs() < 1e-4);
+        assert!((w3[2] - 15.0).abs() < 1e-4);
+        assert!((TOP_CARD_MIN_HEIGHT_REM..=TOP_CARD_MAX_HEIGHT_REM).contains(&h3));
+
+        // 4 and 8 games: first 1.5x base, rest base.
+        for n in [4usize, 8] {
+            let (w, h) = top_card_widths(n, 60.0);
+            assert_eq!(w.len(), n);
+            assert!((w[0] - TOP_CARD_BASE_REM * 1.5).abs() < 1e-4);
+            assert!(w[1..].iter().all(|&x| (x - TOP_CARD_BASE_REM).abs() < 1e-4));
+            assert!((TOP_CARD_MIN_HEIGHT_REM..=TOP_CARD_MAX_HEIGHT_REM).contains(&h));
+        }
     }
 }

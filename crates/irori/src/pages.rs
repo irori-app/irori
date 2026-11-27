@@ -8,10 +8,7 @@ use irori_ui::Route;
 #[derive(Default)]
 pub struct Pages {
     current: Option<(Route, AnyView)>,
-    downloads: Option<AnyView>,
-    wine: Option<AnyView>,
-    emulators: Option<AnyView>,
-    accounts: Option<AnyView>,
+    downloads: Option<Entity<irori_manage::DownloadsView>>,
     stores: Option<AnyView>,
     settings: Option<Entity<irori_settings::SettingsView>>,
     library: Option<Entity<irori_library::LibraryView>>,
@@ -64,40 +61,27 @@ impl Pages {
                 window.defer(cx, move |window, cx| focus.focus(window, cx));
                 view.into()
             }
-            Route::Downloads => cached(&mut self.downloads, || {
-                cx.new(|cx| irori_manage::DownloadsView::new(window, cx))
-                    .into()
-            }),
-            Route::WineManager => cached(&mut self.wine, || {
-                cx.new(|cx| irori_manage::WineManagerView::new(window, cx))
-                    .into()
-            }),
-            Route::Emulators => cached(&mut self.emulators, || {
-                cx.new(|cx| irori_manage::EmulatorsView::new(window, cx))
-                    .into()
-            }),
-            Route::Accounts => cached(&mut self.accounts, || {
-                cx.new(|cx| irori_manage::AccountsView::new(window, cx))
-                    .into()
-            }),
+            Route::Downloads => match &self.downloads {
+                Some(view) => {
+                    view.update(cx, |v, cx| v.refresh_install_disks(cx));
+                    view.clone().into()
+                }
+                None => {
+                    let view = cx.new(|cx| irori_manage::DownloadsView::new(window, cx));
+                    self.downloads = Some(view.clone());
+                    view.into()
+                }
+            },
+            Route::WineManager => self.settings_view("wine-manager", window, cx),
+            Route::Emulators => self.settings_view("emulators", window, cx),
+            Route::Accounts => self.settings_view("accounts", window, cx),
             Route::Stores => cached(&mut self.stores, || {
                 cx.new(|cx| irori_manage::StoresView::new(window, cx))
                     .into()
             }),
             Route::Settings(section) => {
                 let section = section.clone();
-                match &self.settings {
-                    Some(view) => {
-                        view.update(cx, |v, cx| v.set_section(&section, window, cx));
-                        view.clone().into()
-                    }
-                    None => {
-                        let view =
-                            cx.new(|cx| irori_settings::SettingsView::new(section, window, cx));
-                        self.settings = Some(view.clone());
-                        view.into()
-                    }
-                }
+                self.settings_view(&section, window, cx)
             }
             Route::Game(id) => {
                 let id = id.clone();
@@ -129,6 +113,25 @@ impl Pages {
                 let (id, section) = (id.clone(), section.clone());
                 cx.new(|cx| irori_settings::GameSettingsView::new(id, section, window, cx))
                     .into()
+            }
+        }
+    }
+    fn settings_view<V: 'static>(
+        &mut self,
+        section: &str,
+        window: &mut Window,
+        cx: &mut Context<V>,
+    ) -> AnyView {
+        match &self.settings {
+            Some(view) => {
+                view.update(cx, |v, cx| v.set_section(section, window, cx));
+                view.clone().into()
+            }
+            None => {
+                let section = section.to_string().into();
+                let view = cx.new(|cx| irori_settings::SettingsView::new(section, window, cx));
+                self.settings = Some(view.clone());
+                view.into()
             }
         }
     }

@@ -228,6 +228,33 @@ pub fn count_matches<Tz: TimeZone>(
     Compiled::new(category, user).members(&facts).1
 }
 
+/// Whether `id` (or any combined copy of its entry) matches `category`'s
+/// dynamic rules alone, ignoring manual `included_games` and `excluded_games`.
+pub fn matches_rules_only<Tz: TimeZone>(
+    category: &SmartCategory,
+    library: &LibrarySnapshot,
+    user: &UserData,
+    inputs: &Inputs,
+    id: &GameId,
+    today: NaiveDate,
+    tz: &Tz,
+) -> bool {
+    let Some((ix, entry)) =
+        library.games.iter().enumerate().find(|(_, g)| {
+            g.id() == *id || library.copies_of(&g.id()).iter().any(|copy| copy == id)
+        })
+    else {
+        return false;
+    };
+    let facts = Facts::new(library, user, inputs, today, tz);
+    let compiled = Compiled::new(category, user);
+    let entry_copies = copies(library, entry);
+    entry_copies
+        .iter()
+        .fold(Truth::No, |t, c| t.or(compiled.test_rules(&facts, c, ix)))
+        == Truth::Yes
+}
+
 /// Every copy of the entry `entry` heads (itself alone when it has none).
 fn copies<'a>(library: &'a LibrarySnapshot, entry: &'a Arc<GameInfo>) -> Vec<&'a Arc<GameInfo>> {
     let ids = library.copies_of(&entry.id());
@@ -545,6 +572,9 @@ struct Compiled<'a> {
     all: Option<bool>,
     rules: Vec<Test<'a>>,
     leave_out: Vec<Test<'a>>,
+    included_games: &'a BTreeSet<String>,
+    excluded_games: &'a BTreeSet<String>,
+    manual_only: bool,
 }
 
 impl<'a> Compiled<'a> {
@@ -563,18 +593,26 @@ impl<'a> Compiled<'a> {
             all,
             rules: tests(&category.rules),
             leave_out: tests(&category.leave_out),
+            included_games: &category.included_games,
+            excluded_games: &category.excluded_games,
+            manual_only: category.manual_only,
         }
     }
 
-    /// The answer for one copy of the entry at `ix`.
-    fn test<Tz: TimeZone>(&self, f: &Facts<'_, Tz>, game: &GameInfo, ix: usize) -> Truth {
+    /// The dynamic-rules answer for one copy, ignoring manual inclusions and exclusions.
+    fn test_rules<Tz: TimeZone>(&self, f: &Facts<'_, Tz>, game: &GameInfo, ix: usize) -> Truth {
         let Some(all) = self.all else {
             return Truth::Unknown;
         };
-        // An empty "all" and an empty "any" both take every game, so a
-        // category of "leave out" rows alone shows the rest.
+        // A manual-only collection with no rules matches nothing on its own;
+        // legacy rule categories with empty `rules` still take every game so
+        // `leave_out`-only categories keep working.
         let kept = if self.rules.is_empty() {
-            Truth::Yes
+            if self.manual_only {
+                Truth::No
+            } else {
+                Truth::Yes
+            }
         } else if all {
             self.rules
                 .iter()
@@ -591,16 +629,47 @@ impl<'a> Compiled<'a> {
         kept.and(left_out.not())
     }
 
+    /// The answer for one copy of the entry at `ix`.
+    fn test<Tz: TimeZone>(&self, f: &Facts<'_, Tz>, game: &GameInfo, ix: usize) -> Truth {
+        if self.all.is_none() {
+            return Truth::Unknown;
+        }
+        let key = game.id().key();
+        if self.excluded_games.contains(&key) {
+            return Truth::No;
+        }
+        if self.included_games.contains(&key) {
+            return Truth::Yes;
+        }
+        self.test_rules(f, game, ix)
+    }
+
     /// Every copy of the entries in the category, and how many of those
     /// entries aren't hidden.
     fn members<Tz: TimeZone>(&self, f: &Facts<'_, Tz>) -> (HashSet<GameId>, usize) {
+        if self.all.is_none() {
+            return (HashSet::new(), 0);
+        }
         let mut members = HashSet::new();
         let mut shown = 0;
         for (ix, entry) in f.library.games.iter().enumerate() {
             let copies = copies(f.library, entry);
-            let truth = copies
+            if copies
                 .iter()
-                .fold(Truth::No, |t, c| t.or(self.test(f, c, ix)));
+                .any(|c| self.excluded_games.contains(&c.id().key()))
+            {
+                continue;
+            }
+            let truth = if copies
+                .iter()
+                .any(|c| self.included_games.contains(&c.id().key()))
+            {
+                Truth::Yes
+            } else {
+                copies
+                    .iter()
+                    .fold(Truth::No, |t, c| t.or(self.test(f, c, ix)))
+            };
             if truth == Truth::Yes {
                 members.extend(copies.iter().map(|c| c.id()));
                 if !f.user.hidden.contains(&entry.id().key()) {

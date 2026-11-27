@@ -17,6 +17,7 @@ use gpui_kit::{
 };
 use irori_core::{FpsLimitMethod, GameHudMode, GlobalHudMode, HudBackend, HudPreset};
 use irori_ui::backend;
+use irori_ui::components::StoreLogo;
 
 use crate::hud::steam_guide::open_steam_launch_guide_dialog;
 use crate::widgets::{RowState, field_row, group_heading, group_panel, muted};
@@ -112,29 +113,95 @@ impl HudPanel {
         )
     }
 
-    pub(super) fn render_steam_launch_card(
-        &self,
-        snippet: SharedString,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let (radius, radius_lg, surface, muted_bg, border_color, muted_fg, mono_font) = {
+    pub(super) fn render_steam_launch_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let show_steam_bar = matches!(self.scope, HudPanelScope::Global) || self.is_steam();
+        let snippet = show_steam_bar
+            .then(|| self.display.steam_snippet.clone())
+            .flatten()?;
+        let (radius, muted_bg, border_color, muted_fg, mono_font) = {
             let theme = cx.theme();
             (
                 theme.radius,
-                theme.radius_lg,
-                theme.secondary,
                 theme.muted,
                 theme.border,
                 theme.muted_foreground,
                 theme.mono_font_family.clone(),
             )
         };
+        let expanded = self.steam_expanded;
+        let toggle_label = if expanded {
+            self.labels.steam_hide_command.clone()
+        } else {
+            self.labels.steam_show_command.clone()
+        };
+        let toggle_icon = if expanded {
+            IconName::ChevronUp
+        } else {
+            IconName::ChevronDown
+        };
+
+        let header = h_flex()
+            .w_full()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_4()
+            .py_2p5()
+            .child(
+                h_flex()
+                    .items_center()
+                    .gap_2p5()
+                    .flex_1()
+                    .min_w_0()
+                    .child(StoreLogo::Steam.icon().small().text_color(muted_fg))
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap_0p5()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_semibold()
+                                    .child(self.labels.steam_snippet_label.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted_fg)
+                                    .child(self.labels.steam_card_subtitle.clone()),
+                            ),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_1p5()
+                    .flex_shrink_0()
+                    .child(self.copy_steam_button("hud-steam-copy", snippet.clone(), cx))
+                    .child(self.how_to_paste_button("hud-steam-how-to", snippet.clone(), cx))
+                    .child(
+                        Button::new("hud-steam-toggle")
+                            .ghost()
+                            .small()
+                            .icon(toggle_icon)
+                            .accessibility_label(toggle_label.clone())
+                            .tooltip(toggle_label)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.steam_expanded = !this.steam_expanded;
+                                cx.notify();
+                            })),
+                    ),
+            );
+
         let code_box = div()
             .id("hud-steam-snippet")
             .w_full()
-            .flex_1()
             .min_w_0()
-            .p_3()
+            .px_3()
+            .py_2()
             .rounded(radius)
             .bg(muted_bg)
             .border_1()
@@ -146,65 +213,24 @@ impl HudPanel {
                 let full = snippet.clone();
                 move |window, cx| Tooltip::new(full.clone()).build(window, cx)
             })
-            .child(snippet.clone());
+            .child(snippet);
 
-        let actions = h_flex()
-            .w_full()
-            .flex_wrap()
-            .items_center()
-            .gap_2()
-            .child(self.copy_steam_button("hud-steam-copy", snippet.clone(), cx))
-            .child(self.how_to_paste_button("hud-steam-how-to", snippet, cx));
-
-        v_flex()
-            .w_full()
-            .h_full()
-            .min_w_0()
-            .p_4()
-            .gap_3()
-            .rounded(radius_lg)
-            .bg(surface)
-            .border_1()
-            .border_color(border_color)
-            .child(
-                v_flex()
-                    .w_full()
-                    .gap_1()
-                    .child(
+        Some(
+            group_panel(cx)
+                .child(header)
+                .when(expanded, |panel| {
+                    panel.child(
                         div()
-                            .text_sm()
-                            .font_medium()
-                            .child(self.labels.steam_snippet_label.clone()),
+                            .w_full()
+                            .border_t_1()
+                            .border_color(border_color)
+                            .px_4()
+                            .py_2p5()
+                            .child(code_box),
                     )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted_fg)
-                            .child(self.labels.steam_card_subtitle.clone()),
-                    ),
-            )
-            .child(code_box)
-            .child(actions)
-            .into_any_element()
-    }
-
-    pub(super) fn render_preview_row(&self, cx: &mut Context<Self>) -> AnyElement {
-        let show_steam_card = matches!(self.scope, HudPanelScope::Global) || self.is_steam();
-        if show_steam_card && let Some(snippet) = self.display.steam_snippet.clone() {
-            return h_flex()
-                .w_full()
-                .items_stretch()
-                .gap_3()
-                .child(div().flex_1().min_w_0().child(self.preview.clone()))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(self.render_steam_launch_card(snippet, cx)),
-                )
-                .into_any_element();
-        }
-        self.preview.clone().into_any_element()
+                })
+                .into_any_element(),
+        )
     }
 
     pub(super) fn render_steam_empty_notice(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -410,6 +436,14 @@ impl HudPanel {
                     )
                     .child(mode_group),
             )
+            .when(matches!(self.scope, HudPanelScope::Global), |row| {
+                row.child(
+                    div()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .child(self.labels.mode_global_per_game_hint.clone()),
+                )
+            })
             .when(
                 matches!(self.scope, HudPanelScope::PerGame { .. })
                     && self.game.mode == GameHudMode::Custom,
@@ -446,6 +480,7 @@ impl HudPanel {
                 Button::new(id).outline()
             };
             btn.small()
+                .compact()
                 .icon(icon)
                 .label(label)
                 .when(saved_dot, |b| {
@@ -458,7 +493,7 @@ impl HudPanel {
 
         let preset_buttons = h_flex()
             .flex_wrap()
-            .gap_1p5()
+            .gap_1()
             .child(preset_btn(
                 "hud-preset-minimal",
                 IconName::Gauge,
@@ -543,7 +578,7 @@ impl HudPanel {
             )
             .child(preset_buttons);
 
-        // Row 3: FPS limit values; contextual Pacing ButtonGroup appears only when a limit is active.
+        // Row 3: FPS limit values alongside always-visible Frame pacing (Late / Early).
         let mut fps_values = h_flex()
             .flex_wrap()
             .gap_1p5()
@@ -572,20 +607,19 @@ impl HudPanel {
         }
         fps_values = fps_values.child(Input::new(&self.fps_limit_input).small().w_20());
 
-        let has_fps_limit = p.fps_limit.is_some_and(|v| v > 0);
         let fps_method_group = ButtonGroup::new("hud-fps-method-group")
             .outline()
-            .xsmall()
+            .small()
             .child(
                 Button::new("hud-fps-method-late")
-                    .label(self.labels.fps_limit_method_late.clone())
-                    .tooltip(self.labels.fps_limit_method_help.clone())
+                    .label(self.labels.fps_limit_method_late_short.clone())
+                    .tooltip(self.labels.fps_limit_method_late.clone())
                     .selected(p.fps_limit_method == FpsLimitMethod::Late),
             )
             .child(
                 Button::new("hud-fps-method-early")
-                    .label(self.labels.fps_limit_method_early.clone())
-                    .tooltip(self.labels.fps_limit_method_help.clone())
+                    .label(self.labels.fps_limit_method_early_short.clone())
+                    .tooltip(self.labels.fps_limit_method_early.clone())
                     .selected(p.fps_limit_method == FpsLimitMethod::Early),
             )
             .on_click(cx.listener(|this, clicked: &Vec<usize>, window, cx| {
@@ -600,18 +634,18 @@ impl HudPanel {
                 }
             }));
 
-        let fps_section = v_flex()
+        let fps_section = h_flex()
             .w_full()
+            .flex_wrap()
+            .items_start()
+            .justify_between()
+            .gap_x_6()
+            .gap_y_2()
             .px_4()
             .py_2p5()
-            .gap_1p5()
             .child(
-                h_flex()
-                    .w_full()
-                    .flex_wrap()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
+                v_flex()
+                    .gap_1p5()
                     .child(
                         h_flex()
                             .items_center()
@@ -627,22 +661,29 @@ impl HudPanel {
                                 self.labels.fps_limit_help.clone(),
                             )),
                     )
-                    .when(has_fps_limit, |row| {
-                        row.child(
-                            h_flex()
-                                .items_center()
-                                .gap_1p5()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted_fg)
-                                        .child(self.labels.fps_limit_method_pacing.clone()),
-                                )
-                                .child(fps_method_group),
-                        )
-                    }),
+                    .child(fps_values),
             )
-            .child(fps_values);
+            .child(
+                v_flex()
+                    .items_end()
+                    .gap_1p5()
+                    .child(
+                        h_flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_semibold()
+                                    .child(self.labels.fps_limit_method_pacing.clone()),
+                            )
+                            .child(info_button(
+                                "hud-fps-method-info",
+                                self.labels.fps_limit_method_help.clone(),
+                            )),
+                    )
+                    .child(fps_method_group),
+            );
 
         group_panel(cx)
             .child(mode_row)

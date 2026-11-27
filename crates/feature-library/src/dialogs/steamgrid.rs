@@ -49,6 +49,7 @@ use irori_emulation::launchbox::LaunchBoxGame;
 use irori_extras::igdb::{IgdbGame, ImageSize, image_url};
 use irori_extras::steamgrid::{self, ApiKey, ImageFilter, SgdbGame, SgdbImage};
 use irori_extras::vndb::VndbNovel;
+use irori_extras::wiki::{self, SteamArtMatch};
 use irori_ui::art_picker::{ArtSlot, OnPicked};
 use irori_ui::components::{art_img, physical_width};
 use irori_ui::i18n::{t, t_args};
@@ -125,6 +126,8 @@ impl ArtKind {
 pub enum ArtSource {
     /// Every source that can be searched, each taking its best match.
     All,
+    /// Public Steam Store search + official CDN (free, no API key needed).
+    Steam,
     SteamGridDb,
     Igdb,
     /// LaunchBox's box art, for a ROM's cover.
@@ -138,11 +141,43 @@ impl ArtSource {
     fn name(self) -> SharedString {
         match self {
             ArtSource::All => t("library.art.source_all"),
+            ArtSource::Steam => "Steam".into(),
             ArtSource::SteamGridDb => "SteamGridDB".into(),
             ArtSource::Igdb => "IGDB".into(),
             ArtSource::LaunchBox => irori_extras::launchbox::SOURCE_NAME.into(),
             ArtSource::Vndb => "VNDB".into(),
         }
+    }
+}
+
+/// Steam's public CDN images of `m` for `kind`: cover (600×900) or hero + header
+/// backgrounds. Steam doesn't supply square grids or logos here.
+pub fn steam_images(kind: ArtKind, m: &SteamArtMatch) -> Vec<SgdbImage> {
+    match kind {
+        ArtKind::Cover => vec![SgdbImage {
+            id: m.app_id,
+            url: m.cover_url.clone(),
+            thumb: m.cover_url.clone(),
+            width: Some(600),
+            height: Some(900),
+        }],
+        ArtKind::Background => vec![
+            SgdbImage {
+                id: m.app_id,
+                url: m.hero_url.clone(),
+                thumb: m.hero_url.clone(),
+                width: Some(1920),
+                height: Some(620),
+            },
+            SgdbImage {
+                id: m.app_id,
+                url: m.header_url.clone(),
+                thumb: m.header_url.clone(),
+                width: Some(460),
+                height: Some(215),
+            },
+        ],
+        ArtKind::Square | ArtKind::Logo => Vec::new(),
     }
 }
 
@@ -354,6 +389,8 @@ enum Phase {
 pub struct ArtPicker {
     kind: ArtKind,
     key: Option<ApiKey>,
+    /// Keyless Steam CDN artwork applies to covers and backgrounds.
+    steam_on: bool,
     /// `iroriIgdb` is on: IGDB can be searched too.
     igdb_on: bool,
     /// `iroriVndb` is on: VNDB can be searched too.
@@ -362,6 +399,8 @@ pub struct ArtPicker {
     query: Entity<InputState>,
     phase: Phase,
     games: Vec<SgdbGame>,
+    /// Steam's matches of `games`, holding CDN artwork URLs.
+    steam_found: Vec<SteamArtMatch>,
     /// IGDB's records of `games`, which already hold their images.
     igdb_found: Vec<IgdbGame>,
     /// VNDB's novels of `games`, which already hold their images.
@@ -393,17 +432,19 @@ pub struct ArtPicker {
 
 impl EventEmitter<ArtPickerEvent> for ArtPicker {}
 
-/// Where a picker may search: SteamGridDB with its key, IGDB and VNDB while
-/// they are on, LaunchBox for this ROM library game's cover.
+/// Where a picker may search: keyless Steam for covers/backgrounds, SteamGridDB
+/// with its key, IGDB and VNDB while they are on, LaunchBox for this ROM library
+/// game's cover.
 struct Sources {
     key: Option<ApiKey>,
+    steam_on: bool,
     igdb_on: bool,
     vndb_on: bool,
     rom: Option<String>,
 }
 
 impl ArtPicker {
-    /// A picker for `kind`, searching for `title` right away when a key is set.
+    /// A picker for `kind`, searching for `title` right away when a source is ready.
     pub fn new(kind: ArtKind, title: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self::for_game(kind, None, title, window, cx)
     }
@@ -428,6 +469,7 @@ impl ArtPicker {
             .map(|id| id.app_name.to_string());
         let sources = Sources {
             key,
+            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Background),
             igdb_on,
             vndb_on,
             rom,
@@ -448,6 +490,7 @@ impl ArtPicker {
     ) -> Self {
         let sources = Sources {
             key,
+            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Background),
             igdb_on,
             vndb_on: false,
             rom: None,
@@ -469,6 +512,7 @@ impl ArtPicker {
     ) -> Self {
         let sources = Sources {
             key,
+            steam_on: matches!(kind, ArtKind::Cover | ArtKind::Background),
             igdb_on,
             vndb_on,
             rom: None,
@@ -485,18 +529,22 @@ impl ArtPicker {
     ) -> Self {
         let Sources {
             key,
+            steam_on,
             igdb_on,
             vndb_on,
             rom,
         } = sources;
-        // A ROM's boxes first; else both sources at once when both can be
-        // searched.
-        let source = match (rom.is_some(), key.is_some(), igdb_on) {
-            (true, _, _) => ArtSource::LaunchBox,
-            (_, true, true) => ArtSource::All,
-            (_, false, true) => ArtSource::Igdb,
-            // VNDB alone when nothing else can be searched.
-            (_, false, false) if vndb_on => ArtSource::Vndb,
+        // A ROM's boxes first; else all ready sources when 2+ can be searched,
+        // or the single ready source (including keyless Steam for covers/heroes).
+        let source = match (rom.is_some(), key.is_some(), igdb_on, vndb_on, steam_on) {
+            (true, _, _, _, _) => ArtSource::LaunchBox,
+            (_, true, true, _, _) | (_, true, false, _, true) | (_, false, true, _, true) => {
+                ArtSource::All
+            }
+            (_, true, false, _, false) => ArtSource::SteamGridDb,
+            (_, false, true, _, false) => ArtSource::Igdb,
+            (_, false, false, true, _) => ArtSource::Vndb,
+            (_, false, false, false, true) => ArtSource::Steam,
             _ => ArtSource::SteamGridDb,
         };
         let query = cx.new(|cx| {
@@ -521,11 +569,13 @@ impl ArtPicker {
             },
             kind,
             key,
+            steam_on,
             igdb_on,
             vndb_on,
             source,
             query,
             games: Vec::new(),
+            steam_found: Vec::new(),
             igdb_found: Vec::new(),
             vndb_found: Vec::new(),
             rom,
@@ -548,12 +598,16 @@ impl ArtPicker {
         this
     }
 
-    /// The sources that can be searched now: SteamGridDB with its key, IGDB
-    /// while it is on, LaunchBox for a ROM's cover.
+    /// The sources that can be searched now: LaunchBox for a ROM's cover,
+    /// keyless Steam for covers/backgrounds, SteamGridDB with its key, IGDB
+    /// while it is on.
     fn searchable(&self) -> Vec<ArtSource> {
         let mut sources = Vec::new();
         if self.rom.is_some() {
             sources.push(ArtSource::LaunchBox);
+        }
+        if self.steam_on {
+            sources.push(ArtSource::Steam);
         }
         if self.key.is_some() {
             sources.push(ArtSource::SteamGridDb);
@@ -574,6 +628,9 @@ impl ArtPicker {
         }
         if self.rom.is_some() {
             sources.push(ArtSource::LaunchBox);
+        }
+        if self.steam_on {
+            sources.push(ArtSource::Steam);
         }
         sources.push(ArtSource::SteamGridDb);
         if self.igdb_on {
@@ -650,6 +707,7 @@ impl ArtPicker {
         self.filter = None;
         self.cursor = None;
         self.games.clear();
+        self.steam_found.clear();
         self.igdb_found.clear();
         self.vndb_found.clear();
         self.launchbox_found.clear();
@@ -669,6 +727,7 @@ impl ArtPicker {
     fn search(&mut self, cx: &mut Context<Self>) {
         let key = match self.source {
             ArtSource::All => return self.search_all(cx),
+            ArtSource::Steam => return self.search_steam(cx),
             ArtSource::SteamGridDb => match self.key.clone() {
                 Some(key) => Some(key),
                 None => return,
@@ -707,6 +766,52 @@ impl ArtPicker {
             this.update(cx, |this, cx| {
                 let result = result.map(|(games, found)| {
                     this.igdb_found = found;
+                    games
+                });
+                match result.map(search_outcome) {
+                    Ok(SearchOutcome::NoMatch) => {
+                        this.games.clear();
+                        this.phase = Phase::Message(t("library.art.no_games"));
+                    }
+                    Ok(SearchOutcome::Single(game)) => {
+                        this.games = vec![game.clone()];
+                        this.load_images(game, cx);
+                    }
+                    Ok(SearchOutcome::Choose(games)) => {
+                        this.games = games;
+                        this.phase = Phase::Games;
+                    }
+                    Err(e) => this.phase = Phase::Message(format!("{e:#}").into()),
+                }
+                cx.notify();
+            })
+            .ok();
+        }));
+    }
+
+    /// Search Steam's public store search (zero API key).
+    fn search_steam(&mut self, cx: &mut Context<Self>) {
+        let query = self.query.read(cx).value().trim().to_string();
+        if query.is_empty() {
+            return;
+        }
+        self.filter = None;
+        self.cursor = None;
+        self.phase = Phase::Searching;
+        cx.notify();
+        let task = irori_ui::run(cx, async move { wiki::search_steam_artwork(&query).await });
+        self._task = Some(cx.spawn(async move |this, cx| {
+            let result = task.await;
+            this.update(cx, |this, cx| {
+                let result = result.map(|found| {
+                    let games = found
+                        .iter()
+                        .map(|m| SgdbGame {
+                            id: m.app_id,
+                            name: m.name.clone(),
+                        })
+                        .collect::<Vec<_>>();
+                    this.steam_found = found;
                     games
                 });
                 match result.map(search_outcome) {
@@ -795,12 +900,13 @@ impl ArtPicker {
         self.filter = None;
         self.cursor = None;
         self.games.clear();
+        self.steam_found.clear();
         self.igdb_found.clear();
         self.launchbox_found.clear();
         self.phase = Phase::Searching;
         cx.notify();
         let (b, kind) = (backend(cx), self.kind);
-        let (key, igdb_on) = (self.key.clone(), self.igdb_on);
+        let (key, steam_on, igdb_on) = (self.key.clone(), self.steam_on, self.igdb_on);
         // LaunchBox takes part once its game list is here; its pill offers
         // the download otherwise.
         let launchbox = self
@@ -817,6 +923,36 @@ impl ArtPicker {
             .filter(|s| **s != ArtSource::LaunchBox || launchbox.is_some())
             .count();
         let task = irori_ui::run(cx, async move {
+            let steam = async {
+                if !steam_on {
+                    return anyhow::Ok(None);
+                }
+                let matches = wiki::search_steam_artwork(&query).await?;
+                let games: Vec<SgdbGame> = matches
+                    .iter()
+                    .map(|m| SgdbGame {
+                        id: m.app_id,
+                        name: m.name.clone(),
+                    })
+                    .collect();
+                let Some(picked) = pick_game(&games, &query) else {
+                    return anyhow::Ok(None);
+                };
+                let Some(mut record) = matches.into_iter().find(|m| m.app_id == picked.id) else {
+                    return anyhow::Ok(None);
+                };
+                let (cover, hero) = wiki::resolve_steam_artwork(record.app_id).await;
+                record.cover_url = cover;
+                record.hero_url = hero;
+                let found = steam_images(kind, &record)
+                    .into_iter()
+                    .map(|image| Found {
+                        source: ArtSource::Steam,
+                        image,
+                    })
+                    .collect::<Vec<_>>();
+                Ok(Some((record.name, found, Vec::new())))
+            };
             let sgdb = async {
                 let Some(key) = key else {
                     return anyhow::Ok(None);
@@ -895,8 +1031,8 @@ impl ArtPicker {
                     (g.name, found, captions)
                 }))
             };
-            let (sgdb, igdb, boxes) = futures::join!(sgdb, igdb, boxes);
-            Ok([boxes, sgdb, igdb].map(|answer| answer.map_err(|e| format!("{e:#}"))))
+            let (boxes, sgdb, steam, igdb) = futures::join!(boxes, sgdb, steam, igdb);
+            Ok([boxes, sgdb, steam, igdb].map(|answer| answer.map_err(|e| format!("{e:#}"))))
         });
         let query: SharedString = self.query.read(cx).value().trim().to_string().into();
         self._task = Some(cx.spawn(async move |this, cx| {
@@ -1101,6 +1237,46 @@ impl ArtPicker {
             };
             self.read_sizes(cx);
             cx.notify();
+            return;
+        }
+        if self.source == ArtSource::Steam {
+            let mut record = self
+                .steam_found
+                .iter()
+                .find(|m| m.app_id == game.id)
+                .cloned()
+                .unwrap_or_else(|| SteamArtMatch::from_app(game.id, game.name.clone()));
+            let kind = self.kind;
+            self.phase = Phase::Loading(name.clone());
+            cx.notify();
+            let task = irori_ui::run(cx, async move {
+                let (cover, hero) = wiki::resolve_steam_artwork(record.app_id).await;
+                record.cover_url = cover;
+                record.hero_url = hero;
+                Ok(steam_images(kind, &record))
+            });
+            self._task = Some(cx.spawn(async move |this, cx| {
+                let result = task.await;
+                this.update(cx, |this, cx| {
+                    this.phase = match result {
+                        Ok(images) if images.is_empty() => Phase::Message(kind.none_found(&name)),
+                        Ok(images) => {
+                            let found = images
+                                .into_iter()
+                                .map(|image| Found {
+                                    source: ArtSource::Steam,
+                                    image,
+                                })
+                                .collect();
+                            Phase::Images(name, found)
+                        }
+                        Err(e) => Phase::Message(format!("{e:#}").into()),
+                    };
+                    this.read_sizes(cx);
+                    cx.notify();
+                })
+                .ok();
+            }));
             return;
         }
         if matches!(self.source, ArtSource::Igdb | ArtSource::Vndb) {
@@ -1627,6 +1803,7 @@ impl Render for ArtPicker {
                 for option in offered {
                     let id = match option {
                         ArtSource::All => "art-source-all",
+                        ArtSource::Steam => "art-source-steam",
                         ArtSource::SteamGridDb => "art-source-sgdb",
                         ArtSource::Igdb => "art-source-igdb",
                         ArtSource::LaunchBox => "art-source-launchbox",
@@ -1699,19 +1876,24 @@ impl ArtPicker {
     /// Where the pictures come from, for the line under them.
     fn attribution(&self) -> SharedString {
         match self.source {
+            ArtSource::Steam => t("library.art.attribution_steam"),
             ArtSource::SteamGridDb => t("library.art.attribution"),
             ArtSource::Igdb => t("library.art.attribution_igdb"),
             ArtSource::LaunchBox => t("library.art.attribution_launchbox"),
             ArtSource::Vndb => t("library.art.attribution_vndb"),
-            ArtSource::All if self.rom.is_none() => t("library.art.attribution_both"),
             ArtSource::All => {
-                // Source names are never translated; only the sentence is.
-                let names: Vec<SharedString> =
-                    self.searchable().into_iter().map(ArtSource::name).collect();
-                t_args(
-                    "library.art.attribution_sources",
-                    &[("sources", &names.join(", "))],
-                )
+                let searchable = self.searchable();
+                if searchable == [ArtSource::SteamGridDb, ArtSource::Igdb] {
+                    t("library.art.attribution_both")
+                } else {
+                    // Source names are never translated; only the sentence is.
+                    let names: Vec<SharedString> =
+                        searchable.into_iter().map(ArtSource::name).collect();
+                    t_args(
+                        "library.art.attribution_sources",
+                        &[("sources", &names.join(", "))],
+                    )
+                }
             }
         }
     }
@@ -1928,5 +2110,20 @@ mod tests {
         );
         assert_eq!(ArtKind::Square.filter().dimensions.len(), 2);
         assert_eq!(ArtKind::Background.filter(), ImageFilter::default());
+    }
+
+    #[test]
+    fn steam_source_offers_covers_and_backgrounds_only() {
+        let m = SteamArtMatch::from_app(570, "Dota 2".into());
+        let covers = steam_images(ArtKind::Cover, &m);
+        assert_eq!(covers.len(), 1);
+        assert_eq!(covers[0].id, 570);
+        assert!(covers[0].url.ends_with("/570/library_600x900_2x.jpg"));
+        let backgrounds = steam_images(ArtKind::Background, &m);
+        assert_eq!(backgrounds.len(), 2);
+        assert!(backgrounds[0].url.ends_with("/570/library_hero.jpg"));
+        assert!(backgrounds[1].url.ends_with("/570/header.jpg"));
+        assert!(steam_images(ArtKind::Square, &m).is_empty());
+        assert!(steam_images(ArtKind::Logo, &m).is_empty());
     }
 }

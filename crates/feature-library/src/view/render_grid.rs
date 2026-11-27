@@ -8,9 +8,10 @@ use gpui_kit::AnimationExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::ContextMenuExt as _;
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, ThemeStyled as _, h_flex, v_flex,
+    ActiveTheme as _, Icon, Sizable as _, Size, StyledExt as _, ThemeStyled as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -23,19 +24,17 @@ use irori_core::GameInfo;
 use irori_core::StatusKind;
 use irori_core::settings::{CoverCaption, CoverFit, CoverHover, CoverShape, LibraryLayout};
 use irori_ui::components::{
-    ArtImage, GameCover, MAX_BADGES, SectionTitle, StoreBadge, art_image, art_img, art_loading,
-    art_missing, badge_row, physical_width,
+    ArtImage, BadgeMark, GameCover, MAX_BADGES, SectionTitle, StoreBadge, StoreLogo, art_image,
+    art_img, art_loading, art_missing, badge_row, physical_width,
 };
 use irori_ui::i18n::{t, t_args};
 use irori_ui::motion::{HOVER_SPRING, gliding_progress};
-use irori_ui::style::{KeyboardFocusable as _, art_tint};
+use irori_ui::style::{KeyboardFocusable as _, art_tint, reduce_motion};
 use irori_ui::{Route, models, navigate};
 
 use super::menus::game_menu;
 use super::render_list::pick_mark;
-use super::{
-    CARD_REM, FAVOURITE_REM, Item, LibraryView, caption, item_rem, status_text, store_badges_shown,
-};
+use super::{FAVOURITE_REM, Item, LibraryView, caption, item_rem, status_text, store_badges_shown};
 use crate::commands::{self, GameCommand};
 use crate::filter::GroupKind;
 use crate::grid;
@@ -72,7 +71,7 @@ impl LibraryView {
         // Focus keeps its column of boxes; the grid takes the chosen shape,
         // and only boxes can be drawn whole in their cells.
         let cover = match self.layout {
-            LibraryLayout::Grid => self.ui_prefs.cover_shape,
+            LibraryLayout::Grid => self.cover_shape,
             _ => CoverShape::Portrait,
         };
         let shapes = (cover == CoverShape::Portrait)
@@ -134,22 +133,27 @@ impl LibraryView {
         let key = id.key();
         let state = self.state_for(game, in_recent, cx);
         let status = models(cx).statuses.read(cx).get(&id).cloned();
-        let (show_badges, cover_categories) = {
+        let (show_badges, badges_always, cover_categories) = {
             let ui = &models(cx).settings.read(cx).app.ui;
             (
                 store_badges_shown(ui, self.frame.one_store),
+                ui.store_badges_always,
                 ui.cover_categories,
             )
         };
-        let badges_always = self.ui_prefs.store_badges_always;
+        let focus_view = self.layout == LibraryLayout::Focus;
         let (corners, caption_kind, hover, favourite_star) = (
             self.ui_prefs.cover_corners,
-            self.ui_prefs.cover_caption,
+            if focus_view {
+                self.ui_prefs.focus_cover_caption()
+            } else {
+                self.ui_prefs.cover_caption
+            },
             self.ui_prefs.cover_hover,
             self.ui_prefs.cover_favourite,
         );
-        let lifts = hover == CoverHover::Lift;
-        let focus_view = self.layout == LibraryLayout::Focus;
+        let reduced = reduce_motion(cx);
+        let lifts = hover == CoverHover::Lift && !reduced;
         // The user's categories, at the cover's foot while nothing else is.
         let categories = (cover_categories && !focus_view)
             .then(|| {
@@ -174,7 +178,8 @@ impl LibraryView {
             s.kind.is_busy() && !matches!(s.kind, StatusKind::Playing | StatusKind::Queued)
         });
         let theme = cx.theme();
-        let scrim = theme.background.opacity(0.88);
+        let bg = theme.background;
+        let scrim = bg.opacity(0.88);
         let muted = theme.muted_foreground;
         let radius = irori_ui::components::cover_radius(corners, cx);
 
@@ -284,44 +289,148 @@ impl LibraryView {
 
         let selecting = self.selection.is_active();
         let picked = self.selection.contains(&id);
+        let actions_scrim = linear_gradient(
+            180.,
+            linear_color_stop(bg.opacity(0.), 0.),
+            linear_color_stop(bg.opacity(0.78), 1.),
+        );
+        let compat_enabled = self.ui_prefs.cover_compat_badges && !state.installed && !focus_view;
+        if compat_enabled {
+            self.request_compat(game, false, cx);
+        }
+        let compat_badge = (compat_enabled && !active && !selecting && status_overlay.is_none())
+            .then(|| self.compat.get(&id))
+            .flatten();
         // Focus covers are small, and the page beside them has the actions.
+        // Wide banners span much more horizontal space than portrait or square
+        // covers, so their hover buttons step up slightly to stay proportional.
+        let banner = cover_shape == CoverShape::Banner;
         let actions = (active && busy.is_none() && !selecting && !focus_view).then(|| {
             let primary = commands::primary(&state).map(|command| {
                 let label = command.label(&state);
+                let command_icon = command.icon(&state);
                 let id = id.clone();
+                let primary_key = key.clone();
                 let button = Button::new(ElementId::Name(format!("tile-primary:{key}").into()))
-                    .small()
-                    .icon(command.icon(&state))
-                    .label(label)
+                    .debug_selector(move || format!("tile-primary:{primary_key}"))
+                    .w_full()
+                    .rounded_full()
+                    .shadow_md()
                     .loading(state.launching)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
                         this.run_command(&id, command.clone(), window, cx)
                     }));
+                let button = if banner {
+                    let icon = if state.launching {
+                        Spinner::new()
+                            .with_size(Size::Size(window.rem_size() * 1.25))
+                            .into_any_element()
+                    } else {
+                        Icon::new(command_icon).size_5().into_any_element()
+                    };
+                    button
+                        .large()
+                        .h(rems(2.5))
+                        .px_5()
+                        .accessibility_label(label.clone())
+                        .child(icon)
+                        .child(
+                            div()
+                                .min_w_0()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .child(label),
+                        )
+                } else {
+                    button.px_4().icon(command_icon).label(label)
+                };
                 if matches!(state.status, Some(StatusKind::Playing)) {
                     button
                 } else {
                     button.primary()
                 }
             });
-            h_flex()
+            div()
                 .absolute()
-                .bottom_2()
-                .left_2()
-                .right_2()
-                .gap_2()
-                .justify_end()
-                .children(primary.map(|b| div().flex_1().min_w_0().child(b.w_full())))
-                .child(self.more_button(game, in_recent, cx))
+                .bottom_0()
+                .left_0()
+                .right_0()
+                .h(rems(if banner { 5.5 } else { 4.75 }))
+                .rounded_b(radius)
+                .bg(actions_scrim)
+                .flex()
+                .items_end()
+                .justify_center()
+                .when_else(banner, |el| el.p_3(), |el| el.p_2p5())
+                .child(
+                    h_flex()
+                        .w_full()
+                        .max_w(rems(if banner { 16.5 } else { 13.25 }))
+                        .min_w_0()
+                        .when_else(banner, |el| el.gap_2p5(), |el| el.gap_2())
+                        .items_center()
+                        .justify_center()
+                        .children(primary.map(|b| {
+                            div()
+                                .flex_1()
+                                .max_w(rems(if banner { 13.25 } else { 10.5 }))
+                                .min_w_0()
+                                .child(b)
+                        }))
+                        .child(self.cover_more_button(game, in_recent, banner, cx)),
+                )
         });
 
         // Uninstalled games are dimmed until pointed at, so installed ones stand out.
         let dim = !state.installed && !active && status.is_none();
         let primary_color = cx.theme().primary;
+        let bg_color = cx.theme().background;
+        // Consistent theme accent keeps rapid cover hovering instant with zero
+        // colour-swap flash and avoids generating *-ambient.jpg blur files on disk.
+        let hover_glow = (active && lifts).then(|| BoxShadow {
+            color: primary_color.opacity(0.45),
+            offset: point(px(0.), px(10.)),
+            blur_radius: px(28.),
+            spread_radius: px(-6.),
+            inset: false,
+        });
+        let draw_badges = show_badges && (active || badges_always) && !selecting;
+        let has_top_right_markers = copies > 1
+            || (state.has_update && state.installed && !state.sideload)
+            || (state.favourite && favourite_star);
+        let hover_caption = (caption_kind == CoverCaption::Hover && active).then(|| {
+            let fade = linear_gradient(
+                180.,
+                linear_color_stop(bg_color.opacity(0.84), 0.0),
+                linear_color_stop(bg_color.opacity(0.0), 1.0),
+            );
+            div()
+                .absolute()
+                .top_0()
+                .left_0()
+                .right_0()
+                .rounded_t(radius)
+                .bg(fade)
+                .pl_2()
+                .pb_4()
+                .when(draw_badges, |el| el.pt_10().pr_2())
+                .when(!draw_badges && has_top_right_markers, |el| el.pt_2().pr_8())
+                .when(!draw_badges && !has_top_right_markers, |el| {
+                    el.pt_2().pr_2()
+                })
+                .child(
+                    div()
+                        .text_xs()
+                        .font_bold()
+                        .truncate()
+                        .child(game.title.clone()),
+                )
+        });
         let cover = div()
             .relative()
             .rounded(radius)
-            .when(active && lifts, |el| el.shadow_lg())
+            .when_some(hover_glow, |el, glow| el.shadow(vec![glow]))
             .when(keyboard, |el| el.focus_ring_style(window, cx))
             .child(div().when(dim, |el| el.opacity(0.45)).child({
                 let cover = GameCover::new(game.clone())
@@ -332,6 +441,7 @@ impl LibraryView {
                     None => cover.width(width),
                 }
             }))
+            .children(hover_caption)
             .when(active || selected, |el| {
                 el.child(
                     div()
@@ -344,39 +454,54 @@ impl LibraryView {
                         .border_color(primary_color.opacity(if selected { 1. } else { 0.85 })),
                 )
             })
+            .when(draw_badges, |el| {
+                // An entry of several stores' copies names every store,
+                // the first few and a count of the rest.
+                let row = badge_row(irori_ui::copies::badge_marks(game, cx), MAX_BADGES);
+                let pill = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
+                let badge_key = key.clone();
+                el.child(
+                    h_flex()
+                        .debug_selector(move || format!("tile-badges:{badge_key}"))
+                        .absolute()
+                        .top_2()
+                        .left_2()
+                        .right_2()
+                        .gap_1p5()
+                        .items_center()
+                        .flex_wrap()
+                        .children(
+                            row.shown
+                                .into_iter()
+                                .map(|mark| cover_store_mark(mark, scrim)),
+                        )
+                        .when(row.more > 0, |el| {
+                            el.child(pill(StoreBadge::more(row.more)))
+                        }),
+                )
+            })
+            .child(markers)
             .when(
-                show_badges && (active || badges_always) && !selecting && !focus_view,
+                actions.is_none() && status_overlay.is_none() && compat_badge.is_none(),
                 |el| {
-                    // An entry of several stores' copies names every store,
-                    // the first few and a count of the rest.
-                    let row = badge_row(irori_ui::copies::badge_marks(game, cx), MAX_BADGES);
-                    let badge = |b: StoreBadge| div().rounded_md().bg(scrim).child(b);
-                    el.child(
-                        h_flex()
-                            .absolute()
-                            .top_2()
-                            .left_2()
-                            .right_2()
-                            .gap_1()
-                            .flex_wrap()
-                            .children(
-                                row.shown
-                                    .into_iter()
-                                    .map(|mark| badge(StoreBadge::mark(mark))),
-                            )
-                            .when(row.more > 0, |el| {
-                                el.child(badge(StoreBadge::more(row.more)))
-                            }),
-                    )
+                    el.children(categories.map(|names| {
+                        // A cover Irori draws itself has the title at its foot.
+                        let has_art =
+                            irori_ui::components::cover_art_for(game, cover_shape).is_some();
+                        category_chips(names, has_art, scrim)
+                    }))
                 },
             )
-            .child(markers)
-            .when(actions.is_none() && status_overlay.is_none(), |el| {
-                el.children(categories.map(|names| {
-                    // A cover Irori draws itself has the title at its foot.
-                    let has_art = irori_ui::components::cover_art_for(game, cover_shape).is_some();
-                    category_chips(names, has_art, scrim)
-                }))
+            .when_some(compat_badge, |el, badge| {
+                el.child(
+                    div()
+                        .absolute()
+                        .bottom_2()
+                        .left_2()
+                        .right_2()
+                        .overflow_hidden()
+                        .child(crate::compat_badges::render_cover_pill(badge, scrim, cx)),
+                )
             })
             .when(actions.is_none(), |el| el.children(status_overlay))
             .children(actions)
@@ -463,41 +588,44 @@ impl LibraryView {
                     None => cover.into_any_element(),
                 }
             })
-            .when(caption_kind != CoverCaption::None, |tile| {
-                tile.child(
-                    v_flex()
-                        .min_w_0()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_semibold()
-                                .truncate()
-                                .when(dim, |el| el.text_color(muted))
-                                .child(game.title.clone()),
-                        )
-                        .when(
-                            caption_kind == CoverCaption::Full
-                                && (!caption_text.is_empty() || sorted_by.is_some()),
-                            |el| {
-                                el.child(
-                                    h_flex()
-                                        .min_w_0()
-                                        .gap_1()
-                                        .text_xs()
-                                        .text_color(muted)
-                                        .when_some(sorted_by, |el, (icon, value)| {
-                                            el.child(Icon::new(icon).xsmall().flex_none())
-                                                .child(div().flex_none().child(value))
-                                                .when(!caption_text.is_empty(), |el| {
-                                                    el.child(div().flex_none().child("·"))
-                                                })
-                                        })
-                                        .child(div().min_w_0().truncate().child(caption_text)),
-                                )
-                            },
-                        ),
-                )
-            })
+            .when(
+                !matches!(caption_kind, CoverCaption::None | CoverCaption::Hover),
+                |tile| {
+                    tile.child(
+                        v_flex()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_semibold()
+                                    .truncate()
+                                    .when(dim, |el| el.text_color(muted))
+                                    .child(game.title.clone()),
+                            )
+                            .when(
+                                caption_kind == CoverCaption::Full
+                                    && (!caption_text.is_empty() || sorted_by.is_some()),
+                                |el| {
+                                    el.child(
+                                        h_flex()
+                                            .min_w_0()
+                                            .gap_1()
+                                            .text_xs()
+                                            .text_color(muted)
+                                            .when_some(sorted_by, |el, (icon, value)| {
+                                                el.child(Icon::new(icon).xsmall().flex_none())
+                                                    .child(div().flex_none().child(value))
+                                                    .when(!caption_text.is_empty(), |el| {
+                                                        el.child(div().flex_none().child("·"))
+                                                    })
+                                            })
+                                            .child(div().min_w_0().truncate().child(caption_text)),
+                                    )
+                                },
+                            ),
+                    )
+                },
+            )
             .context_menu(move |menu, window, cx| {
                 game_menu(menu, &view, &menu_game, in_recent, window, cx)
             })
@@ -508,10 +636,19 @@ impl LibraryView {
         let Some((kind, games)) = self.frame.top.clone() else {
             return div().into_any_element();
         };
+        let card_widths = self.frame.top_card_widths.clone();
+        let card_height_rem = self.frame.top_card_height_rem;
         let cards: Vec<AnyElement> = match kind {
             TopKind::ContinuePlaying => games
                 .iter()
-                .map(|g| self.render_card(g, window, cx))
+                .enumerate()
+                .map(|(ix, g)| {
+                    let width_rem = card_widths
+                        .get(ix)
+                        .copied()
+                        .unwrap_or(grid::TOP_CARD_BASE_REM);
+                    self.render_card(g, ix == 0, width_rem, card_height_rem, window, cx)
+                })
                 .collect(),
             TopKind::Favourites => games
                 .iter()
@@ -529,7 +666,12 @@ impl LibraryView {
                 .collect(),
         };
         v_flex()
-            .h(rems(item_rem(Item::Top, Some(kind), &self.frame.metrics)))
+            .h(rems(item_rem(
+                Item::Top,
+                Some(kind),
+                card_height_rem,
+                &self.frame.metrics,
+            )))
             .child(
                 div()
                     .h(rems(grid::HEADING_REM))
@@ -552,10 +694,14 @@ impl LibraryView {
             .into_any_element()
     }
 
-    /// A large landscape "Continue playing" card with one-click Play.
+    /// A landscape "Continue playing" card with one-click Play, sized
+    /// dynamically by [`grid::top_card_widths`].
     fn render_card(
         &mut self,
         game: &Arc<GameInfo>,
+        featured: bool,
+        width_rem: f32,
+        height_rem: f32,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -570,8 +716,8 @@ impl LibraryView {
                 lib.last_played(&id).map(str::to_string),
             )
         };
-        let width = rems(CARD_REM);
-        let height = rems(CARD_REM * 9.0 / 16.0);
+        let width = rems(width_rem);
+        let height = rems(height_rem);
         let image = match game.hero_art() {
             Some(url) => art_image(url, physical_width(width, window), false, cx),
             None => ArtImage::Missing,
@@ -579,12 +725,13 @@ impl LibraryView {
         // Store logos are drawn for dark backgrounds (often white lettering);
         // the card's fade is the theme's background, so light themes show
         // the title as text, as the game page does.
+        let logo_max_rem = (width_rem * 0.55).min(16.0);
         let logo = game
             .art_logo
             .clone()
             .filter(|l| !l.is_empty() && cx.theme().mode.is_dark())
             .and_then(|url| {
-                let px = physical_width(rems(CARD_REM * 0.6), window);
+                let px = physical_width(rems(logo_max_rem), window);
                 art_img(&url, px, true, cx)
             });
         // Hovered cards glow in their art's colour.
@@ -626,12 +773,15 @@ impl LibraryView {
             linear_color_stop(bg.opacity(0.92), 1.),
         );
 
+        let compact_card = !featured && width_rem < 18.0;
         let primary = commands::primary(&state).map(|command| {
             let id = id.clone();
             let playing = command == GameCommand::Stop;
             let button = Button::new(ElementId::Name(format!("card-primary:{key}").into()))
+                .when(compact_card, |b| b.small())
                 .icon(command.icon(&state))
-                .label(command.label(&state))
+                .when(!compact_card, |b| b.label(command.label(&state)))
+                .when(compact_card, |b| b.tooltip(command.label(&state)))
                 .loading(state.launching)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     cx.stop_propagation();
@@ -683,12 +833,13 @@ impl LibraryView {
                                     .overflow_hidden()
                                     .child(
                                         logo.h(rems(CARD_LOGO_REM))
-                                            .max_w(rems(CARD_REM * 0.6))
+                                            .max_w(rems(logo_max_rem))
                                             .object_fit(ObjectFit::Contain),
                                     )
                                     .into_any_element(),
                                 None => div()
-                                    .text_lg()
+                                    .when(featured, |el| el.text_xl())
+                                    .when(!featured, |el| el.text_base())
                                     .font_extrabold()
                                     .truncate()
                                     .child(game.title.clone())
@@ -788,5 +939,48 @@ fn category_chips(
                     .child(format!("+{more}")),
             )
         })
+        .into_any_element()
+}
+
+/// Render a store or launcher mark over cover art: SVG marks draw directly at
+/// 20 px (`1.25 rem`) in white on a transparent background with a subtle
+/// silhouette drop shadow for legibility over light or dark art; text-only
+/// marks (`Amazon`, `ZOOM`, emulators) keep a compact pill.
+fn cover_store_mark(mark: BadgeMark, scrim: gpui_kit::Hsla) -> AnyElement {
+    let logo = match &mark {
+        BadgeMark::Store(runner) => StoreLogo::of_runner(*runner),
+        BadgeMark::Launcher(id) => StoreLogo::of_launcher(id),
+        BadgeMark::Emulator { .. } => None,
+    };
+    let Some(logo) = logo else {
+        return div()
+            .rounded_md()
+            .bg(scrim)
+            .child(StoreBadge::mark(mark))
+            .into_any_element();
+    };
+    let size = rems(1.25);
+    let halo = |dx: f32, dy: f32, alpha: f32| {
+        div().absolute().top(px(dy)).left(px(dx)).child(
+            logo.icon()
+                .size(size)
+                .text_color(gpui_kit::black().opacity(alpha)),
+        )
+    };
+    div()
+        .relative()
+        .size(size)
+        .flex_shrink_0()
+        .child(halo(0., 1.25, 0.65))
+        .child(halo(-0.75, 0., 0.35))
+        .child(halo(0.75, 0., 0.35))
+        .child(halo(0., -0.75, 0.35))
+        .child(
+            div()
+                .absolute()
+                .top(px(0.))
+                .left(px(0.))
+                .child(logo.icon().size(size).text_color(gpui_kit::white())),
+        )
         .into_any_element()
 }

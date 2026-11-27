@@ -458,11 +458,11 @@ mod tests {
     fn labels_reflect_toggles() {
         crate::i18n::register();
         let mut s = GameState::default();
-        assert_eq!(ToggleFavourite.label(&s), "Add to favourites");
+        assert_eq!(ToggleFavourite.label(&s), "Add to Favorites");
         assert_eq!(ToggleHidden.label(&s), "Hide");
         s.favourite = true;
         s.hidden = true;
-        assert_eq!(ToggleFavourite.label(&s), "Remove from favourites");
+        assert_eq!(ToggleFavourite.label(&s), "Remove from Favorites");
         assert_eq!(ToggleHidden.label(&s), "Unhide");
         assert_eq!(Install.label(&s), "Install");
     }

@@ -123,6 +123,8 @@ pub enum CoverCaption {
     Full,
     /// Only the title.
     Title,
+    /// Title overlaid on the cover only when hovered or focused (no space below).
+    Hover,
     /// Nothing: the covers alone.
     None,
 }
@@ -334,6 +336,17 @@ pub struct UiPrefs {
     pub library_focus_columns: u32,
     /// How large the Focus view's covers are (`libraryFocusCoverSize`).
     pub library_focus_cover_size: FocusCoverSize,
+    /// What Focus writes under (or over) its covers (`libraryFocusCoverCaption`);
+    /// `None` inherits `coverCaption` from the Grid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library_focus_cover_caption: Option<CoverCaption>,
+    /// Show a time-of-day greeting in the library header (`libraryGreeting`,
+    /// on unless turned off).
+    pub library_greeting: bool,
+    /// Custom display name for the library greeting (`greetingName`); `None`
+    /// derives a first name from the OS user name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub greeting_name: Option<String>,
     /// The library switches to Focus when the window grows wide enough for
     /// its page beside the covers, and to the grid when it shrinks below
     /// that (`libraryAutoLayout`, off unless turned on).
@@ -356,9 +369,56 @@ pub struct UiPrefs {
     /// ("PEGI", as [`crate::RatingSystem::from_key`] reads it), or empty for
     /// the board of the user's region.
     pub age_rating_board: String,
+    /// ProtonDB tier and Steam Deck badge on covers of not-installed games
+    /// (`coverCompatBadges`, on by default on Linux, opt-in elsewhere).
+    pub cover_compat_badges: bool,
     /// Kinds of rows the game page's Details leave out (`hiddenDetailRows`,
     /// ids such as `publisher`); ids a later Irori adds stay as written.
     pub hidden_detail_rows: Vec<String>,
+    /// Data columns shown in the library's List view (`libraryListColumns`).
+    pub library_list_columns: ListColumns,
+    /// Row height in the library's List view (`libraryListRowSize`).
+    pub library_list_row_size: ListRowSize,
+}
+
+/// Row height in the library's List view (`libraryListRowSize`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ListRowSize {
+    Compact,
+    Large,
+    /// Last, so a size a newer Irori writes reads as this one.
+    #[default]
+    #[serde(other)]
+    Medium,
+}
+
+/// Which data columns the library's List view shows (`libraryListColumns`).
+/// Title and actions always stay; narrow windows still drop columns from the
+/// chosen set so the title stays readable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ListColumns {
+    pub store: bool,
+    pub size: bool,
+    pub playtime: bool,
+    pub last_played: bool,
+    pub status: bool,
+    /// ProtonDB compatibility column ("On Linux").
+    pub compat: bool,
+}
+
+impl Default for ListColumns {
+    fn default() -> Self {
+        Self {
+            store: true,
+            size: false,
+            playtime: true,
+            last_played: true,
+            status: true,
+            compat: cfg!(target_os = "linux"),
+        }
+    }
 }
 
 /// Shader cache room games get unless the user changes it, in GiB.
@@ -386,6 +446,13 @@ impl UiPrefs {
             return None;
         }
         u32::from_str_radix(hex, 16).ok()
+    }
+
+    /// Effective cover caption for the Focus layout (`libraryFocusCoverCaption`
+    /// if explicitly chosen, otherwise inherits Grid's `coverCaption`).
+    pub fn focus_cover_caption(&self) -> CoverCaption {
+        self.library_focus_cover_caption
+            .unwrap_or(self.cover_caption)
     }
 }
 
@@ -443,13 +510,19 @@ impl Default for UiPrefs {
             cover_favourite: true,
             library_focus_columns: 0,
             library_focus_cover_size: FocusCoverSize::Medium,
+            library_focus_cover_caption: None,
+            library_greeting: true,
+            greeting_name: None,
             library_auto_layout: false,
             library_open_details_on_select: true,
             store_badges_always: false,
             store_badges_one_store: false,
             show_age_ratings: true,
             age_rating_board: String::new(),
+            cover_compat_badges: cfg!(target_os = "linux"),
             hidden_detail_rows: Vec::new(),
+            library_list_columns: ListColumns::default(),
+            library_list_row_size: ListRowSize::Medium,
         }
     }
 }

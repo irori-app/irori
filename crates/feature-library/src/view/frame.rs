@@ -14,7 +14,7 @@ use irori_services::StoreFilter;
 use irori_ui::i18n::t;
 use irori_ui::{backend, models};
 
-use super::{CARD_REM, FAVOURITE_REM, LibraryView, toolbar};
+use super::{FAVOURITE_REM, LibraryView, toolbar};
 use crate::availability;
 use crate::commands::GameState;
 use crate::filter::{self, GroupKind, HiddenMode, StatusGroup};
@@ -57,6 +57,8 @@ struct FrameKey {
     /// Height of the toolbar's room in the list, in whole pixels; zero
     /// when the toolbar is in the header.
     toolbar: u32,
+    /// Height of the "Continue playing" card row in 1/16 rem units.
+    top_card_h: u32,
 }
 
 /// Everything derived for the current frame. Rebuilt only when its inputs
@@ -66,12 +68,18 @@ pub(super) struct Frame {
     /// Sections of `games`; empty when the list is not grouped.
     pub(super) groups: Arc<[StatusGroup]>,
     pub(super) top: Option<(TopKind, Arc<[Arc<GameInfo>]>)>,
+    /// Dynamic widths (in rem) for each "Continue playing" card.
+    pub(super) top_card_widths: Vec<f32>,
+    /// Shared height (in rem) for the "Continue playing" cards.
+    pub(super) top_card_height_rem: f32,
     pub(super) stores: Vec<Runner>,
+    /// Total installed games in the snapshot (cached per revision).
+    pub(super) installed_count: usize,
     /// Title of the main section under the top row.
     pub(super) heading: SharedString,
     pub(super) metrics: GridMetrics,
     /// Which of `grid::LIST_COLUMNS` fit the width.
-    pub(super) list_columns: [bool; 6],
+    pub(super) list_columns: [bool; 7],
     /// Width of the Focus view's column of covers, in rem.
     pub(super) focus_rem: f32,
     pub(super) items: Rc<Vec<Item>>,
@@ -82,6 +90,8 @@ pub(super) struct Frame {
     pub(super) one_store: bool,
     /// The toolbar sits in the list under the top row, not in the header.
     pub(super) toolbar_in_list: bool,
+    /// Cached counts for the preset tabs and narrowing saved views.
+    pub(super) chip_counts: crate::chips::ChipCountMap,
 }
 
 impl Default for Frame {
@@ -90,16 +100,20 @@ impl Default for Frame {
             games: Arc::from(Vec::new()),
             groups: Arc::from(Vec::new()),
             top: None,
+            top_card_widths: Vec::new(),
+            top_card_height_rem: grid::TOP_CARD_MIN_HEIGHT_REM,
             stores: Vec::new(),
+            installed_count: 0,
             heading: SharedString::default(),
             metrics: grid::grid_metrics(60.0, 11.0),
-            list_columns: [true; 6],
+            list_columns: [true; 7],
             focus_rem: layouts::focus_column_rem(2, layouts::FOCUS_TILE_REM),
             items: Rc::default(),
             sizes: Rc::default(),
             one_store: false,
             key: None,
             toolbar_in_list: false,
+            chip_counts: Default::default(),
         }
     }
 }
@@ -127,6 +141,34 @@ impl LibraryView {
         let filter = self.filters.read(cx).filter().clone();
         self.check_availability(&snapshot, cx);
         let missing = self.availability.missing().clone();
+
+        let lang = irori_ui::i18n::language();
+        if self.search_placeholder_lang.as_deref() != Some(lang.as_str()) {
+            let placeholder = t("library.search.placeholder");
+            self.search
+                .update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
+            self.search_placeholder_lang = Some(lang);
+        }
+
+        if std::mem::take(&mut self.tile_slider_dirty) {
+            let size = self.tile_rem;
+            self.tile_slider
+                .update(cx, |s, cx| s.set_value(size, window, cx));
+        }
+
+        if self.ui_prefs.library_quick_controls {
+            let smart_ids = crate::views::smart_collection_ids(&user);
+            let inputs = crate::chips::ChipCountInputs {
+                smart_ids: &smart_ids,
+                stores: &stores,
+                library: &snapshot,
+                user: &user,
+                categories: &categories,
+                updates: &updates,
+                missing: &missing,
+            };
+            self.frame.chip_counts = self.chip_counts.get(&inputs).clone();
+        }
 
         let games = self.games.get_in(
             &filter,
@@ -174,13 +216,16 @@ impl LibraryView {
         // The measured width is the library's whole body; the drawer and the
         // Focus page take their share of it.
         let body_rem = f32::from(width) / f32::from(rem);
-        let focus_tile = layouts::focus_tile_rem(self.ui_prefs.library_focus_cover_size);
+        let focus_tile = layouts::focus_tile_rem(self.focus_cover_size);
         // Following the window's width switches the view for now; the
         // user's own choice stays what is saved.
         if self.ui_prefs.library_auto_layout {
             let wide = layouts::wide_enough_for_focus(body_rem, focus_tile);
             if let Some(layout) = layouts::auto_layout(self.layout, self.auto_wide, wide) {
                 self.layout = layout;
+                if !self.compat_active() {
+                    self.cancel_compat();
+                }
                 self.scroll_to_focused();
                 // The rows above were worked out for the other view.
                 cx.notify();
@@ -199,17 +244,30 @@ impl LibraryView {
             _ => body_rem,
         };
         let available = list_rem - 2.0 * grid::EDGE_REM;
-        let caption = self.ui_prefs.cover_caption;
-        let metrics = match self.layout {
+        let caption = match self.layout {
+            LibraryLayout::Focus => self.ui_prefs.focus_cover_caption(),
+            _ => self.ui_prefs.cover_caption,
+        };
+        let mut metrics = match self.layout {
             LibraryLayout::Focus => grid::focus_metrics(available, focus_tile, caption),
             _ => grid::grid_metrics_shaped(
                 available,
                 self.tile_rem,
                 self.density,
                 caption,
-                self.ui_prefs.cover_shape,
+                self.cover_shape,
             ),
         };
+        metrics.list_row_rem = grid::list_row_rem(self.list_row_size, self.density);
+        let (top_card_widths, top_card_height_rem) = match &top {
+            Some((TopKind::ContinuePlaying, games)) => {
+                grid::top_card_widths(games.len(), available)
+            }
+            _ => (Vec::new(), grid::TOP_CARD_MIN_HEIGHT_REM),
+        };
+        let installed_count = *self.installed_count.get(&snapshot, |lib| {
+            lib.games.iter().filter(|g| g.is_installed).count()
+        });
         // The top row isn't filtered, so the controls that filter sit under
         // it; without one (or with nothing to show) they stay in the header.
         let toolbar_in_list = top.is_some() && !games.is_empty();
@@ -232,6 +290,7 @@ impl LibraryView {
             } else {
                 0
             },
+            top_card_h: (top_card_height_rem * 16.0).round() as u32,
         };
         if self.frame.key.as_ref() != Some(&key) {
             let mut items = Vec::new();
@@ -269,7 +328,10 @@ impl LibraryView {
                 .iter()
                 .map(|item| match item {
                     Item::Toolbar => size(width, toolbar_height),
-                    _ => size(width, rem * item_rem(*item, top_kind, &metrics)),
+                    _ => size(
+                        width,
+                        rem * item_rem(*item, top_kind, top_card_height_rem, &metrics),
+                    ),
                 })
                 .collect();
             self.frame.items = Rc::new(items);
@@ -284,6 +346,9 @@ impl LibraryView {
         self.frame.games = games;
         self.frame.groups = groups;
         self.frame.top = top;
+        self.frame.top_card_widths = top_card_widths;
+        self.frame.top_card_height_rem = top_card_height_rem;
+        self.frame.installed_count = installed_count;
         self.frame.toolbar_in_list = toolbar_in_list;
         self.frame.stores = stores;
         self.frame.one_store = matches!(filter.store, StoreFilter::Store(_));
@@ -295,7 +360,11 @@ impl LibraryView {
             t("library.heading.all")
         };
         self.frame.metrics = metrics;
-        self.frame.list_columns = grid::list_columns(available);
+        self.frame.list_columns = grid::list_columns_for(
+            available,
+            self.ui_prefs.library_list_columns,
+            self.list_row_size,
+        );
         self.frame.focus_rem = focus_rem;
         self.follow_selection();
         if std::mem::take(&mut self.scroll_pending) {
@@ -481,14 +550,19 @@ fn section_ranges(groups: &[StatusGroup], len: usize) -> Vec<Range<usize>> {
 }
 
 /// Height of a virtual-list item, in rem.
-pub(super) fn item_rem(item: Item, top: Option<TopKind>, metrics: &GridMetrics) -> f32 {
+pub(super) fn item_rem(
+    item: Item,
+    top: Option<TopKind>,
+    top_card_height_rem: f32,
+    metrics: &GridMetrics,
+) -> f32 {
     match item {
         Item::Top => {
             // Favourites carry their title below the cover; continue-playing
             // cards carry it on the art.
             let (art, caption) = match top {
                 Some(TopKind::Favourites) => (FAVOURITE_REM * grid::COVER_RATIO, grid::CAPTION_REM),
-                _ => (CARD_REM * 9.0 / 16.0, 0.0),
+                _ => (top_card_height_rem, 0.0),
             };
             grid::HEADING_REM + grid::ROW_INSET_REM + art + caption + grid::GAP_REM
         }

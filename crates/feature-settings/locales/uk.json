@@ -2318,5 +2318,15 @@
   "settings.crash.recent_help": "Звіти про несподіване завершення залишаються тут, доки ви їх не видалите.",
   "settings.crash.review_action": "Переглянути й повідомити",
   "settings.crash.delete": "Видалити звіт",
-  "settings.crash.delete_failed": "Не вдалося видалити звіт про збій"
+  "settings.crash.delete_failed": "Не вдалося видалити звіт про збій",
+  "settings.field.ui_cover_compat_badges.label": "Позначки ProtonDB і Steam Deck на обкладинках",
+  "settings.field.ui_cover_compat_badges.help": "Показувати рейтинги ProtonDB та позначки Steam Deck Verified на обкладинках невстановлених ігор.",
+  "settings.option.cover_caption.hover": "При наведенні",
+  "settings.field.ui_library_greeting.label": "Показувати привітання в заголовку бібліотеки",
+  "settings.field.ui_library_greeting.help": "Вітає вас відповідно до часу доби вгорі бібліотеки. Натисніть на ім’я, щоб змінити або сховати його.",
+  "settings.sidebar.setup": "Облікові записи та інструменти",
+  "settings.page.accounts": "Облікові записи",
+  "settings.page.wine_manager": "Wine і Proton",
+  "settings.page.wine_manager_macos": "Менеджер Wine",
+  "settings.page.emulators": "Емулятори"
 }

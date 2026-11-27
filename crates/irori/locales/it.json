@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Il gioco è a schermo intero esclusivo. Passa a finestra senza bordi o in finestra per usare l’overlay.",
   "shell.palette.year_in_review": "Apri il Riepilogo dell’anno",
   "shell.palette.year_in_review_keywords": "riepilogo recap annuale",
-  "shell.nav.views": "Viste",
   "shell.palette.show_view": "Mostra vista: {name}",
   "shell.palette.show_category": "Mostra categoria: {name}",
   "shell.palette.new_smart_category": "Nuova categoria intelligente…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Esamina e segnala",
   "shell.palette.latest_crash_report": "Visualizza l’ultimo rapporto di arresto anomalo",
   "shell.palette.latest_crash_report_keywords": "crash arresto rapporto log panic bug",
-  "shell.notice.manage_rollback": "Gestisci / Ripristina"
+  "shell.notice.manage_rollback": "Gestisci / Ripristina",
+  "shell.nav.pinned": "Fissati"
 }

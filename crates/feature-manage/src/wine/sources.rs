@@ -171,7 +171,7 @@ pub(super) fn grouped_sources(available: &[ReleaseKind]) -> Vec<(SourceGroup, Ve
 }
 
 pub(super) fn is_latest_release(release: &Release) -> bool {
-    release.version.ends_with("-latest")
+    release.is_latest()
 }
 
 /// Other downloadable sources whose name, badge, or description matches `query`.
@@ -223,18 +223,26 @@ pub(super) fn visible_releases<'a>(
         };
     }
     if show_older {
+        let mut items = eligible;
+        items.sort_by_key(|r| !is_latest_release(r));
         return VisibleReleases {
-            items: eligible,
+            items,
             hidden_count: 0,
         };
     }
 
     let mut items = Vec::with_capacity(eligible.len().min(INITIAL_VISIBLE_VERSIONS + 1));
-    let mut numbered_seen = 0usize;
     for release in &eligible {
         if is_latest_release(release) {
             items.push(*release);
-        } else if numbered_seen < INITIAL_VISIBLE_VERSIONS {
+        }
+    }
+    let mut numbered_seen = 0usize;
+    for release in &eligible {
+        if is_latest_release(release) {
+            continue;
+        }
+        if numbered_seen < INITIAL_VISIBLE_VERSIONS {
             items.push(*release);
             numbered_seen += 1;
         } else if release.installed() {
@@ -340,6 +348,24 @@ mod tests {
                 "GE-Proton10-1"
             ]
         );
+    }
+
+    #[test]
+    fn visible_releases_pins_latest_first_even_behind_newer_prereleases() {
+        let list = vec![
+            fake_release("Proton-EM-10.0-38-HDRTEST", false),
+            fake_release("Proton-EM-10.0-37-HDR", false),
+            fake_release("Proton-EM-latest", false),
+            fake_release("Proton-EM-10.0-34", false),
+        ];
+
+        let compact = visible_releases(&list, "", false);
+        assert_eq!(compact.items[0].version, "Proton-EM-latest");
+        assert_eq!(compact.items[1].version, "Proton-EM-10.0-38-HDRTEST");
+
+        let expanded = visible_releases(&list, "", true);
+        assert_eq!(expanded.items[0].version, "Proton-EM-latest");
+        assert_eq!(expanded.items[1].version, "Proton-EM-10.0-38-HDRTEST");
     }
 
     #[test]

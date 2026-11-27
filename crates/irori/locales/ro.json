@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Jocul rulează pe ecran complet exclusiv. Treceți-l pe fereastră fără margini sau în fereastră pentru a folosi suprapunerea.",
   "shell.palette.year_in_review": "Deschide Anul în revistă",
   "shell.palette.year_in_review_keywords": "rezumat recapitulare an",
-  "shell.nav.views": "Vizualizări",
   "shell.palette.show_view": "Arată vizualizarea: {name}",
   "shell.palette.show_category": "Arată categoria: {name}",
   "shell.palette.new_smart_category": "Categorie inteligentă nouă…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Revizuiește și raportează",
   "shell.palette.latest_crash_report": "Vezi ultimul raport de blocare",
   "shell.palette.latest_crash_report_keywords": "crash blocare raport jurnal log bug",
-  "shell.notice.manage_rollback": "Gestionează / Revino"
+  "shell.notice.manage_rollback": "Gestionează / Revino",
+  "shell.nav.pinned": "Fixate"
 }

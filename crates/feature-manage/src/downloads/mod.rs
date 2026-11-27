@@ -763,4 +763,8 @@ impl DownloadsView {
         let web = models(cx).downloads.read(cx).web.clone();
         self.summary(&web, None, &app_status)
     }
+
+    pub(crate) fn set_install_disks_for_tests(&mut self, disks: Vec<irori_services::QueueDisk>) {
+        self.install_disks = disks;
+    }
 }

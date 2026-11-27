@@ -6,19 +6,22 @@ use std::time::Instant;
 
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::button::ButtonVariant;
-use gpui_kit::{Context, Focusable as _, ScrollStrategy, SharedString, Window};
-use irori_core::settings::LibraryLayout;
+use gpui_kit::{Context, Entity, Focusable as _, ScrollStrategy, SharedString, Window};
+use irori_core::settings::{CoverShape, FocusCoverSize, LibraryLayout, ListRowSize};
 use irori_core::{GameId, GameInfo, Runner, UpdateRequest};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, backend, models, navigate};
 
 use super::{Item, LibraryView, persist_ui};
 use crate::LibraryEvent;
+use crate::chips::{self, PresetChip};
 use crate::commands::{self, GameCommand};
 use crate::dialogs;
 use crate::filter::{Grouping, ViewFilter};
+use crate::filters_panel::FilterModel;
 use crate::grid::{self, Move};
 use crate::launch::{self, LaunchChoice};
+use crate::views::{self, TabKey, TabViewPrefs};
 
 impl LibraryView {
     /// Run a command on a game. Commands owned by other features are emitted
@@ -558,17 +561,238 @@ impl LibraryView {
         );
     }
 
-    /// Switch to `layout` and remember it. The selected game stays
-    /// selected and in view; Focus selects the first game when none is.
-    fn set_layout(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
+    /// Save a visualization preference on the active tab when one is active;
+    /// returns `false` when custom filters are active (no tab matched) so the
+    /// caller can fall back to global `UiPrefs`.
+    fn save_active_tab_prefs(
+        &self,
+        f: impl FnOnce(&mut TabViewPrefs),
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(tab) = self.active_tab.clone() else {
+            return false;
+        };
+        views::saved_views(cx).update(cx, |m, cx| m.update(|v| v.update_prefs(&tab, f), cx));
+        true
+    }
+
+    /// Switch to `layout` and remember it on the active tab (or globally when
+    /// no tab is active). The selected game stays selected and in view; Focus
+    /// selects the first game when none is.
+    pub(crate) fn set_layout(&mut self, layout: LibraryLayout, cx: &mut Context<Self>) {
         if self.layout == layout && self.chosen_layout == layout {
             return;
         }
         self.layout = layout;
         self.chosen_layout = layout;
-        persist_ui(cx, move |ui| ui.library_layout = layout);
+        if !self.compat_active() {
+            self.cancel_compat();
+        }
+        if !self.save_active_tab_prefs(|p| p.layout = Some(layout), cx) {
+            persist_ui(cx, move |ui| ui.library_layout = layout);
+        }
         self.scroll_to_focused();
         cx.notify();
+    }
+
+    /// Switch cover shape for the active tab (or globally when no tab is active).
+    pub(crate) fn set_cover_shape(&mut self, shape: CoverShape, cx: &mut Context<Self>) {
+        if self.cover_shape == shape {
+            return;
+        }
+        self.cover_shape = shape;
+        if !self.save_active_tab_prefs(|p| p.cover_shape = Some(shape), cx) {
+            persist_ui(cx, move |ui| ui.cover_shape = shape);
+        }
+        cx.notify();
+    }
+
+    /// Save the grid tile size for the active tab (or globally when no tab is active).
+    pub(crate) fn set_tile_size(&mut self, size: f32, cx: &mut Context<Self>) {
+        let size = size.clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
+        self.tile_rem = size;
+        if !self.save_active_tab_prefs(|p| p.tile_size = Some(size), cx) {
+            persist_ui(cx, move |ui| ui.tile_size = size);
+        }
+        cx.notify();
+    }
+
+    /// Switch list row size for the active tab (or globally when no tab is active).
+    pub(crate) fn set_list_row_size(&mut self, size: ListRowSize, cx: &mut Context<Self>) {
+        if self.list_row_size == size {
+            return;
+        }
+        self.list_row_size = size;
+        if !self.save_active_tab_prefs(|p| p.list_row_size = Some(size), cx) {
+            persist_ui(cx, move |ui| ui.library_list_row_size = size);
+        }
+        cx.notify();
+    }
+
+    /// Switch Focus cover size for the active tab (or globally when no tab is active).
+    pub(crate) fn set_focus_cover_size(&mut self, size: FocusCoverSize, cx: &mut Context<Self>) {
+        if self.focus_cover_size == size {
+            return;
+        }
+        self.focus_cover_size = size;
+        if !self.save_active_tab_prefs(|p| p.focus_cover_size = Some(size), cx) {
+            persist_ui(cx, move |ui| ui.library_focus_cover_size = size);
+        }
+        cx.notify();
+    }
+
+    /// Restore the visual properties (layout, cover shape, sizes) saved for
+    /// `tab`, falling back to global `ui_prefs` for any property the tab hasn't
+    /// customized yet.
+    fn restore_tab_visuals(
+        &mut self,
+        tab: &TabKey,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
+        let prefs = views::saved_views(cx)
+            .read(cx)
+            .views()
+            .prefs_for(tab)
+            .cloned()
+            .unwrap_or_default();
+        let next_layout = prefs.layout.unwrap_or(self.ui_prefs.library_layout);
+        if self.layout != next_layout || self.chosen_layout != next_layout {
+            self.layout = next_layout;
+            self.chosen_layout = next_layout;
+            self.auto_wide = None;
+            if !self.compat_active() {
+                self.cancel_compat();
+            }
+            self.scroll_to_focused();
+        }
+        self.cover_shape = prefs.cover_shape.unwrap_or(self.ui_prefs.cover_shape);
+        self.list_row_size = prefs
+            .list_row_size
+            .unwrap_or(self.ui_prefs.library_list_row_size);
+        self.focus_cover_size = prefs
+            .focus_cover_size
+            .unwrap_or(self.ui_prefs.library_focus_cover_size);
+        let next_tile = prefs
+            .tile_size
+            .unwrap_or(self.ui_prefs.tile_size)
+            .clamp(grid::MIN_TILE_REM, grid::MAX_TILE_REM);
+        if (self.tile_rem - next_tile).abs() > f32::EPSILON {
+            self.tile_rem = next_tile;
+            if let Some(window) = window {
+                self.tile_slider
+                    .update(cx, |s, cx| s.set_value(next_tile, window, cx));
+                self.tile_slider_dirty = false;
+            } else {
+                self.tile_slider_dirty = true;
+            }
+        }
+    }
+
+    /// Activate `tab`: apply its filtering criteria (keeping search text) and
+    /// restore its saved layout, cover shape, size, and sort/group settings.
+    pub(crate) fn apply_tab(
+        &mut self,
+        tab: TabKey,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
+        let prefs = views::saved_views(cx)
+            .read(cx)
+            .views()
+            .prefs_for(&tab)
+            .cloned()
+            .unwrap_or_default();
+        let mut target = tab_default_filter(&tab);
+        if let Some(sort) = prefs.sort {
+            target.sort = sort;
+        }
+        if let Some(desc) = prefs.descending {
+            target.descending = desc;
+        }
+        if let Some(group) = prefs.group {
+            target.group = group;
+        }
+
+        self.active_tab = Some(tab.clone());
+        views::saved_views(cx).update(cx, |m, cx| {
+            m.update(|v| v.set_active_tab(Some(tab.clone())), cx)
+        });
+
+        self.suppress_filter_sync = true;
+        self.filters.update(cx, |m, cx| {
+            m.update(
+                move |f| {
+                    *f = ViewFilter {
+                        query: std::mem::take(&mut f.query),
+                        ..target
+                    };
+                },
+                cx,
+            )
+        });
+        self.suppress_filter_sync = false;
+
+        self.restore_tab_visuals(&tab, window, cx);
+        cx.notify();
+    }
+
+    /// Keep `active_tab` and per-tab sort/group prefs synchronized whenever
+    /// `self.filters` changes outside `apply_tab` (Sort & Group popover,
+    /// Filters popover, keyboard shortcuts, or deleting a collection).
+    pub(super) fn sync_tab_from_filter(
+        &mut self,
+        filters: Entity<FilterModel>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.suppress_filter_sync {
+            return;
+        }
+        let filter = filters.read(cx).filter().clone();
+        let smart_ids = {
+            let user = &models(cx).library.read(cx).user;
+            views::smart_collection_ids(user)
+        };
+        let next_tab = chips::active_tab_for(&filter, self.active_tab.as_ref(), &smart_ids);
+        if next_tab == self.active_tab {
+            if let Some(tab) = self.active_tab.clone() {
+                let default_f = tab_default_filter(&tab);
+                let cur = views::saved_views(cx)
+                    .read(cx)
+                    .views()
+                    .prefs_for(&tab)
+                    .cloned()
+                    .unwrap_or_default();
+                let expected_sort = cur.sort.unwrap_or(default_f.sort);
+                let expected_desc = cur.descending.unwrap_or(default_f.descending);
+                let expected_group = cur.group.unwrap_or(default_f.group);
+                if filter.sort != expected_sort
+                    || filter.descending != expected_desc
+                    || filter.group != expected_group
+                {
+                    views::saved_views(cx).update(cx, |m, cx| {
+                        m.update(
+                            |v| {
+                                v.update_prefs(&tab, |p| {
+                                    p.sort = Some(filter.sort);
+                                    p.descending = Some(filter.descending);
+                                    p.group = Some(filter.group);
+                                });
+                            },
+                            cx,
+                        )
+                    });
+                }
+            }
+            return;
+        }
+        self.active_tab = next_tab.clone();
+        views::saved_views(cx).update(cx, |m, cx| {
+            m.update(|v| v.set_active_tab(next_tab.clone()), cx)
+        });
+        if let Some(tab) = next_tab {
+            self.restore_tab_visuals(&tab, None, cx);
+        }
     }
 
     /// Scroll the selected game into view once the next render has laid
@@ -602,6 +826,17 @@ impl LibraryView {
             self.hovered = None;
             cx.notify();
         }
+    }
+}
+
+/// Default filter criteria for a tab before per-tab sort/group overrides.
+fn tab_default_filter(tab: &TabKey) -> ViewFilter {
+    match tab {
+        TabKey::All | TabKey::View(_) => PresetChip::All.filter(),
+        TabKey::Installed => PresetChip::Installed.filter(),
+        TabKey::Favorites => PresetChip::Favourites.filter(),
+        TabKey::RecentlyAdded => PresetChip::RecentlyAdded.filter(),
+        TabKey::Collection(id) => chips::collection_filter(id),
     }
 }
 

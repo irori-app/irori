@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Gra działa w wyłącznym trybie pełnoekranowym. Przełącz ją na okno bez ramek lub tryb okienkowy, aby używać nakładki.",
   "shell.palette.year_in_review": "Otwórz Podsumowanie roku",
   "shell.palette.year_in_review_keywords": "podsumowanie rok recap",
-  "shell.nav.views": "Widoki",
   "shell.palette.show_view": "Pokaż widok: {name}",
   "shell.palette.show_category": "Pokaż kategorię: {name}",
   "shell.palette.new_smart_category": "Nowa inteligentna kategoria…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Przejrzyj i zgłoś",
   "shell.palette.latest_crash_report": "Zobacz ostatni raport o awarii",
   "shell.palette.latest_crash_report_keywords": "crash awaria raport log błąd bug",
-  "shell.notice.manage_rollback": "Zarządzaj / Cofnij"
+  "shell.notice.manage_rollback": "Zarządzaj / Cofnij",
+  "shell.nav.pinned": "Przypięte"
 }

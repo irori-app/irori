@@ -2318,5 +2318,15 @@
   "settings.crash.recent_help": "意外退出的报告会保留在此处，直到你将其删除。",
   "settings.crash.review_action": "查看并报告",
   "settings.crash.delete": "删除报告",
-  "settings.crash.delete_failed": "无法删除崩溃报告"
+  "settings.crash.delete_failed": "无法删除崩溃报告",
+  "settings.field.ui_cover_compat_badges.label": "在封面显示 ProtonDB 和 Steam Deck 徽章",
+  "settings.field.ui_cover_compat_badges.help": "在未安装游戏的封面上显示 ProtonDB 评级和 Steam Deck 已验证徽章。",
+  "settings.option.cover_caption.hover": "仅悬停时",
+  "settings.field.ui_library_greeting.label": "在库标题栏显示问候语",
+  "settings.field.ui_library_greeting.help": "在库顶部按时间段向你问好。点击名字即可编辑或隐藏。",
+  "settings.sidebar.setup": "账户与工具",
+  "settings.page.accounts": "账户",
+  "settings.page.wine_manager": "Wine 和 Proton",
+  "settings.page.wine_manager_macos": "Wine 管理器",
+  "settings.page.emulators": "模拟器"
 }

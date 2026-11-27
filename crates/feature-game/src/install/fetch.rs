@@ -15,7 +15,7 @@ use crate::choice::{Choice, set_choices};
 use crate::hooks;
 use crate::load::{Load, language_name, preferred_language};
 use crate::ops::{notify_error, pick_path};
-use crate::sizes::{InstallSize, detect_extra_drives, disk_space, free_space, same_dir};
+use crate::sizes::{InstallSize, disk_space, free_space, same_dir};
 
 impl Choice {
     fn value_str(&self) -> &str {
@@ -40,29 +40,40 @@ impl InstallSheet {
                 .enumerate()
                 .filter_map(|(ix, path)| free_space(path).ok().map(|free| (ix, free)))
                 .collect();
-            let extras = detect_extra_drives(&configured);
-            (spaces, extras)
+            let probe = irori_services::probe_install_drives(&configured);
+            (spaces, probe)
         });
         cx.spawn_in(window, async move |this, cx| {
-            let (spaces, extras) = task.await;
+            let (spaces, probe) = task.await;
             let _ = this.update(cx, |this, cx| {
                 for (ix, free) in spaces {
                     if let Some(target) = this.install_targets.get_mut(ix) {
                         target.free = Some(free);
                     }
                 }
-                for drive in extras {
+                let default_name = irori_ui::library_folders::label(
+                    &irori_core::settings::LibraryFolder::default(),
+                );
+                for (ix, resolved) in probe.configured_labels.into_iter().enumerate() {
+                    if let (Some(disk_label), Some(target)) =
+                        (resolved, this.install_targets.get_mut(ix))
+                        && target.is_default
+                    {
+                        target.label = format!("{default_name} ({disk_label})").into();
+                    }
+                }
+                for drive in probe.extras {
                     let already = this.install_targets.iter().any(|t| {
-                        same_dir(
-                            &irori_core::paths::expand_home(t.base_path.trim()),
-                            &drive.mount,
-                        )
+                        let expanded = irori_core::paths::expand_home(t.base_path.trim());
+                        same_dir(&expanded, &drive.mount)
+                            || same_dir(&expanded, PathBuf::from(&drive.suggested_base).as_path())
                     });
                     if !already {
                         this.install_targets.push(InstallTarget {
-                            label: drive.label.into(),
+                            label: drive.disk_label.into(),
                             base_path: drive.suggested_base,
                             free: Some(drive.free),
+                            is_default: false,
                         });
                     }
                 }

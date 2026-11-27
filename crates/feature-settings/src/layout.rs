@@ -22,6 +22,14 @@ pub(crate) struct SidebarGroup {
 /// Sidebar sections grouped for quick scanning without changing route IDs.
 pub(crate) const SIDEBAR_GROUPS: &[SidebarGroup] = &[
     SidebarGroup {
+        label_key: "settings.sidebar.setup",
+        sections: &[
+            SettingsSection::Accounts,
+            SettingsSection::WineManager,
+            SettingsSection::Emulators,
+        ],
+    },
+    SidebarGroup {
         label_key: "settings.sidebar.preferences",
         sections: &[
             SettingsSection::General,
@@ -327,6 +335,7 @@ fn appearance_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.showAgeRatings"
         | "iroriUi.ageRatingBoard"
         | "iroriUi.trailerAutoplay"
+        | "iroriUi.coverCompatBadges"
         | "iroriUi.coverCategories"
         | "iroriUi.coverCorners"
         | "iroriUi.coverFit"
@@ -338,6 +347,7 @@ fn appearance_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.libraryOpenDetailsOnSelect"
         | "iroriUi.libraryAutoLayout"
         | "iroriUi.coverFavourite"
+        | "iroriUi.libraryGreeting"
         | "iroriUi.libraryQuickControls"
         | "iroriUi.libraryBackground"
         | "iroriUi.libraryBackgroundPicture"

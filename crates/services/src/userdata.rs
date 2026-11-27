@@ -144,6 +144,10 @@ pub struct BulkSnapshot {
     hidden: BTreeSet<String>,
     /// Every category that existed, with which of the games were in it.
     categories: BTreeMap<String, BTreeSet<String>>,
+    /// Every smart category's manual inclusions among `keys`.
+    smart_included: BTreeMap<String, BTreeSet<String>>,
+    /// Every smart category's manual exclusions among `keys`.
+    smart_excluded: BTreeMap<String, BTreeSet<String>>,
     play_status: BTreeMap<String, PlayStatusRecord>,
     status_history: StatusHistory,
 }
@@ -418,6 +422,16 @@ impl UserData {
                 .iter()
                 .map(|(name, games)| (name.clone(), pick(games)))
                 .collect(),
+            smart_included: self
+                .smart_categories
+                .iter()
+                .map(|(id, cat)| (id.clone(), pick(&cat.included_games)))
+                .collect(),
+            smart_excluded: self
+                .smart_categories
+                .iter()
+                .map(|(id, cat)| (id.clone(), pick(&cat.excluded_games)))
+                .collect(),
             play_status: keys
                 .iter()
                 .filter_map(|k| Some((k.clone(), self.play_status.get(k)?.clone())))
@@ -454,6 +468,25 @@ impl UserData {
         }
         for name in emptied {
             self.categories.remove(&name);
+        }
+        for (id, cat) in self.smart_categories.iter_mut() {
+            if cat.is_unreadable() {
+                continue;
+            }
+            let before_in = snap.smart_included.get(id);
+            let before_out = snap.smart_excluded.get(id);
+            for key in &snap.keys {
+                set(
+                    &mut cat.included_games,
+                    key,
+                    before_in.is_some_and(|b| b.contains(key)),
+                );
+                set(
+                    &mut cat.excluded_games,
+                    key,
+                    before_out.is_some_and(|b| b.contains(key)),
+                );
+            }
         }
         for key in &snap.keys {
             set(&mut self.favourites, key, snap.favourites.contains(key));
@@ -705,6 +738,81 @@ impl LibrarySync {
     }
 }
 
+fn exclude_smart_game(d: &mut UserData, smart_id: &str, game_key: &str) -> bool {
+    if game_key.is_empty() {
+        return false;
+    }
+    d.smart_categories
+        .get_mut(smart_id)
+        .filter(|c| !c.is_unreadable())
+        .is_some_and(|c| {
+            let removed_in = c.included_games.remove(game_key);
+            let added_out = c.excluded_games.insert(game_key.to_owned());
+            removed_in || added_out
+        })
+}
+
+fn restore_smart_game(d: &mut UserData, smart_id: &str, game_key: &str) -> bool {
+    d.smart_categories
+        .get_mut(smart_id)
+        .filter(|c| !c.is_unreadable())
+        .is_some_and(|c| c.excluded_games.remove(game_key))
+}
+
+fn add_smart_games(
+    d: &mut UserData,
+    smart_id: &str,
+    plans: &[(String, Vec<String>, bool)],
+) -> bool {
+    let Some(cat) = d
+        .smart_categories
+        .get_mut(smart_id)
+        .filter(|c| !c.is_unreadable())
+    else {
+        return false;
+    };
+    let mut changed = false;
+    for (primary_key, copy_keys, pin_manually) in plans {
+        if primary_key.is_empty() {
+            continue;
+        }
+        for key in copy_keys {
+            changed |= cat.excluded_games.remove(key);
+        }
+        if *pin_manually {
+            changed |= cat.included_games.insert(primary_key.clone());
+        }
+    }
+    changed
+}
+
+fn remove_smart_games(
+    d: &mut UserData,
+    smart_id: &str,
+    plans: &[(String, Vec<String>, bool)],
+) -> bool {
+    let Some(cat) = d
+        .smart_categories
+        .get_mut(smart_id)
+        .filter(|c| !c.is_unreadable())
+    else {
+        return false;
+    };
+    let mut changed = false;
+    for (primary_key, copy_keys, exclude_rule_match) in plans {
+        if primary_key.is_empty() {
+            continue;
+        }
+        for key in copy_keys {
+            changed |= cat.included_games.remove(key);
+        }
+        if *exclude_rule_match {
+            changed |= cat.excluded_games.insert(primary_key.clone());
+        }
+    }
+    changed
+}
+
 pub struct UserDataService {
     data: RwLock<Arc<UserData>>,
     bus: EventBus,
@@ -900,6 +1008,60 @@ impl UserDataService {
 
     pub fn delete_smart_category(&self, id: &str) {
         self.update_if(None, |d| d.smart_categories.remove(id).is_some());
+    }
+
+    /// Manually leave `game_key` out of smart category `smart_id`.
+    pub fn exclude_from_smart_category(&self, smart_id: &str, game_key: &str) {
+        self.update_if(None, |d| exclude_smart_game(d, smart_id, game_key));
+    }
+
+    /// Put a manually excluded `game_key` back into smart category `smart_id`.
+    pub fn restore_to_smart_category(&self, smart_id: &str, game_key: &str) {
+        self.update_if(None, |d| restore_smart_game(d, smart_id, game_key));
+    }
+
+    /// Add `ids` to smart category `smart_id`, clearing any manual exclusions
+    /// on their copies and inserting into `included_games` whenever
+    /// `pin_manually` returns true (game does not already match by rules).
+    pub fn add_to_smart_category_many(
+        &self,
+        smart_id: &str,
+        ids: &[GameId],
+        pin_manually: impl Fn(&GameId) -> bool,
+    ) {
+        let plans: Vec<(String, Vec<String>, bool)> = ids
+            .iter()
+            .map(|id| {
+                (
+                    id.key(),
+                    self.keys_with_copies(std::slice::from_ref(id)),
+                    pin_manually(id),
+                )
+            })
+            .collect();
+        self.update_if(None, |d| add_smart_games(d, smart_id, &plans));
+    }
+
+    /// Remove `ids` from smart category `smart_id`, clearing manual inclusions
+    /// on their copies and inserting into `excluded_games` whenever
+    /// `exclude_rule_match` returns true (game would still match by rules).
+    pub fn remove_from_smart_category_many(
+        &self,
+        smart_id: &str,
+        ids: &[GameId],
+        exclude_rule_match: impl Fn(&GameId) -> bool,
+    ) {
+        let plans: Vec<(String, Vec<String>, bool)> = ids
+            .iter()
+            .map(|id| {
+                (
+                    id.key(),
+                    self.keys_with_copies(std::slice::from_ref(id)),
+                    exclude_rule_match(id),
+                )
+            })
+            .collect();
+        self.update_if(None, |d| remove_smart_games(d, smart_id, &plans));
     }
 
     /// Pin, unpin or colour a category of either kind.
@@ -1897,5 +2059,97 @@ mod tests {
             rewritten.journal_day("gog:1", day)[0].text,
             "Found the lift; beat the knight twice"
         );
+    }
+
+    #[test]
+    fn excludes_and_restores_games_in_smart_category() {
+        let mut d = UserData::default();
+        let smart = SmartCategory::new("Souls", crate::Match::Any, vec![], vec![]);
+        d.smart_categories.insert("s-souls".into(), smart);
+
+        assert!(exclude_smart_game(&mut d, "s-souls", "steam:570"));
+        // Inserting the same key again or an empty key is a no-op.
+        assert!(!exclude_smart_game(&mut d, "s-souls", "steam:570"));
+        assert!(!exclude_smart_game(&mut d, "s-souls", ""));
+        assert!(
+            d.smart_categories["s-souls"]
+                .excluded_games
+                .contains("steam:570")
+        );
+
+        assert!(restore_smart_game(&mut d, "s-souls", "steam:570"));
+        assert!(!restore_smart_game(&mut d, "s-souls", "steam:570"));
+        assert!(
+            !d.smart_categories["s-souls"]
+                .excluded_games
+                .contains("steam:570")
+        );
+
+        // Missing or unreadable smart categories are safe no-ops.
+        assert!(!exclude_smart_game(&mut d, "s-missing", "steam:570"));
+        let unreadable: SmartCategory =
+            serde_json::from_value(serde_json::json!({"name": "Future", "rules": "not-an-array"}))
+                .unwrap();
+        assert!(unreadable.is_unreadable());
+        d.smart_categories.insert("s-future".into(), unreadable);
+        assert!(!exclude_smart_game(&mut d, "s-future", "steam:570"));
+        assert!(!restore_smart_game(&mut d, "s-future", "steam:570"));
+    }
+
+    #[test]
+    fn hybrid_collection_mutations_and_bulk_snapshot_undo() {
+        let mut d = UserData::default();
+        let mut smart = SmartCategory::new("Souls", crate::Match::Any, vec![], vec![]);
+        smart.manual_only = true;
+        d.smart_categories.insert("s-souls".into(), smart);
+
+        let before = d.capture_keys(vec!["steam:10".into(), "gog:20".into()]);
+
+        // Add one manually (pinned) and one by clearing exclusion.
+        assert!(add_smart_games(
+            &mut d,
+            "s-souls",
+            &[("steam:10".into(), vec!["steam:10".into()], true)],
+        ));
+        assert!(
+            d.smart_categories["s-souls"]
+                .included_games
+                .contains("steam:10")
+        );
+
+        // Removing a manual-only game clears included_games without polluting excluded_games.
+        assert!(remove_smart_games(
+            &mut d,
+            "s-souls",
+            &[("steam:10".into(), vec!["steam:10".into()], false)],
+        ));
+        assert!(d.smart_categories["s-souls"].included_games.is_empty());
+        assert!(d.smart_categories["s-souls"].excluded_games.is_empty());
+
+        // Removing a rule-matched game inserts into excluded_games, then BulkSnapshot restores both.
+        assert!(add_smart_games(
+            &mut d,
+            "s-souls",
+            &[("steam:10".into(), vec!["steam:10".into()], true)],
+        ));
+        assert!(remove_smart_games(
+            &mut d,
+            "s-souls",
+            &[("gog:20".into(), vec!["gog:20".into()], true)],
+        ));
+        assert!(
+            d.smart_categories["s-souls"]
+                .included_games
+                .contains("steam:10")
+        );
+        assert!(
+            d.smart_categories["s-souls"]
+                .excluded_games
+                .contains("gog:20")
+        );
+
+        d.restore(&before);
+        assert!(d.smart_categories["s-souls"].included_games.is_empty());
+        assert!(d.smart_categories["s-souls"].excluded_games.is_empty());
     }
 }

@@ -2318,5 +2318,15 @@
   "settings.crash.recent_help": "非預期結束的報告會保留於此，直到您將其刪除。",
   "settings.crash.review_action": "檢視並回報",
   "settings.crash.delete": "刪除報告",
-  "settings.crash.delete_failed": "無法刪除當機報告"
+  "settings.crash.delete_failed": "無法刪除當機報告",
+  "settings.field.ui_cover_compat_badges.label": "在封面顯示 ProtonDB 與 Steam Deck 徽章",
+  "settings.field.ui_cover_compat_badges.help": "在未安裝遊戲的封面上顯示 ProtonDB 評級與 Steam Deck 已驗證徽章。",
+  "settings.option.cover_caption.hover": "僅游標停留時",
+  "settings.field.ui_library_greeting.label": "在收藏庫標題列顯示問候語",
+  "settings.field.ui_library_greeting.help": "在收藏庫頂部依時段向你問好。點擊名字即可編輯或隱藏。",
+  "settings.sidebar.setup": "帳號與工具",
+  "settings.page.accounts": "帳號",
+  "settings.page.wine_manager": "Wine 與 Proton",
+  "settings.page.wine_manager_macos": "Wine 管理員",
+  "settings.page.emulators": "模擬器"
 }

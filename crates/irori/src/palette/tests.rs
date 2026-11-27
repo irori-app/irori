@@ -46,6 +46,7 @@ fn every_category_of_both_kinds_is_offered() {
         count: 1,
         pinned: false,
         colour: None,
+        icon: None,
         readable: true,
     };
     let categories = [

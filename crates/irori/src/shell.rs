@@ -612,7 +612,7 @@ impl AppShell {
             + models(cx).components.read(cx).report.pending().count()
             + usize::from(models(cx).app_update.read(cx).status.has_update());
         let collapsed = self.sidebar_collapsed_now(window);
-        let any_account = models(cx).accounts.read(cx).any_logged_in();
+        let accounts_expired = models(cx).accounts.read(cx).any_expired();
         let theme = cx.theme();
         let item = |id, label: &'static str, icon, key: &str, route, suffix, cx: &App| {
             sidebar::nav_item(
@@ -631,6 +631,14 @@ impl AppShell {
         // Active download percent, else queue count, else pending updates count.
         let download_count =
             (downloads > 0 || updates > 0).then(|| self.downloads_badge.clone().into_any_element());
+        let settings_dot = accounts_expired.then(|| {
+            div()
+                .flex_none()
+                .size_2()
+                .rounded_full()
+                .bg(theme.warning)
+                .into_any_element()
+        });
 
         v_flex()
             .id("main-sidebar")
@@ -703,53 +711,24 @@ impl AppShell {
                 cx,
             ))
             .when(!collapsed, |d| {
-                d.child(self.saved_views.clone()).child(self.recent.clone())
+                d.child(
+                    v_flex()
+                        .id("sidebar-scroll")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .child(self.saved_views.clone())
+                        .child(self.recent.clone()),
+                )
             })
-            .child(div().flex_1())
-            .when(!cfg!(windows), |d| {
-                d.child(item(
-                    "nav-wine",
-                    if cfg!(target_os = "macos") {
-                        "manage.wine.title"
-                    } else {
-                        "shell.nav.wine"
-                    },
-                    IconName::Wine,
-                    "wine",
-                    Route::WineManager,
-                    None,
-                    cx,
-                ))
-            })
-            .child(item(
-                "nav-emulators",
-                "shell.nav.emulators",
-                IconName::Joystick,
-                "emulators",
-                Route::Emulators,
-                None,
-                cx,
-            ))
-            .child(item(
-                "nav-accounts",
-                if any_account {
-                    "shell.nav.accounts"
-                } else {
-                    "shell.nav.login"
-                },
-                IconName::CircleUser,
-                "accounts",
-                Route::Accounts,
-                None,
-                cx,
-            ))
+            .when(collapsed, |d| d.child(div().flex_1()))
             .child(item(
                 "nav-settings",
                 "shell.nav.settings",
                 IconName::Settings,
                 "settings",
                 Route::Settings("general".into()),
-                None,
+                settings_dot,
                 cx,
             ))
             .child(
@@ -963,7 +942,7 @@ impl Render for AppShell {
         let content = self.pages.view(&route, window, cx);
         // Each new page settles in from just below; its id changes with the route.
         let content = irori_ui::motion::rise_in(
-            SharedString::from(format!("page:{route:?}")),
+            page_transition_key(&route),
             div().size_full().child(content),
             PAGE_RISE_PX,
         );
@@ -1125,6 +1104,16 @@ fn should_activate_on_exit(minimized_for: Option<&GameId>, exited: &GameId, rout
     minimized_for == Some(exited) || *route == Route::BigPicture
 }
 
+/// Key for the page entrance animation. Switching between sections inside
+/// Settings reuses one key so the Settings sidebar stays steady.
+fn page_transition_key(route: &Route) -> SharedString {
+    if route.section() == "settings" {
+        "page:settings".into()
+    } else {
+        format!("page:{route:?}").into()
+    }
+}
+
 /// Where to go once the stores have loaded, if not where the user is.
 fn route_once_loaded(current: &Route, wants_onboarding: bool) -> Option<Route> {
     (*current == Route::Onboarding && !wants_onboarding).then_some(Route::Library)
@@ -1133,6 +1122,18 @@ fn route_once_loaded(current: &Route, wants_onboarding: bool) -> Option<Route> {
 #[cfg(test)]
 mod start_tests {
     use super::*;
+
+    #[test]
+    fn settings_routes_share_a_transition_key() {
+        let key = page_transition_key(&Route::Settings("general".into()));
+        assert_eq!(key, "page:settings");
+        assert_eq!(page_transition_key(&Route::Settings("storage".into())), key);
+        assert_eq!(page_transition_key(&Route::Accounts), key);
+        assert_eq!(page_transition_key(&Route::WineManager), key);
+        assert_eq!(page_transition_key(&Route::Emulators), key);
+        assert_ne!(page_transition_key(&Route::Library), key);
+        assert_ne!(page_transition_key(&Route::Stores), key);
+    }
 
     #[test]
     fn onboarding_is_left_only_when_it_turns_out_not_to_be_needed() {

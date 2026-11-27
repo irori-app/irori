@@ -7,6 +7,7 @@ pub(super) struct HudLabels {
     pub(super) group_mode: SharedString,
     pub(super) mode_label: SharedString,
     pub(super) mode_global_help: SharedString,
+    pub(super) mode_global_per_game_hint: SharedString,
     pub(super) mode_game_help: SharedString,
     pub(super) mode_off: SharedString,
     pub(super) mode_irori_profile: SharedString,
@@ -21,7 +22,6 @@ pub(super) struct HudLabels {
     pub(super) missing_title: SharedString,
     pub(super) missing_description: SharedString,
 
-    pub(super) global_stores_notice: SharedString,
     pub(super) launcher_restart_notice: SharedString,
 
     pub(super) steam_card_subtitle: SharedString,
@@ -29,6 +29,8 @@ pub(super) struct HudLabels {
     pub(super) steam_copy: SharedString,
     pub(super) steam_copied: SharedString,
     pub(super) steam_how_to_paste: SharedString,
+    pub(super) steam_show_command: SharedString,
+    pub(super) steam_hide_command: SharedString,
     pub(super) steam_none_needed: SharedString,
 
     pub(super) tab_metrics: SharedString,
@@ -126,7 +128,9 @@ pub(super) struct HudLabels {
     pub(super) fps_limit_placeholder: SharedString,
     pub(super) fps_limit_method_help: SharedString,
     pub(super) fps_limit_method_late: SharedString,
+    pub(super) fps_limit_method_late_short: SharedString,
     pub(super) fps_limit_method_early: SharedString,
+    pub(super) fps_limit_method_early_short: SharedString,
     pub(super) fps_limit_method_pacing: SharedString,
 
     pub(super) position_label: SharedString,
@@ -195,6 +199,7 @@ impl HudLabels {
             group_mode: t("settings.hud.group.mode"),
             mode_label: t("settings.hud.mode.label"),
             mode_global_help: t("settings.hud.mode.global_help"),
+            mode_global_per_game_hint: t("settings.hud.mode.global_per_game_hint"),
             mode_game_help: t("settings.hud.mode.game_help"),
             mode_off: t("settings.hud.mode.off"),
             mode_irori_profile: t("settings.hud.mode.irori_profile"),
@@ -209,7 +214,6 @@ impl HudLabels {
             missing_title: t("settings.hud.missing.title"),
             missing_description: t("settings.hud.missing.description"),
 
-            global_stores_notice: t("settings.hud.global_stores_notice"),
             launcher_restart_notice: t("settings.hud.launcher_restart_notice"),
 
             steam_card_subtitle: t("settings.hud.steam.card_subtitle"),
@@ -217,6 +221,8 @@ impl HudLabels {
             steam_copy: t("settings.hud.steam.copy"),
             steam_copied: t("settings.hud.steam.copied"),
             steam_how_to_paste: t("settings.hud.steam.how_to_paste"),
+            steam_show_command: t("settings.hud.steam.show_command"),
+            steam_hide_command: t("settings.hud.steam.hide_command"),
             steam_none_needed: t("settings.hud.steam.none_needed"),
 
             tab_metrics: t("settings.hud.tab.metrics"),
@@ -386,7 +392,9 @@ impl HudLabels {
             fps_limit_placeholder: t("settings.hud.fps_limit.placeholder"),
             fps_limit_method_help: t("settings.hud.fps_limit_method.help"),
             fps_limit_method_late: t("settings.hud.fps_limit_method.late"),
+            fps_limit_method_late_short: t("settings.hud.fps_limit_method.late_short"),
             fps_limit_method_early: t("settings.hud.fps_limit_method.early"),
+            fps_limit_method_early_short: t("settings.hud.fps_limit_method.early_short"),
             fps_limit_method_pacing: t("settings.hud.fps_limit_method.pacing"),
 
             position_label: t("settings.hud.position.label"),

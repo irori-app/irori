@@ -86,6 +86,31 @@ pub(crate) async fn get_json<T: DeserializeOwned>(url: &str, timeout: Duration) 
     Ok(resp.json().await?)
 }
 
+/// GET `url` and decode JSON, failing on non-2xx statuses or bodies over `max_bytes`.
+pub(crate) async fn get_json_bounded<T: DeserializeOwned>(
+    url: &str,
+    timeout: Duration,
+    max_bytes: usize,
+) -> Result<T> {
+    let mut resp = irori_core::http::client()
+        .get(url)
+        .timeout(timeout)
+        .send()
+        .await?
+        .error_for_status()?;
+    if resp.content_length().is_some_and(|n| n > max_bytes as u64) {
+        bail!("response exceeds {max_bytes} bytes");
+    }
+    let mut buf = Vec::new();
+    while let Some(chunk) = resp.chunk().await? {
+        if buf.len().saturating_add(chunk.len()) > max_bytes {
+            bail!("response exceeds {max_bytes} bytes");
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(serde_json::from_slice(&buf)?)
+}
+
 /// GET `url` as text, failing on non-2xx statuses.
 pub(crate) async fn get_text(url: &str, timeout: Duration) -> Result<String> {
     let resp = irori_core::http::client()

@@ -15,6 +15,7 @@ use gpui_kit::{
     px, rems,
 };
 use irori_core::StatusKind;
+use irori_core::settings::ListRowSize;
 use irori_ui::components::{GameCover, SectionTitle};
 use irori_ui::i18n::t;
 use irori_ui::motion::gliding_progress;
@@ -159,14 +160,17 @@ impl LibraryView {
             ),
             GroupKind::Category(Some((category, name))) => {
                 let user = &models(cx).library.read(cx).user;
-                let colour = user.category_look(&category).colour;
-                let colour = irori_ui::categories::colour(colour.as_deref(), cx)
+                let look = user.category_look(&category);
+                let colour = irori_ui::categories::colour(look.colour.as_deref(), cx)
                     .unwrap_or(theme.muted_foreground);
                 (
-                    Icon::new(irori_ui::categories::icon(&category))
-                        .small()
-                        .text_color(colour)
-                        .into_any_element(),
+                    Icon::new(irori_ui::categories::icon_for(
+                        &category,
+                        look.icon.as_deref(),
+                    ))
+                    .small()
+                    .text_color(colour)
+                    .into_any_element(),
                     SharedString::from(name.to_string()),
                 )
             }
@@ -207,6 +211,7 @@ impl LibraryView {
         let muted = cx.theme().muted_foreground;
         let border = cx.theme().border;
         let shown = self.frame.list_columns;
+        let thumb_rem = grid::list_thumb_rem_at(self.list_row_size, self.density);
         let column = |w: f32, key: &str, right: bool| {
             div()
                 .w(rems(w))
@@ -225,7 +230,7 @@ impl LibraryView {
             .text_color(muted)
             .border_b_1()
             .border_color(border)
-            .child(div().w(rems(grid::LIST_THUMB_REM)).flex_shrink_0())
+            .child(div().w(rems(thumb_rem)).flex_shrink_0())
             .child(
                 div()
                     .flex_1()
@@ -249,8 +254,13 @@ impl LibraryView {
                     false,
                 ))
             })
-            .child(column(grid::LIST_COLUMNS[4], "library.list.status", false))
-            .child(div().w(rems(grid::LIST_COLUMNS[5])).flex_shrink_0())
+            .when(shown[4], |el| {
+                el.child(column(grid::LIST_COLUMNS[4], "library.list.status", false))
+            })
+            .when(shown[5], |el| {
+                el.child(column(grid::LIST_COLUMNS[5], "library.list.compat", false))
+            })
+            .child(div().w(rems(grid::LIST_COLUMNS[6])).flex_shrink_0())
             .into_any_element()
     }
 
@@ -352,6 +362,10 @@ impl LibraryView {
         let hover_id = id.clone();
         let click_id = id.clone();
         let shown = self.frame.list_columns;
+        if shown[5] {
+            self.request_compat(&game, true, cx);
+        }
+        let compat_badge = shown[5].then(|| self.compat.get(&id)).flatten();
         // An entry of several stores' copies names every store.
         let stores = shown[0].then(|| {
             irori_ui::copies::stores(&id, cx)
@@ -369,6 +383,8 @@ impl LibraryView {
                 .when(right, |el| el.text_right())
                 .child(text)
         };
+        let row_size = self.list_row_size;
+        let thumb_rem = grid::list_thumb_rem_at(row_size, self.density);
         h_flex()
             .id(ElementId::Name(format!("row:{key}").into()))
             .w_full()
@@ -404,7 +420,7 @@ impl LibraryView {
             })
             .child(
                 GameCover::new(game.clone())
-                    .width(rems(grid::LIST_THUMB_REM))
+                    .width(rems(thumb_rem))
                     .radius(cx.theme().radius / 2.),
             )
             .child(
@@ -417,8 +433,11 @@ impl LibraryView {
                             .min_w_0()
                             .child(
                                 div()
-                                    .text_sm()
-                                    .font_medium()
+                                    .map(|el| match row_size {
+                                        ListRowSize::Compact => el.text_sm().font_medium(),
+                                        ListRowSize::Medium => el.text_base().font_semibold(),
+                                        ListRowSize::Large => el.text_lg().font_semibold(),
+                                    })
                                     .truncate()
                                     .child(game.title.clone()),
                             )
@@ -460,15 +479,25 @@ impl LibraryView {
                     crate::format::last_played(last.as_deref(), now).unwrap_or_else(dash),
                 ))
             })
-            .child(
-                div()
-                    .w(rems(grid::LIST_COLUMNS[4]))
-                    .flex_shrink_0()
-                    .child(status_cell),
-            )
+            .when(shown[4], |el| {
+                el.child(
+                    div()
+                        .w(rems(grid::LIST_COLUMNS[4]))
+                        .flex_shrink_0()
+                        .child(status_cell),
+                )
+            })
+            .when(shown[5], |el| {
+                el.child(
+                    div()
+                        .w(rems(grid::LIST_COLUMNS[5]))
+                        .flex_shrink_0()
+                        .child(crate::compat_badges::render_list_cell(compat_badge, cx)),
+                )
+            })
             .child(
                 h_flex()
-                    .w(rems(grid::LIST_COLUMNS[5]))
+                    .w(rems(grid::LIST_COLUMNS[6]))
                     .flex_shrink_0()
                     .justify_end()
                     .gap_1()

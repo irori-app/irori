@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "Гра працює в ексклюзивному повноекранному режимі. Перемкніть її у вікно без рамки або віконний режим, щоб користуватися оверлеєм.",
   "shell.palette.year_in_review": "Відкрити підсумки року",
   "shell.palette.year_in_review_keywords": "підсумки рік огляд",
-  "shell.nav.views": "Вигляди",
   "shell.palette.show_view": "Показати вигляд: {name}",
   "shell.palette.show_category": "Показати категорію: {name}",
   "shell.palette.new_smart_category": "Нова розумна категорія…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "Переглянути й повідомити",
   "shell.palette.latest_crash_report": "Переглянути останній звіт про збій",
   "shell.palette.latest_crash_report_keywords": "crash збій звіт журнал помилка bug",
-  "shell.notice.manage_rollback": "Керувати / Відкотити"
+  "shell.notice.manage_rollback": "Керувати / Відкотити",
+  "shell.nav.pinned": "Закріплені"
 }

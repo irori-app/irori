@@ -24,18 +24,20 @@
 
 mod availability;
 mod categories;
+mod chips;
 mod commands;
+mod compat_badges;
 mod dialogs;
 mod filter;
 mod filters_panel;
 pub mod format;
+mod greeting;
 mod grid;
 mod groups;
 mod i18n;
 mod launch;
 mod launchbox;
 mod layouts;
-mod quick;
 mod random;
 mod selection;
 mod stats;
@@ -52,6 +54,7 @@ use irori_sideload::SideloadStore;
 
 pub use commands::{GameCommand, GameState};
 pub use dialogs::categories::{export_categories, import_categories, open_categories_dialog};
+pub use dialogs::collection::open_collection_dialog;
 pub use dialogs::duplicates::open_duplicates_dialog;
 pub use dialogs::edit_game::open_edit_game_dialog;
 pub use dialogs::fields::open_fields_dialog;
@@ -77,6 +80,7 @@ pub use view::LibraryView;
 pub use view::details::{
     edit_picked_metadata, link_picked_to_steam, picked_count, refresh_picked_details,
 };
+pub use view::quick::pinned_category_menu;
 pub use view::remove::{removable_picks, remove_picked_from_library};
 pub use views::{BuiltinView, active_view, apply_view, list as saved_view_list, saved_views};
 
@@ -402,10 +406,38 @@ pub fn category_list(cx: &App) -> Vec<irori_ui::categories::CategoryEntry> {
     irori_ui::categories::entries(&library.user, &library.categories)
 }
 
+/// Pin or unpin a category (manual or dynamic collection) in the sidebar.
+pub fn set_category_pinned(category: &irori_services::CategoryRef, pinned: bool, cx: &App) {
+    let mut look = irori_ui::models(cx)
+        .library
+        .read(cx)
+        .user
+        .category_look(category);
+    if look.pinned == pinned {
+        return;
+    }
+    look.pinned = pinned;
+    let category = category.clone();
+    let b = irori_ui::backend(cx);
+    irori_ui::state::run_infallible(cx, async move {
+        b.userdata.set_category_look(&category, look);
+    })
+    .detach();
+}
+
 /// Show the library's games in `category` alone, as a palette row or a
 /// menu does: the Filters popover's criteria give way to it, while the
-/// search, store, sort and grouping stay.
+/// search, store, sort and grouping stay (for dynamic collections, restores
+/// the collection tab's saved visualization when the library is open).
 pub fn show_category(category: irori_services::CategoryRef, cx: &mut App) {
+    if let irori_services::CategoryRef::Smart(id) = &category
+        && let Some(view) = view::remove::active_library(cx)
+    {
+        let id = id.clone();
+        view.update(cx, |v, cx| v.apply_collection_tab(id, cx));
+        irori_ui::navigate(irori_ui::Route::Library, cx);
+        return;
+    }
     filters_panel::change_filters(move |f| f.show_only(&category), cx);
     irori_ui::navigate(irori_ui::Route::Library, cx);
 }
@@ -451,14 +483,22 @@ pub fn show_tag(tag: String, cx: &mut App) {
     irori_ui::navigate(irori_ui::Route::Library, cx);
 }
 
-/// How the library shows games: grid, list or Focus (`iroriUi.libraryLayout`).
+/// How the library shows games: grid, list or Focus (active tab's layout when
+/// open, otherwise `iroriUi.libraryLayout`).
 pub fn library_layout(cx: &App) -> irori_core::settings::LibraryLayout {
+    if let Some(view) = view::remove::active_library(cx) {
+        return view.read(cx).current_layout();
+    }
     irori_ui::models(cx).settings.read(cx).app.ui.library_layout
 }
 
-/// Show the library as `layout` from now on. An open library view follows
-/// the setting.
+/// Show the library as `layout` from now on. Updates the active tab when a
+/// library view is open, otherwise persists the global default.
 pub fn set_library_layout(layout: irori_core::settings::LibraryLayout, cx: &mut App) {
+    if let Some(view) = view::remove::active_library(cx) {
+        view.update(cx, |v, cx| v.set_layout(layout, cx));
+        return;
+    }
     let backend = irori_ui::backend(cx);
     irori_ui::state::run_infallible(cx, async move {
         backend

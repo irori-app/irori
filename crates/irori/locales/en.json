@@ -220,7 +220,6 @@
   "shell.notice.overlay_fullscreen_message": "It runs in exclusive fullscreen. Switch the game to borderless or windowed to use the overlay.",
   "shell.palette.year_in_review": "Open the Year in review",
   "shell.palette.year_in_review_keywords": "recap wrapped annual summary",
-  "shell.nav.views": "Views",
   "shell.palette.show_view": "Show view: {name}",
   "shell.palette.show_category": "Show category: {name}",
   "shell.palette.new_smart_category": "New smart category…",
@@ -301,5 +300,6 @@
   "shell.quit_downloads.body": "Irori is still downloading. Pausing saves your progress so you can resume next time.",
   "shell.quit_downloads.keep_open": "Keep open",
   "shell.quit_downloads.minimize": "Minimize",
-  "shell.quit_downloads.pause_and_quit": "Pause & quit"
+  "shell.quit_downloads.pause_and_quit": "Pause & quit",
+  "shell.nav.pinned": "Pinned"
 }

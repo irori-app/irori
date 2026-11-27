@@ -224,37 +224,28 @@ impl Render for RecentGames {
     }
 }
 
-/// The saved library views and the pinned categories, one click from
-/// anywhere. A view of its own so renaming or reordering views redraws only
-/// it.
+/// The pinned categories, one click from anywhere. Hides itself when no
+/// category is pinned. A view of its own so pinning, renaming or recolouring
+/// categories redraws only it.
 pub(crate) struct SavedViewsNav {
     /// Following the library's criteria, once a library view exists, to
-    /// mark the view it shows.
+    /// mark the category it shows.
     filters: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl SavedViewsNav {
     pub(crate) fn new(cx: &mut Context<Self>) -> Self {
-        let views = irori_library::saved_views(cx);
         let library = models(cx).library.clone();
         Self {
             filters: None,
             _subscriptions: vec![
-                cx.observe(&views, |_, _, cx| cx.notify()),
                 // Categories pinned, renamed or recoloured.
                 cx.observe(&library, |_, _, cx| cx.notify()),
                 cx.observe(&navigator(cx), |_, _, cx| cx.notify()),
             ],
         }
     }
-}
-
-/// What a row of the views section opens.
-#[derive(Clone)]
-enum ViewTarget {
-    Saved(u64),
-    Category(CategoryRef),
 }
 
 impl Render for SavedViewsNav {
@@ -264,60 +255,64 @@ impl Render for SavedViewsNav {
         {
             self.filters = Some(cx.observe(&filters, |_, _, cx| cx.notify()));
         }
-        let views = irori_library::saved_view_list(cx);
         let on_library = *navigator(cx).read(cx).current() == Route::Library;
-        let active = on_library.then(|| irori_library::active_view(cx)).flatten();
-        // Pinned categories of either kind, after the views: a smart
-        // category is a view that keeps itself up to date.
         let pinned = irori_library::category_list(cx)
             .into_iter()
             .filter(|entry| entry.pinned)
             .map(|entry| {
-                let selected = on_library
-                    && active.is_none()
-                    && irori_library::shows_only_category(&entry.category, cx);
+                let selected =
+                    on_library && irori_library::shows_only_category(&entry.category, cx);
                 let colour = irori_ui::categories::colour(entry.colour.as_deref(), cx);
-                let icon = irori_ui::categories::icon(&entry.category);
+                let icon = irori_ui::categories::icon_for(&entry.category, entry.icon.as_deref());
                 (
-                    ViewTarget::Category(entry.category),
+                    entry.category,
                     SharedString::from(entry.name),
                     icon,
                     colour,
                     selected,
                 )
             });
-        let entries = views
-            .into_iter()
-            .map(|(id, name)| {
-                let selected = active == Some(id);
-                (
-                    ViewTarget::Saved(id),
-                    name,
-                    IconName::Bookmark,
-                    None,
-                    selected,
-                )
-            })
-            .chain(pinned);
         let theme = cx.theme();
         let palette = SidebarPalette::new(cx);
         let hover_bg = palette.highlight;
         let radius = theme.radius;
         let (active_fg, fg) = (palette.selected_text, palette.text);
         let (active_icon, icon) = (palette.selected_icon, palette.icon);
-        let rows: Vec<AnyElement> = entries
-            .map(|(target, name, glyph, colour, selected)| {
-                let id = match &target {
-                    ViewTarget::Saved(id) => format!("saved-view:{id}"),
-                    ViewTarget::Category(CategoryRef::Manual(name)) => {
-                        format!("pinned-category:{name}")
-                    }
-                    ViewTarget::Category(CategoryRef::Smart(id)) => {
-                        format!("pinned-smart-category:{id}")
-                    }
+        let sidebar_surfaces =
+            irori_ui::glass::chrome_surfaces(&[theme.sidebar, theme.sidebar_accent], cx);
+        let rows: Vec<AnyElement> = pinned
+            .map(|(category, name, glyph, colour, selected)| {
+                let id = match &category {
+                    CategoryRef::Manual(name) => format!("pinned-category:{name}"),
+                    CategoryRef::Smart(id) => format!("pinned-smart-category:{id}"),
+                };
+                let selector = id.clone();
+                let menu_category = category.clone();
+                let row_icon_colour = match colour {
+                    Some(c) => irori_ui::style::legible(
+                        c,
+                        &sidebar_surfaces,
+                        irori_ui::style::ICON_CONTRAST,
+                        cx,
+                    ),
+                    None if selected => active_icon,
+                    None => icon,
+                };
+                let row_text_colour = if selected {
+                    colour.map_or(active_fg, |c| {
+                        irori_ui::style::legible(
+                            c,
+                            &sidebar_surfaces,
+                            irori_ui::style::TEXT_CONTRAST,
+                            cx,
+                        )
+                    })
+                } else {
+                    fg
                 };
                 h_flex()
                     .id(ElementId::Name(id.into()))
+                    .debug_selector(move || selector.clone())
                     .keyboard_focusable(cx)
                     .h(rems(2.25))
                     .px_3()
@@ -325,25 +320,19 @@ impl Render for SavedViewsNav {
                     .rounded(radius)
                     .cursor_pointer()
                     .text_sm()
-                    .text_color(if selected { active_fg } else { fg })
+                    .text_color(row_text_colour)
                     .when(selected, |d| d.bg(hover_bg).font_semibold())
                     .when(!selected, |d| {
                         d.hover(move |s| s.bg(hover_bg).text_color(active_fg))
                     })
-                    .child(Icon::new(glyph).small().text_color(if selected {
-                        active_icon
-                    } else {
-                        icon
-                    }))
+                    .child(Icon::new(glyph).small().text_color(row_icon_colour))
                     .child(div().flex_1().min_w_0().truncate().child(name))
                     .when_some(colour, |d, colour| {
                         d.child(div().flex_none().size_2().rounded_full().bg(colour))
                     })
-                    .on_click(move |_, _, cx| match &target {
-                        ViewTarget::Saved(id) => irori_library::apply_view(*id, cx),
-                        ViewTarget::Category(category) => {
-                            irori_library::show_category(category.clone(), cx)
-                        }
+                    .on_click(move |_, _, cx| irori_library::show_category(category.clone(), cx))
+                    .context_menu(move |menu, _, cx| {
+                        irori_library::pinned_category_menu(menu, &menu_category, cx)
                     })
                     .into_any_element()
             })
@@ -354,7 +343,7 @@ impl Render for SavedViewsNav {
                     .px_3()
                     .pt_5()
                     .pb_2()
-                    .child(caption(t("shell.nav.views"), cx).text_color(palette.caption)),
+                    .child(caption(t("shell.nav.pinned"), cx).text_color(palette.caption)),
             )
             .children(rows)
         })

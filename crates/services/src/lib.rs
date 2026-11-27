@@ -25,6 +25,7 @@ pub mod displays;
 mod download_power;
 mod download_space;
 mod downloads;
+pub mod drives;
 pub mod duplicates;
 pub mod engine_health;
 mod engines;
@@ -118,6 +119,10 @@ pub use backup_schedule::{BackupEntry, BackupKind, BackupStatus};
 pub use download_power::{DOWNLOADS_FINISHED_NOTICE, POWER_COUNTDOWN, PowerCountdown};
 pub use download_space::QueueDisk;
 pub use downloads::{DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
+pub use drives::{
+    DetectedDrive, InstallDriveProbe, detect_extra_drives, drive_label, format_disk_label,
+    probe_install_drives,
+};
 pub use engines::EngineStatus;
 pub use files::{FileDownload, FileState, key_of as file_download_key};
 pub use games::{

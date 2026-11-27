@@ -102,7 +102,7 @@ struct ActiveLibrary(WeakEntity<LibraryView>);
 impl Global for ActiveLibrary {}
 
 /// The library view the palette's library commands act on, while it exists.
-pub(super) fn active_library(cx: &App) -> Option<gpui_kit::Entity<LibraryView>> {
+pub(crate) fn active_library(cx: &App) -> Option<gpui_kit::Entity<LibraryView>> {
     cx.try_global::<ActiveLibrary>()?.0.upgrade()
 }
 
@@ -115,6 +115,14 @@ pub(crate) fn set_active_library(view: WeakEntity<LibraryView>, cx: &mut App) {
 pub(crate) fn shown_games(cx: &App) -> Option<Arc<[Arc<GameInfo>]>> {
     let view = cx.try_global::<ActiveLibrary>()?.0.upgrade()?;
     Some(view.read(cx).visible_games())
+}
+
+/// Whether the active library view found `id`'s installed files missing.
+pub(crate) fn is_game_unavailable(id: &GameId, cx: &App) -> bool {
+    let Some(view) = active_library(cx) else {
+        return false;
+    };
+    view.read(cx).availability.missing().contains(id)
 }
 
 /// How many picked games "Remove from library" would take out, while the

@@ -155,6 +155,16 @@ impl AccountsModel {
             .iter()
             .any(|(r, u)| r.has_account() && u.is_some())
     }
+
+    /// Whether any store or account slot has an expired login that needs attention.
+    pub fn any_expired(&self) -> bool {
+        !self.expired.is_empty()
+            || self
+                .accounts
+                .values()
+                .flatten()
+                .any(|a| a.expired.is_some())
+    }
 }
 
 /// Application settings snapshot.

@@ -326,6 +326,18 @@ pub(crate) fn nav_button(
     selected: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Button {
+    nav_button_with_dot(id, icon, label, selected, None, on_click)
+}
+
+/// A row in a section navigation column with an optional status dot at the end.
+pub(crate) fn nav_button_with_dot(
+    id: impl Into<ElementId>,
+    icon: IconName,
+    label: impl Into<SharedString>,
+    selected: bool,
+    dot: Option<gpui_kit::Hsla>,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Button {
     let label = label.into();
     // Button centres its content row, so the icon and label go in a child
     // that fills it and lines them up at the start.
@@ -339,9 +351,13 @@ pub(crate) fn nav_button(
             h_flex()
                 .flex_1()
                 .min_w_0()
+                .items_center()
                 .gap_2()
                 .child(Icon::new(icon))
-                .child(div().min_w_0().text_ellipsis().child(label)),
+                .child(div().flex_1().min_w_0().text_ellipsis().child(label))
+                .when_some(dot, |row, colour| {
+                    row.child(div().flex_none().size_2().rounded_full().bg(colour))
+                }),
         )
         .selected(selected)
         .on_click(on_click)

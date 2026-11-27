@@ -263,6 +263,24 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
     .help("settings.field.ui_trailer_autoplay.help")
     .keywords(&["trailer", "video", "movie", "autoplay", "ffmpeg"]),
     app(
+        "iroriUi.coverCompatBadges",
+        "settings.field.ui_cover_compat_badges.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_cover_compat_badges.help")
+    .keywords(&[
+        "protondb",
+        "steam deck",
+        "deck",
+        "linux",
+        "compat",
+        "compatibility",
+        "badge",
+        "cover",
+    ]),
+    app(
         "iroriUi.coverCategories",
         "settings.field.ui_cover_categories.label",
         Appearance,
@@ -370,6 +388,15 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
         Toggle,
     )
     .keywords(&["cover", "favourite", "favorite", "star"]),
+    app(
+        "iroriUi.libraryGreeting",
+        "settings.field.ui_library_greeting.label",
+        Appearance,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_library_greeting.help")
+    .keywords(&["greeting", "welcome", "hello", "name", "header", "library"]),
     app(
         "iroriUi.libraryQuickControls",
         "settings.field.ui_library_quick_controls.label",

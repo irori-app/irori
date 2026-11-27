@@ -2318,5 +2318,15 @@
   "settings.crash.recent_help": "Rapoartele închiderilor neașteptate rămân aici până când le ștergi.",
   "settings.crash.review_action": "Revizuiește și raportează",
   "settings.crash.delete": "Șterge raportul",
-  "settings.crash.delete_failed": "Nu s-a putut șterge raportul de blocare"
+  "settings.crash.delete_failed": "Nu s-a putut șterge raportul de blocare",
+  "settings.field.ui_cover_compat_badges.label": "Insigne ProtonDB și Steam Deck pe coperți",
+  "settings.field.ui_cover_compat_badges.help": "Afișează evaluările ProtonDB și insignele Steam Deck Verified pe coperțile jocurilor neinstalate.",
+  "settings.option.cover_caption.hover": "La trecerea mouse-ului",
+  "settings.field.ui_library_greeting.label": "Arată salutul în antetul bibliotecii",
+  "settings.field.ui_library_greeting.help": "Te salută în funcție de ora zilei în partea de sus a Bibliotecii. Dă clic pe numele tău acolo pentru a-l edita sau ascunde.",
+  "settings.sidebar.setup": "Conturi și unelte",
+  "settings.page.accounts": "Conturi",
+  "settings.page.wine_manager": "Wine și Proton",
+  "settings.page.wine_manager_macos": "Manager Wine",
+  "settings.page.emulators": "Emulatoare"
 }

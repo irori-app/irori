@@ -2318,5 +2318,15 @@
   "settings.crash.recent_help": "Les rapports des fermetures inattendues restent ici jusqu’à leur suppression.",
   "settings.crash.review_action": "Examiner et signaler",
   "settings.crash.delete": "Supprimer le rapport",
-  "settings.crash.delete_failed": "Impossible de supprimer le rapport de plantage"
+  "settings.crash.delete_failed": "Impossible de supprimer le rapport de plantage",
+  "settings.field.ui_cover_compat_badges.label": "Badges ProtonDB et Steam Deck sur les jaquettes",
+  "settings.field.ui_cover_compat_badges.help": "Affiche les notes ProtonDB et les badges Steam Deck Verified sur les jaquettes des jeux non installés.",
+  "settings.option.cover_caption.hover": "Au survol",
+  "settings.field.ui_library_greeting.label": "Afficher le message d’accueil dans l’en-tête de la bibliothèque",
+  "settings.field.ui_library_greeting.help": "Vous salue selon l’heure en haut de la Bibliothèque. Cliquez sur votre nom pour le modifier ou le masquer.",
+  "settings.sidebar.setup": "Comptes et outils",
+  "settings.page.accounts": "Comptes",
+  "settings.page.wine_manager": "Wine et Proton",
+  "settings.page.wine_manager_macos": "Gestionnaire Wine",
+  "settings.page.emulators": "Émulateurs"
 }

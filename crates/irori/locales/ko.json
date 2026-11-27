@@ -218,7 +218,6 @@
   "shell.notice.overlay_fullscreen_message": "게임이 전용 전체 화면으로 실행 중입니다. 오버레이를 쓰려면 테두리 없는 창 또는 창 모드로 바꾸세요.",
   "shell.palette.year_in_review": "연말 결산 열기",
   "shell.palette.year_in_review_keywords": "결산 요약 연간",
-  "shell.nav.views": "보기",
   "shell.palette.show_view": "보기 표시: {name}",
   "shell.palette.show_category": "범주 표시: {name}",
   "shell.palette.new_smart_category": "새 스마트 범주…",
@@ -294,5 +293,6 @@
   "shell.notice.crashed_review_action": "검토 및 신고",
   "shell.palette.latest_crash_report": "최근 충돌 보고서 보기",
   "shell.palette.latest_crash_report_keywords": "crash 충돌 보고서 로그 버그",
-  "shell.notice.manage_rollback": "관리 / 롤백"
+  "shell.notice.manage_rollback": "관리 / 롤백",
+  "shell.nav.pinned": "고정됨"
 }
