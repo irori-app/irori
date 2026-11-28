@@ -9,14 +9,14 @@ use std::sync::Arc;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::dialog::DialogFooter;
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
 };
-use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Entity, Global, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, Styled as _, Window, div,
+    ParentElement as _, SharedString, Styled as _, Window, div, rems,
 };
 use irori_steam::{
     ClientLibraryError, ClientLibraryMode, ClientLibraryState, SteamHiddenGames, SteamStore,
@@ -84,6 +84,24 @@ pub(crate) fn hidden_games_text(state: &SteamHiddenGames, locked: bool) -> Optio
         (true, _, 1) => t("manage.steam_hidden.count_one"),
         (true, _, n) => t_args(
             "manage.steam_hidden.count_other",
+            &[("count", &n.to_string())],
+        ),
+    })
+}
+
+/// Compact badge text for the Steam header summarizing games hidden in Steam;
+/// full explanation stays in [`hidden_games_text`] for its tooltip.
+pub(crate) fn hidden_games_chip(state: &SteamHiddenGames, locked: bool) -> Option<SharedString> {
+    if !state.steam_found {
+        return None;
+    }
+    Some(match (state.known, state.count) {
+        (false, _) => t("manage.steam_hidden.chip_unknown"),
+        (true, 0) => return None,
+        (true, _) if locked => return None,
+        (true, 1) => t("manage.steam_hidden.chip_one"),
+        (true, n) => t_args(
+            "manage.steam_hidden.chip_other",
             &[("count", &n.to_string())],
         ),
     })
@@ -378,9 +396,14 @@ pub(crate) fn status_text(state: &ClientLibraryState, now: u64) -> SharedString 
 pub(crate) fn render_section(state: &ClientLibraryState, reading: bool, cx: &App) -> AnyElement {
     let theme = cx.theme();
     let muted = theme.muted_foreground;
+    let border = theme.border;
+    let radius = theme.radius;
+    let background = theme.background;
+    let icon_bg = theme.muted.opacity(0.45);
     let now = irori_core::util::unix_now();
     let on = state.mode != ClientLibraryMode::Off;
-    let read_label = if state.read_at.is_some() {
+    let has_read = state.read_at.is_some();
+    let read_label = if has_read {
         t("manage.steam_library.read_again")
     } else {
         t("manage.steam_library.read")
@@ -390,11 +413,16 @@ pub(crate) fn render_section(state: &ClientLibraryState, reading: bool, cx: &App
     } else {
         ClientLibraryMode::Once
     };
+    let read_icon = if has_read {
+        IconName::RefreshCw
+    } else {
+        IconName::LibraryBig
+    };
     let read = Button::new("steam-library-read")
         .debug_selector(|| "steam-library-read".into())
         .small()
         .outline()
-        .icon(IconName::LibraryBig)
+        .icon(read_icon)
         .label(read_label)
         .loading(reading)
         .disabled(reading)
@@ -406,81 +434,123 @@ pub(crate) fn render_section(state: &ClientLibraryState, reading: bool, cx: &App
                 open_steam_library_dialog(window, cx)
             }
         });
-    let switch_off_button = (on || state.own_marker).then(|| {
-        Button::new("steam-library-off")
-            .debug_selector(|| "steam-library-off".into())
-            .small()
+
+    let show_switch_off = on || state.own_marker;
+    let show_forget = has_read && !on;
+    let overflow = (show_switch_off || show_forget).then(|| {
+        Button::new("steam-library-more")
+            .debug_selector(|| "steam-library-more".into())
+            .xsmall()
             .ghost()
-            .icon(IconName::PowerOff)
-            .label(t("manage.steam_library.switch_off"))
+            .icon(IconName::Ellipsis)
+            .tooltip(t("manage.steam_library.more_actions"))
             .disabled(reading)
-            .on_click(|_, window, cx| switch_off(window, cx))
+            .dropdown_menu(move |mut menu, _, _| {
+                if show_switch_off {
+                    menu = menu.item(
+                        PopupMenuItem::new(t("manage.steam_library.switch_off"))
+                            .icon(IconName::PowerOff)
+                            .disabled(reading)
+                            .on_click(|_, window, cx| switch_off(window, cx)),
+                    );
+                }
+                if show_forget {
+                    menu = menu.item(
+                        PopupMenuItem::new(t("manage.steam_library.forget"))
+                            .icon(IconName::Trash)
+                            .disabled(reading)
+                            .on_click(|_, window, cx| forget(window, cx)),
+                    );
+                }
+                menu
+            })
     });
-    let forget_button = (state.read_at.is_some() && !on).then(|| {
-        Button::new("steam-library-forget")
-            .debug_selector(|| "steam-library-forget".into())
-            .small()
-            .ghost()
-            .icon(IconName::Trash)
-            .label(t("manage.steam_library.forget"))
-            .disabled(reading)
-            .on_click(|_, window, cx| forget(window, cx))
+
+    let mut debug_notes = Vec::new();
+    if state.mode == ClientLibraryMode::Keep {
+        debug_notes.push(t("manage.steam_library.kept_on").to_string());
+    }
+    if state.marker && !state.own_marker {
+        debug_notes.push(t("manage.steam_library.other_program").to_string());
+    }
+    let debug_tip = (!debug_notes.is_empty()).then(|| {
+        info_tip(
+            "steam-library-debug",
+            SharedString::from(debug_notes.join("\n\n")),
+            cx,
+        )
     });
-    v_flex()
+
+    h_flex()
         .w_full()
-        .gap_2()
-        .p_3()
-        .rounded(theme.radius)
-        .bg(theme.background)
+        .flex_wrap()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .px_3p5()
+        .py_3()
+        .rounded(radius)
+        .bg(background)
         .border_1()
-        .border_color(theme.border)
+        .border_color(border)
         .child(
             h_flex()
-                .gap_1()
-                .items_center()
+                .flex_1()
+                .min_w(rems(16.))
+                .items_start()
+                .gap_3()
                 .child(
                     div()
-                        .text_sm()
-                        .font_medium()
-                        .child(t("manage.steam_library.section_title")),
+                        .w_8()
+                        .h_8()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(radius)
+                        .bg(icon_bg)
+                        .border_1()
+                        .border_color(border)
+                        .flex_shrink_0()
+                        .child(Icon::new(IconName::LibraryBig).small().text_color(muted)),
                 )
-                .child(info_tip(
-                    "steam-library",
-                    t("manage.steam_library.section_tip"),
-                    cx,
-                )),
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(
+                            h_flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_medium()
+                                        .child(t("manage.steam_library.section_title")),
+                                )
+                                .child(info_tip(
+                                    "steam-library",
+                                    t("manage.steam_library.section_tip"),
+                                    cx,
+                                ))
+                                .children(debug_tip),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(status_text(state, now)),
+                        ),
+                ),
         )
-        .child(
-            div()
-                .flex_1()
-                .text_sm()
-                .text_color(muted)
-                .child(status_text(state, now)),
-        )
-        .when(state.mode == ClientLibraryMode::Keep, |this| {
-            this.child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(t("manage.steam_library.kept_on")),
-            )
-        })
-        .when(state.marker && !state.own_marker, |this| {
-            this.child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(t("manage.steam_library.other_program")),
-            )
-        })
         .child(
             h_flex()
-                .flex_wrap()
-                .gap_2()
-                .pt_1()
+                .items_center()
+                .gap_1()
+                .flex_shrink_0()
                 .child(read)
-                .children(switch_off_button)
-                .children(forget_button),
+                .children(overflow),
         )
         .into_any_element()
 }

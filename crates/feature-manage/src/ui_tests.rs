@@ -695,6 +695,14 @@ fn accounts_page_separates_sections_and_features_steam_on_wide_window(cx: &mut T
         itch.top() > zoom.bottom(),
         "turned-off stores appear in the inactive section below available stores"
     );
+    assert!(
+        vcx.debug_bounds("accounts-summary").is_some(),
+        "connected header shows consolidated store and game summary"
+    );
+    assert!(
+        vcx.debug_bounds("accounts-sync-all").is_some(),
+        "connected header exposes global Sync all action"
+    );
 }
 
 #[gpui_kit::test]
@@ -737,10 +745,18 @@ fn accounts_page_caps_available_grid_columns_on_ultrawide(cx: &mut TestAppContex
     let nile = card("account-nile");
     let zoom = card("account-zoom");
     assert_eq!(legendary.top(), gog.top());
-    assert_eq!(gog.top(), nile.top());
     assert!(
-        zoom.top() > legendary.bottom(),
-        "4 available cards wrap to a second row even on ultrawide screens"
+        nile.top() > legendary.bottom(),
+        "available stores cap at 2 columns so 4 stores balance cleanly into 2x2"
+    );
+    assert_eq!(nile.top(), zoom.top());
+    assert!(
+        vcx.debug_bounds("accounts-summary").is_none(),
+        "no connected summary pill when every store is signed out"
+    );
+    assert!(
+        vcx.debug_bounds("accounts-sync-all").is_none(),
+        "no Sync all button when no stores are connected"
     );
 }
 

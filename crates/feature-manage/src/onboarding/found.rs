@@ -451,6 +451,7 @@ mod tests {
             can_add: false,
             steam_client: None,
             steam_hidden: None,
+            steam_hidden_chip: None,
             steam_waiting: None,
         }
     }
