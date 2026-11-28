@@ -270,6 +270,12 @@ pub struct GameSettings {
     /// Irori manages. Irori-only.
     #[serde(rename = "iroriEngineOwnSettings", alias = "emberEngineOwnSettings")]
     pub engine_own_settings: bool,
+    /// Run the eXo collection's own native launch script (`.command`/`.bsh`/`.bat`)
+    /// instead of launching directly with Irori's managed emulator. Off by default;
+    /// opt-in per game for titles whose eXo wrapper provides custom setup menus.
+    /// Irori-only.
+    #[serde(rename = "iroriExoUseNativeScript")]
+    pub exo_use_native_script: bool,
     /// DXVK release tag for plain Wine builds; empty for the newest.
     /// Irori-only.
     #[serde(rename = "iroriDxvkVersion")]
@@ -638,6 +644,7 @@ impl Default for GameSettings {
             engine_version: String::new(),
             engine_options: BTreeMap::new(),
             engine_own_settings: false,
+            exo_use_native_script: false,
             lutris_script: None,
             sandbox: SandboxSettings::default(),
             launch_programs: Vec::new(),

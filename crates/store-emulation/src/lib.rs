@@ -87,6 +87,7 @@ pub struct EmulationStore {
     library_file: PathBuf,
     cache_file: PathBuf,
     playlists: PathBuf,
+    exo_launch: PathBuf,
     state: RwLock<State>,
     /// One scan at a time.
     scan_lock: tokio::sync::Mutex<()>,
@@ -140,6 +141,7 @@ impl EmulationStore {
             library_file: config_dir.join("library.json"),
             cache_file: cache_dir.join("scan-cache.json"),
             playlists: cache_dir.join("playlists"),
+            exo_launch: cache_dir.join("exo-launch"),
             state: RwLock::new(State::default()),
             scan_lock: tokio::sync::Mutex::new(()),
             scanning: AtomicBool::new(false),
@@ -761,11 +763,32 @@ impl Store for EmulationStore {
 
     async fn install_info(
         &self,
-        _app_name: &str,
-        _platform: InstallPlatform,
+        app_name: &str,
+        platform: InstallPlatform,
         _query: &InstallInfoQuery,
     ) -> Result<InstallInfo> {
-        bail!(NOT_INSTALLABLE)
+        let entry = self
+            .entry(app_name)
+            .context("This game is not in the library")?;
+        let Some(exo) = entry.exo else {
+            bail!(NOT_INSTALLABLE);
+        };
+        let Some(zip_path) = exo.archive_path else {
+            bail!(NOT_INSTALLABLE);
+        };
+        let disk_size =
+            tokio::task::spawn_blocking(move || exo::extract::archive_uncompressed_size(&zip_path))
+                .await
+                .context("inspecting eXo archive stopped")??;
+        Ok(InstallInfo {
+            app_name: entry.app_name,
+            title: entry.title,
+            platform,
+            download_size: 0,
+            disk_size,
+            is_native: true,
+            ..Default::default()
+        })
     }
 
     async fn updatable_games(&self) -> Result<Vec<String>> {
@@ -774,11 +797,49 @@ impl Store for EmulationStore {
 
     async fn install(
         &self,
-        _app_name: &str,
+        app_name: &str,
         _request: &InstallRequest,
-        _ctx: OpContext,
+        ctx: OpContext,
     ) -> Result<Outcome> {
-        Ok(Outcome::Error(NOT_INSTALLABLE.into()))
+        let Some(entry) = self.entry(app_name) else {
+            return Ok(Outcome::Error("This game is not in the library".into()));
+        };
+        let Some(exo) = entry.exo else {
+            return Ok(Outcome::Error(NOT_INSTALLABLE.into()));
+        };
+        if exo.archive_path.is_none() {
+            return Ok(Outcome::Error(NOT_INSTALLABLE.into()));
+        }
+        let exo_for_extract = exo.clone();
+        let outcome = tokio::task::spawn_blocking(move || {
+            exo::extract::extract_local_archive(&exo_for_extract, &ctx)
+        })
+        .await
+        .context("extracting eXo archive stopped")??;
+        if outcome != Outcome::Done {
+            return Ok(outcome);
+        }
+        let (mut entries, mut added, removed) = {
+            let s = self.state.read();
+            (s.entries.clone(), s.added.clone(), s.removed.clone())
+        };
+        for list in [&mut entries, &mut added] {
+            for e in list.iter_mut().filter(|e| e.app_name == app_name) {
+                if let Some(meta) = e.exo.as_mut() {
+                    meta.installed = true;
+                    if meta.collection == exo::ExoCollectionKind::ExoScummVm {
+                        e.path = meta.game_dir.clone();
+                    } else if let Some(conf) = &meta.conf_path {
+                        e.path = conf.clone();
+                    } else {
+                        e.path = meta.game_dir.clone();
+                    }
+                }
+            }
+        }
+        self.publish(entries, added, removed);
+        self.save().await?;
+        Ok(Outcome::Done)
     }
 
     async fn update(
@@ -794,12 +855,45 @@ impl Store for EmulationStore {
         Ok(Outcome::Error(NOT_INSTALLABLE.into()))
     }
 
-    /// Remove the game from the library. Its files are never deleted, and a
-    /// rescan doesn't add it back.
-    async fn uninstall(&self, app_name: &str, _args: RemoveArgs) -> Result<()> {
+    /// Remove a game from the library (without touching user ROM files), or for
+    /// an extracted eXo game backed by a local `.zip` archive, remove only its
+    /// extracted folder when `args.delete_files` is set while preserving the
+    /// archive so it can be re-extracted later.
+    async fn uninstall(&self, app_name: &str, args: RemoveArgs) -> Result<()> {
         let entry = self
             .entry(app_name)
             .context("This game is not in the library")?;
+        if args.delete_files
+            && let Some(exo) = entry.exo.as_ref()
+            && exo.installed
+            && exo.archive_path.is_some()
+        {
+            let exo_clone = exo.clone();
+            let app = (self.settings)();
+            tokio::task::spawn_blocking(move || {
+                exo::extract::remove_extracted_game(&exo_clone, &app)
+            })
+            .await
+            .context("removing extracted eXo game stopped")??;
+            let (mut entries, mut added, removed) = {
+                let s = self.state.read();
+                (s.entries.clone(), s.added.clone(), s.removed.clone())
+            };
+            for list in [&mut entries, &mut added] {
+                for e in list.iter_mut().filter(|e| e.app_name == app_name) {
+                    if let Some(meta) = e.exo.as_mut() {
+                        meta.installed = false;
+                        if let Some(zip) = &meta.archive_path
+                            && meta.collection == exo::ExoCollectionKind::ExoScummVm
+                        {
+                            e.path = zip.clone();
+                        }
+                    }
+                }
+            }
+            self.publish(entries, added, removed);
+            return self.save().await;
+        }
         let (entries, mut added, mut removed) = {
             let s = self.state.read();
             (s.entries.clone(), s.added.clone(), s.removed.clone())
@@ -852,9 +946,34 @@ impl Store for EmulationStore {
         let entry = self
             .entry(app_name)
             .context("This game is not in the library")?;
+        let settings = request.settings.clone();
+        if let Some(exo) = entry.exo.as_ref() {
+            if !exo.installed {
+                bail!(
+                    "This eXo game archive has not been extracted yet. Choose Install to unpack the local archive."
+                );
+            }
+            if settings.exo_use_native_script {
+                let exo_clone = exo.clone();
+                let command = tokio::task::spawn_blocking(move || {
+                    exo::conf::native_script_command(&exo_clone)
+                })
+                .await
+                .context("preparing eXo launch script stopped")??;
+                let env = &request.environment;
+                let command = command
+                    .envs(env.env.clone())
+                    .env_removes(env.env_remove.clone())
+                    .args(request.extra_args.clone());
+                return Ok(LaunchPlan {
+                    command: command.wrapped(&env.wrappers),
+                    track_wineserver: false,
+                    watch: None,
+                });
+            }
+        }
         let system = systems::get(&entry.system)
             .with_context(|| format!("Irori does not know the system {}", entry.system))?;
-        let settings = request.settings.clone();
 
         // Checked first: no emulator download helps a game without its BIOS.
         let app = (self.settings)();
@@ -978,17 +1097,55 @@ impl Store for EmulationStore {
         }
 
         let is_flatpak = installation.origin == Origin::Flatpak;
+        let exo_meta = entry.exo.clone();
+        let exo_launch_dir = self.exo_launch.clone();
+        let app_key = entry.app_name.clone();
         let first_time_hotkey = tokio::task::spawn_blocking(move || -> Result<_> {
             let values = m.option_values(&values_set);
-            let command = irori_engines::launch::command(&LaunchInput {
+            let mut effective_game = game;
+            let mut exo_cwd: Option<PathBuf> = None;
+            let mut exo_flatpak_root: Option<PathBuf> = None;
+            let mut exo_scummvm_platform: Option<&'static str> = None;
+
+            if let Some(exo) = exo_meta.as_ref() {
+                exo_flatpak_root = Some(exo.exo_root.clone());
+                match m.kind {
+                    EngineKind::Dosbox => {
+                        let conf = exo::conf::prepare_dosbox_conf(
+                            exo,
+                            &exo_launch_dir,
+                            &app_key,
+                            &values,
+                        )?;
+                        effective_game.path = conf;
+                        exo_cwd = Some(exo::conf::exo_host_base(exo));
+                    }
+                    EngineKind::Scummvm => {
+                        effective_game.path = exo.game_dir.clone();
+                        exo_scummvm_platform = exo::scummvm::detect_platform_code(&exo.config_dir);
+                    }
+                    _ => {}
+                }
+            }
+
+            let mut command = irori_engines::launch::command(&LaunchInput {
                 manifest: &m,
                 installation: &installation,
-                game: &game,
+                game: &effective_game,
                 core: core.as_deref(),
                 values: &values,
                 bios: &index,
                 own_settings,
             })?;
+            if let Some(platform) = exo_scummvm_platform {
+                exo::scummvm::inject_platform_arg(&mut command, platform);
+            }
+            if let Some(cwd) = exo_cwd {
+                command.cwd = Some(cwd);
+            }
+            if is_flatpak && let Some(root) = exo_flatpak_root {
+                inject_flatpak_filesystem(&mut command, &root);
+            }
             let first = irori_engines::state::update(|s| s.hotkey_shown.insert(m.id.clone()))
                 .unwrap_or(false);
             Ok((command, first))
@@ -1032,6 +1189,28 @@ impl Store for EmulationStore {
 
 fn is_flatpak_hud_var(key: &str) -> bool {
     key.starts_with("MANGOHUD") || key == "DISABLE_MANGOHUD"
+}
+
+/// Grant a Flatpak emulator access to an extra host directory (such as an eXo
+/// collection root referenced by a generated launch `.conf` under cache).
+fn inject_flatpak_filesystem(command: &mut irori_core::process::CommandSpec, dir: &Path) {
+    let is_flatpak = command
+        .program
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n == "flatpak");
+    let is_run = command
+        .args
+        .first()
+        .and_then(|a| a.to_str())
+        .is_some_and(|a| a == "run");
+    if !is_flatpak || !is_run || dir.as_os_str().is_empty() {
+        return;
+    }
+    let flag = std::ffi::OsString::from(format!("--filesystem={}", dir.display()));
+    if !command.args.contains(&flag) {
+        command.args.insert(1, flag);
+    }
 }
 
 fn is_mangohud_wrapper(wrapper: &[String]) -> bool {

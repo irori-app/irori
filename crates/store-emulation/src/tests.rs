@@ -21,6 +21,18 @@ pub(crate) fn test_dir(name: &str) -> PathBuf {
     dir
 }
 
+/// A shared fake `dosbox-staging` binary under the test root so parallel tests
+/// never race over `engines.json`.
+pub(crate) fn test_dosbox() -> PathBuf {
+    static BIN: Lazy<PathBuf> = Lazy::new(|| {
+        let bin = test_dir("shared-engines").join("dosbox");
+        touch(&bin, b"#!/bin/sh");
+        irori_engines::install::set_custom("dosbox-staging", Some(&bin)).unwrap();
+        bin
+    });
+    BIN.clone()
+}
+
 fn touch(path: &std::path::Path, bytes: &[u8]) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
@@ -99,11 +111,9 @@ async fn launches_with_the_chosen_emulator_and_checks_bios() {
     let roms = dir.join("roms");
     touch(&roms.join("DOS/Keen/KEEN1.EXE"), b"MZ");
     touch(&roms.join("PS1/Game (USA).chd"), b"x");
-    let dosbox = dir.join("bin/dosbox");
+    let dosbox = test_dosbox();
     let duck = dir.join("bin/duckstation");
-    touch(&dosbox, b"#!/bin/sh");
     touch(&duck, b"#!/bin/sh");
-    irori_engines::install::set_custom("dosbox-staging", Some(&dosbox)).unwrap();
     irori_engines::install::set_custom("duckstation", Some(&duck)).unwrap();
     let bios_dir = dir.join("bios");
     std::fs::create_dir_all(&bios_dir).unwrap();
