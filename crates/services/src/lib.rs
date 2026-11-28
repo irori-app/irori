@@ -135,12 +135,15 @@ pub use irori_extras::news_feeds::{
     ArticleContent, CustomFeed, FeedArticle, FeedFetchResult, NewsFeedsConfig, PRESET_FEEDS,
     validate_feed_url,
 };
-pub use irori_steam_api::{NewsKind, SteamNewsItem, StoreHit as SteamHit};
+pub use irori_steam_api::{
+    NewsKind, ReleaseFeedKind, SteamNewsItem, StoreHit as SteamHit, StoreReleaseItem,
+};
 pub use journal::{Journal, JournalEntry, LeftOff};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};
 pub use ludusavi::{BackupItem, GameBackups, LudusaviInfo, RestorePlan, SavesDone, SavesKeeper};
 pub use mods::{FomodPrompt, InstallOutcome, ModProgress, ModsView, ScriptExtender, supports_mods};
 pub use news::{GameNewsEntry, GameNewsResult, NewsFeedSnapshot, NewsScope};
+pub use news_feeds::ReleasesSnapshot;
 pub use optiscaler::{OptiscalerInstallParams, OptiscalerStatus};
 pub use play_status::{EffectiveStatus, PlayStatus, PlayStatusRecord, StatusChange, StatusHistory};
 pub use power::{Permission, PowerAction, PowerSystem};
