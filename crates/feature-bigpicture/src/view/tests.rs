@@ -5,7 +5,7 @@
 //! so the power menu never asks the real one.
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
@@ -139,11 +139,26 @@ fn library() -> Vec<Arc<GameInfo>> {
     ]
 }
 
+/// Serializes tests that remove the shared `bigpicture-welcome-done` marker
+/// against parallel tests that open `BigPictureView` expecting it to exist.
+static WELCOME_MARKER_LOCK: parking_lot::RwLock<()> = parking_lot::RwLock::new(());
+
+fn init_test_paths() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        let root =
+            std::env::temp_dir().join(format!("irori-bigpicture-test-{}", std::process::id()));
+        Paths::init(Paths::under(&root));
+    });
+}
+
 pub(crate) fn start_backend() -> Backend {
-    let root = std::env::temp_dir().join(format!("irori-bigpicture-test-{}", std::process::id()));
-    Paths::init(Paths::under(&root));
+    init_test_paths();
     // Existing Home/Library tests open Big Picture directly into the shelves.
-    let _ = super::welcome::mark_welcome_done();
+    {
+        let _welcome = WELCOME_MARKER_LOCK.read();
+        let _ = super::welcome::mark_welcome_done();
+    }
     let backend = Backend::start_for_tests(|_, _| {
         let games = library();
         let store = |runner: Runner| -> DynStore {
@@ -201,20 +216,24 @@ fn open(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<BigPictureView>) {
         crate::register_catalogs();
         crate::bind_keys(cx);
     });
-    let (handle, view) = cx.update(|cx| {
-        gpui_kit::open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
-                    Default::default(),
-                    size(px(1280.), px(800.)),
-                ))),
-                ..Default::default()
-            },
-            cx,
-            |window, cx| cx.new(|cx| BigPictureView::new(window, cx)),
-        )
-        .expect("open test window")
-    });
+    let (handle, view) = {
+        let _welcome = WELCOME_MARKER_LOCK.read();
+        let _ = super::welcome::mark_welcome_done();
+        cx.update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| BigPictureView::new(window, cx)),
+            )
+            .expect("open test window")
+        })
+    };
     cx.run_until_parked();
     (handle, view)
 }
@@ -1076,7 +1095,18 @@ fn inputs_sound_only_when_they_do_something() {
 
 #[gpui_kit::test]
 fn big_picture_welcome_walks_two_steps_with_controller(cx: &mut TestAppContext) {
+    struct RestoreWelcomeMarker;
+    impl Drop for RestoreWelcomeMarker {
+        fn drop(&mut self) {
+            let _ = super::welcome::mark_welcome_done();
+        }
+    }
+
     let (handle, view) = open(cx);
+    // Hold the exclusive marker lock while removing `bigpicture-welcome-done`
+    // so parallel tests opening `BigPictureView` never observe a missing marker.
+    let _welcome = WELCOME_MARKER_LOCK.write();
+    let _restore = RestoreWelcomeMarker;
     // Re-open the first-run welcome state as on a fresh Game Mode boot.
     cx.update(|cx| {
         let marker = Paths::get().state_dir().join("bigpicture-welcome-done");
@@ -1122,12 +1152,7 @@ fn big_picture_welcome_walks_two_steps_with_controller(cx: &mut TestAppContext) 
 #[gpui_kit::test]
 fn empty_big_picture_supports_controller_navigation(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
-    let root = std::env::temp_dir().join(format!(
-        "irori-bigpicture-empty-test-{}",
-        std::process::id()
-    ));
-    Paths::init(Paths::under(&root));
-    let _ = super::welcome::mark_welcome_done();
+    init_test_paths();
     let backend = Backend::start_for_tests(|_, _| Vec::new()).expect("empty backend starts");
     backend.set_power_system(Arc::new(FakePower::default()));
     cx.update(|cx| {
@@ -1136,23 +1161,30 @@ fn empty_big_picture_supports_controller_navigation(cx: &mut TestAppContext) {
         crate::register_catalogs();
         crate::bind_keys(cx);
     });
-    let (handle, view) = cx.update(|cx| {
-        gpui_kit::open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
-                    Default::default(),
-                    size(px(1280.), px(800.)),
-                ))),
-                ..Default::default()
-            },
-            cx,
-            |window, cx| cx.new(|cx| BigPictureView::new(window, cx)),
-        )
-        .expect("open empty big picture window")
-    });
+    let (handle, view) = {
+        let _welcome = WELCOME_MARKER_LOCK.read();
+        let _ = super::welcome::mark_welcome_done();
+        cx.update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| BigPictureView::new(window, cx)),
+            )
+            .expect("open empty big picture window")
+        })
+    };
     cx.run_until_parked();
 
-    cx.read(|cx| assert_eq!(view.read(cx).empty_ix, 0));
+    cx.read(|cx| {
+        assert!(view.read(cx).welcome.is_none());
+        assert_eq!(view.read(cx).empty_ix, 0);
+    });
     cx.dispatch_action(handle, gamepad::Down);
     cx.read(|cx| assert_eq!(view.read(cx).empty_ix, 1));
     cx.dispatch_action(handle, gamepad::Down);
