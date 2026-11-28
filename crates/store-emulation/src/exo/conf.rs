@@ -372,9 +372,18 @@ pub fn native_script_command(exo: &ExoEntryMeta) -> Result<CommandSpec> {
     Ok(spec)
 }
 
+/// Strip a Windows `\\?\` verbatim drive prefix so `cmd.exe /c` accepts canonicalized `.bat` paths.
+#[cfg(any(windows, test))]
+pub(crate) fn strip_windows_verbatim(path: &Path) -> &Path {
+    path.to_str()
+        .and_then(|s| s.strip_prefix(r"\\?\"))
+        .filter(|s| s.as_bytes().get(1) == Some(&b':'))
+        .map_or(path, Path::new)
+}
+
 #[cfg(windows)]
 fn build_platform_script_command(script: &Path) -> CommandSpec {
-    irori_core::process::program_command(script)
+    irori_core::process::program_command(strip_windows_verbatim(script))
 }
 
 #[cfg(not(windows))]

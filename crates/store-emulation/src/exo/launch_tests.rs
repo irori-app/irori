@@ -10,7 +10,10 @@ use irori_core::{
 use serde_json::Value;
 
 use crate::EmulationStore;
-use crate::exo::conf::{LocalMidiAssets, prepare_dosbox_conf, rewrite_host_paths, translate_conf};
+use crate::exo::conf::{
+    LocalMidiAssets, prepare_dosbox_conf, rewrite_host_paths, strip_windows_verbatim,
+    translate_conf,
+};
 use crate::exo::extract::extract_local_archive;
 use crate::exo::scummvm::{detect_platform_code, inject_platform_arg, map_platform_code};
 use crate::exo::{ExoCollectionKind, ExoEntryMeta};
@@ -57,22 +60,37 @@ set PATH=C:\\;Z:\\\nc:\ncd \\DOOM\nDOOM.EXE\nexit\n";
     assert!(out.contains("set PATH=C:\\;Z:\\\n"));
     assert!(out.contains("cd \\DOOM\n"));
     // Host mount paths quoted because `My eXo` has a space, and trailing slash stripped.
+    // On case-sensitive filesystems (e.g. Linux), mismatched casing in Windows-authored
+    // configs resolves to the exact on-disk casing (`doom`, `DISC.CUE`). On case-insensitive
+    // filesystems (Windows NTFS, default macOS APFS), the direct path already exists and
+    // is kept without extra directory scans.
+    let case_sensitive = !base.join("eXoDOS/DOOM").exists();
     let expected_game = base
-        .join("eXoDOS/doom")
+        .join(if case_sensitive {
+            "eXoDOS/doom"
+        } else {
+            "eXoDOS/DOOM"
+        })
         .to_string_lossy()
         .replace('\\', "/");
     assert!(
         out.contains(&format!("mount c \"{expected_game}\"\n")),
         "unexpected conf:\n{out}"
     );
+    assert!(Path::new(&expected_game).is_dir());
     let expected_cue = base
-        .join("eXoDOS/doom/cd/DISC.CUE")
+        .join(if case_sensitive {
+            "eXoDOS/doom/cd/DISC.CUE"
+        } else {
+            "eXoDOS/doom/cd/disc.cue"
+        })
         .to_string_lossy()
         .replace('\\', "/");
     assert!(
         out.contains(&format!("imgmount d \"{expected_cue}\" -t iso\n")),
         "unexpected conf:\n{out}"
     );
+    assert!(Path::new(&expected_cue).is_file());
     if !cfg!(windows) {
         assert!(out.contains("mididevice = fluidsynth\n"));
         assert!(out.contains("soundfont = "));
@@ -80,6 +98,14 @@ set PATH=C:\\;Z:\\\nc:\ncd \\DOOM\nDOOM.EXE\nexit\n";
     // Verify pure rewrite helper quotes mount args with spaces but never config values.
     let pure = rewrite_host_paths("romdir=.\\mt32\nmount c .\\game", &|_| "/a b/target".into());
     assert_eq!(pure, "romdir=/a b/target\nmount c \"/a b/target\"");
+    assert_eq!(
+        strip_windows_verbatim(Path::new(r"\\?\C:\eXo\game.bat")),
+        Path::new(r"C:\eXo\game.bat")
+    );
+    assert_eq!(
+        strip_windows_verbatim(Path::new(r"\\?\UNC\server\share\game.bat")),
+        Path::new(r"\\?\UNC\server\share\game.bat")
+    );
 }
 
 #[test]
