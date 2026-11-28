@@ -1,11 +1,11 @@
 //! Grouping, plain-language copy, badges, and version-list compaction for the
 //! Wine manager's downloadable Proton and Wine sources.
 
-use gpui_kit::component::Sizable as _;
-use gpui_kit::component::tag::Tag;
-use gpui_kit::{ParentElement as _, SharedString};
+use gpui_kit::{App, Div, SharedString};
 use irori_runtime::manager::{Release, ReleaseKind};
 use irori_ui::i18n::t;
+
+use super::ui::{PillTone, pill};
 
 /// Number of recent numbered versions shown before collapsing older ones.
 pub(super) const INITIAL_VISIBLE_VERSIONS: usize = 8;
@@ -53,14 +53,14 @@ impl SourceBadge {
         }
     }
 
-    pub(super) fn tag(self) -> Tag {
-        let base = match self {
-            Self::Recommended => Tag::primary(),
-            Self::VrChat | Self::Xbox => Tag::info(),
-            Self::Experimental => Tag::warning(),
-            Self::OlderGpus | Self::Discontinued => Tag::secondary(),
+    pub(super) fn pill(self, cx: &App) -> Div {
+        let tone = match self {
+            Self::Recommended => PillTone::Accent,
+            Self::VrChat | Self::Xbox => PillTone::Info,
+            Self::Experimental => PillTone::Warning,
+            Self::OlderGpus | Self::Discontinued => PillTone::Muted,
         };
-        base.xsmall().child(self.label())
+        pill(self.label(), tone, false, cx)
     }
 }
 
@@ -318,7 +318,6 @@ mod tests {
         }
 
         let compact = visible_releases(&list, "", false);
-        // 1 latest + 8 recent + 1 older installed build (GE-Proton10-2)
         assert_eq!(compact.items.len(), 10);
         assert_eq!(compact.hidden_count, 3);
         assert!(
@@ -384,7 +383,6 @@ mod tests {
         let xbox = matching_sources(linux, ReleaseKind::GeProton, "xbox");
         assert!(xbox.contains(&ReleaseKind::NexusRuntime));
 
-        // Current source is never suggested again.
         assert!(
             !matching_sources(linux, ReleaseKind::ProtonGeRtsp, "rtsp")
                 .contains(&ReleaseKind::ProtonGeRtsp)
