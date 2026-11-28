@@ -2550,9 +2550,7 @@ fn look_popover_slider_clearance_and_single_line_segments(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn sideload_dialog_renders_quick_bar_and_two_detail_tabs(cx: &mut TestAppContext) {
-    use crate::dialogs::sideload::DetailsTab;
-
+fn sideload_dialog_renders_split_preview_and_collapsible_sections(cx: &mut TestAppContext) {
     let _backend = start(cx);
     let (window, dialog) = cx
         .update(|cx| {
@@ -2560,7 +2558,7 @@ fn sideload_dialog_renders_quick_bar_and_two_detail_tabs(cx: &mut TestAppContext
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(Bounds::new(
                         Default::default(),
-                        size(px(900.), px(900.)),
+                        size(px(960.), px(900.)),
                     ))),
                     ..Default::default()
                 },
@@ -2579,38 +2577,57 @@ fn sideload_dialog_renders_quick_bar_and_two_detail_tabs(cx: &mut TestAppContext
     };
     draw(cx);
 
+    // Quick import bar, live Library preview panel, and Fetch art button are
+    // visible immediately; Compatibility and Launch & details stay collapsed.
     {
         let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
         assert!(vcx.debug_bounds("sideload-quick-bar").is_some());
-        assert!(vcx.debug_bounds("sideload-panel-artwork").is_none());
+        assert!(vcx.debug_bounds("sideload-panel-artwork").is_some());
+        assert!(
+            vcx.debug_bounds("sideload-fetch-art").is_some(),
+            "Add game dialog must expose the explicit Fetch art button"
+        );
         assert!(vcx.debug_bounds("sideload-panel-details").is_none());
+        if irori_core::HostPlatform::current() != irori_core::HostPlatform::Windows {
+            assert!(vcx.debug_bounds("sideload-compatibility-card").is_some());
+        }
     }
 
-    // Expanding More details defaults to the Artwork tab.
+    // Expanding Compatibility reveals the Wine/Proton & Prefix controls on non-Windows hosts.
+    if irori_core::HostPlatform::current() != irori_core::HostPlatform::Windows {
+        cx.update(|cx| dialog.update(cx, |d, cx| d.toggle_compat_for_test(true, cx)));
+        draw(cx);
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("sideload-compatibility-body").is_some());
+    }
+
+    // Expanding Launch & details reveals the full-width environment variables input
+    // alongside launch arguments and metadata while keeping the live preview visible.
     cx.update(|cx| dialog.update(cx, |d, cx| d.toggle_more_for_test(true, cx)));
     draw(cx);
     {
         let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
         assert!(vcx.debug_bounds("sideload-panel-artwork").is_some());
-        assert!(vcx.debug_bounds("sideload-panel-details").is_none());
-    }
-
-    // Switching to Details & Launch swaps cleanly to the details form.
-    cx.update(|cx| {
-        dialog.update(cx, |d, cx| {
-            d.set_details_tab_for_test(DetailsTab::Details, cx)
-        })
-    });
-    draw(cx);
-    {
-        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
-        assert!(vcx.debug_bounds("sideload-panel-artwork").is_none());
         assert!(vcx.debug_bounds("sideload-panel-details").is_some());
+        let env_bounds = vcx
+            .debug_bounds("sideload-env-vars")
+            .expect("Environment variables field must render in Launch & details");
+        let details_bounds = vcx
+            .debug_bounds("sideload-panel-details")
+            .expect("Details panel bounds");
         assert!(
-            vcx.debug_bounds("sideload-fetch-art").is_some(),
-            "Add game dialog must expose the explicit Fetch art button"
+            env_bounds.size.width > details_bounds.size.width * 0.75,
+            "Environment variables input should span full form width without a Category column"
         );
     }
+
+    // Setting environment variables updates cleanly without panic.
+    cx.update_window(window, |_, window, cx| {
+        dialog.update(cx, |d, cx| {
+            d.set_env_vars_for_test("PROTON_ENABLE_NVAPI=1 MANGOHUD=1", window, cx);
+        });
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

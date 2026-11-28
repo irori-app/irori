@@ -13,9 +13,11 @@
 //! path is pinned so renaming the app later keeps the installed files. If
 //! the dialog is closed without saving, that provisional entry is removed.
 //!
-//! The form asks first for what playing needs (title, platform, program,
-//! and for Windows programs the Wine or Proton build and prefix); the rest
-//! waits under "More details", and Add stays in the dialog's footer.
+//! The form keeps the core setup on the left (title, platform, executable or
+//! address, collapsible Compatibility for Windows games, and collapsible Launch
+//! & details with launch arguments, environment variables, and metadata) paired
+//! with a live Library preview panel on the right for cover/banner art, and
+//! Add stays in the dialog's footer.
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
@@ -31,8 +33,8 @@ use gpui_kit::component::list::ListItem;
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _, StyledExt as _,
+    WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -42,7 +44,7 @@ use gpui_kit::{
     div, rems, transparent_black,
 };
 use irori_core::process::CancellationToken;
-use irori_core::{GameId, GameInfo, GameMode, Runner, Store as _};
+use irori_core::{EnvVar, GameId, GameInfo, GameMode, Runner, Store as _};
 use irori_extras::shortcuts::{self, ShortcutTargets};
 use irori_sideload::scan::{
     DetectionOutcome, InstalledCandidate, PrefixSnapshot, detect_installed_executables,
@@ -50,7 +52,7 @@ use irori_sideload::scan::{
 use irori_sideload::{SideloadApp, SideloadPlatform};
 use irori_ui::components::{art_img, physical_width};
 use irori_ui::i18n::{t, t_args};
-use irori_ui::style::{KeyboardFocusable as _, TEXT_CONTRAST, legible};
+use irori_ui::style::{KeyboardFocusable as _, TEXT_CONTRAST, legible, visible_size};
 use irori_ui::wine_choice::{WineChoice, WineSetup};
 use irori_ui::{Route, backend, navigate};
 
@@ -86,9 +88,16 @@ fn platform_label(platform: SideloadPlatform) -> SharedString {
 fn platform_icon(platform: SideloadPlatform) -> IconName {
     match platform {
         SideloadPlatform::Browser => IconName::Globe,
-        SideloadPlatform::Windows | SideloadPlatform::Linux | SideloadPlatform::Mac => {
-            IconName::AppWindow
-        }
+        SideloadPlatform::Linux => IconName::SquareTerminal,
+        SideloadPlatform::Windows | SideloadPlatform::Mac => IconName::AppWindow,
+    }
+}
+
+fn env_placeholder(platform: SideloadPlatform) -> SharedString {
+    if platform == SideloadPlatform::Windows {
+        t("library.sideload.placeholder.env_vars_windows")
+    } else {
+        t("library.sideload.placeholder.env_vars_native")
     }
 }
 
@@ -97,12 +106,58 @@ fn active_accent(cx: &App) -> Hsla {
     legible(theme.primary, &[theme.background], TEXT_CONTRAST, cx)
 }
 
-/// Active tab inside the expanded "More details" section.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum DetailsTab {
-    #[default]
-    Artwork,
-    Details,
+/// Which artwork slot currently has its inline URL/path input open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArtUrlTarget {
+    Cover,
+    Background,
+}
+
+/// Parse space- or newline-separated `KEY=VALUE` environment variable pairs.
+pub(crate) fn parse_env_vars(raw: &str) -> Result<Vec<EnvVar>, SharedString> {
+    let mut out: Vec<EnvVar> = Vec::new();
+    for token in irori_core::process::split_args(raw) {
+        let Some((key, value)) = token.split_once('=') else {
+            return Err(t_args(
+                "library.sideload.error.invalid_env_var",
+                &[("token", &token)],
+            ));
+        };
+        let valid_key = !key.is_empty()
+            && !key.starts_with(|c: char| c.is_ascii_digit())
+            && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid_key {
+            return Err(t_args(
+                "library.sideload.error.invalid_env_var",
+                &[("token", &token)],
+            ));
+        }
+        out.retain(|existing| existing.key != key);
+        out.push(EnvVar {
+            key: key.to_string(),
+            value: value.to_string(),
+        });
+    }
+    Ok(out)
+}
+
+/// Format environment variables into a single editable line of `KEY=VALUE` pairs.
+pub(crate) fn format_env_vars(vars: &[EnvVar]) -> String {
+    vars.iter()
+        .filter(|v| !v.key.trim().is_empty())
+        .map(|v| {
+            let needs_quotes = v.value.chars().any(char::is_whitespace)
+                || v.value.contains('"')
+                || v.value.contains('\'');
+            if needs_quotes {
+                let escaped = v.value.replace('\\', "\\\\").replace('"', "\\\"");
+                format!("{}=\"{escaped}\"", v.key)
+            } else {
+                format!("{}={}", v.key, v.value)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Title suggested from an executable's file name (`/x/Hollow_Knight.exe` →
@@ -158,6 +213,12 @@ pub struct SideloadDialog {
     title: Entity<InputState>,
     executable: Entity<InputState>,
     arguments: Entity<InputState>,
+    /// Per-game environment variables (`enviromentOptions`), formatted as
+    /// space-separated `KEY=VALUE` pairs.
+    env_vars: Entity<InputState>,
+    /// Whether the edited game already had an explicit `enviromentOptions`
+    /// override, so clearing the field resets it cleanly.
+    had_env_override: bool,
     /// A command line that starts a Linux or macOS game instead of its
     /// program.
     command: Entity<InputState>,
@@ -194,10 +255,12 @@ pub struct SideloadDialog {
     /// The Wine or Proton build and prefix of a Windows program; `None` on
     /// Windows, which runs it itself.
     wine: Option<Entity<WineChoice>>,
-    /// The optional fields are shown.
+    /// Whether the Compatibility disclosure card is expanded.
+    compat_expanded: bool,
+    /// Whether the "Launch & details" disclosure card is expanded.
     more: bool,
-    /// Which tab is active inside "More details".
-    details_tab: DetailsTab,
+    /// Inline URL/path input currently open inside the Library preview panel.
+    art_url_editor: Option<ArtUrlTarget>,
     /// One-click keyless Steam artwork fetch is currently running.
     fetching_art: bool,
     _fetch_art_task: Option<Task<()>>,
@@ -289,6 +352,25 @@ impl SideloadDialog {
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default()
         };
+        let initial_platform = if given {
+            existing.platform
+        } else {
+            SideloadPlatform::default()
+        };
+        let (initial_env, had_env_override) = match &editing {
+            Some(name) => {
+                let id = GameId::new(Runner::Sideload, name.as_str());
+                let b = backend(cx);
+                let overrides = b.settings.overrides(&id);
+                let effective = b.settings.game(&id);
+                if overrides.is_overridden("enviromentOptions") {
+                    (format_env_vars(&effective.environment_options), true)
+                } else {
+                    (String::new(), false)
+                }
+            }
+            None => (String::new(), false),
+        };
         let mut input = |placeholder: SharedString, value: String| {
             cx.new(|cx| {
                 InputState::new(window, cx)
@@ -305,6 +387,7 @@ impl SideloadDialog {
             t("library.sideload.placeholder.arguments"),
             existing.launcher_args.clone(),
         );
+        let env_vars = input(env_placeholder(initial_platform), initial_env.clone());
         let command = input(
             t("library.sideload.placeholder.command"),
             existing.command.clone().unwrap_or_default(),
@@ -389,6 +472,7 @@ impl SideloadDialog {
             });
         let more = editing.is_some()
             && (!existing.launcher_args.is_empty()
+                || !initial_env.is_empty()
                 || existing.command.is_some()
                 || existing.install_folder.is_some()
                 || existing.custom_user_agent.is_some()
@@ -399,12 +483,13 @@ impl SideloadDialog {
                 || existing.developer.is_some()
                 || existing.release_date.is_some()
                 || existing.genres.iter().any(|g| !g.trim().is_empty())
-                || existing.cover_art.is_some()
-                || existing.background_art.is_some()
                 || !modes.is_empty());
 
         let art = irori_ui::art::art_store(cx);
         let mut subscriptions = vec![cx.observe(&art, |_, _, cx| cx.notify())];
+        if let Some(wine) = &wine {
+            subscriptions.push(cx.observe(wine, |_, _, cx| cx.notify()));
+        }
         // A new app's prefix is named after it.
         if editing.is_none()
             && let Some(wine) = &wine
@@ -422,7 +507,7 @@ impl SideloadDialog {
                 },
             ));
         }
-        for state in [&title, &executable, &url] {
+        for state in [&title, &executable, &url, &env_vars] {
             subscriptions.push(
                 cx.subscribe_in(state, window, |this, _, event, window, cx| match event {
                     InputEvent::Change => {
@@ -434,7 +519,17 @@ impl SideloadDialog {
                 }),
             );
         }
-        for state in [&cover, &background] {
+        for state in [
+            &cover,
+            &background,
+            &arguments,
+            &command,
+            &install_folder,
+            &user_agent,
+            &developer,
+            &release_date,
+            &genres,
+        ] {
             subscriptions.push(cx.subscribe(state, |_, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
@@ -442,19 +537,8 @@ impl SideloadDialog {
             }));
         }
 
-        let details_tab =
-            if existing.cover_art.is_none() && existing.background_art.is_none() && more {
-                DetailsTab::Details
-            } else {
-                DetailsTab::Artwork
-            };
-
         Self {
-            platform: if given {
-                existing.platform
-            } else {
-                SideloadPlatform::default()
-            },
+            platform: initial_platform,
             fullscreen: existing.launch_fullscreen,
             launch_link: existing.launch_link.clone(),
             replaces: None,
@@ -462,6 +546,8 @@ impl SideloadDialog {
             title,
             executable,
             arguments,
+            env_vars,
+            had_env_override,
             command,
             install_folder,
             url,
@@ -480,8 +566,9 @@ impl SideloadDialog {
             installer: InstallerState::Idle,
             error: None,
             wine,
+            compat_expanded: false,
             more,
-            details_tab,
+            art_url_editor: None,
             fetching_art: false,
             _fetch_art_task: None,
             picker: None,
@@ -548,8 +635,6 @@ impl SideloadDialog {
                             .update(cx, |s, cx| s.set_value(cover_url, window, cx));
                         this.background
                             .update(cx, |s, cx| s.set_value(hero_url, window, cx));
-                        this.more = true;
-                        this.details_tab = DetailsTab::Artwork;
                         window.push_notification(
                             Notification::success(t_args(
                                 "library.sideload.fetch_art_found",
@@ -972,6 +1057,18 @@ impl SideloadDialog {
             cx.notify();
             return;
         }
+        let env_vars = if app.platform == SideloadPlatform::Browser {
+            Vec::new()
+        } else {
+            match parse_env_vars(&text(&self.env_vars, cx)) {
+                Ok(vars) => vars,
+                Err(err) => {
+                    self.error = Some(err);
+                    cx.notify();
+                    return;
+                }
+            }
+        };
         let Some(store) = crate::sideload_store(cx) else {
             self.error = Some(t("library.sideload.error.unavailable"));
             cx.notify();
@@ -983,6 +1080,7 @@ impl SideloadDialog {
         let settings = b.settings.app();
         let modes = super::chosen_modes(&self.known_modes, &self.modes);
         let setup = self.wine_setup(cx);
+        let had_env_override = self.had_env_override;
         let replaces = self.replaces.clone();
         self.saving = true;
         self.error = None;
@@ -1016,6 +1114,14 @@ impl SideloadDialog {
                 && let Some(game) = store.game(&id.app_name)
             {
                 setup.apply(&b, &id, &game);
+            }
+            if !env_vars.is_empty() {
+                if let Ok(value) = serde_json::to_value(&env_vars) {
+                    b.settings
+                        .set_game_value(&id, "enviromentOptions", Some(value));
+                }
+            } else if had_env_override {
+                b.settings.set_game_value(&id, "enviromentOptions", None);
             }
             let mut own = b
                 .userdata
@@ -1122,6 +1228,16 @@ impl SideloadDialog {
         directories: bool,
         cx: &mut Context<Self>,
     ) -> gpui_kit::Div {
+        self.path_row_inner(id, target, directories, cx)
+    }
+
+    fn path_row_inner(
+        &self,
+        id: &'static str,
+        target: fn(&Self) -> &Entity<InputState>,
+        directories: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Div {
         h_flex()
             .w_full()
             .gap_2()
@@ -1135,28 +1251,6 @@ impl SideloadDialog {
                         this.browse(target, directories, window, cx)
                     })),
             )
-    }
-
-    /// An art field: path or URL, plus "Find online…".
-    fn art_row(
-        &self,
-        id: &'static str,
-        target: fn(&Self) -> &Entity<InputState>,
-        kind: ArtKind,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let find_id = if kind == ArtKind::Background {
-            "find-background"
-        } else {
-            "find-cover"
-        };
-        self.path_row(id, target, false, cx).child(
-            Button::new(find_id)
-                .outline()
-                .icon(IconName::Globe)
-                .label(t("library.common.find_online"))
-                .on_click(cx.listener(move |this, _, window, cx| this.find_art(kind, window, cx))),
-        )
     }
 }
 
@@ -1265,11 +1359,19 @@ impl SideloadDialog {
                 .gap_1p5()
                 .min_w_0()
                 .child(
+                    div()
+                        .text_xs()
+                        .font_medium()
+                        .text_color(muted)
+                        .pr_1()
+                        .child(t("library.sideload.quick_import")),
+                )
+                .child(
                     Button::new("sideload-folder")
                         .xsmall()
                         .outline()
                         .icon(IconName::FolderPlus)
-                        .label(t("library.sideload.scan_folder"))
+                        .label(t("library.sideload.scan_folder_chip"))
                         .tooltip(t("library.folder.open_tooltip"))
                         .on_click(|_, window, cx| {
                             window.close_dialog(cx);
@@ -1282,7 +1384,7 @@ impl SideloadDialog {
                             .xsmall()
                             .outline()
                             .icon(IconName::ScrollText)
-                            .label(t("library.sideload.lutris_short"))
+                            .label(t("library.sideload.lutris_chip"))
                             .tooltip(t("library.sideload.lutris_script_tooltip"))
                             .on_click(|_, window, cx| {
                                 window.close_dialog(cx);
@@ -1337,315 +1439,932 @@ impl SideloadDialog {
         out
     }
 
-    /// Live thumbnail previews for cover (2:3) and background (wide) art.
-    fn render_art_previews(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui_kit::AnyElement {
-        let cover_w = rems(5.5);
-        let preview_h = rems(8.25);
-        let cover_url = optional_text(&self.cover, cx);
-        let cover_img = cover_url
-            .as_deref()
-            .and_then(|u| art_img(u, physical_width(cover_w, window), false, cx));
-        let bg_url = optional_text(&self.background, cx);
-        let bg_img = bg_url
-            .as_deref()
-            .and_then(|u| art_img(u, physical_width(rems(16.), window), false, cx));
-
-        let theme = cx.theme();
-        let radius = theme.radius;
-        let muted_bg = theme.muted;
-        let muted_fg = theme.muted_foreground;
-        let border = theme.border;
-        let card_bg = theme.secondary.opacity(0.3);
-
-        let cover_box = div()
-            .w(cover_w)
-            .h(preview_h)
-            .flex_shrink_0()
-            .overflow_hidden()
-            .rounded(radius)
-            .bg(muted_bg)
-            .border_1()
-            .border_color(border.opacity(0.75))
-            .map(|frame| match cover_img {
-                Some(img) => {
-                    frame.child(img.size_full().rounded(radius).object_fit(ObjectFit::Cover))
-                }
-                None => frame.child(
-                    v_flex()
-                        .size_full()
-                        .items_center()
-                        .justify_center()
-                        .gap_1()
-                        .text_color(muted_fg)
-                        .child(Icon::new(IconName::Image).large())
-                        .child(
-                            div()
-                                .text_xs()
-                                .px_1()
-                                .truncate()
-                                .child(t("library.sideload.preview.cover")),
-                        ),
-                ),
-            });
-
-        let bg_box = div()
-            .flex_1()
-            .min_w_0()
-            .h(preview_h)
-            .overflow_hidden()
-            .rounded(radius)
-            .bg(muted_bg)
-            .border_1()
-            .border_color(border.opacity(0.75))
-            .map(|frame| match bg_img {
-                Some(img) => {
-                    frame.child(img.size_full().rounded(radius).object_fit(ObjectFit::Cover))
-                }
-                None => frame.child(
-                    v_flex()
-                        .size_full()
-                        .items_center()
-                        .justify_center()
-                        .gap_1()
-                        .text_color(muted_fg)
-                        .child(Icon::new(IconName::Image).large())
-                        .child(
-                            div()
-                                .text_xs()
-                                .px_1()
-                                .truncate()
-                                .child(t("library.sideload.preview.background")),
-                        ),
-                ),
-            });
-
-        h_flex()
-            .w_full()
-            .items_center()
-            .gap_3()
-            .p_2p5()
-            .rounded(radius)
-            .bg(card_bg)
-            .border_1()
-            .border_color(border.opacity(0.65))
-            .child(cover_box)
-            .child(bg_box)
-            .into_any_element()
-    }
-
-    /// Accent-highlighted 2-tab switcher inside "More details".
-    fn render_details_tabs(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
-        let theme = cx.theme();
-        let primary = theme.primary;
-        let active_fg = active_accent(cx);
-        let fg = theme.foreground;
-        let muted = theme.muted_foreground;
-        let rail_bg = theme.secondary.opacity(0.45);
-        let hover_bg = theme.secondary.opacity(0.85);
-        let border = theme.border;
-        let radius = theme.radius;
-        let active_tab = self.details_tab;
-
-        let tabs = [
-            (
-                DetailsTab::Artwork,
-                "sideload-tab-artwork",
-                IconName::Image,
-                t("library.sideload.tab.artwork"),
-            ),
-            (
-                DetailsTab::Details,
-                "sideload-tab-details",
-                IconName::SlidersHorizontal,
-                t("library.sideload.tab.details"),
-            ),
-        ];
-
-        h_flex()
-            .w_full()
-            .p_0p5()
-            .gap_1()
-            .rounded(radius)
-            .bg(rail_bg)
-            .border_1()
-            .border_color(border)
-            .children(tabs.into_iter().map(|(tab, id, icon, label)| {
-                let selected = active_tab == tab;
-                h_flex()
-                    .id(id)
-                    .debug_selector(move || id.into())
-                    .flex_1()
-                    .min_w_0()
-                    .justify_center()
-                    .items_center()
-                    .gap_1p5()
-                    .px_2()
-                    .py_1()
-                    .rounded_md()
-                    .border_1()
-                    .cursor_pointer()
-                    .keyboard_focusable(cx)
-                    .text_xs()
-                    .when(selected, |el| {
-                        el.bg(primary.opacity(0.18))
-                            .border_color(primary)
-                            .text_color(active_fg)
-                            .font_semibold()
-                    })
-                    .when(!selected, |el| {
-                        el.border_color(transparent_black())
-                            .text_color(muted)
-                            .hover(move |s| s.bg(hover_bg).text_color(fg))
-                    })
-                    .child(Icon::new(icon).xsmall().flex_shrink_0())
-                    .child(div().min_w_0().truncate().child(label))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if this.details_tab != tab {
-                            this.details_tab = tab;
-                            cx.notify();
-                        }
-                    }))
-            }))
-            .into_any_element()
-    }
-
-    /// The optional fields behind "More details", split cleanly into Artwork
-    /// (with live thumbnail previews) and Details & Launch.
-    fn render_details(&self, window: &mut Window, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    /// Count of optional fields currently filled inside "Launch & details".
+    fn launch_details_count(&self, cx: &App) -> usize {
         let browser = self.platform == SideloadPlatform::Browser;
         let native = matches!(
             self.platform,
             SideloadPlatform::Linux | SideloadPlatform::Mac
         );
-        let body = match self.details_tab {
-            DetailsTab::Artwork => v_flex()
-                .debug_selector(|| "sideload-panel-artwork".into())
-                .gap_3()
-                .child(self.render_art_previews(window, cx))
-                .child(
-                    v_form()
-                        .child(
-                            field()
-                                .label(t("library.common.cover_art"))
-                                .description(t("library.sideload.art_hint"))
-                                .child(self.art_row(
-                                    "browse-cover",
-                                    |this| &this.cover,
-                                    ArtKind::Cover,
-                                    cx,
-                                )),
-                        )
-                        .child(field().label(t("library.sideload.field.background")).child(
-                            self.art_row(
-                                "browse-background",
-                                |this| &this.background,
-                                ArtKind::Background,
-                                cx,
-                            ),
-                        )),
-                )
-                .into_any_element(),
-            DetailsTab::Details => div()
-                .debug_selector(|| "sideload-panel-details".into())
-                .child(
-                    v_form()
-                        .when(!browser, |form| {
-                            form.child(
-                                field()
-                                    .label(t("library.sideload.field.arguments"))
-                                    .child(Input::new(&self.arguments)),
-                            )
-                            .when(native, |form| {
-                                form.child(
-                                    field()
-                                        .label(t("library.sideload.field.command"))
-                                        .description(t("library.sideload.command_hint"))
-                                        .child(Input::new(&self.command)),
-                                )
-                            })
-                            .child(
-                                field()
-                                    .label(t("library.sideload.field.install_folder"))
-                                    .description(t("library.sideload.install_folder_hint"))
-                                    .child(self.path_row(
-                                        "browse-folder",
-                                        |this| &this.install_folder,
-                                        true,
-                                        cx,
-                                    )),
-                            )
-                        })
-                        .when(browser, |form| {
-                            form.child(
-                                field()
-                                    .label(t("library.sideload.field.user_agent"))
-                                    .description(t("library.sideload.user_agent_hint"))
-                                    .child(Input::new(&self.user_agent)),
-                            )
-                            .child(
-                                field().label_indent(false).child(
-                                    Switch::new("sideload-fullscreen")
-                                        .label(t("library.sideload.fullscreen"))
-                                        .checked(self.fullscreen)
-                                        .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                            this.fullscreen = *v;
-                                            cx.notify();
-                                        })),
-                                ),
-                            )
-                        })
-                        .child(
-                            field().label_indent(false).child(
-                                h_flex()
-                                    .w_full()
-                                    .gap_3()
-                                    .child(
-                                        div().flex_1().min_w_0().child(
-                                            v_form().child(
-                                                field()
-                                                    .label(t("library.sideload.field.developer"))
-                                                    .child(Input::new(&self.developer)),
-                                            ),
-                                        ),
-                                    )
-                                    .child(
-                                        div().flex_1().min_w_0().child(
-                                            v_form().child(
-                                                field()
-                                                    .label(t("library.sideload.field.release_date"))
-                                                    .child(Input::new(&self.release_date)),
-                                            ),
-                                        ),
-                                    ),
-                            ),
-                        )
-                        .child(
-                            field()
-                                .label(t("library.sideload.field.genres"))
-                                .description(t("library.sideload.genres_hint"))
-                                .child(Input::new(&self.genres)),
-                        )
-                        .child(field().label(irori_ui::game_mode::title()).child(
-                            super::mode_boxes(&self.modes, |this: &mut Self| &mut this.modes, cx),
-                        ))
-                        .child(
-                            field()
-                                .label(t("library.sideload.field.description"))
-                                .description(t("library.sideload.description_hint"))
-                                .child(Textarea::new(&self.description)),
-                        ),
-                )
-                .into_any_element(),
+        let mut count = 0usize;
+        if browser {
+            if !text(&self.user_agent, cx).is_empty() {
+                count += 1;
+            }
+            if self.fullscreen {
+                count += 1;
+            }
+        } else {
+            if !text(&self.arguments, cx).is_empty() {
+                count += 1;
+            }
+            if !text(&self.env_vars, cx).is_empty() {
+                count += 1;
+            }
+            if native && !text(&self.command, cx).is_empty() {
+                count += 1;
+            }
+            if !text(&self.install_folder, cx).is_empty() {
+                count += 1;
+            }
+        }
+        if !text(&self.developer, cx).is_empty() {
+            count += 1;
+        }
+        if !text(&self.release_date, cx).is_empty() {
+            count += 1;
+        }
+        if !text(&self.genres, cx).is_empty() {
+            count += 1;
+        }
+        if !self.modes.is_empty() {
+            count += 1;
+        }
+        if !self.description.read(cx).value().trim().is_empty() {
+            count += 1;
+        }
+        count
+    }
+
+    /// Plain-language readiness hint for the footer bar.
+    fn readiness_hint(&self, cx: &App) -> (SharedString, bool) {
+        if text(&self.title, cx).is_empty() {
+            return (t("library.sideload.hint.enter_title"), false);
+        }
+        if self.platform == SideloadPlatform::Browser {
+            if text(&self.url, cx).is_empty() {
+                return (t("library.sideload.hint.enter_url"), false);
+            }
+            return (t("library.sideload.hint.ready"), true);
+        }
+        let native = matches!(
+            self.platform,
+            SideloadPlatform::Linux | SideloadPlatform::Mac
+        );
+        let has_command = native
+            && !text(&self.command, cx).is_empty()
+            && !text(&self.install_folder, cx).is_empty();
+        let has_exec = !text(&self.executable, cx).is_empty();
+        if !has_exec && !has_command && self.launch_link.is_none() {
+            return (t("library.sideload.hint.enter_executable"), false);
+        }
+        (t("library.sideload.hint.ready"), true)
+    }
+
+    /// Collapsible Compatibility card holding Wine/Proton build and Prefix.
+    fn render_compatibility_card(
+        &self,
+        wine: Entity<WineChoice>,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
+        let (build_name, customized, no_builds, has_custom_prefix) = {
+            let w = wine.read(cx);
+            (
+                w.build_summary(cx),
+                w.is_customized(cx),
+                w.has_no_builds(),
+                !w.setup(cx).prefix.is_empty(),
+            )
+        };
+        let expanded = self.compat_expanded || no_builds;
+        let summary = if has_custom_prefix {
+            t_args(
+                "library.sideload.compat_summary_custom",
+                &[("build", build_name.as_ref())],
+            )
+        } else {
+            t_args(
+                "library.sideload.compat_summary_auto",
+                &[("build", build_name.as_ref())],
+            )
+        };
+
+        let theme = cx.theme();
+        let radius = theme.radius;
+        let border = theme.border;
+        let card_bg = theme.secondary.opacity(0.32);
+        let body_bg = theme.background.opacity(0.35);
+        let hover_bg = theme.secondary.opacity(0.55);
+        let fg = theme.foreground;
+        let muted = theme.muted_foreground;
+        let primary = theme.primary;
+        let warning = theme.warning;
+        let active_fg = active_accent(cx);
+        let warn_fg = legible(warning, &[theme.background], TEXT_CONTRAST, cx);
+
+        let (pill_label, pill_bg, pill_fg) = if no_builds {
+            (
+                t("library.sideload.compat_no_runtime"),
+                warning.opacity(0.18),
+                warn_fg,
+            )
+        } else if customized {
+            (
+                t("library.sideload.compat_customized"),
+                primary.opacity(0.16),
+                active_fg,
+            )
+        } else {
+            (
+                t("library.sideload.compat_default"),
+                theme.muted.opacity(0.75),
+                muted,
+            )
         };
 
         v_flex()
-            .gap_3()
-            .child(self.render_details_tabs(cx))
-            .child(body)
+            .id("sideload-compatibility-card")
+            .debug_selector(|| "sideload-compatibility-card".into())
+            .w_full()
+            .rounded(radius)
+            .bg(card_bg)
+            .border_1()
+            .border_color(if expanded {
+                border
+            } else {
+                border.opacity(0.75)
+            })
+            .overflow_hidden()
+            .child(
+                h_flex()
+                    .id("sideload-compatibility-toggle")
+                    .w_full()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .cursor_pointer()
+                    .keyboard_focusable(cx)
+                    .hover(move |s| s.bg(hover_bg))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.compat_expanded = !this.compat_expanded;
+                        cx.notify();
+                    }))
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .items_center()
+                            .gap_2p5()
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .p_1p5()
+                                    .rounded_md()
+                                    .bg(theme.muted.opacity(0.65))
+                                    .border_1()
+                                    .border_color(border.opacity(0.6))
+                                    .text_color(muted)
+                                    .child(Icon::new(IconName::Cpu).xsmall()),
+                            )
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        h_flex()
+                                            .items_center()
+                                            .gap_1p5()
+                                            .min_w_0()
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .font_semibold()
+                                                    .text_color(fg)
+                                                    .truncate()
+                                                    .child(t("library.sideload.compatibility")),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex_shrink_0()
+                                                    .px_1p5()
+                                                    .py_0p5()
+                                                    .rounded_full()
+                                                    .bg(pill_bg)
+                                                    .text_xs()
+                                                    .font_medium()
+                                                    .text_color(pill_fg)
+                                                    .child(pill_label),
+                                            ),
+                                    )
+                                    .child(
+                                        div().text_xs().text_color(muted).truncate().child(summary),
+                                    ),
+                            ),
+                    )
+                    .child(
+                        h_flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .gap_1()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(if expanded {
+                                t("library.sideload.hide")
+                            } else {
+                                t("library.sideload.customize")
+                            })
+                            .child(
+                                Icon::new(if expanded {
+                                    IconName::ChevronUp
+                                } else {
+                                    IconName::ChevronDown
+                                })
+                                .xsmall(),
+                            ),
+                    ),
+            )
+            .when(expanded, |card| {
+                card.child(
+                    div()
+                        .id("sideload-compatibility-body")
+                        .debug_selector(|| "sideload-compatibility-body".into())
+                        .w_full()
+                        .p_3()
+                        .bg(body_bg)
+                        .border_t_1()
+                        .border_color(border.opacity(0.75))
+                        .child(wine),
+                )
+            })
+            .into_any_element()
+    }
+
+    /// Collapsible "Launch & details" card holding launch arguments,
+    /// full-width environment variables, command/install folder, and metadata.
+    fn render_launch_details_card(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let browser = self.platform == SideloadPlatform::Browser;
+        let native = matches!(
+            self.platform,
+            SideloadPlatform::Linux | SideloadPlatform::Mac
+        );
+        let count = self.launch_details_count(cx);
+        let expanded = self.more;
+
+        let theme = cx.theme();
+        let radius = theme.radius;
+        let border = theme.border;
+        let card_bg = theme.secondary.opacity(0.32);
+        let body_bg = theme.background.opacity(0.35);
+        let hover_bg = theme.secondary.opacity(0.55);
+        let fg = theme.foreground;
+        let muted = theme.muted_foreground;
+        let primary = theme.primary;
+        let active_fg = active_accent(cx);
+
+        let count_pill = (count > 0).then(|| {
+            let label = if count == 1 {
+                t("library.sideload.launch_details_count_one")
+            } else {
+                t_args(
+                    "library.sideload.launch_details_count_other",
+                    &[("count", &count.to_string())],
+                )
+            };
+            div()
+                .flex_shrink_0()
+                .px_1p5()
+                .py_0p5()
+                .rounded_full()
+                .bg(primary.opacity(0.16))
+                .text_xs()
+                .font_medium()
+                .text_color(active_fg)
+                .child(label)
+        });
+
+        let summary = if count > 0 {
+            t("library.sideload.launch_details_configured")
+        } else {
+            t("library.sideload.launch_details_summary")
+        };
+
+        v_flex()
+            .w_full()
+            .rounded(radius)
+            .bg(card_bg)
+            .border_1()
+            .border_color(if expanded {
+                border
+            } else {
+                border.opacity(0.75)
+            })
+            .overflow_hidden()
+            .child(
+                h_flex()
+                    .id("sideload-more")
+                    .w_full()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .cursor_pointer()
+                    .keyboard_focusable(cx)
+                    .hover(move |s| s.bg(hover_bg))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.more = !this.more;
+                        cx.notify();
+                    }))
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .items_center()
+                            .gap_2p5()
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .p_1p5()
+                                    .rounded_md()
+                                    .bg(theme.muted.opacity(0.65))
+                                    .border_1()
+                                    .border_color(border.opacity(0.6))
+                                    .text_color(muted)
+                                    .child(Icon::new(IconName::SlidersHorizontal).xsmall()),
+                            )
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        h_flex()
+                                            .items_center()
+                                            .gap_1p5()
+                                            .min_w_0()
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .font_semibold()
+                                                    .text_color(fg)
+                                                    .truncate()
+                                                    .child(t("library.sideload.launch_details")),
+                                            )
+                                            .children(count_pill),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(muted)
+                                            .truncate()
+                                            .child(summary),
+                                    ),
+                            ),
+                    )
+                    .child(
+                        h_flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .gap_1()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(if expanded {
+                                t("library.sideload.hide")
+                            } else {
+                                t("library.sideload.configure")
+                            })
+                            .child(
+                                Icon::new(if expanded {
+                                    IconName::ChevronUp
+                                } else {
+                                    IconName::ChevronDown
+                                })
+                                .xsmall(),
+                            ),
+                    ),
+            )
+            .when(expanded, |card| {
+                card.child(
+                    div()
+                        .debug_selector(|| "sideload-panel-details".into())
+                        .w_full()
+                        .p_3()
+                        .bg(body_bg)
+                        .border_t_1()
+                        .border_color(border.opacity(0.75))
+                        .child(
+                            v_form()
+                                .when(!browser, |form| {
+                                    form.child(
+                                        field()
+                                            .label(t("library.sideload.field.arguments"))
+                                            .child(Input::new(&self.arguments)),
+                                    )
+                                    .child(
+                                        field()
+                                            .label(t("library.sideload.field.env_vars"))
+                                            .description(t("library.sideload.env_vars_hint"))
+                                            .child(
+                                                div()
+                                                    .id("sideload-env-vars")
+                                                    .debug_selector(|| "sideload-env-vars".into())
+                                                    .w_full()
+                                                    .child(Input::new(&self.env_vars)),
+                                            ),
+                                    )
+                                    .when(native, |form| {
+                                        form.child(
+                                            field()
+                                                .label(t("library.sideload.field.command"))
+                                                .description(t("library.sideload.command_hint"))
+                                                .child(Input::new(&self.command)),
+                                        )
+                                    })
+                                    .child(
+                                        field()
+                                            .label(t("library.sideload.field.install_folder"))
+                                            .description(t("library.sideload.install_folder_hint"))
+                                            .child(self.path_row(
+                                                "browse-folder",
+                                                |this| &this.install_folder,
+                                                true,
+                                                cx,
+                                            )),
+                                    )
+                                })
+                                .when(browser, |form| {
+                                    form.child(
+                                        field()
+                                            .label(t("library.sideload.field.user_agent"))
+                                            .description(t("library.sideload.user_agent_hint"))
+                                            .child(Input::new(&self.user_agent)),
+                                    )
+                                    .child(
+                                        field().label_indent(false).child(
+                                            Switch::new("sideload-fullscreen")
+                                                .label(t("library.sideload.fullscreen"))
+                                                .checked(self.fullscreen)
+                                                .on_change(cx.listener(|this, v: &bool, _, cx| {
+                                                    this.fullscreen = *v;
+                                                    cx.notify();
+                                                })),
+                                        ),
+                                    )
+                                })
+                                .child(
+                                    field().label_indent(false).child(
+                                        h_flex()
+                                            .w_full()
+                                            .gap_3()
+                                            .child(
+                                                div().flex_1().min_w_0().child(
+                                                    v_form().child(
+                                                        field()
+                                                            .label(t(
+                                                                "library.sideload.field.developer",
+                                                            ))
+                                                            .child(Input::new(&self.developer)),
+                                                    ),
+                                                ),
+                                            )
+                                            .child(
+                                                div().flex_1().min_w_0().child(
+                                                    v_form().child(
+                                                        field()
+                                                            .label(t(
+                                                                "library.sideload.field.release_date",
+                                                            ))
+                                                            .child(Input::new(&self.release_date)),
+                                                    ),
+                                                ),
+                                            ),
+                                    ),
+                                )
+                                .child(
+                                    field()
+                                        .label(t("library.sideload.field.genres"))
+                                        .description(t("library.sideload.genres_hint"))
+                                        .child(Input::new(&self.genres)),
+                                )
+                                .child(field().label(irori_ui::game_mode::title()).child(
+                                    super::mode_boxes(
+                                        &self.modes,
+                                        |this: &mut Self| &mut this.modes,
+                                        cx,
+                                    ),
+                                ))
+                                .child(
+                                    field()
+                                        .label(t("library.sideload.field.description"))
+                                        .description(t("library.sideload.description_hint"))
+                                        .child(Textarea::new(&self.description)),
+                                ),
+                        ),
+                )
+            })
+            .into_any_element()
+    }
+
+    /// Always-visible Library preview & artwork panel (Proposal B right column).
+    fn render_artwork_panel(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
+        let cover_url = optional_text(&self.cover, cx);
+        let bg_url = optional_text(&self.background, cx);
+        let has_cover = cover_url.is_some();
+        let has_bg = bg_url.is_some();
+        let cover_img = cover_url
+            .as_deref()
+            .and_then(|u| art_img(u, physical_width(rems(16.), window), false, cx));
+        let bg_img = bg_url
+            .as_deref()
+            .and_then(|u| art_img(u, physical_width(rems(16.), window), false, cx));
+
+        let title_text = text(&self.title, cx);
+        let title_empty = title_text.is_empty();
+        let display_title: SharedString = if title_empty {
+            t("library.sideload.preview.untitled")
+        } else {
+            title_text.into()
+        };
+        let platform_badge = platform_label(self.platform);
+        let fetching_art = self.fetching_art;
+
+        let theme = cx.theme();
+        let radius = theme.radius;
+        let radius_lg = theme.radius_lg;
+        let border = theme.border;
+        let fg = theme.foreground;
+        let muted = theme.muted_foreground;
+        let muted_bg = theme.muted;
+        let card_bg = theme.secondary.opacity(0.32);
+        let scrim_bg = theme.background.opacity(0.86);
+        let editor_bg = theme.background.opacity(0.55);
+        let primary = theme.primary;
+        let active_fg = active_accent(cx);
+        let success = theme.success;
+        let success_fg = legible(success, &[theme.background], TEXT_CONTRAST, cx);
+
+        let (status_label, status_bg, status_fg) = match (has_cover, has_bg) {
+            (true, true) => (
+                t("library.sideload.preview.both_set"),
+                success.opacity(0.16),
+                success_fg,
+            ),
+            (true, false) => (
+                t("library.sideload.preview.cover_set"),
+                success.opacity(0.16),
+                success_fg,
+            ),
+            (false, true) => (
+                t("library.sideload.preview.banner_set"),
+                success.opacity(0.16),
+                success_fg,
+            ),
+            (false, false) => (
+                t("library.sideload.preview.empty"),
+                muted_bg.opacity(0.8),
+                muted,
+            ),
+        };
+
+        let art_actions = |target: ArtUrlTarget,
+                           browse_id: &'static str,
+                           url_id: &'static str,
+                           find_id: &'static str,
+                           clear_id: &'static str,
+                           has_value: bool,
+                           cx: &mut Context<Self>| {
+            let is_cover = target == ArtUrlTarget::Cover;
+            let kind = if is_cover {
+                ArtKind::Cover
+            } else {
+                ArtKind::Background
+            };
+            let upload_tip = if is_cover {
+                t("library.sideload.preview.upload_cover")
+            } else {
+                t("library.sideload.preview.upload_background")
+            };
+            let remove_tip = if is_cover {
+                t("library.sideload.preview.remove_cover")
+            } else {
+                t("library.sideload.preview.remove_background")
+            };
+            let url_active = self.art_url_editor == Some(target);
+            h_flex()
+                .items_center()
+                .gap_0p5()
+                .p_0p5()
+                .rounded_md()
+                .bg(scrim_bg)
+                .border_1()
+                .border_color(border.opacity(0.8))
+                .child(
+                    Button::new(browse_id)
+                        .xsmall()
+                        .ghost()
+                        .icon(IconName::Upload)
+                        .tooltip(upload_tip)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if is_cover {
+                                this.browse(|d| &d.cover, false, window, cx);
+                            } else {
+                                this.browse(|d| &d.background, false, window, cx);
+                            }
+                        })),
+                )
+                .child(
+                    Button::new(url_id)
+                        .xsmall()
+                        .ghost()
+                        .selected(url_active)
+                        .icon(IconName::Link)
+                        .tooltip(t("library.sideload.preview.url_action"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if this.art_url_editor == Some(target) {
+                                this.art_url_editor = None;
+                            } else {
+                                this.art_url_editor = Some(target);
+                                let input = if is_cover {
+                                    &this.cover
+                                } else {
+                                    &this.background
+                                };
+                                input.focus_handle(cx).focus(window, cx);
+                            }
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    Button::new(find_id)
+                        .xsmall()
+                        .ghost()
+                        .icon(IconName::Search)
+                        .tooltip(t("library.common.find_online"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.art_url_editor = None;
+                            this.find_art(kind, window, cx);
+                        })),
+                )
+                .when(has_value, |bar| {
+                    bar.child(
+                        Button::new(clear_id)
+                            .xsmall()
+                            .ghost()
+                            .icon(IconName::Trash)
+                            .tooltip(remove_tip)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let input = if is_cover {
+                                    &this.cover
+                                } else {
+                                    &this.background
+                                };
+                                input.update(cx, |s, cx| s.set_value(String::new(), window, cx));
+                                cx.notify();
+                            })),
+                    )
+                })
+        };
+
+        let cover_card = div()
+            .relative()
+            .w_full()
+            .h(rems(12.25))
+            .overflow_hidden()
+            .rounded(radius)
+            .bg(muted_bg)
+            .border_1()
+            .border_color(if has_cover {
+                border
+            } else {
+                border.opacity(0.85)
+            })
+            .when(!has_cover, |el| el.border_dashed())
+            .map(|frame| match cover_img {
+                Some(img) => frame.child(img.size_full().object_fit(ObjectFit::Cover)),
+                None => frame.child(
+                    v_flex()
+                        .size_full()
+                        .pb_8()
+                        .items_center()
+                        .justify_center()
+                        .gap_1()
+                        .text_color(muted)
+                        .child(Icon::new(IconName::Image).large())
+                        .child(
+                            div()
+                                .text_xs()
+                                .px_2()
+                                .truncate()
+                                .child(t("library.sideload.preview.cover")),
+                        ),
+                ),
+            })
+            .child(div().absolute().top_2().right_2().child(art_actions(
+                ArtUrlTarget::Cover,
+                "browse-cover",
+                "edit-cover-url",
+                "find-cover",
+                "clear-cover",
+                has_cover,
+                cx,
+            )))
+            .child(
+                h_flex()
+                    .absolute()
+                    .bottom_0()
+                    .left_0()
+                    .right_0()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2p5()
+                    .py_2()
+                    .bg(scrim_bg)
+                    .border_t_1()
+                    .border_color(border.opacity(0.55))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_sm()
+                            .when(!title_empty, |d| d.font_semibold().text_color(fg))
+                            .when(title_empty, |d| d.text_color(muted))
+                            .truncate()
+                            .child(display_title),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded_sm()
+                            .bg(primary.opacity(0.16))
+                            .border_1()
+                            .border_color(primary.opacity(0.45))
+                            .text_xs()
+                            .font_medium()
+                            .text_color(active_fg)
+                            .child(platform_badge),
+                    ),
+            );
+
+        let banner_card = div()
+            .relative()
+            .w_full()
+            .h(rems(5.0))
+            .overflow_hidden()
+            .rounded(radius)
+            .bg(muted_bg)
+            .border_1()
+            .border_color(if has_bg { border } else { border.opacity(0.85) })
+            .when(!has_bg, |el| el.border_dashed())
+            .map(|frame| match bg_img {
+                Some(img) => frame.child(img.size_full().object_fit(ObjectFit::Cover)),
+                None => frame.child(
+                    h_flex()
+                        .size_full()
+                        .items_center()
+                        .justify_center()
+                        .gap_1p5()
+                        .text_color(muted)
+                        .child(Icon::new(IconName::Image).small())
+                        .child(
+                            div()
+                                .text_xs()
+                                .truncate()
+                                .child(t("library.sideload.preview.background")),
+                        ),
+                ),
+            })
+            .child(
+                div()
+                    .absolute()
+                    .top_2()
+                    .left_2()
+                    .px_1p5()
+                    .py_0p5()
+                    .rounded_sm()
+                    .bg(scrim_bg)
+                    .border_1()
+                    .border_color(border.opacity(0.6))
+                    .text_xs()
+                    .font_medium()
+                    .text_color(fg)
+                    .child(t("library.sideload.preview.banner")),
+            )
+            .child(div().absolute().top_2().right_2().child(art_actions(
+                ArtUrlTarget::Background,
+                "browse-background",
+                "edit-background-url",
+                "find-background",
+                "clear-background",
+                has_bg,
+                cx,
+            )));
+
+        let url_editor = self.art_url_editor.map(|target| {
+            let (label, input) = match target {
+                ArtUrlTarget::Cover => (t("library.common.cover_art"), &self.cover),
+                ArtUrlTarget::Background => {
+                    (t("library.sideload.field.background"), &self.background)
+                }
+            };
+            v_flex()
+                .id("sideload-art-url-editor")
+                .w_full()
+                .gap_1p5()
+                .p_2()
+                .rounded(radius)
+                .bg(editor_bg)
+                .border_1()
+                .border_color(border)
+                .child(
+                    h_flex()
+                        .w_full()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_medium()
+                                .text_color(fg)
+                                .truncate()
+                                .child(label),
+                        )
+                        .child(
+                            Button::new("sideload-art-url-done")
+                                .xsmall()
+                                .ghost()
+                                .label(t("library.sideload.preview.done"))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.art_url_editor = None;
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .child(Input::new(input).small())
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(t("library.sideload.art_hint")),
+                )
+        });
+
+        let fetch_label = if has_cover || has_bg {
+            t("library.sideload.fetch_art_refetch")
+        } else {
+            t("library.sideload.fetch_art_auto")
+        };
+
+        v_flex()
+            .id("sideload-panel-artwork")
+            .debug_selector(|| "sideload-panel-artwork".into())
+            .w_full()
+            .gap_2p5()
+            .p_3()
+            .rounded(radius_lg)
+            .bg(card_bg)
+            .border_1()
+            .border_color(border.opacity(0.75))
+            .child(
+                h_flex()
+                    .w_full()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_semibold()
+                            .text_color(muted)
+                            .truncate()
+                            .child(t("library.sideload.preview.title")),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded_full()
+                            .bg(status_bg)
+                            .text_xs()
+                            .font_medium()
+                            .text_color(status_fg)
+                            .child(status_label),
+                    ),
+            )
+            .child(cover_card)
+            .child(banner_card)
+            .children(url_editor)
+            .child(
+                Button::new("sideload-fetch-art")
+                    .debug_selector(|| "sideload-fetch-art".into())
+                    .w_full()
+                    .outline()
+                    .icon(IconName::Sparkles)
+                    .label(fetch_label)
+                    .tooltip(t("library.sideload.fetch_art_tooltip"))
+                    .loading(fetching_art)
+                    .disabled(fetching_art || title_empty)
+                    .on_click(cx.listener(|this, _, window, cx| this.fetch_art(window, cx))),
+            )
             .into_any_element()
     }
 
@@ -1656,8 +2375,21 @@ impl SideloadDialog {
     }
 
     #[cfg(test)]
-    pub(crate) fn set_details_tab_for_test(&mut self, tab: DetailsTab, cx: &mut Context<Self>) {
-        self.details_tab = tab;
+    pub(crate) fn toggle_compat_for_test(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.compat_expanded = open;
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_env_vars_for_test(
+        &mut self,
+        value: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = value.to_string();
+        self.env_vars
+            .update(cx, |s, cx| s.set_value(value, window, cx));
         cx.notify();
     }
 
@@ -1844,9 +2576,15 @@ impl Render for SideloadDialog {
         let installer_busy = self.installer.is_busy();
         let installer_panel = windows.then(|| self.render_installer_state(cx)).flatten();
         let platform = self.platform;
-        let wine = self.wine.clone().filter(|_| windows);
-        let more = self.more;
-        let details = more.then(|| self.render_details(window, cx));
+        let compat_card = self
+            .wine
+            .clone()
+            .filter(|_| windows)
+            .map(|wine| self.render_compatibility_card(wine, cx));
+        let launch_card = self.render_launch_details_card(cx);
+        let artwork_panel = self.render_artwork_panel(window, cx);
+        let split = visible_size(window).width >= window.rem_size() * 48.;
+
         let theme = cx.theme();
         let primary = theme.primary;
         let active_fg = active_accent(cx);
@@ -1894,44 +2632,28 @@ impl Render for SideloadDialog {
                     })
                     .child(Icon::new(platform_icon(p)).xsmall().flex_shrink_0())
                     .child(div().min_w_0().truncate().child(platform_label(p)))
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                    .on_click(cx.listener(move |this, _, window, cx| {
                         if this.platform != p {
                             this.platform = p;
                             this.error = None;
+                            let placeholder = env_placeholder(p);
+                            this.env_vars
+                                .update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
                             cx.notify();
                         }
                     }))
             }));
 
-        let title_empty = text(&self.title, cx).is_empty();
-        let fetching_art = self.fetching_art;
-
-        v_flex()
-            .id("sideload-form")
-            .gap_4()
-            .children(hints)
+        let left_column = v_flex()
+            .flex_1()
+            .min_w_0()
+            .gap_3()
             .child(
                 v_form()
                     .child(
-                        field().label(t("library.sideload.field.title")).child(
-                            h_flex()
-                                .w_full()
-                                .gap_2()
-                                .child(div().flex_1().min_w_0().child(Input::new(&self.title)))
-                                .child(
-                                    Button::new("sideload-fetch-art")
-                                        .debug_selector(|| "sideload-fetch-art".into())
-                                        .outline()
-                                        .icon(IconName::ImageDown)
-                                        .label(t("library.sideload.fetch_art"))
-                                        .tooltip(t("library.sideload.fetch_art_tooltip"))
-                                        .loading(fetching_art)
-                                        .disabled(fetching_art || title_empty)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.fetch_art(window, cx)
-                                        })),
-                                ),
-                        ),
+                        field()
+                            .label(t("library.sideload.field.title"))
+                            .child(Input::new(&self.title)),
                     )
                     .child(
                         field()
@@ -1940,47 +2662,57 @@ impl Render for SideloadDialog {
                             .child(platform_selector),
                     )
                     .when(!browser, |form| {
+                        let exec_header = h_flex()
+                            .w_full()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_sm()
+                                    .font_medium()
+                                    .text_color(fg)
+                                    .child(t("library.sideload.field.executable")),
+                            )
+                            .when(windows, |row| {
+                                row.child(
+                                    Button::new("run-installer")
+                                        .xsmall()
+                                        .ghost()
+                                        .text_color(active_fg)
+                                        .icon(IconName::PackageOpen)
+                                        .label(t("library.sideload.need_installer"))
+                                        .tooltip(t("library.sideload.run_installer_tooltip"))
+                                        .loading(installer_busy)
+                                        .disabled(installer_busy)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.run_installer(window, cx)
+                                        })),
+                                )
+                            });
                         form.child(
                             field()
-                                .label(t("library.sideload.field.executable"))
+                                .label_indent(false)
                                 .description(match platform {
                                     SideloadPlatform::Windows => {
                                         t("library.sideload.executable_hint.windows")
                                     }
                                     _ => t("library.sideload.executable_hint.native"),
                                 })
-                                .child(
+                                .child(v_flex().w_full().gap_1p5().child(exec_header).child(
                                     self.path_row(
                                         "browse-executable",
                                         |this| &this.executable,
                                         false,
                                         cx,
-                                    )
-                                    .flex_wrap()
-                                    .when(windows, |row| {
-                                        row.child(
-                                            Button::new("run-installer")
-                                                .outline()
-                                                .icon(IconName::PackageOpen)
-                                                .label(t("library.sideload.run_installer"))
-                                                .tooltip(t(
-                                                    "library.sideload.run_installer_tooltip",
-                                                ))
-                                                .loading(installer_busy)
-                                                .disabled(installer_busy)
-                                                .on_click(cx.listener(|this, _, window, cx| {
-                                                    this.run_installer(window, cx)
-                                                })),
-                                        )
-                                    }),
-                                ),
+                                    ),
+                                )),
                         )
                         .when_some(installer_panel, |form, panel| {
                             form.child(field().label_indent(false).child(panel))
                         })
-                    })
-                    .when_some(wine, |form, wine| {
-                        form.child(field().label_indent(false).child(wine))
                     })
                     .when(browser, |form| {
                         form.child(
@@ -1990,33 +2722,36 @@ impl Render for SideloadDialog {
                         )
                     }),
             )
-            .child(
-                h_flex().child(
-                    Button::new("sideload-more")
-                        .ghost()
-                        .small()
-                        .icon(if more {
-                            IconName::ChevronDown
-                        } else {
-                            IconName::ChevronRight
-                        })
-                        .label(if more {
-                            t("library.sideload.fewer_details")
-                        } else {
-                            t("library.sideload.more_details")
-                        })
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.more = !this.more;
-                            cx.notify();
-                        })),
-                ),
-            )
-            .children(details)
+            .children(compat_card)
+            .child(launch_card);
+
+        let body = if split {
+            h_flex()
+                .w_full()
+                .items_start()
+                .gap_4()
+                .child(left_column)
+                .child(div().w(rems(17.5)).flex_shrink_0().child(artwork_panel))
+                .into_any_element()
+        } else {
+            v_flex()
+                .w_full()
+                .gap_4()
+                .child(left_column)
+                .child(artwork_panel)
+                .into_any_element()
+        };
+
+        v_flex()
+            .id("sideload-form")
+            .gap_3p5()
+            .children(hints)
+            .child(body)
     }
 }
 
-/// The dialog's footer: the error, Cancel and Add (or Save), outside the
-/// scrolling form so they never move out of sight.
+/// The dialog's footer: the error, readiness hint, Cancel and Add (or Save),
+/// outside the scrolling form so they never move out of sight.
 pub struct SideloadFooter {
     dialog: Entity<SideloadDialog>,
     _observe: Subscription,
@@ -2039,9 +2774,24 @@ impl Render for SideloadFooter {
             return v_flex().id("sideload-footer");
         }
         let adding = state.editing.is_none();
+        let browser = state.platform == SideloadPlatform::Browser;
         let saving = state.saving;
         let error = state.error.clone();
+        let (hint, ready) = state.readiness_hint(cx);
         let dialog = self.dialog.clone();
+
+        let theme = cx.theme();
+        let muted = theme.muted_foreground;
+        let ready_fg = legible(theme.success, &[theme.background], TEXT_CONTRAST, cx);
+
+        let submit_label = if !adding {
+            t("library.common.save")
+        } else if browser {
+            t("library.sideload.add_web_app")
+        } else {
+            t("library.sideload.add_game")
+        };
+
         v_flex()
             .id("sideload-footer")
             .w_full()
@@ -2052,28 +2802,43 @@ impl Render for SideloadFooter {
             .child(
                 h_flex()
                     .w_full()
-                    .justify_end()
+                    .items_center()
+                    .justify_between()
                     .flex_wrap()
                     .gap_2()
                     .child(
-                        Button::new("sideload-cancel")
-                            .ghost()
-                            .label(t("library.common.cancel"))
-                            .on_click(|_, window, cx| window.close_dialog(cx)),
+                        h_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .items_center()
+                            .gap_1p5()
+                            .text_xs()
+                            .text_color(if ready { ready_fg } else { muted })
+                            .when(ready, |row| {
+                                row.child(Icon::new(IconName::Check).xsmall().flex_shrink_0())
+                            })
+                            .child(div().min_w_0().truncate().child(hint)),
                     )
                     .child(
-                        Button::new("sideload-save")
-                            .primary()
-                            .label(if adding {
-                                t("library.sideload.add")
-                            } else {
-                                t("library.common.save")
-                            })
-                            .loading(saving)
-                            .disabled(saving)
-                            .on_click(move |_, window, cx| {
-                                dialog.update(cx, |d, cx| d.save(window, cx));
-                            }),
+                        h_flex()
+                            .flex_shrink_0()
+                            .gap_2()
+                            .child(
+                                Button::new("sideload-cancel")
+                                    .ghost()
+                                    .label(t("library.common.cancel"))
+                                    .on_click(|_, window, cx| window.close_dialog(cx)),
+                            )
+                            .child(
+                                Button::new("sideload-save")
+                                    .primary()
+                                    .label(submit_label)
+                                    .loading(saving)
+                                    .disabled(saving)
+                                    .on_click(move |_, window, cx| {
+                                        dialog.update(cx, |d, cx| d.save(window, cx));
+                                    }),
+                            ),
                     ),
             )
     }
@@ -2107,7 +2872,9 @@ fn open(editing: Option<String>, prefill: Option<SideloadApp>, window: &mut Wind
 
 fn show(view: Entity<SideloadDialog>, window: &mut Window, cx: &mut App) {
     let footer = cx.new(|cx| SideloadFooter::new(view.clone(), cx));
-    let width = dialog_width(window, 40.);
+    let visible_w = visible_size(window).width;
+    let max_w = (visible_w - window.rem_size() * 3.).max(dialog_width(window, 26.));
+    let width = dialog_width(window, 52.).min(max_w);
     let focus = Cell::new(true);
     window.open_dialog(cx, move |dialog, window, cx| {
         if focus.replace(false) {
@@ -2326,5 +3093,56 @@ mod tests {
             Some("Void Reaver")
         );
         assert_eq!(title_from_executable(Path::new("/")), None);
+    }
+
+    #[test]
+    fn env_vars_parse_and_format_round_trip() {
+        let parsed = parse_env_vars("PROTON_ENABLE_NVAPI=1 DXVK_HUD=\"fps,frametimes\" MANGOHUD=1")
+            .expect("valid env pairs");
+        assert_eq!(
+            parsed,
+            vec![
+                EnvVar {
+                    key: "PROTON_ENABLE_NVAPI".into(),
+                    value: "1".into(),
+                },
+                EnvVar {
+                    key: "DXVK_HUD".into(),
+                    value: "fps,frametimes".into(),
+                },
+                EnvVar {
+                    key: "MANGOHUD".into(),
+                    value: "1".into(),
+                },
+            ]
+        );
+        let formatted = format_env_vars(&[
+            EnvVar {
+                key: "A".into(),
+                value: "1".into(),
+            },
+            EnvVar {
+                key: "GAME_TITLE".into(),
+                value: "Hollow Knight".into(),
+            },
+        ]);
+        assert_eq!(formatted, "A=1 GAME_TITLE=\"Hollow Knight\"");
+        assert_eq!(
+            parse_env_vars(&formatted).expect("round-trip parses"),
+            vec![
+                EnvVar {
+                    key: "A".into(),
+                    value: "1".into(),
+                },
+                EnvVar {
+                    key: "GAME_TITLE".into(),
+                    value: "Hollow Knight".into(),
+                },
+            ]
+        );
+        assert!(parse_env_vars("   ").expect("empty parses").is_empty());
+        assert!(parse_env_vars("NOT_A_PAIR").is_err());
+        assert!(parse_env_vars("1BAD=value").is_err());
+        assert!(parse_env_vars("=value").is_err());
     }
 }
