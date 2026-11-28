@@ -1132,9 +1132,10 @@ fn fps_value_color(sim_fps: u32, profile: &MangoHudProfile, palette: &PreviewPal
     if !profile.fps_color_change {
         return palette.text;
     }
-    if sim_fps <= 30 {
+    let (low, high) = profile.effective_fps_color_thresholds();
+    if sim_fps <= low {
         hex_to_hsla("B22222", "B22222", 1.0)
-    } else if sim_fps <= 60 {
+    } else if sim_fps <= high {
         hex_to_hsla("FDFD09", "FDFD09", 1.0)
     } else {
         hex_to_hsla("39F900", "39F900", 1.0)

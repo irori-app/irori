@@ -3,15 +3,16 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::select::SelectItem;
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Entity, Hsla, IntoElement as _, ParentElement as _, SharedString, Styled as _,
-    Window, div, px, rgb,
+    AnyElement, App, Entity, Hsla, InteractiveElement as _, IntoElement as _, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px, rgb,
 };
-use irori_core::hud::{resolve_effective_hud, sanitize_hex6};
+use irori_core::hud::{DEFAULT_TOGGLE_HUD, resolve_effective_hud, sanitize_hex6};
 use irori_core::{
     GameHudMode, GameHudSettings, GlobalHudMode, GlobalHudSettings, GpuSelection, HudBackend,
     HudColorPalette, MangoHudProfile, MetalHudSettings, Paths, ResolvedHud, ThemeHudColors,
@@ -24,6 +25,7 @@ use irori_ui::i18n::t_args;
 use irori_ui::theme::theme_hud_colors;
 
 use crate::hud::color_wheel::wcag_contrast_ratio;
+use crate::hud::shortcut_recorder::format_shortcut_display;
 use crate::widgets::{RowState, field_row, group_heading, group_panel};
 
 use super::HudPanelScope;
@@ -201,12 +203,28 @@ pub(super) struct CachedDisplay {
     pub(super) inherit_summary: SharedString,
     pub(super) steam_snippet: Option<SharedString>,
     pub(super) custom_swatches: [Hsla; 11],
-    /// Metric band titles with the enabled count (GPU, CPU, FPS, runtime).
-    pub(super) band_titles: [SharedString; 4],
+    /// `(enabled, total)` counts per metric band (GPU, CPU, FPS, runtime).
+    pub(super) band_counts: [(usize, usize); 4],
+    /// Compact `on/total` badges per metric band (GPU, CPU, FPS, runtime).
+    pub(super) band_count_badges: [SharedString; 4],
+    /// Total active metrics summary for the Metrics tab header (e.g. `10 active`).
+    pub(super) metrics_total_active: SharedString,
     /// Active HUD palette color dots for each metric band header (GPU, CPU, FPS, runtime).
     pub(super) band_dots: [Hsla; 4],
     /// Compact summary of how many presets are in the in-game cycle (e.g. `5 in cycle`).
     pub(super) in_cycle_summary: SharedString,
+    /// Start-hidden help line referencing the active toggle shortcut.
+    pub(super) start_hidden_help: SharedString,
+    /// FPS threshold summary line (e.g. `Red <= 30, yellow 31-60, green > 60 FPS.`).
+    pub(super) fps_threshold_summary: SharedString,
+    /// Start of the middle FPS color range (`low + 1`).
+    pub(super) fps_mid_start: SharedString,
+    /// Upper FPS color cutoff formatted for the `> {high} FPS` badge.
+    pub(super) fps_high_value: SharedString,
+    /// WCAG contrast ratio between custom Text and Background colors.
+    pub(super) wcag_ratio: f32,
+    /// Formatted WCAG contrast ratio (e.g. `20.6:1`).
+    pub(super) wcag_ratio_label: SharedString,
     /// Inline contrast warning when custom Text and Background colors have low contrast.
     pub(super) low_contrast_notice: Option<SharedString>,
     /// GPU, CPU and RAM sample colors for each palette button, in the order
@@ -236,7 +254,7 @@ pub(super) fn metric_chip(
     on_click: impl Fn(&gpui_kit::ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Button {
     let btn = if active {
-        Button::new(id).primary()
+        Button::new(id).primary().icon(IconName::Check)
     } else {
         Button::new(id).outline()
     };
@@ -246,15 +264,41 @@ pub(super) fn metric_chip(
 pub(super) fn locked_metric_chip(
     id: &'static str,
     label: SharedString,
+    auto_badge: SharedString,
     reason: SharedString,
-) -> Button {
-    Button::new(id)
-        .primary()
-        .small()
-        .icon(IconName::Lock)
-        .disabled(true)
-        .label(label)
-        .tooltip(reason)
+    cx: &App,
+) -> AnyElement {
+    let (primary, fg, radius) = {
+        let theme = cx.theme();
+        (theme.primary, theme.foreground, theme.radius)
+    };
+    h_flex()
+        .id(id)
+        .h_7()
+        .px_2p5()
+        .gap_1p5()
+        .items_center()
+        .rounded(radius)
+        .border_1()
+        .border_color(primary)
+        .bg(primary.opacity(0.16))
+        .text_xs()
+        .font_medium()
+        .text_color(fg)
+        .cursor_default()
+        .tooltip(move |window, cx| Tooltip::new(reason.clone()).build(window, cx))
+        .child(Icon::new(IconName::Lock).xsmall())
+        .child(label)
+        .child(
+            div()
+                .px_1()
+                .rounded(px(4.))
+                .bg(primary.opacity(0.22))
+                .text_xs()
+                .text_color(fg.opacity(0.85))
+                .child(auto_badge),
+        )
+        .into_any_element()
 }
 
 /// Focusable info icon that shows `help` in its tooltip.
@@ -321,12 +365,21 @@ pub(super) fn legacy_hud_toggle(scope: &HudPanelScope, hud_backend: HudBackend, 
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn compact_slider_cell(
     label: SharedString,
     value_label: SharedString,
     state: &Entity<SliderState>,
-    muted_fg: Hsla,
+    is_default: bool,
+    reset_id: &'static str,
+    reset_tooltip: SharedString,
+    on_reset: impl Fn(&gpui_kit::ClickEvent, &mut Window, &mut App) + 'static,
+    cx: &App,
 ) -> gpui_kit::Div {
+    let (muted_fg, mono_font) = {
+        let theme = cx.theme();
+        (theme.muted_foreground, theme.mono_font_family.clone())
+    };
     v_flex()
         .flex_1()
         .min_w_0()
@@ -339,17 +392,33 @@ pub(super) fn compact_slider_cell(
                 .gap_2()
                 .child(
                     div()
-                        .text_xs()
-                        .font_semibold()
+                        .text_sm()
+                        .font_medium()
                         .truncate()
                         .child(label.clone()),
                 )
                 .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted_fg)
+                    h_flex()
+                        .items_center()
+                        .gap_1()
                         .flex_shrink_0()
-                        .child(value_label),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(mono_font)
+                                .text_color(muted_fg)
+                                .child(value_label),
+                        )
+                        .child(
+                            Button::new(reset_id)
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::RotateCcw)
+                                .disabled(is_default)
+                                .accessibility_label(reset_tooltip.clone())
+                                .tooltip(reset_tooltip)
+                                .on_click(on_reset),
+                        ),
                 ),
         )
         .child(Slider::new(state).accessibility_label(label))
@@ -658,7 +727,6 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
             p.frametime,
             p.frame_timing,
             p.present_mode,
-            p.fps_use_label,
         ]),
         tally(&[
             p.wine,
@@ -670,25 +738,16 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
             p.gamepad_battery,
         ]),
     ];
-    let groups = [
-        &labels.group_metrics_gpu,
-        &labels.group_metrics_cpu,
-        &labels.group_metrics_fps,
-        &labels.group_metrics_runtime,
-    ];
-    let band_titles = std::array::from_fn(|ix| {
+    let band_count_badges = std::array::from_fn(|ix| {
         let (on, total) = counts[ix];
-        let on = on.to_string();
-        let total = total.to_string();
-        t_args(
-            "settings.hud.metrics.band_count",
-            &[
-                ("group", groups[ix].as_ref()),
-                ("on", on.as_str()),
-                ("total", total.as_str()),
-            ],
-        )
+        SharedString::from(format!("{on}/{total}"))
     });
+    let total_active: usize = counts.iter().map(|(on, _)| *on).sum();
+    let total_active_str = total_active.to_string();
+    let metrics_total_active = t_args(
+        "settings.hud.metrics.active_count",
+        &[("count", total_active_str.as_str())],
+    );
 
     let ctx = ConfRenderContext {
         gpu_vendor: default_gpu_vendor(&profile.gpu_selection, &env.gpus),
@@ -711,14 +770,42 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
         &[("count", cycle_count.as_str())],
     );
 
+    let toggle_key_raw = if profile.toggle_hud.trim().is_empty() {
+        DEFAULT_TOGGLE_HUD
+    } else {
+        profile.toggle_hud.trim()
+    };
+    let toggle_key_display = format_shortcut_display(toggle_key_raw);
+    let start_hidden_help = t_args(
+        "settings.hud.no_display.help_with_key",
+        &[("key", toggle_key_display.as_str())],
+    );
+
+    let (fps_low, fps_high) = profile.effective_fps_color_thresholds();
+    let fps_low_str = fps_low.to_string();
+    let fps_mid_str = (fps_low + 1).to_string();
+    let fps_high_str = fps_high.to_string();
+    let fps_threshold_summary = t_args(
+        "settings.hud.fps_color_change.summary",
+        &[
+            ("low", fps_low_str.as_str()),
+            ("mid", fps_mid_str.as_str()),
+            ("high", fps_high_str.as_str()),
+        ],
+    );
+    let fps_mid_start = SharedString::from(fps_mid_str);
+    let fps_high_value = SharedString::from(fps_high_str);
+
+    let wcag_ratio = wcag_contrast_ratio(
+        &profile.custom_colors.text_color,
+        &profile.custom_colors.background_color,
+    );
+    let wcag_ratio_label = SharedString::from(format!("{wcag_ratio:.1}:1"));
+
     let low_contrast_notice =
         if profile.palette == HudColorPalette::Custom && profile.background_alpha >= 0.30 {
-            let ratio = wcag_contrast_ratio(
-                &profile.custom_colors.text_color,
-                &profile.custom_colors.background_color,
-            );
-            (ratio < 4.5).then(|| {
-                let ratio_str = format!("{ratio:.1}");
+            (wcag_ratio < 4.5).then(|| {
+                let ratio_str = format!("{wcag_ratio:.1}");
                 t_args(
                     "settings.hud.color.low_contrast",
                     &[("ratio", ratio_str.as_str())],
@@ -756,9 +843,17 @@ pub(super) fn build_cached_display(inputs: DisplayInputs<'_>, cx: &App) -> Cache
         inherit_summary,
         steam_snippet,
         custom_swatches,
-        band_titles,
+        band_counts: counts,
+        band_count_badges,
+        metrics_total_active,
         band_dots,
         in_cycle_summary,
+        start_hidden_help,
+        fps_threshold_summary,
+        fps_mid_start,
+        fps_high_value,
+        wcag_ratio,
+        wcag_ratio_label,
         low_contrast_notice,
         palette_dots,
     }

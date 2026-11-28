@@ -652,3 +652,92 @@ fn frame_pacing_can_be_changed_and_persisted_while_fps_limit_is_off(cx: &mut Tes
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn fps_color_thresholds_and_layout_reset_render_and_isolate_per_game(cx: &mut TestAppContext) {
+    let (handle, panel) = open_hud(cx, HudPanelScope::Global, Some(HudBackend::MangoHud));
+    cx.update_window(handle, |_, window, cx| {
+        panel.update(cx, |p, cx| {
+            p.set_global_mode(GlobalHudMode::IroriProfile, window, cx);
+            p.active_tab = super::HudTab::Appearance;
+            p.edit_mangohud(window, cx, |m| {
+                m.fps_color_change = true;
+                m.set_fps_color_thresholds(60, 120);
+            });
+            assert_eq!(p.fps_threshold_low_input.read(cx).value().as_ref(), "60");
+            assert_eq!(p.fps_threshold_high_input.read(cx).value().as_ref(), "120");
+            assert!(p.display.fps_threshold_summary.contains("61-120"));
+
+            // Layout tab reset restores sliders and spacing toggles.
+            p.active_tab = super::HudTab::Layout;
+            p.edit_mangohud(window, cx, |m| {
+                m.font_scale = 1.4;
+                m.round_corners = 16;
+                m.background_alpha = 0.8;
+                m.alpha = 0.7;
+                m.hud_compact = true;
+                m.hud_no_margin = true;
+            });
+            p.reset_layout_defaults(window, cx);
+            let m = p.active_mangohud();
+            assert!((m.font_scale - 1.0).abs() < 0.01);
+            assert_eq!(m.round_corners, 8);
+            assert!((m.background_alpha - 0.5).abs() < 0.01);
+            assert!((m.alpha - 1.0).abs() < 0.01);
+            assert!(!m.hud_compact);
+            assert!(!m.hud_no_margin);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    // Per-game Custom starts from global 60/120 and isolates edits.
+    let game_id = GameId::new(Runner::Gog, "hud-fps-threshold-game");
+    let (g_handle, g_panel) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                HudPanel::new(
+                    HudPanelScope::PerGame {
+                        id: game_id,
+                        is_native_linux: false,
+                        is_steam: false,
+                    },
+                    Some(HudBackend::MangoHud),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .expect("open per-game hud window")
+    });
+    cx.run_until_parked();
+    cx.update_window(g_handle, |_, window, cx| {
+        g_panel.update(cx, |p, cx| {
+            p.set_game_mode(GameHudMode::Custom, window, cx);
+            assert_eq!(
+                p.active_mangohud().effective_fps_color_thresholds(),
+                (60, 120)
+            );
+            p.edit_mangohud(window, cx, |m| {
+                m.set_fps_color_thresholds(45, 90);
+            });
+            assert_eq!(
+                p.active_mangohud().effective_fps_color_thresholds(),
+                (45, 90)
+            );
+        });
+        assert_eq!(
+            irori_ui::backend(cx)
+                .settings
+                .app()
+                .hud
+                .mangohud
+                .effective_fps_color_thresholds(),
+            (60, 120)
+        );
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+}
