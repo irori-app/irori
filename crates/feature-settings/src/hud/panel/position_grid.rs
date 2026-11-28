@@ -7,7 +7,7 @@ use gpui_kit::{
     AnyElement, App, ClickEvent, InteractiveElement as _, IntoElement as _, ParentElement as _,
     SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
-use irori_core::{HudPosition, MetalHudAlignment};
+use irori_core::{HudOrientation, HudPosition, MetalHudAlignment};
 
 /// Map [`HudPosition`] to its index in `HudLabels::position_labels` (`HudPosition::ALL`).
 pub(super) fn position_label_index(pos: HudPosition) -> usize {
@@ -17,11 +17,12 @@ pub(super) fn position_label_index(pos: HudPosition) -> usize {
 /// Interactive 3x3 16:9 monitor anchor picker for MangoHud's 8 screen positions.
 pub(super) fn render_mangohud_position_grid(
     current: HudPosition,
+    orientation: HudOrientation,
     position_labels: &[SharedString; 8],
     on_select: impl Fn(HudPosition, &ClickEvent, &mut Window, &mut App) + Clone + 'static,
     cx: &App,
 ) -> AnyElement {
-    let (bg, card_bg, border, hover_bg, primary, muted_fg) = {
+    let (bg, card_bg, border, hover_bg, primary, primary_fg, muted_fg) = {
         let theme = cx.theme();
         (
             theme.background,
@@ -29,6 +30,7 @@ pub(super) fn render_mangohud_position_grid(
             theme.border,
             theme.muted,
             theme.primary,
+            theme.primary_foreground,
             theme.muted_foreground,
         )
     };
@@ -37,18 +39,38 @@ pub(super) fn render_mangohud_position_grid(
         let active = current == pos;
         let tip = position_labels[position_label_index(pos)].clone();
         let on_select = on_select.clone();
-        div()
+        let mut el = div()
             .id(id)
             .flex_1()
             .h_full()
+            .flex()
+            .items_center()
+            .justify_center()
             .rounded(px(4.))
             .border_1()
             .border_color(if active { primary } else { border })
             .bg(if active { primary } else { card_bg })
             .cursor_pointer()
-            .hover(move |s| if active { s } else { s.bg(hover_bg) })
+            .hover(move |s| {
+                if active {
+                    s
+                } else {
+                    s.bg(hover_bg).border_color(muted_fg)
+                }
+            })
             .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
-            .on_click(move |ev, window, cx| on_select(pos, ev, window, cx))
+            .on_click(move |ev, window, cx| on_select(pos, ev, window, cx));
+
+        if active {
+            let cue = match orientation {
+                HudOrientation::Vertical => div().w(px(6.)).h(px(16.)),
+                HudOrientation::Horizontal => div().w(px(22.)).h(px(6.)),
+            }
+            .rounded(px(2.))
+            .bg(primary_fg.opacity(0.85));
+            el = el.child(cue);
+        }
+        el
     };
 
     let center_cell = div()

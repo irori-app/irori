@@ -13,6 +13,26 @@ pub const DEFAULT_TOGGLE_HUD: &str = "Shift_R+F12";
 /// Default MangoHud preset cycling shortcut matching MangoHud's factory default.
 pub const DEFAULT_TOGGLE_PRESET: &str = "Shift_R+F10";
 
+/// Default lower FPS threshold (red up to this value) for `fps_color_change`.
+pub const DEFAULT_FPS_COLOR_LOW: u32 = 30;
+
+/// Default upper FPS threshold (yellow up to this value, green above) for `fps_color_change`.
+pub const DEFAULT_FPS_COLOR_HIGH: u32 = 60;
+
+/// Minimum allowed FPS color threshold value.
+pub const MIN_FPS_COLOR_THRESHOLD: u32 = 1;
+
+/// Maximum allowed FPS color threshold value.
+pub const MAX_FPS_COLOR_THRESHOLD: u32 = 999;
+
+const fn default_fps_color_low() -> u32 {
+    DEFAULT_FPS_COLOR_LOW
+}
+
+const fn default_fps_color_high() -> u32 {
+    DEFAULT_FPS_COLOR_HIGH
+}
+
 /// Active HUD backend for the host operating system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -421,6 +441,10 @@ pub struct MangoHudProfile {
     pub palette: HudColorPalette,
     pub custom_colors: ThemeHudColors,
     pub fps_color_change: bool,
+    #[serde(default = "default_fps_color_low")]
+    pub fps_color_low: u32,
+    #[serde(default = "default_fps_color_high")]
+    pub fps_color_high: u32,
 
     // Hardware selection and labels
     pub gpu_selection: GpuSelection,
@@ -494,6 +518,8 @@ impl MangoHudProfile {
             palette: HudColorPalette::MangoHudDefault,
             custom_colors: ThemeHudColors::default(),
             fps_color_change: false,
+            fps_color_low: DEFAULT_FPS_COLOR_LOW,
+            fps_color_high: DEFAULT_FPS_COLOR_HIGH,
             gpu_selection: GpuSelection::AutoDedicated,
             gpu_label_override: String::new(),
             cpu_label_override: String::new(),
@@ -799,6 +825,24 @@ impl MangoHudProfile {
     /// include in MangoHud's in-game preset cycle (`[preset 6]`).
     pub const fn has_custom_horizontal_preset(&self) -> bool {
         matches!(self.preset, HudPreset::CustomHorizontal) || self.saved_custom_horizontal.is_some()
+    }
+
+    /// Normalized `(low, high)` FPS color thresholds guaranteed to satisfy
+    /// `1 <= low < high <= 999`.
+    pub fn effective_fps_color_thresholds(&self) -> (u32, u32) {
+        let low = self
+            .fps_color_low
+            .clamp(MIN_FPS_COLOR_THRESHOLD, MAX_FPS_COLOR_THRESHOLD - 1);
+        let high = self.fps_color_high.clamp(low + 1, MAX_FPS_COLOR_THRESHOLD);
+        (low, high)
+    }
+
+    /// Update the low and high FPS color cutoffs, clamping so `1 <= low < high <= 999`.
+    pub fn set_fps_color_thresholds(&mut self, low: u32, high: u32) {
+        let low = low.clamp(MIN_FPS_COLOR_THRESHOLD, MAX_FPS_COLOR_THRESHOLD - 1);
+        let high = high.clamp(low + 1, MAX_FPS_COLOR_THRESHOLD);
+        self.fps_color_low = low;
+        self.fps_color_high = high;
     }
 
     /// Ordered preset cycle starting with `self.preset` so MangoHud launches
@@ -1447,5 +1491,64 @@ mod tests {
         let before = profile.custom_snapshot();
         profile.apply_preset(HudPreset::Custom);
         assert_eq!(profile.custom_snapshot(), before);
+    }
+
+    #[test]
+    fn fps_color_thresholds_default_clamp_and_respect_per_game_scope() {
+        let legacy: MangoHudProfile = serde_json::from_str("{}").unwrap();
+        assert_eq!(
+            legacy.effective_fps_color_thresholds(),
+            (DEFAULT_FPS_COLOR_LOW, DEFAULT_FPS_COLOR_HIGH)
+        );
+
+        let mut global = GlobalHudSettings {
+            mode: GlobalHudMode::IroriProfile,
+            ..Default::default()
+        };
+        global.mangohud.fps_color_change = true;
+        global.mangohud.set_fps_color_thresholds(60, 120);
+        assert_eq!(global.mangohud.effective_fps_color_thresholds(), (60, 120));
+
+        // InheritGlobal picks up global custom thresholds.
+        let inherited = GameHudSettings::default();
+        let ResolvedHud::MangoHudProfile(resolved_inherited) =
+            resolve_effective_hud(&global, &inherited, false, false, HudBackend::MangoHud)
+        else {
+            panic!("expected MangoHudProfile");
+        };
+        assert_eq!(
+            resolved_inherited.effective_fps_color_thresholds(),
+            (60, 120)
+        );
+
+        // Per-game Custom starts from global and stays isolated on edits.
+        let mut per_game = GameHudSettings {
+            mode: GameHudMode::Custom,
+            ..Default::default()
+        };
+        per_game.ensure_custom_from(&global);
+        assert_eq!(
+            per_game
+                .custom_mangohud
+                .as_ref()
+                .unwrap()
+                .effective_fps_color_thresholds(),
+            (60, 120)
+        );
+        per_game
+            .custom_mangohud
+            .as_mut()
+            .unwrap()
+            .set_fps_color_thresholds(90, 90);
+        assert_eq!(
+            per_game
+                .custom_mangohud
+                .as_ref()
+                .unwrap()
+                .effective_fps_color_thresholds(),
+            (90, 91)
+        );
+        // Global remains untouched.
+        assert_eq!(global.mangohud.effective_fps_color_thresholds(), (60, 120));
     }
 }

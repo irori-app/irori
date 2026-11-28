@@ -72,6 +72,18 @@ fn parse_keycaps(combo: &str) -> Vec<SharedString> {
         .collect()
 }
 
+/// Human-readable shortcut label (`Shift (R) + F12`) for inline help text.
+pub(crate) fn format_shortcut_display(combo: &str) -> String {
+    let caps = parse_keycaps(combo);
+    if caps.is_empty() {
+        return format_shortcut_display(DEFAULT_TOGGLE_HUD);
+    }
+    caps.iter()
+        .map(SharedString::as_ref)
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
 type ShortcutChangeHandler = Rc<dyn Fn(SharedString, &mut Window, &mut App)>;
 
 /// Interactive MangoHud shortcut recorder.
@@ -253,11 +265,10 @@ impl Render for ShortcutRecorder {
         if self.language.changed() {
             self.labels = ShortcutLabels::load();
         }
-        let (muted_fg, border, cap_bg, mono_font) = {
+        let (muted_fg, cap_bg, mono_font) = {
             let theme = cx.theme();
             (
                 theme.muted_foreground,
-                theme.border,
                 theme.secondary,
                 theme.mono_font_family.clone(),
             )
@@ -286,8 +297,6 @@ impl Render for ShortcutRecorder {
                         .py(px(1.))
                         .rounded(px(4.))
                         .bg(cap_bg)
-                        .border_1()
-                        .border_color(border)
                         .font_family(mono_font.clone())
                         .text_xs()
                         .child(cap.clone()),
@@ -333,7 +342,6 @@ impl Render for ShortcutRecorder {
                 h_flex()
                     .gap_1p5()
                     .items_center()
-                    .child(main_btn)
                     .when(self.has_modifiers, |row| {
                         let side_group = ButtonGroup::new(id_side_group)
                             .outline()
@@ -359,6 +367,7 @@ impl Render for ShortcutRecorder {
                             }));
                         row.child(side_group)
                     })
+                    .child(main_btn)
                     .child(reset_btn),
             )
             .when(self.show_wayland_note, |col| {

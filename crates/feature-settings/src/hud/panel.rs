@@ -29,7 +29,8 @@ use gpui_kit::{
     div,
 };
 use irori_core::hud::{
-    DEFAULT_TOGGLE_HUD, DEFAULT_TOGGLE_PRESET, sanitize_hex6, sanitize_hud_label,
+    DEFAULT_FPS_COLOR_HIGH, DEFAULT_FPS_COLOR_LOW, DEFAULT_TOGGLE_HUD, DEFAULT_TOGGLE_PRESET,
+    MAX_FPS_COLOR_THRESHOLD, MIN_FPS_COLOR_THRESHOLD, sanitize_hex6, sanitize_hud_label,
 };
 use irori_core::{
     GameHudMode, GameHudSettings, GameId, GlobalHudMode, GlobalHudSettings, HudBackend,
@@ -120,6 +121,8 @@ pub struct HudPanel {
     gpu_label_input: Entity<InputState>,
     cpu_label_input: Entity<InputState>,
     fps_limit_input: Entity<InputState>,
+    fps_threshold_low_input: Entity<InputState>,
+    fps_threshold_high_input: Entity<InputState>,
     round_corners_slider: Entity<SliderState>,
     font_scale_slider: Entity<SliderState>,
     bg_alpha_slider: Entity<SliderState>,
@@ -186,7 +189,7 @@ impl HudPanel {
                 "hud-preset-shortcut",
                 DEFAULT_TOGGLE_PRESET,
                 active_profile.toggle_preset.clone(),
-                true,
+                false,
                 move |combo, window, cx| {
                     let _ = weak_preset.update(cx, |this, cx| {
                         this.edit_mangohud(window, cx, |p| {
@@ -230,6 +233,18 @@ impl HudPanel {
         let fps_limit_input = cx.new(|cx| {
             let mut s = InputState::new(window, cx).placeholder(fps_limit_placeholder);
             s.set_value(fps_limit_text, window, cx);
+            s
+        });
+
+        let (fps_low, fps_high) = active_profile.effective_fps_color_thresholds();
+        let fps_threshold_low_input = cx.new(|cx| {
+            let mut s = InputState::new(window, cx).placeholder(DEFAULT_FPS_COLOR_LOW.to_string());
+            s.set_value(fps_low.to_string(), window, cx);
+            s
+        });
+        let fps_threshold_high_input = cx.new(|cx| {
+            let mut s = InputState::new(window, cx).placeholder(DEFAULT_FPS_COLOR_HIGH.to_string());
+            s.set_value(fps_high.to_string(), window, cx);
             s
         });
 
@@ -375,6 +390,59 @@ impl HudPanel {
         ));
 
         subscriptions.push(cx.subscribe_in(
+            &fps_threshold_low_input,
+            window,
+            |this, state, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                    let (cur_low, cur_high) =
+                        this.active_mangohud().effective_fps_color_thresholds();
+                    let raw = state.read(cx).value().trim().to_string();
+                    let next_low = raw
+                        .parse::<u32>()
+                        .ok()
+                        .map(|v| v.clamp(MIN_FPS_COLOR_THRESHOLD, MAX_FPS_COLOR_THRESHOLD - 1))
+                        .unwrap_or(cur_low);
+                    let next_high = cur_high.max(next_low + 1);
+                    let low_str = next_low.to_string();
+                    if state.read(cx).value().as_ref() != low_str {
+                        state.update(cx, |s, cx| s.set_value(low_str, window, cx));
+                    }
+                    if (next_low, next_high) != (cur_low, cur_high) {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.set_fps_color_thresholds(next_low, next_high);
+                        });
+                    }
+                }
+            },
+        ));
+
+        subscriptions.push(cx.subscribe_in(
+            &fps_threshold_high_input,
+            window,
+            |this, state, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                    let (cur_low, cur_high) =
+                        this.active_mangohud().effective_fps_color_thresholds();
+                    let raw = state.read(cx).value().trim().to_string();
+                    let next_high = raw
+                        .parse::<u32>()
+                        .ok()
+                        .map(|v| v.clamp(cur_low + 1, MAX_FPS_COLOR_THRESHOLD))
+                        .unwrap_or(cur_high);
+                    let high_str = next_high.to_string();
+                    if state.read(cx).value().as_ref() != high_str {
+                        state.update(cx, |s, cx| s.set_value(high_str, window, cx));
+                    }
+                    if next_high != cur_high {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.set_fps_color_thresholds(cur_low, next_high);
+                        });
+                    }
+                }
+            },
+        ));
+
+        subscriptions.push(cx.subscribe_in(
             &round_corners_slider,
             window,
             |this, _, event: &SliderEvent, window, cx| {
@@ -483,6 +551,8 @@ impl HudPanel {
             gpu_label_input,
             cpu_label_input,
             fps_limit_input,
+            fps_threshold_low_input,
+            fps_threshold_high_input,
             round_corners_slider,
             font_scale_slider,
             bg_alpha_slider,
@@ -858,6 +928,17 @@ impl HudPanel {
         });
     }
 
+    pub(super) fn reset_layout_defaults(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.edit_mangohud(window, cx, |p| {
+            p.font_scale = 1.0;
+            p.round_corners = 8;
+            p.background_alpha = 0.5;
+            p.alpha = 1.0;
+            p.hud_compact = false;
+            p.hud_no_margin = false;
+        });
+    }
+
     fn edit_mangohud_color(
         &mut self,
         slot: ColorSlot,
@@ -1038,6 +1119,30 @@ impl HudPanel {
         {
             self.fps_limit_input
                 .update(cx, |s, cx| s.set_value(fps_text, window, cx));
+        }
+
+        let (fps_low, fps_high) = profile.effective_fps_color_thresholds();
+        let fps_low_text = fps_low.to_string();
+        if !self
+            .fps_threshold_low_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+            && self.fps_threshold_low_input.read(cx).value().as_ref() != fps_low_text
+        {
+            self.fps_threshold_low_input
+                .update(cx, |s, cx| s.set_value(fps_low_text, window, cx));
+        }
+        let fps_high_text = fps_high.to_string();
+        if !self
+            .fps_threshold_high_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+            && self.fps_threshold_high_input.read(cx).value().as_ref() != fps_high_text
+        {
+            self.fps_threshold_high_input
+                .update(cx, |s, cx| s.set_value(fps_high_text, window, cx));
         }
 
         self.round_corners_slider.update(cx, |s, cx| {

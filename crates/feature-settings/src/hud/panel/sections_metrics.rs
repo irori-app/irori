@@ -1,5 +1,9 @@
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
+use gpui_kit::component::switch::Switch;
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Sizable as _, StyledExt as _, h_flex, v_flex,
+};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, Context, Hsla, IntoElement as _, ParentElement as _, SharedString, Styled as _,
     div, px,
@@ -12,8 +16,15 @@ use super::helpers::{locked_metric_chip, metric_chip};
 
 impl HudPanel {
     pub(super) fn render_metrics_tab(&self, cx: &mut Context<Self>) -> AnyElement {
-        let border = cx.theme().border;
-        let muted_fg = cx.theme().muted_foreground;
+        let (border, bg, muted_fg, mono_font) = {
+            let theme = cx.theme();
+            (
+                theme.border,
+                theme.background,
+                theme.muted_foreground,
+                theme.mono_font_family.clone(),
+            )
+        };
         let p = self.active_mangohud();
         let gpu_locked = p.gpu_stats_locked();
         let cpu_locked = p.cpu_stats_locked();
@@ -25,7 +36,9 @@ impl HudPanel {
                 locked_metric_chip(
                     "hud-metric-gpu-stats",
                     self.labels.metric_gpu_stats.clone(),
+                    self.labels.metric_locked_auto.clone(),
                     self.labels.metric_gpu_stats_locked.clone(),
+                    cx,
                 )
             } else {
                 metric_chip(
@@ -40,7 +53,20 @@ impl HudPanel {
                         });
                     }),
                 )
+                .into_any_element()
             })
+            .child(metric_chip(
+                "hud-metric-vram",
+                self.labels.metric_vram.clone(),
+                self.labels.metric_vram_help.clone(),
+                p.vram,
+                cx.listener(|this, _, window, cx| {
+                    this.edit_mangohud(window, cx, |p| {
+                        p.vram = !p.vram;
+                        p.mark_custom();
+                    });
+                }),
+            ))
             .child(metric_chip(
                 "hud-metric-gpu-temp",
                 self.labels.metric_gpu_temp.clone(),
@@ -124,18 +150,6 @@ impl HudPanel {
                         p.mark_custom();
                     });
                 }),
-            ))
-            .child(metric_chip(
-                "hud-metric-vram",
-                self.labels.metric_vram.clone(),
-                self.labels.metric_vram_help.clone(),
-                p.vram,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.vram = !p.vram;
-                        p.mark_custom();
-                    });
-                }),
             ));
 
         let cpu_chips = h_flex()
@@ -145,7 +159,9 @@ impl HudPanel {
                 locked_metric_chip(
                     "hud-metric-cpu-stats",
                     self.labels.metric_cpu_stats.clone(),
+                    self.labels.metric_locked_auto.clone(),
                     self.labels.metric_cpu_stats_locked.clone(),
+                    cx,
                 )
             } else {
                 metric_chip(
@@ -160,6 +176,7 @@ impl HudPanel {
                         });
                     }),
                 )
+                .into_any_element()
             })
             .child(metric_chip(
                 "hud-metric-cpu-temp",
@@ -284,19 +301,46 @@ impl HudPanel {
                         p.mark_custom();
                     });
                 }),
-            ))
-            .child(metric_chip(
-                "hud-metric-fps-use-label",
-                self.labels.metric_fps_use_label.clone(),
-                self.labels.metric_fps_use_label_help.clone(),
-                p.fps_use_label,
-                cx.listener(|this, _, window, cx| {
-                    this.edit_mangohud(window, cx, |p| {
-                        p.fps_use_label = !p.fps_use_label;
-                        p.mark_custom();
-                    });
-                }),
             ));
+
+        let fps_label_row = h_flex()
+            .w_full()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .pt_2p5()
+            .border_t_1()
+            .border_color(border.opacity(0.65))
+            .when(!p.fps, |row| row.opacity(0.55))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_0p5()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_medium()
+                            .child(self.labels.metric_fps_use_label.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_fg)
+                            .child(self.labels.metric_fps_use_label_help.clone()),
+                    ),
+            )
+            .child(
+                Switch::new("hud-metric-fps-use-label")
+                    .checked(p.fps_use_label)
+                    .disabled(!p.fps)
+                    .accessibility_label(self.labels.metric_fps_use_label.clone())
+                    .on_change(cx.listener(|this, on: &bool, window, cx| {
+                        this.edit_mangohud(window, cx, |p| {
+                            p.fps_use_label = *on;
+                        });
+                    })),
+            );
 
         let runtime_chips = h_flex()
             .flex_wrap()
@@ -390,17 +434,20 @@ impl HudPanel {
             Box<dyn Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App)>;
 
         let band = |title: SharedString,
+                    count_badge: SharedString,
+                    (on_count, total_count): (usize, usize),
                     dot_color: Hsla,
                     all_id: &'static str,
                     clear_id: &'static str,
                     on_all: ClickAction,
                     on_clear: ClickAction,
-                    chips: gpui_kit::Div| {
+                    chips: gpui_kit::Div,
+                    footer: Option<gpui_kit::Div>| {
             v_flex()
                 .w_full()
                 .px_4()
                 .py_3()
-                .gap_2()
+                .gap_2p5()
                 .child(
                     h_flex()
                         .w_full()
@@ -420,12 +467,19 @@ impl HudPanel {
                                         .border_1()
                                         .border_color(border),
                                 )
+                                .child(div().text_sm().font_medium().child(title))
                                 .child(
                                     div()
+                                        .px_1p5()
+                                        .py(px(1.))
+                                        .rounded(px(5.))
+                                        .bg(bg)
+                                        .border_1()
+                                        .border_color(border)
+                                        .font_family(mono_font.clone())
                                         .text_xs()
-                                        .font_semibold()
                                         .text_color(muted_fg)
-                                        .child(title),
+                                        .child(count_badge),
                                 ),
                         )
                         .child(
@@ -436,26 +490,58 @@ impl HudPanel {
                                     Button::new(all_id)
                                         .ghost()
                                         .xsmall()
+                                        .disabled(on_count == total_count)
                                         .label(self.labels.metrics_all.clone())
                                         .on_click(move |ev, window, cx| on_all(ev, window, cx)),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(border)
+                                        .child(SharedString::new_static("|")),
                                 )
                                 .child(
                                     Button::new(clear_id)
                                         .ghost()
                                         .xsmall()
+                                        .disabled(on_count == 0)
                                         .label(self.labels.metrics_clear.clone())
                                         .on_click(move |ev, window, cx| on_clear(ev, window, cx)),
                                 ),
                         ),
                 )
                 .child(chips)
+                .when_some(footer, |col, extra| col.child(extra))
         };
 
-        let [gpu_title, cpu_title, fps_title, runtime_title] = self.display.band_titles.clone();
+        let [gpu_badge, cpu_badge, fps_badge, runtime_badge] =
+            self.display.band_count_badges.clone();
+        let [gpu_counts, cpu_counts, fps_counts, runtime_counts] = self.display.band_counts;
         let [gpu_dot, cpu_dot, fps_dot, runtime_dot] = self.display.band_dots;
-        group_panel(cx)
+
+        let header = h_flex()
+            .w_full()
+            .items_center()
+            .justify_between()
+            .pt_2()
+            .pb_1()
+            .child(irori_ui::style::caption(
+                self.labels.group_visible_metrics.clone(),
+                cx,
+            ))
+            .child(
+                div()
+                    .text_xs()
+                    .font_family(mono_font.clone())
+                    .text_color(muted_fg)
+                    .child(self.display.metrics_total_active.clone()),
+            );
+
+        let panel = group_panel(cx)
             .child(band(
-                gpu_title,
+                self.labels.group_metrics_gpu.clone(),
+                gpu_badge,
+                gpu_counts,
                 gpu_dot,
                 "hud-band-gpu-all",
                 "hud-band-gpu-clear",
@@ -488,9 +574,12 @@ impl HudPanel {
                     });
                 })),
                 gpu_chips,
+                None,
             ))
             .child(div().border_t_1().border_color(border).child(band(
-                cpu_title,
+                self.labels.group_metrics_cpu.clone(),
+                cpu_badge,
+                cpu_counts,
                 cpu_dot,
                 "hud-band-cpu-all",
                 "hud-band-cpu-clear",
@@ -515,9 +604,12 @@ impl HudPanel {
                     });
                 })),
                 cpu_chips,
+                None,
             )))
             .child(div().border_t_1().border_color(border).child(band(
-                fps_title,
+                self.labels.group_metrics_fps.clone(),
+                fps_badge,
+                fps_counts,
                 fps_dot,
                 "hud-band-fps-all",
                 "hud-band-fps-clear",
@@ -529,7 +621,6 @@ impl HudPanel {
                         p.frametime = true;
                         p.frame_timing = true;
                         p.present_mode = true;
-                        p.fps_use_label = true;
                         p.mark_custom();
                     });
                 })),
@@ -541,14 +632,16 @@ impl HudPanel {
                         p.frametime = false;
                         p.frame_timing = false;
                         p.present_mode = false;
-                        p.fps_use_label = false;
                         p.mark_custom();
                     });
                 })),
                 fps_chips,
+                Some(fps_label_row),
             )))
             .child(div().border_t_1().border_color(border).child(band(
-                runtime_title,
+                self.labels.group_metrics_runtime.clone(),
+                runtime_badge,
+                runtime_counts,
                 runtime_dot,
                 "hud-band-runtime-all",
                 "hud-band-runtime-clear",
@@ -577,7 +670,13 @@ impl HudPanel {
                     });
                 })),
                 runtime_chips,
-            )))
+                None,
+            )));
+
+        v_flex()
+            .w_full()
+            .child(header)
+            .child(panel)
             .into_any_element()
     }
 }

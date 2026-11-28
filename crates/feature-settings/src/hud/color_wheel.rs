@@ -7,7 +7,6 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui_kit::{App, AppContext as _, Context, Entity, IntoElement, Render, SharedString, Window};
-pub(crate) use irori_ui::components::ColorSwatchTrigger;
 pub(crate) use irori_ui::components::color_wheel::wcag_contrast_ratio;
 use irori_ui::components::{
     ColorWheel, ColorWheelLabels as SharedLabels, ColorWheelPick, ColorWheelReset, ColorWheelSwatch,

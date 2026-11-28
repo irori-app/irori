@@ -180,8 +180,9 @@ pub fn render_mangohud_conf(profile: &MangoHudProfile, ctx: &ConfRenderContext) 
         );
     }
     if profile.fps_color_change {
+        let (low, high) = profile.effective_fps_color_thresholds();
         out.push_str("fps_color_change\n");
-        out.push_str("fps_value=30,60\n");
+        let _ = writeln!(out, "fps_value={low},{high}");
         out.push_str("fps_color=B22222,FDFD09,39F900\n");
     }
 
@@ -676,5 +677,21 @@ mod tests {
         assert!(l_nv.contains(&"gpu_color=76B900"));
         assert!(l_nv.contains(&"vram_color=76B900"));
         assert!(l_nv.contains(&"cpu_color=ED1C24"));
+    }
+
+    #[test]
+    fn custom_fps_color_thresholds_emit_clamped_fps_value() {
+        let mut p = MangoHudProfile::from_preset(HudPreset::BalancedGaming);
+        p.fps_color_change = true;
+        p.set_fps_color_thresholds(60, 120);
+        let conf = render_mangohud_conf(&p, &ConfRenderContext::default());
+        let l = lines(&conf);
+        assert!(l.contains(&"fps_color_change"));
+        assert!(l.contains(&"fps_value=60,120"));
+
+        p.fps_color_low = 144;
+        p.fps_color_high = 60;
+        let clamped = render_mangohud_conf(&p, &ConfRenderContext::default());
+        assert!(lines(&clamped).contains(&"fps_value=144,145"));
     }
 }
