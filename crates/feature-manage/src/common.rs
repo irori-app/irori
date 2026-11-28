@@ -140,6 +140,29 @@ pub(crate) fn card_grid_capped(
     cards: Vec<AnyElement>,
     window: &Window,
 ) -> Div {
+    card_grid_inner(width, min_card, max_columns, cards, true, window)
+}
+
+/// Like [`card_grid_capped`], but sizes each row to its own tallest card so a
+/// tall card in one row does not leave empty space in other rows.
+pub(crate) fn card_grid_natural_rows(
+    width: &Rc<Cell<Pixels>>,
+    min_card: f32,
+    max_columns: u16,
+    cards: Vec<AnyElement>,
+    window: &Window,
+) -> Div {
+    card_grid_inner(width, min_card, max_columns, cards, false, window)
+}
+
+fn card_grid_inner(
+    width: &Rc<Cell<Pixels>>,
+    min_card: f32,
+    max_columns: u16,
+    cards: Vec<AnyElement>,
+    equal_rows: bool,
+    window: &Window,
+) -> Div {
     let cap = max_columns.max(1);
     let measured = width.get();
     let columns = if measured > px(0.) {
@@ -148,7 +171,15 @@ pub(crate) fn card_grid_capped(
         DEFAULT_COLUMNS.min(cap)
     };
     let rows = cards.len().div_ceil(usize::from(columns)).max(1);
+    let row_count = u16::try_from(rows).unwrap_or(u16::MAX);
     let width = width.clone();
+    let mut grid = div().w_full().grid().grid_cols(columns).gap_4();
+    grid = if equal_rows {
+        // Fractional rows share the tallest card's height.
+        grid.grid_rows_min_content(row_count)
+    } else {
+        grid.grid_rows_max_content(row_count).items_start()
+    };
     div()
         .relative()
         .w_full()
@@ -168,16 +199,7 @@ pub(crate) fn card_grid_capped(
             .left_0()
             .size_full(),
         )
-        .child(
-            div()
-                .w_full()
-                .grid()
-                .grid_cols(columns)
-                // Fractional rows share the tallest card's height.
-                .grid_rows_min_content(u16::try_from(rows).unwrap_or(u16::MAX))
-                .gap_4()
-                .children(cards),
-        )
+        .child(grid.children(cards))
 }
 
 #[cfg(test)]
