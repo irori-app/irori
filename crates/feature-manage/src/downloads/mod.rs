@@ -18,6 +18,8 @@ mod when_done;
 
 pub use add_dialog::open_add_download_dialog;
 pub use indicator::{DownloadsBadge, DownloadsPanel, DownloadsPill};
+#[cfg(test)]
+pub(crate) use when_done::set_power_choices_for_tests;
 pub use when_done::{
     DownloadCommand, download_command_keywords, download_commands, keep_on, run_download_command,
 };

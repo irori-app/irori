@@ -60,6 +60,15 @@ fn power_choices_loaded(cx: &mut App) -> Option<Vec<PowerAction>> {
     None
 }
 
+/// Pre-populate [`PowerChoices`] in UI tests so `power_menu_button` renders
+/// deterministically without racing an asynchronous `logind`/OS probe.
+#[cfg(test)]
+pub(crate) fn set_power_choices_for_tests(actions: Vec<PowerAction>, cx: &mut App) {
+    let state = cx.default_global::<PowerChoices>();
+    state.actions = Some(actions);
+    state.asking = false;
+}
+
 /// Of what [`irori_services::Backend::power_actions`] offers, what a
 /// finished queue may do: sleep and power off. Empty until the system has
 /// answered; the answer redraws the windows.
