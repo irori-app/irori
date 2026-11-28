@@ -1314,16 +1314,25 @@ fn emulators_page_constrains_width_and_hides_search_on_achievements(cx: &mut Tes
     );
 }
 
-#[gpui_kit::test]
-fn emulators_page_opens_retroarch_cores_dialog(cx: &mut TestAppContext) {
-    setup(cx);
-    let (handle, _view) = cx.update(|cx| {
-        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-            cx.new(|cx| crate::EmulatorsView::new(window, cx))
+fn open_emulators_window(cx: &mut TestAppContext, w: f32, h: f32) -> VisualTestContext {
+    let (handle, _) = cx.update(|cx| {
+        let bounds = Bounds::centered(None, size(px(w), px(h)), cx);
+        let opts = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            ..Default::default()
+        };
+        gpui_kit::open_window(opts, cx, |w, cx| {
+            cx.new(|cx| crate::EmulatorsView::new(w, cx))
         })
         .expect("window opens")
     });
-    let mut vcx = VisualTestContext::from_window(handle, cx);
+    VisualTestContext::from_window(handle, cx)
+}
+
+#[gpui_kit::test]
+fn emulators_page_opens_retroarch_cores_dialog(cx: &mut TestAppContext) {
+    setup(cx);
+    let mut vcx = open_emulators_window(cx, 1200., 1200.);
     for _ in 0..200 {
         vcx.run_until_parked();
         if vcx.debug_bounds("manage-retroarch-cores").is_some() {
@@ -1345,53 +1354,43 @@ fn emulators_page_opens_retroarch_cores_dialog(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn emulators_page_features_retroarch_and_avoids_false_bios_badge(cx: &mut TestAppContext) {
     setup(cx);
-    let options = cx.update(|cx| WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-            None,
-            size(px(1400.), px(900.)),
-            cx,
-        ))),
-        ..Default::default()
-    });
-    let (handle, _view) = cx.update(|cx| {
-        gpui_kit::open_window(options, cx, |window, cx| {
-            cx.new(|cx| crate::EmulatorsView::new(window, cx))
-        })
-        .expect("window opens")
-    });
-    let mut vcx = VisualTestContext::from_window(handle, cx);
+    let mut vcx = open_emulators_window(cx, 1400., 1200.);
+    let ra_dl = irori_engines::engine("retroarch")
+        .unwrap()
+        .downloadable_on(irori_engines::Host::current());
+    let standalone_id = if ra_dl {
+        "engine-duckstation"
+    } else {
+        "engine-mame"
+    };
     for _ in 0..200 {
         vcx.run_until_parked();
         if vcx.debug_bounds("engine-retroarch").is_some()
-            && vcx.debug_bounds("engine-duckstation").is_some()
+            && (!ra_dl || vcx.debug_bounds(standalone_id).is_some())
         {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    vcx.update(|window, cx| {
-        let _ = window.draw(cx);
-    });
-    vcx.run_until_parked();
+    if !ra_dl && vcx.debug_bounds("expand-manual-engines").is_some() {
+        click(&mut vcx, "expand-manual-engines");
+    }
+    for _ in 0..2 {
+        vcx.update(|w, cx| _ = w.draw(cx));
+        vcx.run_until_parked();
+    }
 
-    let retro = vcx
-        .debug_bounds("engine-retroarch")
-        .expect("featured RetroArch card rendered");
-    let duck = vcx
-        .debug_bounds("engine-duckstation")
-        .expect("standalone DuckStation card rendered");
+    let retro = vcx.debug_bounds("engine-retroarch").expect("RetroArch");
+    let standalone = vcx.debug_bounds(standalone_id).expect("standalone card");
     assert!(
-        retro.size.width > duck.size.width * 1.5,
-        "RetroArch spans full width above the standalone grid: retro={retro:?}, duck={duck:?}"
+        retro.size.width > standalone.size.width * 1.5,
+        "RetroArch spans full width: retro={retro:?}, standalone={standalone:?}"
     );
     assert!(
-        duck.top() >= retro.bottom(),
-        "standalone grid starts below featured RetroArch card"
+        standalone.top() >= retro.bottom(),
+        "standalone grid starts below RetroArch"
     );
-    assert!(
-        vcx.debug_bounds("systems-attention-badge").is_none(),
-        "no false Systems warning badge when the library has zero emulated games"
-    );
+    assert!(vcx.debug_bounds("systems-attention-badge").is_none());
 }
 
 #[gpui_kit::test]

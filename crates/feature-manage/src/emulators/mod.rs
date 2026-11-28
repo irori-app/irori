@@ -123,6 +123,11 @@ pub(crate) fn classify_engine(status: &EngineStatus, host: Host) -> EngineSectio
     }
 }
 
+/// RetroArch stays a featured hub card even in `Manual` (e.g. Linux/Windows ARM64).
+pub(crate) fn is_featured_engine(manifest: &EngineManifest) -> bool {
+    manifest.kind == EngineKind::Retroarch
+}
+
 /// Only systems with games in the library raise missing-emulator or BIOS alerts.
 pub(crate) fn system_needs_attention(game_count: usize, ready: bool, bios_warn: bool) -> bool {
     game_count > 0 && (!ready || bios_warn)
@@ -1756,7 +1761,7 @@ impl EmulatorsView {
                 },
             );
 
-        let (mut installed_hero, mut available_hero) = (None, None);
+        let (mut installed_hero, mut available_hero, mut manual_hero) = (None, None, None);
         let mut installed_cards = Vec::new();
         let mut available_cards = Vec::new();
         let mut manual_cards = Vec::new();
@@ -1774,9 +1779,8 @@ impl EmulatorsView {
             if !matches_filter {
                 continue;
             }
-            let featured =
-                status.manifest.kind == EngineKind::Retroarch && section != EngineSection::Manual;
-            if section == EngineSection::Manual {
+            let featured = is_featured_engine(&status.manifest);
+            if section == EngineSection::Manual && !featured {
                 manual_names.push(status.manifest.name.clone());
             }
             let rendered = self.render_engine(status, featured, cx);
@@ -1785,15 +1789,18 @@ impl EmulatorsView {
                 (EngineSection::Installed, false) => installed_cards.push(rendered),
                 (EngineSection::Available, true) => available_hero = Some(rendered),
                 (EngineSection::Available, false) => available_cards.push(rendered),
-                (EngineSection::Manual, _) => manual_cards.push(rendered),
+                (EngineSection::Manual, true) => manual_hero = Some(rendered),
+                (EngineSection::Manual, false) => manual_cards.push(rendered),
             }
         }
 
         let has_installed = installed_hero.is_some() || !installed_cards.is_empty();
         let has_available = available_hero.is_some() || !available_cards.is_empty();
-        let has_manual = !manual_cards.is_empty();
+        let has_manual_cards = !manual_cards.is_empty();
+        let has_manual = manual_hero.is_some() || has_manual_cards;
         let empty = !has_installed && !has_available && !has_manual;
         let can_collapse_manual = (has_installed || has_available)
+            && has_manual_cards
             && query.is_empty()
             && self.engine_filter == EngineFilter::All;
         let manual_expanded = !can_collapse_manual || self.show_manual;
@@ -1868,7 +1875,8 @@ impl EmulatorsView {
                     v_flex()
                         .gap_3()
                         .child(title)
-                        .when(manual_expanded, |sec| {
+                        .children(manual_hero)
+                        .when(manual_expanded && has_manual_cards, |sec| {
                             sec.child(card_grid_natural_rows(
                                 &self.manual_grid_width,
                                 COMPACT_CARD_REM,
@@ -1877,24 +1885,18 @@ impl EmulatorsView {
                                 window,
                             ))
                         })
-                        .when(!manual_expanded, |sec| {
+                        .when(!manual_expanded && has_manual_cards, |sec| {
+                            let preview = t_args(
+                                "manage.emulators.manual_preview",
+                                &[("engines", &manual_preview)],
+                            );
                             sec.child(
                                 card(cx).py_3().child(
                                     row_between()
-                                        .child(
-                                            muted_xs(
-                                                t_args(
-                                                    "manage.emulators.manual_preview",
-                                                    &[("engines", &manual_preview)],
-                                                ),
-                                                cx,
-                                            )
-                                            .flex_1()
-                                            .min_w_0()
-                                            .truncate(),
-                                        )
+                                        .child(muted_xs(preview, cx).flex_1().min_w_0().truncate())
                                         .child(
                                             Button::new("expand-manual-engines")
+                                                .debug_selector(|| "expand-manual-engines".into())
                                                 .outline()
                                                 .small()
                                                 .label(t("manage.emulators.expand_catalog"))
@@ -3063,10 +3065,8 @@ mod tests {
 
     #[test]
     fn classify_engine_splits_installed_available_and_manual() {
-        let linux = Host {
-            os: Os::Linux,
-            arch: "x86_64",
-        };
+        let host = |os, arch| Host { os, arch };
+        let linux = host(Os::Linux, "x86_64");
         let installed = fake_status("duckstation", true, true, false);
         assert_eq!(classify_engine(&installed, linux), EngineSection::Installed);
 
@@ -3078,6 +3078,18 @@ mod tests {
 
         let manual = fake_status("duckstation", false, false, false);
         assert_eq!(classify_engine(&manual, linux), EngineSection::Manual);
+
+        let retroarch = fake_status("retroarch", false, false, true);
+        assert_eq!(
+            classify_engine(&retroarch, host(Os::Linux, "aarch64")),
+            EngineSection::Manual
+        );
+        assert_eq!(
+            classify_engine(&retroarch, host(Os::Windows, "aarch64")),
+            EngineSection::Manual
+        );
+        assert!(is_featured_engine(&retroarch.manifest));
+        assert!(!is_featured_engine(&manual.manifest));
     }
 
     #[test]
