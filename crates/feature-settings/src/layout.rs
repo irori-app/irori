@@ -275,6 +275,7 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.stores.epic"
         | "iroriUi.stores.gog"
         | "iroriUi.stores.amazon"
+        | "iroriNews"
         | "iroriDeals"
         | "zoomPlatform"
         | "iroriItchIo"

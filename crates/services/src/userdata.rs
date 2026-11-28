@@ -98,6 +98,12 @@ pub struct UserData {
         skip_serializing_if = "crate::field_rules::FieldRules::is_empty"
     )]
     pub field_rules: crate::field_rules::FieldRules,
+    /// Non-installed games the user explicitly follows in News.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub news_followed: BTreeSet<String>,
+    /// Games the user muted from the unified News feed.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub news_muted: BTreeSet<String>,
 }
 
 /// A playtime record's length in seconds.
@@ -200,6 +206,8 @@ impl UserData {
             &mut self.favourites,
             &mut self.hidden,
             &mut self.recent_dismissed,
+            &mut self.news_followed,
+            &mut self.news_muted,
         ] {
             if set.remove(from) {
                 set.insert(to.to_string());
@@ -271,7 +279,12 @@ impl UserData {
     /// copy's favourite or hidden flag, the status set last, the first
     /// rating.
     pub fn share_between(&mut self, keys: &[String]) {
-        for set in [&mut self.favourites, &mut self.hidden] {
+        for set in [
+            &mut self.favourites,
+            &mut self.hidden,
+            &mut self.news_followed,
+            &mut self.news_muted,
+        ] {
             if keys.iter().any(|k| set.contains(k)) {
                 set.extend(keys.iter().cloned());
             }
@@ -957,6 +970,30 @@ impl UserDataService {
     pub fn set_hidden(&self, id: &GameId, on: bool) {
         let keys = self.keys_with_copies(std::slice::from_ref(id));
         self.update(Some(id), |d| toggle(&mut d.hidden, &keys, on));
+    }
+
+    /// Follow or unfollow a game (every copy of its entry) in News.
+    pub fn set_news_followed(&self, id: &GameId, on: bool) {
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| {
+            toggle(&mut d.news_followed, &keys, on);
+            if on {
+                toggle(&mut d.news_muted, &keys, false);
+            }
+        });
+        self.bus.emit(Event::NewsChanged);
+    }
+
+    /// Mute or unmute a game (every copy of its entry) in the unified News feed.
+    pub fn set_news_muted(&self, id: &GameId, on: bool) {
+        let keys = self.keys_with_copies(std::slice::from_ref(id));
+        self.update(Some(id), |d| {
+            toggle(&mut d.news_muted, &keys, on);
+            if on {
+                toggle(&mut d.news_followed, &keys, false);
+            }
+        });
+        self.bus.emit(Event::NewsChanged);
     }
 
     pub fn set_category(&self, id: &GameId, category: &str, on: bool) {

@@ -272,6 +272,10 @@ pub struct AppSettings {
     /// players gave than the strongest are left out too. Irori-only.
     #[serde(rename = "iroriSteamTagLimit")]
     pub steam_tag_limit: u32,
+    /// Show the News tab on the Stores page and on linked game pages; off,
+    /// news is neither shown nor asked for. Irori-only.
+    #[serde(rename = "iroriNews")]
+    pub news: bool,
     /// The user's own launch presets. Irori-only.
     #[serde(rename = "iroriLaunchPresets")]
     pub launch_presets: Vec<crate::launch_extras::LaunchPreset>,
@@ -361,6 +365,7 @@ impl Default for AppSettings {
             launchbox: false,
             steam_title_match: false,
             steam_tag_limit: DEFAULT_STEAM_TAG_LIMIT,
+            news: true,
             launch_presets: Vec::new(),
             ludusavi_path: String::new(),
             ludusavi_backup_path: String::new(),

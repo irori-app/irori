@@ -2010,6 +2010,8 @@
   "settings.field.idle_screen.label": "Idle screen",
   "settings.field.steam_tag_limit.help": "How many of a game’s strongest Steam tags the library keeps, from 5 to 20. Tags that far fewer players gave than the strongest one are left out.",
   "settings.field.steam_tag_limit.label": "Steam tags per game",
+  "settings.field.news.label": "Show news",
+  "settings.field.news.help": "Shows the News tab on the Stores page and on linked game pages. Turned off, Irori doesn’t fetch news.",
   "settings.field.steam_title_match.help": "Links games of other stores to the Steam app with the same title (edition names aside, released within a year of it) when no wiki names one, for Steam’s tags, store details and ProtonDB. A few games are looked up at a time, and the answers are kept for a month.",
   "settings.field.steam_title_match.label": "Find games on Steam by their exact title",
   "settings.option.idle_screen.slideshow": "Your games’ art, one after another",

@@ -156,6 +156,12 @@ pub struct Registers {
     /// empty for "remove".
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub field_rules: Lww<String, Option<String>>,
+    /// Games explicitly followed in News.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub news_followed: Lww<String, bool>,
+    /// Games muted in the unified News feed.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub news_muted: Lww<String, bool>,
 }
 
 /// A journal note with the game and day it belongs to.
@@ -199,6 +205,8 @@ impl Registers {
             max(&self.left_off),
             max(&self.playtime_adjust),
             max(&self.field_rules),
+            max(&self.news_followed),
+            max(&self.news_muted),
         ]
         .into_iter()
         .max()
@@ -416,6 +424,8 @@ pub fn record(
     );
     changed += note(&mut regs.playtime_adjust, &adjust_view(data), me, |_| plain);
     changed += note(&mut regs.field_rules, &rules_view(data), me, |_| plain);
+    changed += note(&mut regs.news_followed, &view.news_followed, me, |_| plain);
+    changed += note(&mut regs.news_muted, &view.news_muted, me, |_| plain);
     // Playtime removed here since the last sync, or back after a removal.
     for key in known_playtime {
         let removed = regs.playtime_removed.get(key).is_some_and(|r| r.value);
@@ -481,6 +491,8 @@ pub fn merge(local: Local<'_>, remotes: &[&Shared]) -> Merged {
     take_all!(left_off, ConflictField::Journal);
     take_all!(playtime_adjust, ConflictField::Playtime);
     take_all!(field_rules, ConflictField::Custom);
+    take_all!(news_followed, ConflictField::Custom);
+    take_all!(news_muted, ConflictField::Custom);
     for remote in remotes {
         take(
             &mut regs.smart_categories,
@@ -669,6 +681,8 @@ struct View {
     links: BTreeMap<String, Option<Vec<GameLink>>>,
     journal: BTreeMap<String, Option<SharedNote>>,
     left_off: BTreeMap<String, Option<LeftOff>>,
+    news_followed: BTreeMap<String, bool>,
+    news_muted: BTreeMap<String, bool>,
 }
 
 fn on(keys: &BTreeSet<String>) -> BTreeMap<String, bool> {
@@ -753,6 +767,8 @@ impl View {
                 .iter()
                 .map(|(k, l)| (k.clone(), Some(l.clone())))
                 .collect(),
+            news_followed: on(&d.news_followed),
+            news_muted: on(&d.news_muted),
         }
     }
 
@@ -794,6 +810,8 @@ impl View {
             links: values(&regs.links),
             journal: values(&regs.journal),
             left_off: values(&regs.left_off),
+            news_followed: values(&regs.news_followed),
+            news_muted: values(&regs.news_muted),
         }
     }
 
@@ -823,6 +841,8 @@ impl View {
             + differing(&self.links, &other.links)
             + differing(&self.journal, &other.journal)
             + differing(&self.left_off, &other.left_off)
+            + differing(&self.news_followed, &other.news_followed)
+            + differing(&self.news_muted, &other.news_muted)
     }
 
     /// Put these values into `d`, whose values were `before`. Returns how
@@ -831,6 +851,8 @@ impl View {
         let changed = self.differences(before);
         d.favourites = self.favourites.keys().cloned().collect();
         d.hidden = self.hidden.keys().cloned().collect();
+        d.news_followed = self.news_followed.keys().cloned().collect();
+        d.news_muted = self.news_muted.keys().cloned().collect();
         d.ratings = self
             .ratings
             .iter()
