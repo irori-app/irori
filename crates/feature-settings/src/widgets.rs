@@ -12,9 +12,10 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, AnyView, App, ClickEvent, Div, ElementId, Hsla, InteractiveElement as _,
     IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Window, div, rems,
+    Window, div, rems, transparent_black,
 };
 use irori_ui::i18n::{t, t_args};
+use irori_ui::style::{KeyboardFocusable as _, TEXT_CONTRAST, legible};
 
 /// Decorations of one field row besides its control.
 #[derive(Default)]
@@ -378,4 +379,79 @@ pub(crate) fn muted(text: impl Into<SharedString>, cx: &App) -> Div {
         .text_sm()
         .text_color(cx.theme().muted_foreground)
         .child(text.into())
+}
+
+/// Click callback stored by [`SegmentedOption`].
+pub(crate) type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+/// One option in [`segmented_choice`].
+pub(crate) struct SegmentedOption {
+    pub id: ElementId,
+    pub debug_id: String,
+    pub label: SharedString,
+    pub selected: bool,
+    pub on_click: ClickHandler,
+}
+
+/// Compact one-click segmented rail for short choice settings.
+pub(crate) fn segmented_choice(
+    options: impl IntoIterator<Item = SegmentedOption>,
+    disabled: bool,
+    cx: &App,
+) -> AnyElement {
+    let theme = cx.theme();
+    let (primary, bg, border, fg, muted, hover_bg, radius) = (
+        theme.primary,
+        theme.background,
+        theme.border,
+        theme.foreground,
+        theme.muted_foreground,
+        theme.secondary_hover,
+        theme.radius,
+    );
+    let active_fg = legible(primary, &[bg, theme.secondary], TEXT_CONTRAST, cx);
+
+    h_flex()
+        .p_0p5()
+        .gap_1()
+        .rounded(radius)
+        .bg(bg)
+        .border_1()
+        .border_color(border)
+        .flex_wrap()
+        .when(disabled, |d| d.opacity(0.5))
+        .children(options.into_iter().map(move |opt| {
+            let on_click = opt.on_click;
+            let debug_id = opt.debug_id;
+            h_flex()
+                .id(opt.id)
+                .debug_selector(move || debug_id.clone())
+                .items_center()
+                .justify_center()
+                .px_2p5()
+                .py_1()
+                .rounded_md()
+                .border_1()
+                .text_xs()
+                .whitespace_nowrap()
+                .when(!disabled, |d| d.cursor_pointer().keyboard_focusable(cx))
+                .when(opt.selected, |d| {
+                    d.bg(primary.opacity(0.18))
+                        .border_color(primary)
+                        .text_color(active_fg)
+                        .font_semibold()
+                })
+                .when(!opt.selected, |d| {
+                    d.border_color(transparent_black())
+                        .text_color(muted)
+                        .when(!disabled, |d| {
+                            d.hover(move |s| s.bg(hover_bg).text_color(fg))
+                        })
+                })
+                .child(opt.label)
+                .when(!disabled, |d| {
+                    d.on_click(move |event, window, cx| on_click(event, window, cx))
+                })
+        }))
+        .into_any_element()
 }

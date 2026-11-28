@@ -507,6 +507,27 @@ pub fn set_library_layout(layout: irori_core::settings::LibraryLayout, cx: &mut 
     .detach();
 }
 
+/// Pending request to open the Look popover as soon as the library view mounts.
+struct PendingOpenLook(bool);
+impl Global for PendingOpenLook {}
+
+pub(crate) fn take_pending_open_look(cx: &mut App) -> bool {
+    if !cx.has_global::<PendingOpenLook>() {
+        return false;
+    }
+    std::mem::replace(&mut cx.global_mut::<PendingOpenLook>().0, false)
+}
+
+/// Navigate to the Library screen and open its Look popover.
+pub fn open_look(cx: &mut App) {
+    if let Some(view) = view::remove::active_library(cx) {
+        view.update(cx, |v, cx| v.open_look_popover(cx));
+    } else {
+        cx.set_global(PendingOpenLook(true));
+    }
+    irori_ui::navigate(irori_ui::Route::Library, cx);
+}
+
 /// Show an error notification in `window`.
 pub(crate) fn notify_error(
     title: impl Into<gpui_kit::SharedString>,

@@ -153,6 +153,7 @@ pub fn hooks() -> Hooks {
     Hooks {
         import_from_heroic: Some(Arc::new(import_from_heroic)),
         open_emulation_setup: Some(Arc::new(irori_manage::open_emulation_setup)),
+        open_library_look: Some(Arc::new(|_, cx| irori_library::open_look(cx))),
         import_from_lutris: Some(Arc::new(|cx| {
             let backend = irori_ui::backend(cx);
             irori_ui::run(cx, async move {

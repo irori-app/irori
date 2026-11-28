@@ -80,9 +80,35 @@ pub const FONTS: &[&[u8]] = &[
 
 /// The bundled themes by family, in file order.
 #[derive(Default)]
-struct Families(Vec<Vec<(SharedString, bool)>>);
+struct Families(Vec<FamilyEntry>);
+
+struct FamilyEntry {
+    name: SharedString,
+    members: Vec<(SharedString, bool)>,
+}
 
 impl Global for Families {}
+
+/// Visual palette sample of one theme variant for the Appearance theme gallery.
+#[derive(Clone, Debug)]
+pub struct ThemeVariantPreview {
+    /// Registry theme name (`""` for the default/desktop theme).
+    pub name: SharedString,
+    /// Short label within the family (for example `"Mocha"` or `"Night"`).
+    pub short_label: SharedString,
+    pub dark: bool,
+    pub background: Hsla,
+    pub secondary: Hsla,
+    pub primary: Hsla,
+    pub border: Hsla,
+}
+
+/// One theme family shown as a card in the Appearance theme gallery.
+#[derive(Clone, Debug)]
+pub struct ThemeFamilyPreview {
+    pub name: SharedString,
+    pub variants: Vec<ThemeVariantPreview>,
+}
 
 /// The desktop's theme, while Irori runs on a desktop it follows. It lives here
 /// rather than in the theme registry because the registry never replaces a
@@ -722,11 +748,18 @@ pub(crate) fn bundled() -> &'static [&'static str] {
 }
 
 /// Names and modes of the themes in one bundled file.
-fn family_members(json: &str) -> Vec<(SharedString, bool)> {
+fn family_members(json: &str) -> FamilyEntry {
     let Ok(doc) = serde_json::from_str::<serde_json::Value>(json) else {
-        return Vec::new();
+        return FamilyEntry {
+            name: SharedString::default(),
+            members: Vec::new(),
+        };
     };
-    doc["themes"]
+    let name = doc["name"]
+        .as_str()
+        .map(|s| SharedString::from(s.to_string()))
+        .unwrap_or_default();
+    let members = doc["themes"]
         .as_array()
         .into_iter()
         .flatten()
@@ -734,7 +767,8 @@ fn family_members(json: &str) -> Vec<(SharedString, bool)> {
             let name = t["name"].as_str()?;
             Some((SharedString::from(name.to_string()), t["mode"] == "dark"))
         })
-        .collect()
+        .collect();
+    FamilyEntry { name, members }
 }
 
 /// The sibling of `name` in the other colour mode: the last theme of that mode
@@ -744,11 +778,122 @@ fn sibling(name: &str, dark: bool, cx: &App) -> Option<SharedString> {
     families
         .0
         .iter()
-        .find(|f| f.iter().any(|(n, _)| n.as_ref() == name))?
+        .find(|f| f.members.iter().any(|(n, _)| n.as_ref() == name))?
+        .members
         .iter()
         .rev()
         .find(|(_, d)| *d == dark)
         .map(|(n, _)| n.clone())
+}
+
+fn parse_config_color(value: Option<&SharedString>, fallback: Hsla) -> Hsla {
+    value
+        .and_then(|s| gpui_kit::component::try_parse_color(s.as_ref()).ok())
+        .unwrap_or(fallback)
+}
+
+fn variant_preview(
+    family_name: &str,
+    config: &ThemeConfig,
+    name_override: Option<SharedString>,
+    cx: &App,
+) -> ThemeVariantPreview {
+    let fallback = Theme::global(cx);
+    let bg = parse_config_color(config.colors.background.as_ref(), fallback.background);
+    let secondary = parse_config_color(config.colors.secondary.as_ref(), fallback.secondary);
+    let primary = parse_config_color(config.colors.primary.as_ref(), fallback.primary);
+    let border = parse_config_color(config.colors.border.as_ref(), fallback.border);
+    let name = name_override.unwrap_or_else(|| config.name.clone());
+    let short_label = name
+        .as_ref()
+        .strip_prefix(family_name)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| SharedString::from(s.to_string()))
+        .unwrap_or_else(|| name.clone());
+    ThemeVariantPreview {
+        name,
+        short_label,
+        dark: config.mode.is_dark(),
+        background: bg,
+        secondary,
+        primary,
+        border,
+    }
+}
+
+/// Bundled theme families with their real palette colors for the Appearance
+/// theme gallery.
+pub fn theme_families(cx: &App) -> Vec<ThemeFamilyPreview> {
+    let Some(families) = cx.try_global::<Families>() else {
+        return Vec::new();
+    };
+    let themes = ThemeRegistry::global(cx).themes();
+    families
+        .0
+        .iter()
+        .filter_map(|fam| {
+            let variants: Vec<ThemeVariantPreview> = fam
+                .members
+                .iter()
+                .filter_map(|(name, _)| {
+                    themes
+                        .get(name)
+                        .map(|cfg| variant_preview(&fam.name, cfg, None, cx))
+                })
+                .collect();
+            (!variants.is_empty()).then(|| ThemeFamilyPreview {
+                name: fam.name.clone(),
+                variants,
+            })
+        })
+        .collect()
+}
+
+/// Palette swatch of the default theme (followed desktop, wallpaper, desktop
+/// accent, or Irori Night/Day) for `dark`.
+pub fn default_theme_swatch(dark: bool, cx: &App) -> ThemeVariantPreview {
+    let fallback_name = if dark { DEFAULT_DARK } else { DEFAULT_LIGHT };
+    let desktop_cfg = shown_desktop(cx).and_then(|d| {
+        if dark {
+            d.dark.as_ref().or(d.light.as_ref())
+        } else {
+            d.light.as_ref().or(d.dark.as_ref())
+        }
+    });
+    let accent_cfg = cx.try_global::<DesktopAccent>().and_then(|a| {
+        if dark {
+            a.dark.as_ref()
+        } else {
+            a.light.as_ref()
+        }
+    });
+    let cfg = desktop_cfg
+        .cloned()
+        .or_else(|| accent_cfg.cloned())
+        .or_else(|| registered(fallback_name, cx));
+    match cfg {
+        Some(cfg) => variant_preview("", &cfg, Some(SharedString::default()), cx),
+        None => {
+            let theme = Theme::global(cx);
+            ThemeVariantPreview {
+                name: SharedString::default(),
+                short_label: SharedString::default(),
+                dark,
+                background: theme.background,
+                secondary: theme.secondary,
+                primary: theme.primary,
+                border: theme.border,
+            }
+        }
+    }
+}
+
+/// Whether this host exposes a separate desktop accent color (not already
+/// carried by a followed KDE/COSMIC/Omarchy desktop theme).
+pub fn has_system_accent(cx: &App) -> bool {
+    cx.try_global::<DesktopAccent>()
+        .is_some_and(|a| a.light.is_some() || a.dark.is_some())
 }
 
 /// Names of the themes the user can pick, dark ones first. gpui-kit's own
@@ -1400,6 +1545,35 @@ mod tests {
         use_omarchy(omarchy::tests::DARK, cx);
         let names = cx.read(theme_names);
         assert!(names.iter().all(|(name, _)| name != "Omarchy"), "{names:?}");
+    }
+
+    #[gpui_kit::test]
+    fn theme_families_expose_palettes_and_short_labels(cx: &mut TestAppContext) {
+        setup(cx);
+        let families = cx.read(theme_families);
+        let cat = families
+            .iter()
+            .find(|f| f.name.as_ref() == "Catppuccin")
+            .expect("Catppuccin family exists");
+        let labels: Vec<&str> = cat
+            .variants
+            .iter()
+            .map(|v| v.short_label.as_ref())
+            .collect();
+        assert_eq!(labels, ["Latte", "Frappe", "Macchiato", "Mocha"]);
+        assert_eq!(cat.variants.iter().filter(|v| v.dark).count(), 3);
+        assert_eq!(cat.variants.iter().filter(|v| !v.dark).count(), 1);
+
+        let tokyo = families
+            .iter()
+            .find(|f| f.name.as_ref() == "Tokyo")
+            .expect("Tokyo family exists");
+        assert_eq!(tokyo.variants.len(), 3);
+        assert!(tokyo.variants.iter().all(|v| v.dark));
+
+        let dark_default = cx.read(|cx| default_theme_swatch(true, cx));
+        assert!(dark_default.dark);
+        assert_eq!(dark_default.name.as_ref(), "");
     }
 
     #[gpui_kit::test]
@@ -2231,7 +2405,7 @@ mod tests {
     fn status_colours_read_as_text_on_every_bundled_theme(cx: &mut TestAppContext) {
         setup(cx);
         for json in BUNDLED {
-            for (name, dark) in family_members(json) {
+            for (name, dark) in family_members(json).members {
                 cx.update(|cx| {
                     let theme = if dark {
                         ThemePreference::Dark
@@ -2275,7 +2449,7 @@ mod tests {
         // Covered by `theme_names` filtering `is_default`; the bundled files
         // must not reuse those names either.
         for json in BUNDLED {
-            for (name, _) in family_members(json) {
+            for (name, _) in family_members(json).members {
                 assert!(!name.starts_with("Default "), "{name}");
             }
         }

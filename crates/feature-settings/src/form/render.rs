@@ -17,8 +17,8 @@ use serde_json::Value;
 
 use crate::registry::{ActionKind, CustomKind, FieldKind, FieldSpec, PanelKind, TextKind};
 use crate::widgets::{
-    PairedRow, RowState, field_row, group_header, group_panel, muted, paired_field_row, panel,
-    section_heading,
+    PairedRow, RowState, SegmentedOption, field_row, group_header, group_panel, muted,
+    paired_field_row, panel, section_heading, segmented_choice,
 };
 
 use super::SettingsForm;
@@ -169,14 +169,21 @@ impl SettingsForm {
         let path = spec.path;
         let label = spec.label_text();
         match spec.kind {
-            FieldKind::Toggle => Switch::new(id("field"))
-                .checked(self.bool_value(spec.path))
-                .disabled(disabled)
-                .accessibility_label(label)
-                .on_change(cx.listener(move |this, on: &bool, window, cx| {
-                    this.write(path, Value::Bool(*on), window, cx)
-                }))
-                .into_any_element(),
+            FieldKind::Toggle => {
+                let checked = if spec.path == "iroriUi.reduceMotion" {
+                    self.bool_value("iroriUi.reduceMotion") || self.bool_value("disableAnimations")
+                } else {
+                    self.bool_value(spec.path)
+                };
+                Switch::new(id("field"))
+                    .checked(checked)
+                    .disabled(disabled)
+                    .accessibility_label(label)
+                    .on_change(cx.listener(move |this, on: &bool, window, cx| {
+                        this.write(path, Value::Bool(*on), window, cx)
+                    }))
+                    .into_any_element()
+            }
             FieldKind::Text(kind) => {
                 let Some(state) = self.texts.get(spec.path) else {
                     return div().into_any_element();
@@ -220,6 +227,24 @@ impl SettingsForm {
                     .when_some(picker, |i, p| i.suffix(p))
                     .into_any_element()
             }
+            FieldKind::Choice(options) if crate::layout::is_segmented_choice(spec.path) => {
+                let current = self.value(spec.path).cloned().unwrap_or(Value::Null);
+                let items = options.iter().map(|opt| {
+                    let key = opt.value.key();
+                    let seg_id = format!("seg-{path}-{key}");
+                    let json = opt.value.to_json();
+                    SegmentedOption {
+                        id: ElementId::Name(seg_id.clone().into()),
+                        debug_id: seg_id,
+                        label: opt.label.text(),
+                        selected: opt.value.matches(&current),
+                        on_click: Box::new(cx.listener(move |this, _, window, cx| {
+                            this.write(path, json.clone(), window, cx)
+                        })),
+                    }
+                });
+                segmented_choice(items, disabled, cx)
+            }
             FieldKind::Choice(_) => match self.choices.get(spec.path) {
                 Some(state) => Select::new(state)
                     .id(id("field"))
@@ -239,6 +264,8 @@ impl SettingsForm {
                         | CustomKind::DllOverrides
                         | CustomKind::Wrappers
                         | CustomKind::GogSaves
+                        | CustomKind::ThemeName
+                        | CustomKind::AccentColor
                 ) {
                     row.stacked = true;
                 }
@@ -362,26 +389,19 @@ impl SettingsForm {
                     .into_any_element(),
                 None => div().into_any_element(),
             },
-            CustomKind::ThemeName => match self.choices.get(path) {
-                Some(state) => Select::new(state)
-                    .id("field-themeName")
-                    .accessibility_label(spec.label_text())
-                    .w_64()
-                    .into_any_element(),
-                None => div().into_any_element(),
-            },
-            CustomKind::AccentColor | CustomKind::FontFamily => match self.panels.get(path) {
-                Some(view) => view.clone().into_any_element(),
-                None => div().into_any_element(),
-            },
-            CustomKind::FontSize | CustomKind::TileSize | CustomKind::Percent => {
+            CustomKind::ThemeName | CustomKind::AccentColor | CustomKind::FontFamily => {
+                match self.panels.get(path) {
+                    Some(view) => view.clone().into_any_element(),
+                    None => div().into_any_element(),
+                }
+            }
+            CustomKind::FontSize | CustomKind::Percent => {
                 let Some(state) = self.sliders.get(path) else {
                     return div().into_any_element();
                 };
                 let v = state.read(cx).value().start();
                 let label = match kind {
                     CustomKind::FontSize => format!("{:.0}%", v / 16. * 100.),
-                    CustomKind::TileSize => format!("{v:.1} rem"),
                     _ => format!("{v:.0}%"),
                 };
                 let defaults = UiPrefs::default();
@@ -390,8 +410,7 @@ impl SettingsForm {
                     "iroriUi.libraryBackgroundStrength" => {
                         defaults.library_background_strength as f32
                     }
-                    "iroriUi.libraryBackgroundDim" => defaults.library_background_dim as f32,
-                    _ => defaults.tile_size,
+                    _ => defaults.library_background_dim as f32,
                 };
                 h_flex()
                     .gap_3()
@@ -671,19 +690,30 @@ impl SettingsForm {
                 first_group = false;
             }
             let first = rows.is_none();
-            let row_content = if compact_rows
-                && i + 1 < fields.len()
-                && fields[i + 1].section == spec.section
-                && fields[i + 1].group == spec.group
-                && let Some(pair) = crate::layout::match_pair(spec.path, fields[i + 1].path)
-            {
-                let next = fields[i + 1];
-                i += 2;
-                self.render_paired_fields(spec, next, pair, window, cx)
-            } else {
-                i += 1;
-                self.render_field(spec, window, cx)
-            };
+            let row_content =
+                if matches!(spec.kind, FieldKind::Panel(PanelKind::LibraryLookShortcut)) {
+                    let path = spec.path;
+                    i += 1;
+                    div()
+                        .id(ElementId::Name(format!("row-{path}").into()))
+                        .debug_selector(move || format!("row-{path}"))
+                        .px_4()
+                        .py_3()
+                        .children(self.panels.get(path).cloned())
+                        .into_any_element()
+                } else if compact_rows
+                    && i + 1 < fields.len()
+                    && fields[i + 1].section == spec.section
+                    && fields[i + 1].group == spec.group
+                    && let Some(pair) = crate::layout::match_pair(spec.path, fields[i + 1].path)
+                {
+                    let next = fields[i + 1];
+                    i += 2;
+                    self.render_paired_fields(spec, next, pair, window, cx)
+                } else {
+                    i += 1;
+                    self.render_field(spec, window, cx)
+                };
             let row = div()
                 .when(!first, |d| d.border_t_1().border_color(border))
                 .child(row_content);

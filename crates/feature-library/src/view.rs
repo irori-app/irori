@@ -337,7 +337,7 @@ impl LibraryView {
             filters,
             filters_panel,
             filters_open: false,
-            look_open: false,
+            look_open: crate::take_pending_open_look(cx),
             sort_open: false,
             sort_more_open: None,
             tabs_manager_open: false,
@@ -398,6 +398,14 @@ impl LibraryView {
     /// Layout currently displayed by this library view.
     pub(crate) fn current_layout(&self) -> LibraryLayout {
         self.layout
+    }
+
+    /// Open the layout-aware Look popover on this library view.
+    pub(crate) fn open_look_popover(&mut self, cx: &mut Context<Self>) {
+        if !self.look_open {
+            self.look_open = true;
+            cx.notify();
+        }
     }
 
     /// Change the view criteria programmatically (e.g. "show updates" from a

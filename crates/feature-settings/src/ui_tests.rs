@@ -163,10 +163,10 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         app_form.update(cx, |f, cx| f.set_query("controller", cx));
         // The in-game overlay's switch is among the controller rows, and so
         // are the button held to open Big Picture and how long, hiding the
-        // pointer, the button map, Big Picture's sounds and idle screen, and
-        // the overlay's own rows (all but Back + Start, which is Windows only),
-        // Guide + Y's moment among them, and the screenshot key on Windows and
-        // macOS.
+        // pointer, the button map, Big Picture's size, sounds, and idle screen,
+        // and the overlay's own rows (all but Back + Start, which is Windows
+        // only), Guide + Y's moment among them, and the screenshot key on
+        // Windows and macOS.
         let overlay_rows = if cfg!(windows) {
             9
         } else if cfg!(target_os = "macos") {
@@ -174,7 +174,7 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         } else {
             7
         };
-        assert_eq!(app_form.read(cx).visible_count(), 14 + overlay_rows);
+        assert_eq!(app_form.read(cx).visible_count(), 15 + overlay_rows);
         assert!(general > 20);
     });
 }
@@ -757,19 +757,16 @@ fn settings_subtabs_switch_and_draw(cx: &mut TestAppContext) {
 
     cx.update_window(handle, |_, window, cx| {
         view.update(cx, |v, cx| v.set_section("appearance", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
     })
     .unwrap();
-    for tab in ["theme", "library", "accessibility"] {
-        cx.update_window(handle, |_, window, cx| {
-            view.update(cx, |v, cx| v.set_subtab_for_test(tab, window, cx));
-            window.refresh();
-            let _ = window.draw(cx);
-        })
-        .unwrap();
-        cx.update(|cx| {
-            assert!(!view.read(cx).app_form().read(cx).visible_paths().is_empty());
-        });
-    }
+    cx.update(|cx| {
+        let paths = view.read(cx).app_form().read(cx).visible_paths();
+        assert!(paths.contains(&"iroriUi.themeName"));
+        assert!(paths.contains(&"iroriUi.accentColor"));
+        assert!(paths.contains(&"panel.library-look-shortcut"));
+    });
 
     cx.update_window(handle, |_, window, cx| {
         view.update(cx, |v, cx| v.set_section("backup", window, cx));
@@ -878,7 +875,6 @@ fn dependent_fields_hide_when_parent_is_off_and_show_in_search(cx: &mut TestAppC
     cx.update_window(handle, |_, window, cx| {
         view.update(cx, |v, cx| {
             v.set_section("appearance", window, cx);
-            v.set_subtab_for_test("library", window, cx);
         });
     })
     .unwrap();
@@ -1341,4 +1337,95 @@ fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext)
             "expected search result button {page_id} for query {query}"
         );
     }
+}
+
+#[gpui_kit::test]
+fn appearance_redesign_renders_controls_and_clears_legacy_disable_animations(
+    cx: &mut TestAppContext,
+) {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use gpui_kit::{Bounds, VisualTestContext, WindowBounds, px, size};
+
+    let opened_look = Arc::new(AtomicBool::new(false));
+    let opened_look_flag = opened_look.clone();
+
+    cx.executor().allow_parking();
+    let backend = test_backend();
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        irori_ui::init(backend, cx);
+        crate::init(cx);
+        irori_ui::hooks::install(
+            irori_ui::hooks::Hooks {
+                open_library_look: Some(Arc::new(move |_, _| {
+                    opened_look_flag.store(true, Ordering::Relaxed);
+                })),
+                ..Default::default()
+            },
+            cx,
+        );
+    });
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                    Default::default(),
+                    size(px(1280.), px(1800.)),
+                ))),
+                ..Default::default()
+            },
+            cx,
+            |window, cx| cx.new(|cx| SettingsView::new("appearance".into(), window, cx)),
+        )
+        .expect("open window")
+    });
+    cx.run_until_parked();
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+
+    assert!(vcx.debug_bounds("theme-family-default").is_some());
+    assert!(vcx.debug_bounds("theme-family-catppuccin").is_some());
+    assert!(vcx.debug_bounds("accent-default-chip").is_some());
+    assert!(vcx.debug_bounds("accent-custom-trigger").is_some());
+    assert!(vcx.debug_bounds("seg-iroriUi.theme-s:dark").is_some());
+    assert!(
+        vcx.debug_bounds("row-panel.library-look-shortcut")
+            .is_some()
+    );
+
+    // Clicking Open Library Look invokes the registered hook.
+    let look_btn = vcx
+        .debug_bounds("open-library-look")
+        .expect("Open Library Look button rendered");
+    vcx.simulate_click(look_btn.center(), Default::default());
+    vcx.run_until_parked();
+    assert!(opened_look.load(Ordering::Relaxed));
+
+    // Legacy `disableAnimations = true` is cleared when Reduce motion is switched off.
+    vcx.update_window(handle, |_, window, cx| {
+        let b = irori_ui::backend(cx);
+        b.settings.update_app(|s| {
+            s.disable_animations = true;
+            s.ui.reduce_motion = false;
+        });
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.write_for_test("iroriUi.reduceMotion", Value::Bool(false), window, cx);
+        });
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    let (reduce_motion, disable_animations) = vcx.read(|cx| {
+        let app = irori_ui::backend(cx).settings.app();
+        (app.ui.reduce_motion, app.disable_animations)
+    });
+    assert!(!reduce_motion);
+    assert!(!disable_animations);
 }

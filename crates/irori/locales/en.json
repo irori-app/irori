@@ -296,5 +296,7 @@
   "shell.palette.latest_crash_report": "View latest crash report",
   "shell.palette.latest_crash_report_keywords": "crash report log panic backtrace bug",
   "shell.notice.manage_rollback": "Manage / Rollback",
-  "shell.nav.pinned": "Pinned"
+  "shell.nav.pinned": "Pinned",
+  "shell.palette.library_look": "Customize library look",
+  "shell.palette.library_look_keywords": "look layout grid list focus cover size shape corners badges caption star categories greeting columns"
 }

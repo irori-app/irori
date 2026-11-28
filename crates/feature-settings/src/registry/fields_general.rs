@@ -1,8 +1,8 @@
 use super::options::{
-    BIG_PICTURE_HOLD, IDLE_SCREEN, LANGUAGES, NAV_SOUNDS, NEEDS_ACHIEVEMENT_NOTICES,
-    NEEDS_CONTROLLER, NEEDS_EXIT_TO_TRAY, NEEDS_OVERLAY, NEEDS_START_WITH_SYSTEM, NEEDS_SUNSHINE,
-    NEEDS_TRAY, NETWORK_MODE, OVERLAY_HELP, OVERLAY_SIDE, OVERLAY_TIP, SUNSHINE_GAMES, TOP_SECTION,
-    UPDATE_HOURS,
+    AGE_RATING_BOARDS, BIG_PICTURE_HOLD, BIG_PICTURE_SCALE, IDLE_SCREEN, LANGUAGES, NAV_SOUNDS,
+    NEEDS_ACHIEVEMENT_NOTICES, NEEDS_AGE_RATINGS, NEEDS_CONTROLLER, NEEDS_EXIT_TO_TRAY,
+    NEEDS_OVERLAY, NEEDS_START_WITH_SYSTEM, NEEDS_SUNSHINE, NEEDS_TRAY, NETWORK_MODE, OVERLAY_HELP,
+    OVERLAY_SIDE, OVERLAY_TIP, SUNSHINE_GAMES, TOP_SECTION, UPDATE_HOURS,
 };
 use super::types::{
     ActionKind,
@@ -390,6 +390,24 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     .help("settings.field.big_picture_fullscreen.help")
     .keywords(&["fullscreen", "window", "console", "big picture"]),
     app(
+        "iroriUi.middleClickScroll",
+        "settings.field.ui_middle_click_scroll.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.ui_middle_click_scroll.help")
+    .tooltip("settings.field.ui_middle_click_scroll.tip")
+    .keywords(&[
+        "middle",
+        "mouse",
+        "scroll",
+        "autoscroll",
+        "wheel",
+        "drag",
+        "scrollanywhere",
+    ]),
+    app(
         "addDesktopShortcuts",
         "settings.field.add_desktop_shortcuts.label",
         General,
@@ -445,6 +463,55 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     )
     .tooltip("settings.field.max_recent_games.tip")
     .keywords(&["recent", "tray"]),
+    app(
+        "iroriUi.groupCopies",
+        "settings.field.ui_group_copies.label",
+        General,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_group_copies.help")
+    .tooltip("settings.field.ui_group_copies.tip")
+    .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
+    app(
+        "iroriUi.showAgeRatings",
+        "settings.field.ui_show_age_ratings.label",
+        General,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_show_age_ratings.help")
+    .keywords(&["age", "rating", "pegi", "esrb", "usk", "cero", "board"]),
+    app(
+        "iroriUi.ageRatingBoard",
+        "settings.field.ui_age_rating_board.label",
+        General,
+        "settings.group.library",
+        Choice(AGE_RATING_BOARDS),
+    )
+    .help("settings.field.ui_age_rating_board.help")
+    .keywords(&[
+        "age", "rating", "pegi", "esrb", "usk", "cero", "board", "region",
+    ])
+    .requires(NEEDS_AGE_RATINGS),
+    app(
+        "iroriUi.trailerAutoplay",
+        "settings.field.ui_trailer_autoplay.label",
+        General,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_trailer_autoplay.help")
+    .keywords(&["trailer", "video", "movie", "autoplay", "ffmpeg"]),
+    app(
+        "iroriUi.libraryOpenDetailsOnSelect",
+        "settings.field.ui_open_details_on_select.label",
+        General,
+        "settings.group.library",
+        Toggle,
+    )
+    .help("settings.field.ui_open_details_on_select.help")
+    .keywords(&["click", "drawer", "details", "select", "grid", "panel"]),
     app(
         "iroriAchievementNotices",
         "settings.field.achievement_notices.label",
@@ -936,6 +1003,23 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "controller",
     ])
     .requires(NEEDS_CONTROLLER),
+    app(
+        "iroriUi.bigPictureScale",
+        "settings.field.ui_big_picture_scale.label",
+        Controller,
+        "settings.group.big_picture",
+        Choice(BIG_PICTURE_SCALE),
+    )
+    .help("settings.field.ui_big_picture_scale.help")
+    .tooltip("settings.field.ui_big_picture_scale.tip")
+    .keywords(&[
+        "big picture",
+        "tv",
+        "console",
+        "zoom",
+        "scale",
+        "steam deck",
+    ]),
     app(
         "iroriBigPicture.sounds",
         "settings.field.nav_sounds.label",

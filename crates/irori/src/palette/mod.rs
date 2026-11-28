@@ -143,6 +143,8 @@ pub(crate) enum PaletteTarget {
     ManageFields,
     /// Show the library as a grid, a list or in Focus view, and show it.
     LibraryView(LibraryLayout),
+    /// Open the library's live Look popover.
+    LibraryLook,
     /// Sync a game's cloud saves now.
     SyncSaves(GameId),
     /// Play or pause the trailer on a game's page.
@@ -759,6 +761,14 @@ impl Palette {
         }
         push(
             Entry::new()
+                .label(t("shell.palette.library_look"))
+                .keywords([t("shell.palette.library_look_keywords")])
+                .icon(IconName::Palette),
+            PaletteTarget::LibraryLook,
+            targets,
+        );
+        push(
+            Entry::new()
                 .label(t("shell.palette.refresh"))
                 .icon(IconName::RefreshCw),
             PaletteTarget::Refresh,
@@ -1282,6 +1292,9 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         PaletteTarget::LibraryView(layout) => {
             irori_library::set_library_layout(layout, cx);
             irori_ui::navigate(Route::Library, cx);
+        }
+        PaletteTarget::LibraryLook => {
+            window.defer(cx, |_, cx| irori_library::open_look(cx));
         }
         PaletteTarget::BackUp => {
             let b = irori_ui::backend(cx);

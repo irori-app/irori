@@ -1,8 +1,7 @@
 use super::options::{
-    AGE_RATING_BOARDS, ART_CACHE_LIMIT, BIG_PICTURE_SCALE, COVER_CAPTION, COVER_CORNERS, COVER_FIT,
-    COVER_HOVER, COVER_SHAPE, DENSITY, FOCUS_COLUMNS, FOCUS_COVER_SIZE, LIBRARY_BACKGROUND,
-    LIBRARY_LAYOUT, LUDUSAVI_DIFFERENTIAL_LIMIT, LUDUSAVI_FULL_LIMIT, NEEDS_AGE_RATINGS,
-    NEEDS_STORE_BADGES, NEEDS_WALLPAPER_COLORS, PROTON_CPU_LEVEL, THEME_MODE, TRANSLUCENCY,
+    ART_CACHE_LIMIT, COVER_FIT, COVER_HOVER, DENSITY, FOCUS_COLUMNS, LIBRARY_BACKGROUND,
+    LUDUSAVI_DIFFERENTIAL_LIMIT, LUDUSAVI_FULL_LIMIT, NEEDS_STORE_BADGES, NEEDS_WALLPAPER_COLORS,
+    PROTON_CPU_LEVEL, THEME_MODE, TRANSLUCENCY,
 };
 use super::types::{
     ActionKind, CustomKind,
@@ -37,19 +36,54 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
         "palette",
         "catppuccin",
         "gruvbox",
+        "tokyo",
+        "everforest",
+        "solarized",
+        "ayu",
         "omarchy",
         "cosmic",
+        "kde",
     ]),
     app(
-        "iroriUi.systemAccent",
-        "settings.field.ui_system_accent.label",
+        "iroriUi.accentColor",
+        "settings.field.ui_accent_color.label",
         Appearance,
         "settings.group.theme",
-        Toggle,
+        Custom(CustomKind::AccentColor),
     )
-    .help("settings.field.ui_system_accent.help")
-    .tooltip("settings.field.ui_system_accent.tip")
-    .keywords(&["accent", "colour", "color", "highlight", "system", "tint"]),
+    .help("settings.field.ui_accent_color.help")
+    .tooltip("settings.field.ui_accent_color.tip")
+    .keywords(&[
+        "accent",
+        "colour",
+        "color",
+        "highlight",
+        "tint",
+        "picker",
+        "system",
+        "desktop",
+        "hue",
+        "wheel",
+        "custom",
+    ]),
+    app(
+        "iroriUi.translucency",
+        "settings.field.ui_translucency.label",
+        Appearance,
+        "settings.group.theme",
+        Choice(TRANSLUCENCY),
+    )
+    .help("settings.field.ui_translucency.help")
+    .tooltip("settings.field.ui_translucency.tip")
+    .keywords(&[
+        "translucency",
+        "transparency",
+        "blur",
+        "glass",
+        "vibrancy",
+        "mica",
+        "acrylic",
+    ]),
     app(
         "iroriUi.wallpaperColors",
         "settings.field.ui_wallpaper_colors.label",
@@ -90,58 +124,30 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
     ])
     .requires(NEEDS_WALLPAPER_COLORS),
     app(
-        "iroriUi.accentColor",
-        "settings.field.ui_accent_color.label",
+        "iroriUi.fontFamily",
+        "settings.field.ui_font_family.label",
         Appearance,
-        "settings.group.theme",
-        Custom(CustomKind::AccentColor),
+        "settings.group.interface",
+        Custom(CustomKind::FontFamily),
     )
-    .help("settings.field.ui_accent_color.help")
-    .tooltip("settings.field.ui_accent_color.tip")
-    .keywords(&["accent", "colour", "color", "highlight", "tint", "picker"]),
-    app(
-        "iroriUi.translucency",
-        "settings.field.ui_translucency.label",
-        Appearance,
-        "settings.group.theme",
-        Choice(TRANSLUCENCY),
-    )
-    .help("settings.field.ui_translucency.help")
-    .tooltip("settings.field.ui_translucency.tip")
-    .keywords(&[
-        "translucency",
-        "transparency",
-        "blur",
-        "glass",
-        "vibrancy",
-        "mica",
-        "acrylic",
-    ]),
+    .help("settings.field.ui_font_family.help")
+    .tooltip("settings.field.ui_font_family.tip")
+    .keywords(&["font", "typeface", "manrope", "text", "family"]),
     app(
         "iroriUi.fontSize",
         "settings.field.ui_font_size.label",
         Appearance,
-        "settings.group.size",
+        "settings.group.interface",
         Custom(CustomKind::FontSize),
     )
     .help("settings.field.ui_font_size.help")
     .tooltip("settings.field.ui_font_size.tip")
     .keywords(&["zoom", "font", "scale", "text size"]),
     app(
-        "iroriUi.tileSize",
-        "settings.field.ui_tile_size.label",
-        Appearance,
-        "settings.group.size",
-        Custom(CustomKind::TileSize),
-    )
-    .help("settings.field.ui_tile_size.help")
-    .tooltip("settings.field.ui_tile_size.tip")
-    .keywords(&["tile", "grid", "cover", "library"]),
-    app(
         "iroriUi.density",
         "settings.field.ui_density.label",
         Appearance,
-        "settings.group.size",
+        "settings.group.interface",
         Choice(DENSITY),
     )
     .help("settings.field.ui_density.help")
@@ -150,320 +156,22 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
         "density", "compact", "spacious", "spacing", "padding", "dense",
     ]),
     app(
-        "iroriUi.bigPictureScale",
-        "settings.field.ui_big_picture_scale.label",
-        Appearance,
-        "settings.group.size",
-        Choice(BIG_PICTURE_SCALE),
-    )
-    .help("settings.field.ui_big_picture_scale.help")
-    .tooltip("settings.field.ui_big_picture_scale.tip")
-    .keywords(&[
-        "big picture",
-        "tv",
-        "console",
-        "zoom",
-        "scale",
-        "steam deck",
-    ]),
-    app(
-        "iroriUi.libraryLayout",
-        "settings.field.ui_library_layout.label",
-        Appearance,
-        "settings.group.library",
-        Choice(LIBRARY_LAYOUT),
-    )
-    .tooltip("settings.field.ui_library_layout.tip")
-    .keywords(&["grid", "list", "focus", "view"]),
-    app(
-        "iroriUi.showStoreBadges",
-        "settings.field.ui_show_store_badges.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .tooltip("settings.field.ui_show_store_badges.tip")
-    .keywords(&["badge", "store", "label"]),
-    app(
-        "iroriUi.storeBadgesAlways",
-        "settings.field.ui_store_badges_always.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_store_badges_always.help")
-    .keywords(&["badge", "store", "logo", "always", "cover", "emulator"])
-    .requires(NEEDS_STORE_BADGES),
-    app(
-        "iroriUi.storeBadgesOneStore",
-        "settings.field.ui_store_badges_one_store.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_store_badges_one_store.help")
-    .keywords(&["badge", "store", "filter", "one store"])
-    .requires(NEEDS_STORE_BADGES),
-    app(
-        "iroriUi.groupCopies",
-        "settings.field.ui_group_copies.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_group_copies.help")
-    .tooltip("settings.field.ui_group_copies.tip")
-    .keywords(&["copies", "duplicate", "stores", "merge", "combine", "group"]),
-    app(
-        "iroriUi.programIconArt",
-        "settings.field.ui_program_icon_art.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_program_icon_art.help")
-    .keywords(&[
-        "icon",
-        "exe",
-        "program",
-        "cover",
-        "art",
-        "missing",
-        "placeholder",
-        "lutris",
-    ]),
-    app(
-        "iroriUi.showAgeRatings",
-        "settings.field.ui_show_age_ratings.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_show_age_ratings.help")
-    .keywords(&["age", "rating", "pegi", "esrb", "usk", "cero", "board"]),
-    app(
-        "iroriUi.ageRatingBoard",
-        "settings.field.ui_age_rating_board.label",
-        Appearance,
-        "settings.group.library",
-        Choice(AGE_RATING_BOARDS),
-    )
-    .help("settings.field.ui_age_rating_board.help")
-    .keywords(&[
-        "age", "rating", "pegi", "esrb", "usk", "cero", "board", "region",
-    ])
-    .requires(NEEDS_AGE_RATINGS),
-    app(
-        "iroriUi.trailerAutoplay",
-        "settings.field.ui_trailer_autoplay.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_trailer_autoplay.help")
-    .keywords(&["trailer", "video", "movie", "autoplay", "ffmpeg"]),
-    app(
-        "iroriUi.coverCompatBadges",
-        "settings.field.ui_cover_compat_badges.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_cover_compat_badges.help")
-    .keywords(&[
-        "protondb",
-        "steam deck",
-        "deck",
-        "linux",
-        "compat",
-        "compatibility",
-        "badge",
-        "cover",
-    ]),
-    app(
-        "iroriUi.coverCategories",
-        "settings.field.ui_cover_categories.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_cover_categories.help")
-    .tooltip("settings.field.ui_cover_categories.tip")
-    .keywords(&["category", "categories", "tag", "cover", "label"]),
-    app(
-        "iroriUi.coverCorners",
-        "settings.field.ui_cover_corners.label",
-        Appearance,
-        "settings.group.library",
-        Choice(COVER_CORNERS),
-    )
-    .keywords(&["cover", "corner", "round", "square", "radius"]),
-    app(
-        "iroriUi.coverFit",
-        "settings.field.ui_cover_fit.label",
-        Appearance,
-        "settings.group.library",
-        Choice(COVER_FIT),
-    )
-    .help("settings.field.ui_cover_fit.help")
-    .keywords(&[
-        "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
-    ]),
-    app(
-        "iroriUi.coverShape",
-        "settings.field.ui_cover_shape.label",
-        Appearance,
-        "settings.group.library",
-        Choice(COVER_SHAPE),
-    )
-    .help("settings.field.ui_cover_shape.help")
-    .keywords(&[
-        "cover", "shape", "square", "banner", "wide", "hero", "aspect",
-    ]),
-    app(
-        "iroriUi.coverCaption",
-        "settings.field.ui_cover_caption.label",
-        Appearance,
-        "settings.group.library",
-        Choice(COVER_CAPTION),
-    )
-    .help("settings.field.ui_cover_caption.help")
-    .keywords(&["cover", "caption", "title", "name", "text", "label"]),
-    app(
-        "iroriUi.coverHover",
-        "settings.field.ui_cover_hover.label",
-        Appearance,
-        "settings.group.library",
-        Choice(COVER_HOVER),
-    )
-    .keywords(&["cover", "hover", "lift", "pointer", "focus", "animation"]),
-    app(
-        "iroriUi.libraryFocusColumns",
-        "settings.field.ui_focus_columns.label",
-        Appearance,
-        "settings.group.library",
-        Choice(FOCUS_COLUMNS),
-    )
-    .help("settings.field.ui_focus_columns.help")
-    .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
-    app(
-        "iroriUi.libraryFocusCoverSize",
-        "settings.field.ui_focus_cover_size.label",
-        Appearance,
-        "settings.group.library",
-        Choice(FOCUS_COVER_SIZE),
-    )
-    .keywords(&["focus", "cover", "size", "small", "large", "column"]),
-    app(
-        "iroriUi.libraryOpenDetailsOnSelect",
-        "settings.field.ui_open_details_on_select.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_open_details_on_select.help")
-    .keywords(&["click", "drawer", "details", "select", "grid", "panel"]),
-    app(
-        "iroriUi.libraryAutoLayout",
-        "settings.field.ui_auto_layout.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_auto_layout.help")
-    .keywords(&[
-        "focus",
-        "grid",
-        "width",
-        "window",
-        "automatic",
-        "resize",
-        "layout",
-    ]),
-    app(
-        "iroriUi.coverFavourite",
-        "settings.field.ui_cover_favourite.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .keywords(&["cover", "favourite", "favorite", "star"]),
-    app(
-        "iroriUi.libraryGreeting",
-        "settings.field.ui_library_greeting.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_library_greeting.help")
-    .keywords(&["greeting", "welcome", "hello", "name", "header", "library"]),
-    app(
-        "iroriUi.libraryQuickControls",
-        "settings.field.ui_library_quick_controls.label",
-        Appearance,
-        "settings.group.library",
-        Toggle,
-    )
-    .help("settings.field.ui_library_quick_controls.help")
-    .tooltip("settings.field.ui_library_quick_controls.tip")
-    .keywords(&[
-        "quick",
-        "sort",
-        "filter",
-        "installed",
-        "favourites",
-        "favorites",
-        "group",
-        "header",
-        "toolbar",
-    ]),
-    app(
         "iroriUi.reduceMotion",
         "settings.field.ui_reduce_motion.label",
         Appearance,
-        "settings.group.motion",
+        "settings.group.interface",
         Toggle,
     )
     .help("settings.field.ui_reduce_motion.help")
     .tooltip("settings.field.ui_reduce_motion.tip")
-    .keywords(&["animation", "accessibility", "motion"]),
-    app(
-        "disableAnimations",
-        "settings.field.disable_animations.label",
-        Appearance,
-        "settings.group.motion",
-        Toggle,
-    )
-    .tooltip("settings.field.disable_animations.tip")
-    .keywords(&["animation", "accessibility"]),
-    app(
-        "iroriUi.middleClickScroll",
-        "settings.field.ui_middle_click_scroll.label",
-        Appearance,
-        "settings.group.mouse",
-        Toggle,
-    )
-    .help("settings.field.ui_middle_click_scroll.help")
-    .tooltip("settings.field.ui_middle_click_scroll.tip")
     .keywords(&[
-        "middle",
-        "mouse",
-        "scroll",
-        "autoscroll",
-        "wheel",
-        "drag",
-        "scrollanywhere",
+        "animation",
+        "animations",
+        "disable animations",
+        "transitions",
+        "accessibility",
+        "motion",
     ]),
-    app(
-        "iroriUi.fontFamily",
-        "settings.field.ui_font_family.label",
-        Appearance,
-        "settings.group.font",
-        Custom(CustomKind::FontFamily),
-    )
-    .help("settings.field.ui_font_family.help")
-    .tooltip("settings.field.ui_font_family.tip")
-    .keywords(&["font", "typeface", "manrope", "text", "family"]),
     app(
         "iroriUi.libraryBackground",
         "settings.field.ui_library_background.label",
@@ -511,6 +219,140 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
     .help("settings.field.ui_library_background_dim.help")
     .tooltip("settings.field.ui_library_background_dim.tip")
     .keywords(&["background", "dim", "darken", "fade"]),
+    app(
+        "panel.library-look-shortcut",
+        "settings.appearance.look_shortcut_title",
+        Appearance,
+        "settings.group.library_look",
+        Panel(PanelKind::LibraryLookShortcut),
+    )
+    .help("settings.appearance.look_shortcut_help")
+    .keywords(&[
+        "look",
+        "layout",
+        "grid",
+        "list",
+        "focus",
+        "cover",
+        "covers",
+        "tile",
+        "size",
+        "shape",
+        "box art",
+        "square",
+        "banner",
+        "corners",
+        "rounded",
+        "caption",
+        "title",
+        "badges",
+        "store",
+        "favourite",
+        "favorite",
+        "star",
+        "protondb",
+        "steam deck",
+        "categories",
+        "tags",
+        "greeting",
+        "columns",
+        "row size",
+    ]),
+    app(
+        "iroriUi.libraryQuickControls",
+        "settings.field.ui_library_quick_controls.label",
+        Appearance,
+        "settings.group.library_look",
+        Toggle,
+    )
+    .help("settings.field.ui_library_quick_controls.help")
+    .tooltip("settings.field.ui_library_quick_controls.tip")
+    .keywords(&[
+        "quick",
+        "view tabs",
+        "tabs",
+        "sort",
+        "filter",
+        "installed",
+        "favourites",
+        "favorites",
+        "group",
+        "header",
+        "toolbar",
+    ]),
+    app(
+        "iroriUi.coverFit",
+        "settings.field.ui_cover_fit.label",
+        Appearance,
+        "settings.group.library_look",
+        Choice(COVER_FIT),
+    )
+    .help("settings.field.ui_cover_fit.help")
+    .keywords(&[
+        "cover", "crop", "whole", "fit", "box art", "shape", "square", "wide", "aspect",
+    ]),
+    app(
+        "iroriUi.coverHover",
+        "settings.field.ui_cover_hover.label",
+        Appearance,
+        "settings.group.library_look",
+        Choice(COVER_HOVER),
+    )
+    .keywords(&["cover", "hover", "lift", "pointer", "focus", "animation"]),
+    app(
+        "iroriUi.storeBadgesOneStore",
+        "settings.field.ui_store_badges_one_store.label",
+        Appearance,
+        "settings.group.library_look",
+        Toggle,
+    )
+    .help("settings.field.ui_store_badges_one_store.help")
+    .keywords(&["badge", "store", "filter", "one store"])
+    .requires(NEEDS_STORE_BADGES),
+    app(
+        "iroriUi.libraryFocusColumns",
+        "settings.field.ui_focus_columns.label",
+        Appearance,
+        "settings.group.library_look",
+        Choice(FOCUS_COLUMNS),
+    )
+    .help("settings.field.ui_focus_columns.help")
+    .keywords(&["focus", "column", "covers", "row", "width", "resize"]),
+    app(
+        "iroriUi.libraryAutoLayout",
+        "settings.field.ui_auto_layout.label",
+        Appearance,
+        "settings.group.library_look",
+        Toggle,
+    )
+    .help("settings.field.ui_auto_layout.help")
+    .keywords(&[
+        "focus",
+        "grid",
+        "width",
+        "window",
+        "automatic",
+        "resize",
+        "layout",
+    ]),
+    app(
+        "iroriUi.programIconArt",
+        "settings.field.ui_program_icon_art.label",
+        Appearance,
+        "settings.group.library_look",
+        Toggle,
+    )
+    .help("settings.field.ui_program_icon_art.help")
+    .keywords(&[
+        "icon",
+        "exe",
+        "program",
+        "cover",
+        "art",
+        "missing",
+        "placeholder",
+        "lutris",
+    ]),
 ];
 
 pub(super) const ADVANCED: &[FieldSpec] = &[

@@ -125,22 +125,6 @@ pub(crate) const GAME_PERFORMANCE_TABS: &[SubTab] = &[
     },
 ];
 
-/// Sub-tabs of Settings -> Appearance.
-pub(crate) const APPEARANCE_TABS: &[SubTab] = &[
-    SubTab {
-        id: "theme",
-        label_key: "settings.subtab.appearance.theme",
-    },
-    SubTab {
-        id: "library",
-        label_key: "settings.subtab.appearance.library",
-    },
-    SubTab {
-        id: "accessibility",
-        label_key: "settings.subtab.appearance.accessibility",
-    },
-];
-
 /// Sub-tabs of Settings -> Backup & sync.
 pub(crate) const BACKUP_TABS: &[SubTab] = &[
     SubTab {
@@ -219,13 +203,28 @@ pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
         FieldSection::Launch => Some("launch"),
         FieldSection::CloudSaves => Some("saves"),
         FieldSection::General => general_subtab(spec.path),
-        FieldSection::Appearance => appearance_subtab(spec.path),
-        // The Controller page is short enough to stay one page.
-        FieldSection::Advanced
+        // Appearance, Controller, Advanced, and Saves are compact enough to stay flat.
+        FieldSection::Appearance
+        | FieldSection::Advanced
         | FieldSection::Saves
         | FieldSection::Artwork
         | FieldSection::Controller => None,
     }
+}
+
+/// Short choice fields rendered as one-click segmented buttons instead of
+/// dropdown selects.
+pub(crate) fn is_segmented_choice(path: &str) -> bool {
+    matches!(
+        path,
+        "iroriUi.theme"
+            | "iroriUi.translucency"
+            | "iroriUi.density"
+            | "iroriUi.libraryBackground"
+            | "iroriUi.coverFit"
+            | "iroriUi.coverHover"
+            | "iroriUi.libraryFocusColumns"
+    )
 }
 
 fn general_subtab(path: &str) -> Option<&'static str> {
@@ -261,9 +260,15 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.bigPictureOnController"
         | "iroriUi.bigPictureFullscreen"
         | "iroriUi.quickLaunchShortcut"
-        | "panel.quick_launch" => Some("window"),
+        | "panel.quick_launch"
+        | "iroriUi.middleClickScroll" => Some("window"),
         "libraryTopSection"
         | "maxRecentGames"
+        | "iroriUi.groupCopies"
+        | "iroriUi.showAgeRatings"
+        | "iroriUi.ageRatingBoard"
+        | "iroriUi.trailerAutoplay"
+        | "iroriUi.libraryOpenDetailsOnSelect"
         | "iroriAchievementNotices"
         | "iroriAchievementToast.overGame"
         | "iroriAchievementToast.showGame"
@@ -305,56 +310,8 @@ fn general_subtab(path: &str) -> Option<&'static str> {
     }
 }
 
-fn appearance_subtab(path: &str) -> Option<&'static str> {
-    match path {
-        "iroriUi.theme"
-        | "iroriUi.themeName"
-        | "iroriUi.systemAccent"
-        | "iroriUi.accentColor"
-        | "iroriUi.translucency"
-        | "iroriUi.fontFamily"
-        | "iroriUi.wallpaperColors"
-        | "iroriUi.wallpaperColorsFile" => Some("theme"),
-        "iroriUi.fontSize"
-        | "iroriUi.tileSize"
-        | "iroriUi.density"
-        | "iroriUi.bigPictureScale"
-        | "iroriUi.libraryLayout"
-        | "iroriUi.showStoreBadges"
-        | "iroriUi.storeBadgesAlways"
-        | "iroriUi.storeBadgesOneStore"
-        | "iroriUi.groupCopies"
-        | "iroriUi.programIconArt"
-        | "iroriUi.showAgeRatings"
-        | "iroriUi.ageRatingBoard"
-        | "iroriUi.trailerAutoplay"
-        | "iroriUi.coverCompatBadges"
-        | "iroriUi.coverCategories"
-        | "iroriUi.coverCorners"
-        | "iroriUi.coverFit"
-        | "iroriUi.coverShape"
-        | "iroriUi.coverCaption"
-        | "iroriUi.coverHover"
-        | "iroriUi.libraryFocusColumns"
-        | "iroriUi.libraryFocusCoverSize"
-        | "iroriUi.libraryOpenDetailsOnSelect"
-        | "iroriUi.libraryAutoLayout"
-        | "iroriUi.coverFavourite"
-        | "iroriUi.libraryGreeting"
-        | "iroriUi.libraryQuickControls"
-        | "iroriUi.libraryBackground"
-        | "iroriUi.libraryBackgroundPicture"
-        | "iroriUi.libraryBackgroundStrength"
-        | "iroriUi.libraryBackgroundDim" => Some("library"),
-        "iroriUi.reduceMotion" | "disableAnimations" | "iroriUi.middleClickScroll" => {
-            Some("accessibility")
-        }
-        _ => None,
-    }
-}
-
 /// Whether `spec` lives inside the collapsible "More options" block of its
-/// sub-tab. Pages without sub-tabs (`Advanced`, `Saves`) stay flat.
+/// page or sub-tab. Pages without disclosure groups (`Advanced`, `Saves`) stay flat.
 pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
     matches!(
         spec.path,
@@ -369,6 +326,8 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "iroriUi.bigPictureOnController"
             | "iroriUi.bigPictureFullscreen"
             // General -> Library & stores
+            | "iroriUi.ageRatingBoard"
+            | "iroriUi.libraryOpenDetailsOnSelect"
             | "iroriAchievementToast.showGame"
             | "iroriAchievementToast.showDescription"
             | "iroriAchievementToast.showRarity"
@@ -385,20 +344,16 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "gamepadInitialRepeatDelay"
             | "gamepadRepeatDelay"
             | "iroriUi.bigPictureHoldMs"
-            // Appearance -> Theme & colors
+            // Appearance
             | "iroriUi.wallpaperColors"
             | "iroriUi.wallpaperColorsFile"
-            // Appearance -> Library
-            | "iroriUi.storeBadgesAlways"
-            | "iroriUi.storeBadgesOneStore"
-            | "iroriUi.programIconArt"
-            | "iroriUi.ageRatingBoard"
+            | "iroriUi.libraryQuickControls"
+            | "iroriUi.coverFit"
             | "iroriUi.coverHover"
-            | "iroriUi.coverFavourite"
+            | "iroriUi.storeBadgesOneStore"
             | "iroriUi.libraryFocusColumns"
-            | "iroriUi.libraryFocusCoverSize"
-            | "iroriUi.libraryOpenDetailsOnSelect"
             | "iroriUi.libraryAutoLayout"
+            | "iroriUi.programIconArt"
             // Game defaults -> Wine & Proton
             | "disableUMU"
             | "iroriProtonPreferSdl"
@@ -462,6 +417,10 @@ pub(crate) fn is_hidden_by_parent(spec: &FieldSpec, snapshot: &Value) -> bool {
         "iroriUi.libraryBackgroundStrength" | "iroriUi.libraryBackgroundDim" => matches!(
             get_path(snapshot, "iroriUi.libraryBackground").and_then(Value::as_str),
             None | Some("" | "none")
+        ),
+        "iroriUi.coverFit" => !matches!(
+            get_path(snapshot, "iroriUi.coverShape").and_then(Value::as_str),
+            None | Some("" | "portrait")
         ),
         _ => false,
     }
@@ -565,7 +524,7 @@ mod tests {
     fn every_app_and_shared_field_on_subtabbed_pages_has_a_subtab() {
         for f in FIELDS {
             let needs_tab = match f.section {
-                FieldSection::General | FieldSection::Appearance => f.scope == Scope::App,
+                FieldSection::General => f.scope == Scope::App,
                 FieldSection::Wine
                 | FieldSection::Performance
                 | FieldSection::Gpu
@@ -579,7 +538,6 @@ mod tests {
             let tab = subtab_of(f).unwrap_or_else(|| panic!("{} lacks a sub-tab", f.path));
             let valid = match f.section {
                 FieldSection::General => GENERAL_TABS.iter().any(|t| t.id == tab),
-                FieldSection::Appearance => APPEARANCE_TABS.iter().any(|t| t.id == tab),
                 _ => DEFAULTS_TABS
                     .iter()
                     .any(|t| t.id == tab && defaults_section_for_tab(t.id) == f.section),
@@ -682,6 +640,21 @@ mod tests {
             find("gamescope.gameWidth").unwrap(),
             &picture
         ));
+
+        let square_covers = serde_json::json!({
+            "iroriUi": { "coverShape": "square" }
+        });
+        let portrait_covers = serde_json::json!({
+            "iroriUi": { "coverShape": "portrait" }
+        });
+        assert!(is_hidden_by_parent(
+            find("iroriUi.coverFit").unwrap(),
+            &square_covers
+        ));
+        assert!(!is_hidden_by_parent(
+            find("iroriUi.coverFit").unwrap(),
+            &portrait_covers
+        ));
     }
 
     #[test]
@@ -698,7 +671,6 @@ mod tests {
             .iter()
             .chain(DEFAULTS_TABS)
             .chain(GAME_PERFORMANCE_TABS)
-            .chain(APPEARANCE_TABS)
             .chain(BACKUP_TABS)
         {
             assert!(

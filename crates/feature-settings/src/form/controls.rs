@@ -10,10 +10,9 @@ use irori_core::Runner;
 use irori_core::settings::AppSettings;
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
-use irori_ui::theme::Desktop;
 use serde_json::Value;
 
-use crate::appearance::{AccentPicker, FontPicker};
+use crate::appearance::{AccentPicker, FontPicker, LibraryLookShortcut, ThemeGallery};
 use crate::artwork::ArtworkPanel;
 use crate::controller_map::ButtonMapPanel;
 use crate::controllers::ControllersPanel;
@@ -246,6 +245,9 @@ impl SettingsForm {
                     self.texts.insert(spec.path, state);
                 }
                 FieldKind::Choice(options) => {
+                    if crate::layout::is_segmented_choice(spec.path) {
+                        continue;
+                    }
                     let items = choice_items(options);
                     let selected = self.choice_index(options, spec.path);
                     let state = cx.new(|cx| SelectState::new(items, selected, window, cx));
@@ -392,6 +394,7 @@ impl SettingsForm {
                 cx.new(|cx| crate::library_folders::LibraryFoldersPanel::new(window, cx))
                     .into(),
             ),
+            PanelKind::LibraryLookShortcut => Some(cx.new(LibraryLookShortcut::new).into()),
             PanelKind::LaunchBox => crate::stores::emulation(cx).map(|store| {
                 cx.new(|cx| crate::launchbox::LaunchBoxPanel::new(store, cx))
                     .into()
@@ -584,24 +587,8 @@ impl SettingsForm {
                 self.sync_hide_gpu_select(window, cx);
             }
             CustomKind::ThemeName => {
-                let items = theme_items(cx);
-                let current = value_to_text(self.value(spec.path));
-                let selected = items
-                    .iter()
-                    .position(|i| i.key.as_ref() == current)
-                    .map(|ix| IndexPath::default().row(ix));
-                let state =
-                    cx.new(|cx| SelectState::new(items, selected, window, cx).searchable(true));
-                self._subscriptions.push(cx.subscribe_in(
-                    &state,
-                    window,
-                    |this, _, event: &SelectEvent<Vec<ChoiceItem>>, window, cx| {
-                        if let SelectEvent::Confirm(Some(name)) = event {
-                            this.pick_theme(name, window, cx);
-                        }
-                    },
-                ));
-                self.choices.insert(spec.path, state);
+                let view = cx.new(ThemeGallery::new);
+                self.panels.insert(spec.path, view.into());
             }
             CustomKind::AccentColor => {
                 let view = cx.new(|cx| AccentPicker::new(window, cx));
@@ -611,10 +598,9 @@ impl SettingsForm {
                 let view = cx.new(|cx| FontPicker::new(window, cx));
                 self.panels.insert(spec.path, view.into());
             }
-            CustomKind::FontSize | CustomKind::TileSize | CustomKind::Percent => {
+            CustomKind::FontSize | CustomKind::Percent => {
                 let (min, max, step) = match kind {
                     CustomKind::FontSize => (12., 24., 1.),
-                    CustomKind::TileSize => (8., 16., 0.5),
                     _ => (0., 100., 5.),
                 };
                 let current = self
@@ -721,7 +707,6 @@ impl SettingsForm {
         for (path, state) in &self.choices {
             let items = match registry::find(path).map(|f| f.kind) {
                 Some(FieldKind::Choice(options)) => choice_items(options),
-                Some(FieldKind::Custom(CustomKind::ThemeName)) => theme_items(cx),
                 Some(FieldKind::Custom(CustomKind::ToolVersion(_))) => {
                     self.tool_version_items(path)
                 }
@@ -770,28 +755,6 @@ pub(super) fn hide_gpu_items(
             name.to_string().into()
         };
         items.push(ChoiceItem::new(current.to_string(), label));
-    }
-    items
-}
-
-/// The default theme followed by every theme of the theme registry.
-fn theme_items(cx: &App) -> Vec<ChoiceItem> {
-    let default = match irori_ui::theme::followed_desktop(cx) {
-        Some(Desktop::Omarchy) => "settings.theme.omarchy",
-        Some(Desktop::Cosmic) => "settings.theme.cosmic",
-        Some(Desktop::Kde) => "settings.theme.kde",
-        Some(Desktop::Wallpaper) => "settings.theme.wallpaper",
-        None => "settings.theme.default",
-    };
-    let mut items = vec![ChoiceItem::new("", t(default))];
-    for (name, dark) in irori_ui::theme::theme_names(cx) {
-        let key = if dark {
-            "settings.theme.dark_variant"
-        } else {
-            "settings.theme.light_variant"
-        };
-        let label = t_args(key, &[("name", &name)]);
-        items.push(ChoiceItem::new(name, label));
     }
     items
 }

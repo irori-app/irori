@@ -97,6 +97,8 @@ pub struct Hooks {
     /// Open the "Set up emulation" guide (it lives in the management
     /// screens, which the library and Big Picture don't depend on).
     pub open_emulation_setup: Option<OpenFn>,
+    /// Navigate to the Library screen with the Look popover already open.
+    pub open_library_look: Option<OpenFn>,
     pub import_from_lutris: Option<LutrisFn>,
     pub import_from_bottles: Option<LutrisFn>,
     pub import_from_faugus: Option<LutrisFn>,
@@ -167,6 +169,18 @@ pub fn open_emulation_setup(window: &mut Window, cx: &mut App) {
     {
         Some(open) => open(window, cx),
         None => crate::navigate(crate::Route::Emulators, cx),
+    }
+}
+
+/// Navigate to the Library screen and open the Look popover; without the hook
+/// (tests), navigate to the Library screen.
+pub fn open_library_look(window: &mut Window, cx: &mut App) {
+    match cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.open_library_look.clone())
+    {
+        Some(open) => open(window, cx),
+        None => crate::navigate(crate::Route::Library, cx),
     }
 }
 
