@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Checkout PR history for path classification
         if: github.event_name == 'pull_request'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Classify changed files
@@ -65,7 +65,7 @@ jobs:
         run: |
           echo "Docs/governance-only pull request: skipping native Rust build and packaging (verified by PR rules)."
       - if: needs.changes.outputs.code_changed == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Rust and clang on Windows on Arm
         if: needs.changes.outputs.code_changed == 'true' && matrix.os == 'windows-11-arm'
         uses: ./.github/actions/windows-arm64-tools
@@ -165,7 +165,7 @@ jobs:
         run: |
           echo "Docs/governance-only pull request: skipping cargo-deny audit."
       - if: needs.changes.outputs.code_changed == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: needs.changes.outputs.code_changed == 'true'
         uses: EmbarkStudios/cargo-deny-action@81891abc19297b21343b15ef67dc61e4aea74fda # v2
         with:
