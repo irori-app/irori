@@ -775,7 +775,7 @@ fn settings_subtabs_switch_and_draw(cx: &mut TestAppContext) {
         view.update(cx, |v, cx| v.set_section("backup", window, cx));
     })
     .unwrap();
-    for tab in [BackupTab::BackupRestore, BackupTab::Sync, BackupTab::Export] {
+    for tab in [BackupTab::Saves, BackupTab::Library, BackupTab::Sync] {
         cx.update_window(handle, |_, window, cx| {
             let panel = view.read(cx).backup_panel().clone();
             panel.update(cx, |p, cx| p.set_tab_for_test(tab, cx));
@@ -1340,5 +1340,164 @@ fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext)
             vcx.debug_bounds(page_id).is_some(),
             "expected search result button {page_id} for query {query}"
         );
+    }
+}
+
+#[gpui_kit::test]
+fn unified_saves_backup_draws_all_tabs_routes_and_danger_zone(cx: &mut TestAppContext) {
+    use crate::backup::BackupTab;
+    use gpui_kit::VisualTestContext;
+    use irori_core::SyncMode;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("backup".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    // All three status-card tabs draw on the unified page.
+    for id in ["backup-tab-saves", "backup-tab-library", "backup-tab-sync"] {
+        assert!(vcx.debug_bounds(id).is_some(), "missing tab card {id}");
+    }
+
+    // Legacy route aliases and sub-tab routes open the right tabs.
+    for (route, expected_tab) in [
+        ("saves", BackupTab::Saves),
+        ("backup/sync", BackupTab::Sync),
+        ("backup/export", BackupTab::Library),
+        ("backup/library", BackupTab::Library),
+    ] {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section(route, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert_eq!(
+            vcx.read(|cx| view.read(cx).section()),
+            SettingsSection::Backup
+        );
+        assert_eq!(
+            vcx.read(|cx| view.read(cx).backup_panel().read(cx).tab_for_test()),
+            expected_tab,
+            "route {route}"
+        );
+    }
+
+    // Deep-link to an advanced Ludusavi field expands More options and highlights it.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_section("field:iroriLudusaviPath", window, cx)
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    assert!(vcx.read(|cx| {
+        view.read(cx)
+            .backup_panel()
+            .read(cx)
+            .ludusavi_more_open_for_test()
+    }));
+    assert_eq!(
+        vcx.read(|cx| view
+            .read(cx)
+            .backup_panel()
+            .read(cx)
+            .highlighted_field_for_test()),
+        Some("iroriLudusaviPath")
+    );
+    assert!(vcx.debug_bounds("row-iroriLudusaviPath").is_some());
+    assert!(vcx.debug_bounds("pair-iroriLudusaviFullLimit").is_some());
+
+    // Library backup draws inline save-to-file panel and Danger zone reset card.
+    vcx.update_window(handle, |_, window, cx| {
+        let panel = view.read(cx).backup_panel().clone();
+        panel.update(cx, |p, cx| {
+            p.set_tab_for_test(BackupTab::Library, cx);
+            p.set_included_open_for_test(true, cx);
+            p.set_manual_save_for_test(true, cx);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("backup-manual-save-panel").is_some());
+    assert!(vcx.debug_bounds("row-action.reset-settings").is_some());
+
+    // Reset all settings no longer lives in Advanced, and deep-link opens Library backup.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("advanced", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(!vcx.read(|cx| {
+        view.read(cx)
+            .app_form()
+            .read(cx)
+            .visible_paths()
+            .contains(&"action.reset-settings")
+    }));
+
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_section("field:action.reset-settings", window, cx)
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).section()),
+        SettingsSection::Backup
+    );
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).backup_panel().read(cx).tab_for_test()),
+        BackupTab::Library
+    );
+    assert!(vcx.debug_bounds("row-action.reset-settings").is_some());
+
+    // Search keywords for reset/factory/redefinir surface Saves & backup.
+    for query in ["reset", "factory", "redefinir", "ludusavi"] {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section("general", window, cx));
+            let search = view.read(cx).search_input();
+            search.read(cx).focus_handle(cx).focus(window, cx);
+        })
+        .unwrap();
+        vcx.simulate_input(query);
+        vcx.run_until_parked();
+        vcx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert!(
+            vcx.debug_bounds("search-page-backup").is_some(),
+            "expected search-page-backup for query {query}"
+        );
+    }
+
+    // Sync renders cleanly across all four transport modes.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("backup/sync", window, cx));
+    })
+    .unwrap();
+    for mode in [
+        SyncMode::Off,
+        SyncMode::Folder,
+        SyncMode::Webdav,
+        SyncMode::Rclone,
+    ] {
+        vcx.update_window(handle, |_, window, cx| {
+            let sync = view.read(cx).backup_panel().read(cx).sync_panel_for_test();
+            sync.update(cx, |s, cx| s.set_mode_for_test(mode, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
     }
 }

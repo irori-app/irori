@@ -1,78 +1,197 @@
-//! Settings → Backup: automatic backups and the list of them, sync between
-//! computers (see [`crate::sync`]), saving what the user set up in Irori to
-//! a file, restoring it (on this or another computer), and exporting the
-//! game list.
+//! Settings → Saves & backup: unified data protection hub with three tabs
+//! selected by live status cards (`Game saves`, `Library backup`, and `Sync`).
+
+mod danger_zone;
+mod library_tab;
+mod overlays;
+mod saves_tab;
+mod tab_cards;
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
-use gpui_kit::assets::IconName;
-use gpui_kit::component::alert::Alert;
-use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
-use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::tab::{Tab, TabBar};
-use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, WindowExt as _, h_flex,
-    v_flex,
-};
-use gpui_kit::prelude::FluentBuilder as _;
+use gpui_kit::component::select::{SelectEvent, SelectState};
+use gpui_kit::component::{WindowExt as _, v_flex};
 use gpui_kit::{
-    App, AppContext as _, AsyncWindowContext, Context, Entity, IntoElement, ParentElement as _,
-    PathPromptOptions, Render, SharedString, Styled as _, Subscription, WeakEntity, Window, div,
+    AppContext as _, AsyncWindowContext, Context, Entity, IntoElement, ParentElement as _,
+    PathPromptOptions, Render, SharedString, Styled as _, Subscription, Task, WeakEntity, Window,
 };
-use irori_core::{BackupPrefs, BackupSchedule};
-use irori_services::backup_schedule::local_time;
-use irori_services::{Backend, Backup, BackupEntry, BackupKind, BackupParts, ExportFormat};
+use irori_core::BackupPrefs;
+use irori_services::{Backend, Backup, BackupEntry, BackupParts, ExportFormat};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::save_backups::LudusaviPanel;
 use irori_ui::{backend, models};
 
+use crate::form::ChoiceItem;
+use crate::i18n::LanguageStamp;
 use crate::restore_paths::RestorePaths;
-use crate::sync::SyncPanel;
-use crate::widgets::{group_header, muted, panel};
+use crate::sync::{SyncPanel, SyncPanelEvent};
 
-/// Horizontal sub-tabs of Settings -> Backup & sync.
+/// Tabs of Settings → Saves & backup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BackupTab {
-    BackupRestore,
+    Saves,
+    Library,
     Sync,
-    Export,
 }
 
-const SCHEDULES: [BackupSchedule; 3] = [
-    BackupSchedule::Off,
-    BackupSchedule::Daily,
-    BackupSchedule::Weekly,
-];
 /// Most scheduled backups kept.
-const MAX_KEEP: u32 = 50;
+pub(super) const MAX_KEEP: u32 = 50;
+/// Most pre-sync safety snapshots kept per game.
+pub(super) const MAX_SNAPSHOTS: u32 = 50;
 
-/// The Backup section's state.
+/// Unified Saves & backup settings panel.
 pub struct BackupPanel {
-    tab: BackupTab,
-    /// What a new backup holds.
-    parts: BackupParts,
+    pub(super) tab: BackupTab,
+    /// Status-only Ludusavi detector shared between Game saves, header cards, and Sync.
+    pub(super) ludusavi: Entity<LudusaviPanel>,
+    /// Game saves tab controls.
+    pub(super) ludusavi_interval: Entity<SelectState<Vec<ChoiceItem>>>,
+    pub(super) ludusavi_path: Entity<InputState>,
+    pub(super) ludusavi_backup_path: Entity<InputState>,
+    pub(super) ludusavi_full_limit: Entity<SelectState<Vec<ChoiceItem>>>,
+    pub(super) ludusavi_diff_limit: Entity<SelectState<Vec<ChoiceItem>>>,
+    pub(super) ludusavi_more_open: bool,
+    /// Highlighted field path after a deep link from global search.
+    pub(super) highlighted_field: Option<&'static str>,
+    highlight_timer: Option<Task<()>>,
+    /// What a standalone manual backup file holds.
+    pub(super) parts: BackupParts,
+    /// Whether the inline "Save copy to file" composer is open.
+    pub(super) manual_save_open: bool,
+    /// Whether the "Included in backups" checklist is expanded.
+    pub(super) included_open: bool,
+    /// Whether all backups beyond the default preview limit are shown.
+    pub(super) show_all_backups: bool,
     /// A backup chosen for restoring, and the parts to restore from it.
-    chosen: Option<(PathBuf, Backup)>,
-    restore_parts: BackupParts,
+    pub(super) chosen: Option<(PathBuf, Backup)>,
+    pub(super) restore_parts: BackupParts,
     /// The chosen backup's paths, as found on this computer.
     pub(crate) paths: RestorePaths,
     /// A restore is running.
-    restoring: bool,
+    pub(super) restoring: bool,
     /// The backups in the backup folder, newest first.
-    listed: Vec<BackupEntry>,
+    pub(super) listed: Vec<BackupEntry>,
     /// The backup folder is there (read with the list).
-    folder_exists: bool,
-    backing_up: bool,
-    sync: Entity<SyncPanel>,
+    pub(super) folder_exists: bool,
+    pub(super) backing_up: bool,
+    /// A full settings reset is running.
+    pub(super) resetting: bool,
+    pub(super) sync: Entity<SyncPanel>,
+    language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
 }
 
 impl BackupPanel {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let app = backend(cx).settings.app();
+        let ludusavi = cx.new(|cx| LudusaviPanel::new(window, cx).status_only(true));
+        let sync = cx.new(|cx| SyncPanel::new(ludusavi.clone(), window, cx));
+
+        let ludusavi_interval =
+            saves_tab::build_interval_select(app.game.ludusavi_interval, window, cx);
+        let ludusavi_full_limit =
+            saves_tab::build_full_limit_select(app.ludusavi_full_limit, window, cx);
+        let ludusavi_diff_limit =
+            saves_tab::build_diff_limit_select(&app.ludusavi_differential_limit, window, cx);
+
+        let ludusavi_path = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t("settings.field.ludusavi_path.placeholder"))
+                .default_value(app.ludusavi_path.clone())
+        });
+        let ludusavi_backup_path = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(t("settings.field.ludusavi_backup_path.placeholder"))
+                .default_value(app.ludusavi_backup_path.clone())
+        });
+
         let settings = models(cx).settings.clone();
+        let subscriptions = vec![
+            cx.observe_in(&settings, window, |this, _, window, cx| {
+                this.sync_saves_controls(window, cx);
+                this.list(cx);
+            }),
+            cx.observe(&ludusavi, |_, _, cx| cx.notify()),
+            cx.observe(&sync, |_, _, cx| cx.notify()),
+            cx.subscribe(&sync, |this, _, event: &SyncPanelEvent, cx| match event {
+                SyncPanelEvent::OpenSaves => this.set_tab(BackupTab::Saves, cx),
+            }),
+            cx.subscribe_in(
+                &ludusavi_interval,
+                window,
+                |_, _, event: &SelectEvent<Vec<ChoiceItem>>, _, cx| {
+                    if let SelectEvent::Confirm(Some(key)) = event
+                        && let Some(mins) = saves_tab::parse_interval_key(key)
+                    {
+                        backend(cx)
+                            .settings
+                            .update_app(|s| s.game.ludusavi_interval = mins);
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &ludusavi_full_limit,
+                window,
+                |_, _, event: &SelectEvent<Vec<ChoiceItem>>, _, cx| {
+                    if let SelectEvent::Confirm(Some(key)) = event
+                        && let Some(limit) = saves_tab::parse_full_limit_key(key)
+                    {
+                        backend(cx)
+                            .settings
+                            .update_app(|s| s.ludusavi_full_limit = limit);
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &ludusavi_diff_limit,
+                window,
+                |_, _, event: &SelectEvent<Vec<ChoiceItem>>, _, cx| {
+                    if let SelectEvent::Confirm(Some(key)) = event {
+                        let val = saves_tab::parse_diff_limit_key(key);
+                        backend(cx)
+                            .settings
+                            .update_app(|s| s.ludusavi_differential_limit = val);
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &ludusavi_path,
+                window,
+                |this, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                        this.commit_ludusavi_paths(cx);
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &ludusavi_backup_path,
+                window,
+                |this, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                        this.commit_ludusavi_paths(cx);
+                    }
+                },
+            ),
+        ];
+
         let mut this = Self {
-            tab: BackupTab::BackupRestore,
+            tab: BackupTab::Saves,
+            ludusavi,
+            ludusavi_interval,
+            ludusavi_path,
+            ludusavi_backup_path,
+            ludusavi_full_limit,
+            ludusavi_diff_limit,
+            ludusavi_more_open: false,
+            highlighted_field: None,
+            highlight_timer: None,
             parts: BackupParts::ALL,
+            manual_save_open: false,
+            included_open: false,
+            show_all_backups: false,
             chosen: None,
             restore_parts: BackupParts::ALL,
             paths: RestorePaths::default(),
@@ -80,21 +199,101 @@ impl BackupPanel {
             listed: Vec::new(),
             folder_exists: false,
             backing_up: false,
-            sync: cx.new(|cx| SyncPanel::new(window, cx)),
-            _subscriptions: vec![cx.observe(&settings, |this, _, cx| this.list(cx))],
+            resetting: false,
+            sync,
+            language: LanguageStamp::new(),
+            _subscriptions: subscriptions,
         };
         this.list(cx);
         this
     }
 
+    pub(crate) fn set_tab(&mut self, tab: BackupTab, cx: &mut Context<Self>) {
+        if self.tab != tab {
+            self.tab = tab;
+            cx.notify();
+        }
+    }
+
+    /// Deep-link from global search into a `FieldSection::Saves` setting:
+    /// opens the owning tab (`Library` for `action.reset-settings`, `Saves`
+    /// otherwise), expands `More options` if advanced, and highlights the
+    /// target row briefly.
+    pub(crate) fn reveal_field(
+        &mut self,
+        path: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if path == "action.reset-settings" {
+            self.tab = BackupTab::Library;
+        } else {
+            self.tab = BackupTab::Saves;
+            if matches!(
+                path,
+                "iroriLudusaviPath"
+                    | "iroriLudusaviBackupPath"
+                    | "iroriLudusaviFullLimit"
+                    | "iroriLudusaviDifferentialLimit"
+            ) {
+                self.ludusavi_more_open = true;
+            }
+        }
+        self.highlighted_field = Some(path);
+        self.highlight_timer = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(2500))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.highlighted_field == Some(path) {
+                    this.highlighted_field = None;
+                    cx.notify();
+                }
+            });
+        }));
+        cx.notify();
+        true
+    }
+
     #[cfg(test)]
     pub(crate) fn set_tab_for_test(&mut self, tab: BackupTab, cx: &mut Context<Self>) {
-        self.tab = tab;
+        self.set_tab(tab, cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn tab_for_test(&self) -> BackupTab {
+        self.tab
+    }
+
+    #[cfg(test)]
+    pub(crate) fn highlighted_field_for_test(&self) -> Option<&'static str> {
+        self.highlighted_field
+    }
+
+    #[cfg(test)]
+    pub(crate) fn ludusavi_more_open_for_test(&self) -> bool {
+        self.ludusavi_more_open
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_manual_save_for_test(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.manual_save_open = open;
         cx.notify();
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_included_open_for_test(&mut self, open: bool, cx: &mut Context<Self>) {
+        self.included_open = open;
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sync_panel_for_test(&self) -> Entity<SyncPanel> {
+        self.sync.clone()
+    }
+
     /// Read the backup folder off the UI thread.
-    fn list(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn list(&mut self, cx: &mut Context<Self>) {
         let b = backend(cx);
         let task = irori_ui::state::run_infallible(cx, async move {
             let b2 = b.clone();
@@ -117,13 +316,17 @@ impl BackupPanel {
         .detach();
     }
 
-    fn update_prefs(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut BackupPrefs)) {
+    pub(super) fn update_prefs(
+        &mut self,
+        cx: &mut Context<Self>,
+        f: impl FnOnce(&mut BackupPrefs),
+    ) {
         backend(cx).settings.update_app(|s| f(&mut s.backups));
         cx.notify();
     }
 
     /// Back up into the backup folder now.
-    fn back_up_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn back_up_now(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.backing_up {
             return;
         }
@@ -148,7 +351,7 @@ impl BackupPanel {
             .detach();
     }
 
-    fn pick_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn pick_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -169,15 +372,22 @@ impl BackupPanel {
         .detach();
     }
 
-    /// Ask where to save a backup, then write it.
-    fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Ask where to save a standalone backup file, then write it.
+    pub(super) fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let parts = self.parts;
         let name = format!("irori-backup-{}.json", today());
         let rx = cx.prompt_for_new_path(&start_dir(), Some(&name));
+        let view = cx.entity().downgrade();
         window
             .spawn(cx, async move |cx| {
                 let Ok(Ok(Some(path))) = rx.await else { return };
                 let result = run_backend(cx, move |b| b.write_backup(&path, parts)).await;
+                if result.is_ok() {
+                    let _ = view.update(cx, |this, cx| {
+                        this.manual_save_open = false;
+                        cx.notify();
+                    });
+                }
                 report(
                     cx,
                     result.map(|()| t("settings.backup.saved")),
@@ -187,8 +397,8 @@ impl BackupPanel {
             .detach();
     }
 
-    /// Ask for a backup file and read it, ready to restore.
-    fn choose(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Ask for a backup file and read it, ready to restore inline.
+    pub(super) fn choose(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: false,
@@ -207,8 +417,14 @@ impl BackupPanel {
             .detach();
     }
 
-    /// Read a backup from the list, ready to restore.
-    fn choose_listed(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+    /// Read a backup from the list, ready to restore inline right above the list.
+    pub(super) fn choose_listed(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.manual_save_open = false;
         let view = cx.entity().downgrade();
         window
             .spawn(cx, async move |cx| load(view, path, cx).await)
@@ -241,7 +457,7 @@ impl BackupPanel {
     }
 
     /// Restore the chosen parts of the chosen backup.
-    fn restore(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn restore(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((path, backup)) = self.chosen.clone() else {
             return;
         };
@@ -294,7 +510,12 @@ impl BackupPanel {
     }
 
     /// Ask where to save the game list, then write it.
-    fn export(&mut self, format: ExportFormat, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn export(
+        &mut self,
+        format: ExportFormat,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let ext = match format {
             ExportFormat::Csv => "csv",
             ExportFormat::Json => "json",
@@ -317,275 +538,34 @@ impl BackupPanel {
 }
 
 impl Render for BackupPanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let selected = match self.tab {
-            BackupTab::BackupRestore => 0,
-            BackupTab::Sync => 1,
-            BackupTab::Export => 2,
-        };
-        let tabs = TabBar::new("backup-tabs")
-            .underline()
-            .large()
-            .selected_index(selected)
-            .children(
-                crate::layout::BACKUP_TABS
-                    .iter()
-                    .map(|tab| Tab::new().label(t(tab.label_key))),
-            )
-            .on_click(cx.listener(|this, ix: &usize, _, cx| {
-                this.tab = match ix {
-                    1 => BackupTab::Sync,
-                    2 => BackupTab::Export,
-                    _ => BackupTab::BackupRestore,
-                };
-                cx.notify();
-            }));
-
-        let parts = self.parts;
-        let backup = panel(cx)
-            .p_3()
-            .gap_2()
-            .child(muted(t("settings.backup.backup_description"), cx))
-            .child(part_checkboxes(
-                "backup",
-                parts,
-                None,
-                cx,
-                |this, parts, _| this.parts = parts,
-            ))
-            .child(
-                h_flex().child(
-                    Button::new("backup-save")
-                        .primary()
-                        .icon(IconName::Save)
-                        .label(t("settings.backup.save"))
-                        .disabled(!parts.any())
-                        .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
-                ),
-            );
-
-        let restore = match &self.chosen {
-            None => panel(cx)
-                .p_3()
-                .gap_2()
-                .child(muted(t("settings.backup.restore_description"), cx))
-                .child(
-                    h_flex().child(
-                        Button::new("backup-choose")
-                            .outline()
-                            .icon(IconName::FolderOpen)
-                            .label(t("settings.backup.choose"))
-                            .on_click(cx.listener(|this, _, window, cx| this.choose(window, cx))),
-                    ),
-                ),
-            Some((path, backup)) => {
-                let available = backup.parts();
-                let created = irori_ui::dates::localized_day(&backup.created);
-                panel(cx)
-                    .p_3()
-                    .gap_2()
-                    .child(v_flex().gap_0p5().child(file_name(path)).child(muted(
-                        t_args("settings.backup.made_on", &[("date", &created)]),
-                        cx,
-                    )))
-                    .child(part_checkboxes(
-                        "restore",
-                        self.restore_parts,
-                        Some(available),
-                        cx,
-                        |this, parts, cx| {
-                            this.restore_parts = parts;
-                            this.plan_paths(cx);
-                        },
-                    ))
-                    .children(self.paths.render(cx))
-                    .child(muted(t("settings.backup.restore_note"), cx))
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .child(
-                                Button::new("backup-restore")
-                                    .primary()
-                                    .icon(IconName::ArchiveRestore)
-                                    .label(t("settings.backup.restore"))
-                                    .loading(self.restoring)
-                                    .disabled(!self.restore_parts.any() || self.restoring)
-                                    .on_click(
-                                        cx.listener(|this, _, window, cx| this.restore(window, cx)),
-                                    ),
-                            )
-                            .child(
-                                Button::new("backup-cancel")
-                                    .ghost()
-                                    .label(t("settings.backup.cancel"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.chosen = None;
-                                        cx.notify();
-                                    })),
-                            ),
-                    )
-            }
-        };
-
-        let export = panel(cx)
-            .p_3()
-            .gap_2()
-            .child(muted(t("settings.backup.export_description"), cx))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Button::new("export-csv")
-                            .outline()
-                            .icon(IconName::FileSpreadsheet)
-                            .label(t("settings.backup.export_csv"))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.export(ExportFormat::Csv, window, cx)
-                            })),
-                    )
-                    .child(
-                        Button::new("export-json")
-                            .outline()
-                            .icon(IconName::FileBraces)
-                            .label(t("settings.backup.export_json"))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.export(ExportFormat::Json, window, cx)
-                            })),
-                    ),
-            );
-
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.language.changed() {
+            cx.defer_in(window, |this, window, cx| {
+                this.retranslate_saves_controls(window, cx);
+            });
+        }
         let body = match self.tab {
-            BackupTab::BackupRestore => v_flex()
-                .gap_1()
-                .child(group_header(
-                    t("settings.backup.auto_title"),
-                    None,
-                    true,
-                    cx,
-                ))
-                .child(self.render_schedule(cx))
-                .child(group_header(
-                    t("settings.backup.backup_title"),
-                    None,
-                    false,
-                    cx,
-                ))
-                .child(backup)
-                .child(group_header(
-                    t("settings.backup.restore_title"),
-                    None,
-                    false,
-                    cx,
-                ))
-                .child(restore)
-                .into_any_element(),
-            BackupTab::Sync => v_flex()
-                .gap_1()
-                .child(group_header(t("settings.sync.title"), None, true, cx))
-                .child(self.sync.clone())
-                .into_any_element(),
-            BackupTab::Export => v_flex()
-                .gap_1()
-                .child(group_header(
-                    t("settings.backup.export_title"),
-                    None,
-                    true,
-                    cx,
-                ))
-                .child(export)
-                .into_any_element(),
+            BackupTab::Saves => self.render_saves_tab(cx).into_any_element(),
+            BackupTab::Library => self.render_library_tab(cx).into_any_element(),
+            BackupTab::Sync => self.sync.clone().into_any_element(),
         };
 
-        v_flex().gap_2().child(tabs).child(body)
+        v_flex()
+            .w_full()
+            .gap_3()
+            .child(self.render_tab_cards(cx))
+            .child(body)
     }
 }
 
-/// One part's checkbox: label key, checked, enabled, and how to set it.
-type PartEntry = (&'static str, bool, bool, fn(&mut BackupParts, bool));
-
-/// A checkbox per part. With `available`, parts the backup lacks are off and
-/// disabled.
-fn part_checkboxes(
-    prefix: &'static str,
-    parts: BackupParts,
-    available: Option<BackupParts>,
-    cx: &mut Context<BackupPanel>,
-    set: fn(&mut BackupPanel, BackupParts, &mut Context<BackupPanel>),
-) -> impl IntoElement {
-    let has = available.unwrap_or(BackupParts::ALL);
-    let entries: [PartEntry; 5] = [
-        (
-            "settings.backup.part_settings",
-            parts.settings,
-            has.settings,
-            |p, v| p.settings = v,
-        ),
-        (
-            "settings.backup.part_game_settings",
-            parts.game_settings,
-            has.game_settings,
-            |p, v| p.game_settings = v,
-        ),
-        (
-            "settings.backup.part_library",
-            parts.library,
-            has.library,
-            |p, v| p.library = v,
-        ),
-        (
-            "settings.backup.part_playtime",
-            parts.playtime,
-            has.playtime,
-            |p, v| p.playtime = v,
-        ),
-        (
-            "settings.backup.part_installs",
-            parts.installs,
-            has.installs,
-            |p, v| p.installs = v,
-        ),
-    ];
-    v_flex()
-        .gap_2()
-        .children(entries.into_iter().enumerate().map(
-            move |(ix, (label, checked, enabled, apply))| {
-                Checkbox::new(SharedString::from(format!("{prefix}-part-{ix}")))
-                    .label(t(label))
-                    .checked(checked && enabled)
-                    .disabled(!enabled)
-                    .small()
-                    .on_change(cx.listener(move |this, v: &bool, _, cx| {
-                        let mut next = match prefix {
-                            "restore" => this.restore_parts,
-                            "schedule" => schedule_parts(&backend(cx).settings.app().backups),
-                            _ => this.parts,
-                        };
-                        apply(&mut next, *v);
-                        set(this, next, cx);
-                        cx.notify();
-                    }))
-            },
-        ))
-}
-
-/// The parts automatic backups hold.
-fn schedule_parts(prefs: &BackupPrefs) -> BackupParts {
-    BackupParts {
-        settings: prefs.settings,
-        game_settings: prefs.game_settings,
-        library: prefs.library,
-        playtime: prefs.playtime,
-        installs: prefs.installs,
-    }
-}
-
-/// Read the backup at `path` and offer it for restoring.
+/// Read the backup at `path` and offer it for restoring inline.
 async fn load(view: WeakEntity<BackupPanel>, path: PathBuf, cx: &mut AsyncWindowContext) {
     let read_path = path.clone();
     let result = run_backend(cx, move |_| Backend::read_backup(&read_path)).await;
     match result {
         Ok(backup) => {
             let _ = view.update(cx, |this, cx| {
+                this.manual_save_open = false;
                 this.restore_parts = backup.parts();
                 this.chosen = Some((path, backup));
                 this.paths = RestorePaths::default();
@@ -593,253 +573,6 @@ async fn load(view: WeakEntity<BackupPanel>, path: PathBuf, cx: &mut AsyncWindow
             });
         }
         Err(e) => report::<SharedString>(cx, Err(e), "settings.backup.read_failed"),
-    }
-}
-
-/// What kind of backup a listed one is.
-fn kind_label(kind: &BackupKind) -> SharedString {
-    match kind {
-        BackupKind::Scheduled => t("settings.backup.kind_scheduled"),
-        BackupKind::BeforeUpdate(version) => t_args(
-            "settings.backup.kind_before_update",
-            &[("version", version)],
-        ),
-        BackupKind::Other => t("settings.backup.kind_other"),
-    }
-}
-
-impl BackupPanel {
-    /// Automatic backups: schedule, folder, how many, what goes in, the
-    /// last result and the backups there.
-    fn render_schedule(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        let b = backend(cx);
-        let prefs = b.settings.app().backups.clone();
-        let status = b.backup_status();
-        let busy = self.backing_up || status.running;
-
-        let schedule = ButtonGroup::new("backup-schedule")
-            .outline()
-            .children(SCHEDULES.iter().enumerate().map(|(ix, s)| {
-                let label = match s {
-                    BackupSchedule::Off => t("settings.backup.schedule_off"),
-                    BackupSchedule::Daily => t("settings.backup.schedule_daily"),
-                    BackupSchedule::Weekly => t("settings.backup.schedule_weekly"),
-                };
-                Button::new(SharedString::from(format!("backup-schedule-{ix}")))
-                    .label(label)
-                    .selected(prefs.schedule == *s)
-            }))
-            .on_click(cx.listener(|this, clicked: &Vec<usize>, _, cx| {
-                if let Some(&ix) = clicked.first() {
-                    this.update_prefs(cx, |p| p.schedule = SCHEDULES[ix]);
-                }
-            }));
-
-        let last = match (&status.last_error, &status.last_ok) {
-            (Some(error), _) => Alert::error("backup-error", error.clone())
-                .title(t("settings.backup.last_failed"))
-                .into_any_element(),
-            (None, Some(ok)) => h_flex()
-                .gap_2()
-                .child(
-                    gpui_kit::component::Icon::new(IconName::CircleCheck)
-                        .text_color(cx.theme().success),
-                )
-                .child(t_args(
-                    "settings.backup.last_ok",
-                    &[("time", &local_time(ok))],
-                ))
-                .into_any_element(),
-            (None, None) => muted(t("settings.backup.never"), cx).into_any_element(),
-        };
-
-        let custom_folder = !prefs.folder.trim().is_empty();
-        let folder = v_flex()
-            .gap_1()
-            .child(irori_ui::style::caption(t("settings.backup.folder"), cx))
-            .child(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .child(status.folder.to_string_lossy().into_owned()),
-                    )
-                    .child(
-                        Button::new("backup-folder")
-                            .outline()
-                            .small()
-                            .icon(IconName::FolderOpen)
-                            .label(t("settings.backup.choose_folder"))
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.pick_folder(window, cx)),
-                            ),
-                    )
-                    .when(custom_folder, |row| {
-                        row.child(
-                            Button::new("backup-folder-default")
-                                .ghost()
-                                .small()
-                                .label(t("settings.backup.use_default_folder"))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.update_prefs(cx, |p| p.folder.clear());
-                                    this.list(cx);
-                                })),
-                        )
-                    }),
-            );
-
-        let keep = prefs.keep.clamp(1, MAX_KEEP);
-        let keep_row = h_flex()
-            .gap_2()
-            .child(div().flex_1().min_w_0().child(t("settings.backup.keep")))
-            .child(
-                Button::new("backup-keep-less")
-                    .outline()
-                    .xsmall()
-                    .icon(IconName::Minus)
-                    .accessibility_label(t("settings.backup.keep_fewer"))
-                    .disabled(keep <= 1)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.update_prefs(cx, |p| p.keep = keep - 1)
-                    })),
-            )
-            .child(
-                div()
-                    .min_w_8()
-                    .flex()
-                    .justify_center()
-                    .child(keep.to_string()),
-            )
-            .child(
-                Button::new("backup-keep-more")
-                    .outline()
-                    .xsmall()
-                    .icon(IconName::Plus)
-                    .accessibility_label(t("settings.backup.keep_more"))
-                    .disabled(keep >= MAX_KEEP)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.update_prefs(cx, |p| p.keep = keep + 1)
-                    })),
-            );
-
-        let parts = schedule_parts(&prefs);
-        let contents = v_flex()
-            .gap_2()
-            .child(irori_ui::style::caption(t("settings.backup.contents"), cx))
-            .child(part_checkboxes(
-                "schedule",
-                parts,
-                None,
-                cx,
-                |this, parts, cx| {
-                    this.update_prefs(cx, |p| {
-                        p.settings = parts.settings;
-                        p.game_settings = parts.game_settings;
-                        p.library = parts.library;
-                        p.playtime = parts.playtime;
-                        p.installs = parts.installs;
-                    })
-                },
-            ))
-            .child(
-                Checkbox::new("schedule-art")
-                    .label(t("settings.backup.part_art"))
-                    .checked(prefs.art)
-                    .small()
-                    .on_change(cx.listener(|this, v: &bool, _, cx| {
-                        let v = *v;
-                        this.update_prefs(cx, |p| p.art = v)
-                    })),
-            )
-            .child(
-                Checkbox::new("schedule-before-updates")
-                    .label(t("settings.backup.before_updates"))
-                    .checked(prefs.before_updates)
-                    .small()
-                    .on_change(cx.listener(|this, v: &bool, _, cx| {
-                        let v = *v;
-                        this.update_prefs(cx, |p| p.before_updates = v)
-                    })),
-            );
-
-        let actions = h_flex()
-            .gap_2()
-            .child(
-                Button::new("backup-now")
-                    .primary()
-                    .icon(IconName::Save)
-                    .label(if busy {
-                        t("settings.backup.running")
-                    } else {
-                        t("settings.backup.now")
-                    })
-                    .loading(busy)
-                    .disabled(busy || !parts.any())
-                    .on_click(cx.listener(|this, _, window, cx| this.back_up_now(window, cx))),
-            )
-            .child(
-                Button::new("backup-open-folder")
-                    .ghost()
-                    .icon(IconName::FolderOpen)
-                    .label(t("settings.backup.open_folder"))
-                    .disabled(!self.folder_exists)
-                    .on_click({
-                        let folder = status.folder.clone();
-                        move |_, _, cx: &mut App| cx.open_with_system(&folder)
-                    }),
-            );
-
-        let list = v_flex()
-            .gap_1()
-            .child(irori_ui::style::caption(
-                t("settings.backup.list_title"),
-                cx,
-            ))
-            .when(self.listed.is_empty(), |l| {
-                l.child(muted(t("settings.backup.list_empty"), cx))
-            })
-            .children(self.listed.iter().enumerate().map(|(ix, entry)| {
-                let path = entry.path.clone();
-                let mut kind = kind_label(&entry.kind).to_string();
-                if entry.art {
-                    kind = t_args("settings.backup.with_art", &[("kind", &kind)]).to_string();
-                }
-                h_flex()
-                    .gap_2()
-                    .py_1()
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .child(div().truncate().child(local_time(&entry.created)))
-                            .child(muted(kind, cx).truncate()),
-                    )
-                    .child(
-                        Button::new(SharedString::from(format!("backup-restore-{ix}")))
-                            .outline()
-                            .small()
-                            .icon(IconName::ArchiveRestore)
-                            .label(t("settings.backup.restore_this"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.choose_listed(path.clone(), window, cx)
-                            })),
-                    )
-            }));
-
-        panel(cx)
-            .p_3()
-            .gap_3()
-            .child(muted(t("settings.backup.auto_description"), cx))
-            .child(h_flex().child(schedule))
-            .child(last)
-            .child(folder)
-            .child(keep_row)
-            .child(contents)
-            .child(actions)
-            .child(list)
     }
 }
 
@@ -891,7 +624,7 @@ fn today() -> String {
     irori_core::util::now_rfc3339().chars().take(10).collect()
 }
 
-fn file_name(path: &Path) -> String {
+pub(super) fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default()

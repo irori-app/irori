@@ -53,7 +53,6 @@ pub enum SettingsSection {
     Appearance,
     Storage,
     Advanced,
-    Saves,
     Backup,
     Logs,
     SystemInfo,
@@ -61,7 +60,7 @@ pub enum SettingsSection {
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 15] = [
+    pub const ALL: [SettingsSection; 14] = [
         SettingsSection::Accounts,
         SettingsSection::WineManager,
         SettingsSection::Emulators,
@@ -72,7 +71,6 @@ impl SettingsSection {
         SettingsSection::Appearance,
         SettingsSection::Storage,
         SettingsSection::Advanced,
-        SettingsSection::Saves,
         SettingsSection::Backup,
         SettingsSection::Logs,
         SettingsSection::SystemInfo,
@@ -110,7 +108,6 @@ impl SettingsSection {
             SettingsSection::Appearance => "appearance",
             SettingsSection::Storage => "storage",
             SettingsSection::Advanced => "advanced",
-            SettingsSection::Saves => "saves",
             SettingsSection::Backup => "backup",
             SettingsSection::Logs => "logs",
             SettingsSection::SystemInfo => "system",
@@ -133,8 +130,9 @@ impl SettingsSection {
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
             "storage" | "disks" | "cleanup" => SettingsSection::Storage,
             "advanced" => SettingsSection::Advanced,
-            "saves" | "ludusavi" | "save-backups" => SettingsSection::Saves,
-            "backup" | "restore" | "export" | "sync" => SettingsSection::Backup,
+            "backup" | "restore" | "export" | "sync" | "saves" | "ludusavi" | "save-backups" => {
+                SettingsSection::Backup
+            }
             "logs" | "log" => SettingsSection::Logs,
             "system" | "systeminfo" | "system-info" => SettingsSection::SystemInfo,
             "about" => SettingsSection::About,
@@ -165,7 +163,6 @@ impl SettingsSection {
             SettingsSection::Appearance => "settings.page.appearance",
             SettingsSection::Storage => "settings.page.storage",
             SettingsSection::Advanced => "settings.page.advanced",
-            SettingsSection::Saves => "settings.page.saves",
             SettingsSection::Backup => "settings.page.backup",
             SettingsSection::Logs => "settings.page.logs",
             SettingsSection::SystemInfo => "settings.page.system_info",
@@ -196,7 +193,6 @@ impl SettingsSection {
             SettingsSection::Appearance => "settings.page.appearance_description",
             SettingsSection::Storage => "settings.page.storage_description",
             SettingsSection::Advanced => "settings.page.advanced_description",
-            SettingsSection::Saves => "settings.page.saves_description",
             SettingsSection::Backup => "settings.page.backup_description",
             SettingsSection::Logs => "settings.page.logs_description",
             SettingsSection::SystemInfo => "settings.page.system_info_description",
@@ -216,8 +212,7 @@ impl SettingsSection {
             SettingsSection::Appearance => IconName::Palette,
             SettingsSection::Storage => IconName::HardDrive,
             SettingsSection::Advanced => IconName::Wrench,
-            SettingsSection::Saves => IconName::DatabaseBackup,
-            SettingsSection::Backup => IconName::ArchiveRestore,
+            SettingsSection::Backup => IconName::DatabaseBackup,
             SettingsSection::Logs => IconName::ScrollText,
             SettingsSection::SystemInfo => IconName::Cpu,
             SettingsSection::About => IconName::Info,
@@ -247,6 +242,9 @@ impl SettingsSection {
             SettingsSection::Storage => {
                 "storage disk drive space size free clean cleanup delete prefix cache"
             }
+            SettingsSection::Backup => {
+                "game saves save backups ludusavi snapshots cloud backup restore sync export csv json schedule automatic computers devices webdav rclone settings library reset defaults factory redefinir danger"
+            }
             _ => "",
         }
     }
@@ -257,7 +255,6 @@ impl SettingsSection {
             SettingsSection::Controller => Some(FieldSection::Controller),
             SettingsSection::Appearance => Some(FieldSection::Appearance),
             SettingsSection::Advanced => Some(FieldSection::Advanced),
-            SettingsSection::Saves => Some(FieldSection::Saves),
             _ => None,
         }
     }
@@ -369,10 +366,7 @@ impl SettingsView {
                 cx.observe(&accounts, |_, _, cx| cx.notify()),
             ],
         };
-        if section.as_ref() == "downloads" {
-            this.general_tab = "integrations";
-        }
-        this.open(SettingsSection::from_id(&section), false, window, cx);
+        this.open_route_id(&section, true, window, cx);
         this
     }
 
@@ -386,16 +380,67 @@ impl SettingsView {
         &self.query
     }
 
-    /// Show a section (route id); the shell calls this when the route
-    /// changes while the page is open.
+    /// Show a section (route id), sub-tab (`backup/<tab>`), or direct setting
+    /// (`field:<path>`); the shell calls this when the route changes while the
+    /// page is open.
     pub fn set_section(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let target = SettingsSection::from_id(id);
+        self.open_route_id(id, false, window, cx);
+    }
+
+    fn open_route_id(
+        &mut self,
+        id: &str,
+        force: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(path) = id.strip_prefix("field:")
+            && let Some(spec) = crate::registry::find(path)
+            && spec.section == FieldSection::Saves
+            && spec.supported_on_host()
+        {
+            self.open(SettingsSection::Backup, false, window, cx);
+            self.backup
+                .update(cx, |b, cx| b.reveal_field(spec.path, window, cx));
+            return;
+        }
         if id == "downloads" {
             self.general_tab = "integrations";
+            self.open(SettingsSection::General, false, window, cx);
+            return;
+        }
+        if let Some((sec, sub)) = id.split_once('/') {
+            let target = SettingsSection::from_id(sec);
+            if target == SettingsSection::Backup {
+                let backup_tab = match sub {
+                    "saves" | "ludusavi" | "save-backups" => Some(crate::backup::BackupTab::Saves),
+                    "sync" => Some(crate::backup::BackupTab::Sync),
+                    "library" | "backup_restore" | "backup" | "restore" | "export" => {
+                        Some(crate::backup::BackupTab::Library)
+                    }
+                    _ => None,
+                };
+                if let Some(tab) = backup_tab {
+                    self.backup.update(cx, |b, cx| b.set_tab(tab, cx));
+                }
+            }
             self.open(target, false, window, cx);
             return;
         }
-        if target == self.section
+        let alias_tab = match id {
+            "saves" | "ludusavi" | "save-backups" => Some(crate::backup::BackupTab::Saves),
+            "restore" | "export" => Some(crate::backup::BackupTab::Library),
+            "sync" => Some(crate::backup::BackupTab::Sync),
+            _ => None,
+        };
+        if let Some(tab) = alias_tab {
+            self.backup.update(cx, |b, cx| b.set_tab(tab, cx));
+            self.open(SettingsSection::Backup, false, window, cx);
+            return;
+        }
+        let target = SettingsSection::from_id(id);
+        if !force
+            && target == self.section
             && self.query.is_empty()
             && (!target.is_embedded() || self.embedded_view(target).is_some())
         {
@@ -1332,8 +1377,7 @@ impl Render for SettingsView {
                         .into_any_element(),
                     SettingsSection::General
                     | SettingsSection::Controller
-                    | SettingsSection::Advanced
-                    | SettingsSection::Saves => self.app_form.clone().into_any_element(),
+                    | SettingsSection::Advanced => self.app_form.clone().into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),
                     SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
                     SettingsSection::PerformanceHud => self.hud.clone().into_any_element(),

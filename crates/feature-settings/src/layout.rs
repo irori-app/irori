@@ -41,11 +41,7 @@ pub(crate) const SIDEBAR_GROUPS: &[SidebarGroup] = &[
     },
     SidebarGroup {
         label_key: "settings.sidebar.data",
-        sections: &[
-            SettingsSection::Storage,
-            SettingsSection::Saves,
-            SettingsSection::Backup,
-        ],
+        sections: &[SettingsSection::Storage, SettingsSection::Backup],
     },
     SidebarGroup {
         label_key: "settings.sidebar.system",
@@ -141,19 +137,19 @@ pub(crate) const APPEARANCE_TABS: &[SubTab] = &[
     },
 ];
 
-/// Sub-tabs of Settings -> Backup & sync.
+/// Sub-tabs of Settings -> Saves & backup.
 pub(crate) const BACKUP_TABS: &[SubTab] = &[
     SubTab {
-        id: "backup_restore",
-        label_key: "settings.subtab.backup.backup_restore",
+        id: "saves",
+        label_key: "settings.subtab.backup.saves",
+    },
+    SubTab {
+        id: "library",
+        label_key: "settings.subtab.backup.library",
     },
     SubTab {
         id: "sync",
         label_key: "settings.subtab.backup.sync",
-    },
-    SubTab {
-        id: "export",
-        label_key: "settings.subtab.backup.export",
     },
 ];
 
@@ -220,11 +216,15 @@ pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
         FieldSection::CloudSaves => Some("saves"),
         FieldSection::General => general_subtab(spec.path),
         FieldSection::Appearance => appearance_subtab(spec.path),
-        // The Controller page is short enough to stay one page.
-        FieldSection::Advanced
-        | FieldSection::Saves
-        | FieldSection::Artwork
-        | FieldSection::Controller => None,
+        FieldSection::Saves => {
+            if spec.path == "action.reset-settings" {
+                Some("library")
+            } else {
+                Some("saves")
+            }
+        }
+        // The Controller and Advanced pages stay flat.
+        FieldSection::Advanced | FieldSection::Artwork | FieldSection::Controller => None,
     }
 }
 
@@ -436,6 +436,11 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "iroriSandbox.noNetwork"
             | "iroriSandbox.noHome"
             | "verboseLogs"
+            // Saves & backup -> Game saves
+            | "iroriLudusaviPath"
+            | "iroriLudusaviBackupPath"
+            | "iroriLudusaviFullLimit"
+            | "iroriLudusaviDifferentialLimit"
     )
 }
 
@@ -543,6 +548,16 @@ pub(crate) const FIELD_PAIRS: &[FieldPair] = &[
         second_sublabel_key: "settings.pair.interval",
         separator: None,
     },
+    FieldPair {
+        first: "iroriLudusaviFullLimit",
+        second: "iroriLudusaviDifferentialLimit",
+        label_key: "settings.pair.ludusavi_retention",
+        help_key: "settings.pair.ludusavi_retention_help",
+        tooltip_key: "settings.pair.ludusavi_retention.tip",
+        first_sublabel_key: "settings.pair.full_backups",
+        second_sublabel_key: "settings.pair.incremental_per_full",
+        separator: None,
+    },
 ];
 
 /// Return the [`FieldPair`] that starts with `first` followed immediately by
@@ -565,7 +580,9 @@ mod tests {
     fn every_app_and_shared_field_on_subtabbed_pages_has_a_subtab() {
         for f in FIELDS {
             let needs_tab = match f.section {
-                FieldSection::General | FieldSection::Appearance => f.scope == Scope::App,
+                FieldSection::General | FieldSection::Appearance | FieldSection::Saves => {
+                    f.scope == Scope::App
+                }
                 FieldSection::Wine
                 | FieldSection::Performance
                 | FieldSection::Gpu
@@ -580,6 +597,7 @@ mod tests {
             let valid = match f.section {
                 FieldSection::General => GENERAL_TABS.iter().any(|t| t.id == tab),
                 FieldSection::Appearance => APPEARANCE_TABS.iter().any(|t| t.id == tab),
+                FieldSection::Saves => BACKUP_TABS.iter().any(|t| t.id == tab),
                 _ => DEFAULTS_TABS
                     .iter()
                     .any(|t| t.id == tab && defaults_section_for_tab(t.id) == f.section),
