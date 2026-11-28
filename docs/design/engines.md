@@ -373,6 +373,18 @@ polls `/proc` and nothing sleeps at launch.
   installed versions.
 - **Scale.** 10,000+ entries: the library keeps `Arc<GameInfo>`, the scanner runs on the
   blocking pool and publishes one `LibraryChanged` per batch, and every list is virtual.
+- **Local eXo collections.** Irori recognizes local eXo collection roots (`eXo/` with
+  `Data/Platforms/*.xml` or `xml/all/*.xml`) for `eXoDOS` (including language packs),
+  `eXoWin3x`, `eXoScummVM`, and `eXoDemoscene`, and discovers them in `rom_sources`.
+  In line with `CONTRIBUTING.md`, Irori never bundles torrents or downloads game archives:
+  only locally present games (extracted folders or local `.zip` archives) appear, while
+  un-downloaded eXo Lite stubs stay hidden. Local `.zip` games appear as installable,
+  extract safely through `archive_guard`, and uninstall removes only the extracted folder
+  while keeping the `.zip`. Launching translates each game's `dosbox.conf` into Irori's
+  cache (`exo-launch/`) without modifying the user's eXo folder, maps `platform.txt` for
+  `eXoScummVM`, grants Flatpak emulators `--filesystem=<exo_root>`, and provides an opt-in
+  per-game `iroriExoUseNativeScript` switch in `Play with…` for titles whose eXo wrapper
+  script provides interactive setup menus.
 
 ## 5. Settings
 
