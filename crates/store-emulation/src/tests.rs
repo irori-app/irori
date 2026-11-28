@@ -13,7 +13,7 @@ static ROOT: Lazy<tempfile::TempDir> = Lazy::new(|| {
 });
 
 /// A fresh folder under the test root, with Paths pointing there.
-fn test_dir(name: &str) -> PathBuf {
+pub(crate) fn test_dir(name: &str) -> PathBuf {
     let root = ROOT.path();
     assert!(Paths::get().config.starts_with(root));
     let dir = root.join(name);

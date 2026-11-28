@@ -5197,6 +5197,7 @@ dependencies = [
  "notify",
  "once_cell",
  "parking_lot",
+ "quick-xml 0.42.0",
  "regex",
  "serde",
  "serde_json",
