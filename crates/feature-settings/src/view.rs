@@ -4,14 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -19,7 +17,6 @@ use gpui_kit::{
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
     Subscription, Window, div, rems,
 };
-use irori_core::Paths;
 use irori_runtime::sysinfo::{self, SystemInfo};
 use irori_services::displays::DisplayReport;
 use irori_ui::components::{EmptyState, PageHeader};
@@ -33,7 +30,7 @@ use crate::feedback::{self, Feedback};
 use crate::form::{FormTarget, SettingsForm};
 use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::{LanguageStamp, english};
-use crate::logs::LogViewer;
+use crate::logs::LogsHubView;
 use crate::registry::FieldSection;
 use crate::storage::StoragePanel;
 use crate::widgets::{
@@ -239,7 +236,9 @@ impl SettingsSection {
             SettingsSection::PerformanceHud => {
                 "performance hud mangohud metal overlay fps frametime gpu cpu vram temperature"
             }
-            SettingsSection::Logs => "logs log launcher debug report problem crash panic backtrace",
+            SettingsSection::Logs => {
+                "logs log launcher debug diagnostics disablelogs disable_logs write diagnostic logs turn off logs logs folder open logs folder show file report problem crash panic backtrace"
+            }
             SettingsSection::SystemInfo => {
                 "system information hardware cpu gpu memory driver os report"
             }
@@ -284,8 +283,7 @@ pub struct SettingsView {
     app_form: Entity<SettingsForm>,
     defaults_form: Entity<SettingsForm>,
     hud: Entity<HudPanel>,
-    log: Entity<LogViewer>,
-    crash_reports: Vec<irori_core::crash::CrashReportMeta>,
+    log: Entity<LogsHubView>,
     backup: Entity<BackupPanel>,
     app_update: Entity<AppUpdatePanel>,
     preview: Entity<AppearancePreview>,
@@ -329,10 +327,7 @@ impl SettingsView {
         let hud = cx.new(|cx| {
             HudPanel::new(HudPanelScope::Global, None, window, cx).with_pinned_preview(true)
         });
-        // The upload name identifies the log at the paste service and in the
-        // upload history, so it stays the same in every language.
-        let log =
-            cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
+        let log = cx.new(|cx| LogsHubView::new(window, cx));
         let storage = cx.new(StoragePanel::new);
         let accounts = models(cx).accounts.clone();
         let default_defaults_tab = crate::layout::supported_defaults_tabs()
@@ -350,7 +345,6 @@ impl SettingsView {
             defaults_form,
             hud,
             log,
-            crash_reports: Vec::new(),
             backup: cx.new(|cx| BackupPanel::new(window, cx)),
             app_update: cx.new(AppUpdatePanel::new),
             preview: cx.new(AppearancePreview::new),
@@ -466,7 +460,7 @@ impl SettingsView {
             SettingsSection::General
         };
         if self.section == SettingsSection::Logs && section != SettingsSection::Logs {
-            self.log.update(cx, |l, _| l.stop());
+            self.log.update(cx, |l, cx| l.stop(cx));
         }
         self.section = section;
         if !self.query.is_empty() {
@@ -505,7 +499,6 @@ impl SettingsView {
             }
             SettingsSection::Logs => {
                 self.log.update(cx, |l, cx| l.start(window, cx));
-                self.load_crash_reports(window, cx);
             }
             SettingsSection::SystemInfo if self.sysinfo.info.is_none() => {
                 self.load_sysinfo(window, cx)
@@ -713,8 +706,23 @@ impl SettingsView {
             .into_iter()
             .filter(|s| s.supported_on_host())
             .filter(|s| {
-                let hay = format!("{} {} {}", s.label(), english(s.label_key()), s.keywords())
-                    .to_lowercase();
+                let extra = if *s == SettingsSection::Logs {
+                    format!(
+                        " {} {}",
+                        t("settings.logs.write_diagnostic"),
+                        t("settings.logs.logs_folder")
+                    )
+                } else {
+                    String::new()
+                };
+                let hay = format!(
+                    "{} {} {}{}",
+                    s.label(),
+                    english(s.label_key()),
+                    s.keywords(),
+                    extra
+                )
+                .to_lowercase();
                 !s.keywords().is_empty() && q.split_whitespace().all(|t| hay.contains(t))
             })
             .collect();
@@ -1059,149 +1067,6 @@ impl SettingsView {
             .into_any_element()
     }
 
-    fn load_crash_reports(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        cx.spawn_in(window, async move |this, cx| {
-            let list = cx
-                .background_executor()
-                .spawn(async move { irori_core::crash::list_reports(&Paths::get().logs_dir()) })
-                .await;
-            this.update(cx, |this, cx| {
-                this.crash_reports = list;
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
-    }
-
-    fn delete_crash_report(
-        &mut self,
-        path: std::path::PathBuf,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        cx.spawn_in(window, async move |this, cx| {
-            let result =
-                cx.background_executor()
-                    .spawn(async move {
-                        irori_core::crash::delete_report(&Paths::get().logs_dir(), &path)
-                    })
-                    .await;
-            this.update_in(cx, |this, window, cx| {
-                if let Err(e) = result {
-                    window.push_notification(
-                        Notification::error(format!("{e}"))
-                            .title(t("settings.crash.delete_failed")),
-                        cx,
-                    );
-                } else {
-                    this.load_crash_reports(window, cx);
-                }
-            })
-            .ok();
-        })
-        .detach();
-    }
-
-    fn render_crash_reports(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if self.crash_reports.is_empty() {
-            return None;
-        }
-        let theme = cx.theme();
-        let (border, muted_fg, warning) = (theme.border, theme.muted_foreground, theme.warning);
-        let rows = self.crash_reports.iter().enumerate().map(|(ix, report)| {
-            let when = crate::crash_report::format_crash_timestamp(report.timestamp)
-                .unwrap_or_else(|| {
-                    report
-                        .path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("-")
-                        .to_string()
-                });
-            let msg = report
-                .summary
-                .message
-                .as_deref()
-                .filter(|m| !m.trim().is_empty() && *m != "(no message)")
-                .or(report.summary.location.as_deref())
-                .unwrap_or("-");
-            let open_path = report.path.clone();
-            let reveal_path = report.path.clone();
-            let delete_path = report.path.clone();
-            h_flex()
-                .gap_3()
-                .px_3()
-                .py_2()
-                .items_center()
-                .when(ix > 0, |r| r.border_t_1().border_color(border))
-                .child(
-                    Icon::new(IconName::TriangleAlert)
-                        .small()
-                        .text_color(warning),
-                )
-                .child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .gap_0p5()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_medium()
-                                .truncate()
-                                .child(msg.to_string()),
-                        )
-                        .child(div().text_xs().text_color(muted_fg).truncate().child(when)),
-                )
-                .child(
-                    Button::new(ElementId::Name(format!("crash-review-{ix}").into()))
-                        .outline()
-                        .xsmall()
-                        .label(t("settings.crash.review_action"))
-                        .on_click(move |_, window, cx| {
-                            crate::open_crash_report_sheet(open_path.clone(), window, cx);
-                        }),
-                )
-                .child(
-                    Button::new(ElementId::Name(format!("crash-show-{ix}").into()))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::FolderOpen)
-                        .tooltip(t("settings.logs.show_file"))
-                        .on_click(move |_, _, cx| {
-                            if reveal_path.exists() {
-                                cx.reveal_path(&reveal_path);
-                            } else if let Some(dir) = reveal_path.parent() {
-                                cx.open_with_system(dir);
-                            }
-                        }),
-                )
-                .child(
-                    Button::new(ElementId::Name(format!("crash-delete-{ix}").into()))
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::Trash)
-                        .tooltip(t("settings.crash.delete"))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.delete_crash_report(delete_path.clone(), window, cx);
-                        })),
-                )
-        });
-        Some(
-            v_flex()
-                .gap_1()
-                .child(group_header(
-                    t("settings.crash.recent_title"),
-                    Some(t("settings.crash.recent_help")),
-                    true,
-                    cx,
-                ))
-                .child(panel(cx).children(rows))
-                .into_any_element(),
-        )
-    }
-
     fn header_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         match self.section {
             SettingsSection::Storage => Some(
@@ -1288,11 +1153,8 @@ impl Render for SettingsView {
                 .flex_1()
                 .min_w_0()
                 .min_h_0()
-                .gap_4()
                 .p_6()
-                .child(PageHeader::new(section.label()).description(section.description()))
-                .children(self.render_crash_reports(cx))
-                .child(div().flex_1().min_h_0().child(self.log.clone()))
+                .child(self.log.clone())
                 .into_any_element()
         } else if !searching && section == SettingsSection::PerformanceHud {
             v_flex()

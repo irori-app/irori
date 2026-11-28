@@ -730,25 +730,6 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
     .tooltip("settings.field.allow_installation_broken_anticheat.tip")
     .keywords(&["anticheat", "eac", "battleye", "denied"]),
     app(
-        "disableLogs",
-        "settings.field.disable_logs.label",
-        Advanced,
-        "settings.group.diagnostics",
-        Toggle,
-    )
-    .help("settings.field.disable_logs.help")
-    .tooltip("settings.field.disable_logs.tip")
-    .keywords(&["log", "debug"]),
-    app(
-        "action.open-logs",
-        "settings.field.action_open_logs.label",
-        Advanced,
-        "settings.group.diagnostics",
-        Action(ActionKind::OpenLogsFolder),
-    )
-    .tooltip("settings.field.action_open_logs.tip")
-    .keywords(&["log", "folder", "open"]),
-    app(
         "action.import-heroic",
         "settings.field.action_import_heroic.label",
         Advanced,

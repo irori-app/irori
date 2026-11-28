@@ -140,6 +140,8 @@ pub struct Hooks {
     /// Install one game (its copy): the install sheet, or the store's own
     /// client for games Irori doesn't install (the game feature).
     pub install: Option<GameFn>,
+    /// Open the launch troubleshooter for one game (the game feature).
+    pub troubleshoot: Option<GameFn>,
 }
 
 impl Global for Hooks {}
@@ -394,6 +396,16 @@ pub fn dismiss_steam_library_hint(cx: &mut App) {
         .and_then(|h| h.steam_library_hint.clone())
     {
         (hint.dismiss)(cx);
+    }
+}
+
+/// Open the launch troubleshooter for `id`, when the game feature hook is installed.
+pub fn open_troubleshooter(id: GameId, window: &mut Window, cx: &mut App) {
+    if let Some(open) = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.troubleshoot.clone())
+    {
+        open(id, window, cx);
     }
 }
 

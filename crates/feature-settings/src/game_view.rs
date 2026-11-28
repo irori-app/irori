@@ -29,7 +29,7 @@ use irori_ui::{Route, backend, models};
 use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::graphics_mods::GraphicsModsChanged;
 use crate::i18n::LanguageStamp;
-use crate::logs::LogViewer;
+use crate::logs::{LogViewer, LogViewerOptions};
 use crate::registry::FieldSection;
 use crate::renodx::RenodxPanel;
 use crate::reshade::ReshadePanel;
@@ -207,7 +207,19 @@ impl GameSettingsView {
                 .map(|g| g.title.clone())
                 .unwrap_or_else(|| id.app_name.to_string())
         );
-        let log = cx.new(|cx| LogViewer::new(log_path, log_name, window, cx));
+        let log = cx.new(|cx| {
+            LogViewer::new(
+                log_path,
+                Some(log_name.into()),
+                LogViewerOptions {
+                    compact: false,
+                    show_action_bar: true,
+                    game_id: Some(id.clone()),
+                },
+                window,
+                cx,
+            )
+        });
         let winetricks = {
             let id = id.clone();
             cx.new(|cx| WinetricksPanel::new(id, window, cx))

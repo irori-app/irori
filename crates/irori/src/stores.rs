@@ -210,6 +210,7 @@ pub fn hooks() -> Hooks {
         install: Some(Arc::new(|id, window, cx| {
             irori_game::ops::install(&id, window, cx)
         })),
+        troubleshoot: Some(Arc::new(irori_game::open_troubleshooter)),
     }
 }
 
