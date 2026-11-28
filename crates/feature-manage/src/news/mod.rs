@@ -5,6 +5,7 @@
 mod gaming_news;
 mod my_games;
 mod reader;
+mod releases;
 mod sources_dialog;
 #[cfg(test)]
 mod tests;
@@ -29,6 +30,7 @@ use irori_ui::{backend, models};
 
 use self::gaming_news::GamingNewsState;
 use self::my_games::MyGamesState;
+use self::releases::ReleasesState;
 
 /// Sub-sections inside `Stores -> News`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -36,6 +38,7 @@ pub(crate) enum NewsSubTab {
     #[default]
     MyGames,
     GamingNews,
+    Releases,
 }
 
 /// Image cache capacity for Steam CDN banners and covers inside News.
@@ -65,10 +68,14 @@ pub struct NewsSection {
     pub(crate) subtab: NewsSubTab,
     pub(crate) my_games: MyGamesState,
     pub(crate) gaming: GamingNewsState,
+    pub(crate) releases: ReleasesState,
     pub(crate) search: Entity<InputState>,
     pub(crate) gaming_search: Entity<InputState>,
+    pub(crate) releases_search: Entity<InputState>,
     pub(crate) body_width: Rc<Cell<Pixels>>,
     pub(crate) grid_width: Rc<Cell<Pixels>>,
+    pub(crate) releases_new_width: Rc<Cell<Pixels>>,
+    pub(crate) releases_soon_width: Rc<Cell<Pixels>>,
     pub(crate) images: Entity<LruImageCache>,
     load_gen: u64,
     visit_marked: bool,
@@ -82,6 +89,8 @@ impl NewsSection {
             cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.news.filter_games")));
         let gaming_search =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.news.gaming.search")));
+        let releases_search =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.news.releases.search")));
         let m = models(cx).clone();
         let subscriptions = vec![
             cx.observe_in(&m.library, window, |this, _, window, cx| {
@@ -106,16 +115,26 @@ impl NewsSection {
                     cx.notify();
                 }
             }),
+            cx.subscribe(&releases_search, |this, input, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.releases.query = input.read(cx).value().to_string();
+                    cx.notify();
+                }
+            }),
         ];
 
         let mut section = Self {
             subtab: NewsSubTab::MyGames,
             my_games: MyGamesState::default(),
             gaming: GamingNewsState::default(),
+            releases: ReleasesState::default(),
             search,
             gaming_search,
+            releases_search,
             body_width: Rc::new(Cell::new(px(0.))),
             grid_width: Rc::new(Cell::new(px(0.))),
+            releases_new_width: Rc::new(Cell::new(px(0.))),
+            releases_soon_width: Rc::new(Cell::new(px(0.))),
             images: LruImageCache::new(NEWS_IMAGE_CACHE_CAPACITY, cx),
             load_gen: 0,
             visit_marked: false,
@@ -282,6 +301,11 @@ impl Render for NewsSection {
                         && !this.gaming.refreshing
                     {
                         this.load_gaming_news(false, window, cx);
+                    } else if target == NewsSubTab::Releases
+                        && !this.releases.loaded
+                        && !this.releases.refreshing
+                    {
+                        this.load_releases(false, window, cx);
                     }
                     cx.notify();
                 }
@@ -301,11 +325,17 @@ impl Render for NewsSection {
                 "news-subtab-gaming",
                 t("manage.news.subtab.gaming"),
                 NewsSubTab::GamingNews,
+            ))
+            .child(seg_btn(
+                "news-subtab-releases",
+                t("manage.news.subtab.releases"),
+                NewsSubTab::Releases,
             ));
 
         let active_body = match self.subtab {
             NewsSubTab::MyGames => self.render_my_games(window, cx),
             NewsSubTab::GamingNews => self.render_gaming_news(window, cx),
+            NewsSubTab::Releases => self.render_releases(window, cx),
         };
 
         v_flex()

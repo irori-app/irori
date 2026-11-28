@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
 use irori_core::{GameId, Runner};
-use irori_services::{FeedArticle, GameNewsEntry, NewsKind, SteamNewsItem};
+use irori_services::{FeedArticle, GameNewsEntry, NewsKind, SteamNewsItem, StoreReleaseItem};
 
 use super::gaming_news::filter_articles;
 use super::my_games::{TimeBucket, filter_entries, group_rows};
+use super::releases::{PlatformFilter, filter_releases};
 
 fn sample_entry(
     game: &str,
@@ -187,4 +188,44 @@ fn filter_articles_matches_source_and_query() {
     assert_eq!(filter_articles(&articles, None, ""), vec![0, 1]);
     assert_eq!(filter_articles(&articles, Some("rps"), ""), vec![0]);
     assert_eq!(filter_articles(&articles, None, "steamos"), vec![1]);
+}
+
+#[test]
+fn filter_releases_matches_platform_genre_and_query() {
+    let items = vec![
+        StoreReleaseItem {
+            appid: 1,
+            name: "Starlight Tactics".into(),
+            developer: "Moon Dev".into(),
+            windows: true,
+            linux: true,
+            genres: vec!["Strategy".into(), "Indie".into()],
+            ..Default::default()
+        },
+        StoreReleaseItem {
+            appid: 2,
+            name: "Neon Drift".into(),
+            developer: "Turbo".into(),
+            windows: true,
+            linux: false,
+            genres: vec!["Racing".into()],
+            ..Default::default()
+        },
+    ];
+    assert_eq!(
+        filter_releases(&items, PlatformFilter::All, None, ""),
+        vec![0, 1]
+    );
+    assert_eq!(
+        filter_releases(&items, PlatformFilter::Linux, None, ""),
+        vec![0]
+    );
+    assert_eq!(
+        filter_releases(&items, PlatformFilter::All, Some("racing"), ""),
+        vec![1]
+    );
+    assert_eq!(
+        filter_releases(&items, PlatformFilter::All, None, "moon"),
+        vec![0]
+    );
 }

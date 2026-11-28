@@ -25,6 +25,7 @@ pub mod friends;
 pub mod library;
 pub mod news;
 pub mod reception;
+pub mod releases;
 pub mod search;
 pub mod tags;
 
@@ -43,5 +44,6 @@ pub use library::{
 };
 pub use news::{NewsKind, SteamNewsItem};
 pub use reception::ReviewSummary;
+pub use releases::{ReleaseFeedKind, StoreReleaseItem};
 pub use search::{StoreHit, app_id_in};
 pub use tags::TagVotes;
