@@ -960,5 +960,21 @@
   "manage.emulators.systems.missing_banner_other": "{count} systems in your library need an emulator to play ({systems}).",
   "manage.emulators.systems.missing_bios": "Missing BIOS",
   "manage.emulators.systems.needs_emulator": "Needs emulator",
-  "manage.emulators.systems.section.supported": "Supported systems"
+  "manage.emulators.systems.section.supported": "Supported systems",
+  "manage.retro.account_title": "RetroAchievements account",
+  "manage.retro.connect_first": "Sign in with your RetroAchievements account on the left to sync your installed emulators in one click.",
+  "manage.retro.emulators_intro": "Configure supported emulators so achievements unlock while you play.",
+  "manage.retro.installed_summary": "{installed} of {total} supported emulators installed",
+  "manage.retro.keyring_note": "Stored securely in your system keyring.",
+  "manage.retro.manual_login": "Manual sign-in",
+  "manage.retro.not_installed": "Not installed",
+  "manage.retro.optional_label": "Optional · RetroAchievements",
+  "manage.retro.ready_to_sync": "Ready to sync",
+  "manage.retro.sign_in_count_one": "Sign in 1 emulator",
+  "manage.retro.sign_in_count_other": "Sign in {count} emulators",
+  "manage.retro.status.enabled": "Enabled",
+  "manage.retro.status.failed": "Failed",
+  "manage.retro.status.signed_in": "Signed in",
+  "manage.retro.syncing_progress": "Syncing achievement progress for matched ROMs",
+  "manage.retro.view_profile": "View profile"
 }

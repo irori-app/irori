@@ -960,5 +960,21 @@
   "manage.emulators.systems.missing_banner_other": "{count} sistemas na sua biblioteca precisam de um emulador para jogar ({systems}).",
   "manage.emulators.systems.missing_bios": "BIOS ausente",
   "manage.emulators.systems.needs_emulator": "Precisa de emulador",
-  "manage.emulators.systems.section.supported": "Sistemas suportados"
+  "manage.emulators.systems.section.supported": "Sistemas suportados",
+  "manage.retro.account_title": "Conta RetroAchievements",
+  "manage.retro.connect_first": "Entre na sua conta RetroAchievements à esquerda para sincronizar os emuladores instalados em um clique.",
+  "manage.retro.emulators_intro": "Configure os emuladores compatíveis para desbloquear conquistas enquanto joga.",
+  "manage.retro.installed_summary": "{installed} de {total} emuladores compatíveis instalados",
+  "manage.retro.keyring_note": "Salvo com segurança no chaveiro do sistema.",
+  "manage.retro.manual_login": "Login manual",
+  "manage.retro.not_installed": "Não instalado",
+  "manage.retro.optional_label": "Opcional · RetroAchievements",
+  "manage.retro.ready_to_sync": "Pronto para sincronizar",
+  "manage.retro.sign_in_count_one": "Entrar em 1 emulador",
+  "manage.retro.sign_in_count_other": "Entrar em {count} emuladores",
+  "manage.retro.status.enabled": "Ativado",
+  "manage.retro.status.failed": "Falhou",
+  "manage.retro.status.signed_in": "Conectado",
+  "manage.retro.syncing_progress": "Sincronizando conquistas das ROMs encontradas",
+  "manage.retro.view_profile": "Ver perfil"
 }

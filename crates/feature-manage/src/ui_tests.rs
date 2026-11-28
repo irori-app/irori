@@ -1352,7 +1352,9 @@ fn emulators_page_opens_retroarch_cores_dialog(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn emulators_page_features_retroarch_and_avoids_false_bios_badge(cx: &mut TestAppContext) {
+fn emulators_page_features_retroarch_avoids_false_bios_badge_and_lists_ra_engines(
+    cx: &mut TestAppContext,
+) {
     setup(cx);
     let mut vcx = open_emulators_window(cx, 1400., 1200.);
     let ra_dl = irori_engines::engine("retroarch")
@@ -1391,6 +1393,20 @@ fn emulators_page_features_retroarch_and_avoids_false_bios_badge(cx: &mut TestAp
         "standalone grid starts below RetroArch"
     );
     assert!(vcx.debug_bounds("systems-attention-badge").is_none());
+
+    click(&mut vcx, "emulators-tab-achievements");
+    for id in [
+        "retro-engine-retroarch",
+        "retro-engine-pcsx2",
+        "retro-engine-ppsspp",
+        "retro-engine-dolphin",
+        "retro-engine-duckstation",
+    ] {
+        assert!(
+            vcx.debug_bounds(id).is_some(),
+            "Achievements tab lists supported emulator {id} even before sign-in"
+        );
+    }
 }
 
 #[gpui_kit::test]
