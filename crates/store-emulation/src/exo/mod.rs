@@ -4,9 +4,14 @@
 //! Irori only reads user-owned collections already on disk: it never bundles
 //! torrents, streams game archives from external swarms, or downloads ROMs.
 
+pub mod conf;
+pub mod extract;
 pub mod media;
+pub mod scummvm;
 pub mod xml;
 
+#[cfg(test)]
+mod launch_tests;
 #[cfg(test)]
 mod tests;
 
