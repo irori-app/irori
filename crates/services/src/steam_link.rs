@@ -292,85 +292,21 @@ impl SteamLinkService {
 
 /// A title's words: lower case letters and digits, `&` read as "and",
 /// apostrophes joining a word ("Assassin's" is "assassins"), Roman numerals
-/// II–X as digits, so "DOOM II: Hell on Earth" is "doom 2 hell on earth".
+/// II–XIII as digits, so "DOOM II: Hell on Earth" is "doom 2 hell on earth".
 pub(crate) fn fold_title(title: &str) -> Vec<String> {
-    let title = title.replace('&', " and ");
-    title
-        .replace(['\'', '’', '`'], "")
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(|w| {
-            let lower = w.to_lowercase();
-            let digit = match lower.as_str() {
-                "ii" => "2",
-                "iii" => "3",
-                "iv" => "4",
-                "v" => "5",
-                "vi" => "6",
-                "vii" => "7",
-                "viii" => "8",
-                "ix" => "9",
-                "x" => "10",
-                _ => return lower,
-            };
-            digit.to_owned()
-        })
-        .collect()
+    irori_extras::title_match::fold_words(title)
 }
-
-/// Words that may come before "Edition" in an edition's name.
-const EDITION_WORDS: &[&str] = &[
-    "game",
-    "of",
-    "the",
-    "year",
-    "goty",
-    "deluxe",
-    "digital",
-    "definitive",
-    "complete",
-    "gold",
-    "ultimate",
-    "enhanced",
-    "special",
-    "standard",
-    "premium",
-    "collectors",
-    "anniversary",
-    "legendary",
-    "extended",
-    "platinum",
-];
 
 /// `words` without a last edition name: "… Deluxe Edition", "… Game of the
 /// Year Edition", "… GOTY", "… Game of the Year", "… Director's Cut".
 fn without_edition(words: &[String]) -> &[String] {
-    let ends = |tail: &[&str]| {
-        words.len() > tail.len() && words[words.len() - tail.len()..].iter().eq(tail.iter())
-    };
-    if ends(&["game", "of", "the", "year"]) {
-        return &words[..words.len() - 4];
-    }
-    if ends(&["directors", "cut"]) {
-        return &words[..words.len() - 2];
-    }
-    if ends(&["goty"]) {
-        return &words[..words.len() - 1];
-    }
-    if ends(&["edition"]) {
-        let mut end = words.len() - 1;
-        while end > 1 && EDITION_WORDS.contains(&words[end - 1].as_str()) {
-            end -= 1;
-        }
-        return &words[..end];
-    }
-    words
+    irori_extras::title_match::without_edition(words)
 }
 
-/// The search hits that are the game titled `title`: those with the same
-/// title (case, punctuation and Roman numerals aside), else those whose
-/// title is the same once an edition's name is left out on either side.
-/// Hits that only look alike never are.
+/// The search hits that are the game titled `title`: exact folded titles
+/// first, then edition-stripped matches, then subtitle matches vetted by
+/// [`irori_extras::title_match::same_title`] (rejecting sequels and add-ons
+/// such as soundtracks, DLCs, demos, packs, and seasons).
 pub(crate) fn title_candidates(title: &str, hits: &[StoreHit]) -> Vec<u32> {
     let wanted = fold_title(title);
     if wanted.is_empty() {
@@ -392,8 +328,17 @@ pub(crate) fn title_candidates(title: &str, hits: &[StoreHit]) -> Vec<u32> {
         .filter(|(_, words)| without_edition(words) == base)
         .map(|(id, _)| *id)
         .collect();
-    same.dedup();
-    same
+    if !same.is_empty() {
+        same.dedup();
+        return same;
+    }
+    let mut confident: Vec<u32> = hits
+        .iter()
+        .filter(|h| irori_extras::title_match::same_title(title, &h.name))
+        .map(|h| h.id)
+        .collect();
+    confident.dedup();
+    confident
 }
 
 /// The candidate that is the game, given each one's release year as Steam
@@ -937,6 +882,21 @@ mod tests {
         );
         // "Edition" alone is a title, not an edition's name.
         assert_eq!(without_edition(&fold_title("Edition")), ["edition"]);
+        // Subtitles match when the base title alone is missing, while add-ons stay out.
+        let witcher = [
+            hit(292030, "The Witcher 3: Wild Hunt"),
+            hit(9991, "The Witcher 3: Wild Hunt - Soundtrack"),
+            hit(9992, "The Witcher 3: Wild Hunt - Blood and Wine DLC"),
+            hit(9993, "The Witcher 3: Demo"),
+        ];
+        assert_eq!(title_candidates("The Witcher 3", &witcher), [292030]);
+        assert!(
+            title_candidates(
+                "Portal",
+                &[hit(620, "Portal 2"), hit(374040, "Portal Knights")]
+            )
+            .is_empty()
+        );
     }
 
     #[test]

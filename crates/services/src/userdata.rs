@@ -135,8 +135,8 @@ fn edit_overrides(d: &mut UserData, key: &str, f: impl FnOnce(&mut GameOverrides
 /// Most stars a game can be rated.
 pub const MAX_RATING: u8 = 5;
 
-/// The favourite, hidden, category and play-status values some games had,
-/// to put back exactly when a bulk edit is undone.
+/// The favourite, hidden, category, play-status and override values some games
+/// had, to put back exactly when a bulk edit is undone.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BulkSnapshot {
     keys: Vec<String>,
@@ -150,6 +150,8 @@ pub struct BulkSnapshot {
     smart_excluded: BTreeMap<String, BTreeSet<String>>,
     play_status: BTreeMap<String, PlayStatusRecord>,
     status_history: StatusHistory,
+    /// Per-game metadata and art overrides among `keys`.
+    overrides: BTreeMap<String, GameOverrides>,
 }
 
 impl BulkSnapshot {
@@ -160,6 +162,13 @@ impl BulkSnapshot {
 
     pub fn is_empty(&self) -> bool {
         self.keys.is_empty()
+    }
+
+    fn first_game_id(&self) -> Option<GameId> {
+        self.keys.iter().find_map(|key| {
+            let (runner, app) = key.split_once(':')?;
+            Some(GameId::new(irori_core::Runner::from_id(runner)?, app))
+        })
     }
 }
 
@@ -440,6 +449,10 @@ impl UserData {
                 .iter()
                 .filter_map(|k| Some((k.clone(), self.status_history.get(k)?.clone())))
                 .collect(),
+            overrides: keys
+                .iter()
+                .filter_map(|k| Some((k.clone(), self.overrides.get(k)?.clone())))
+                .collect(),
             keys,
         }
     }
@@ -506,6 +519,14 @@ impl UserData {
                 }
                 None => {
                     self.status_history.remove(key);
+                }
+            }
+            match snap.overrides.get(key) {
+                Some(o) => {
+                    self.overrides.insert(key.clone(), o.clone());
+                }
+                None => {
+                    self.overrides.remove(key);
                 }
             }
         }
@@ -1103,7 +1124,15 @@ impl UserDataService {
 
     /// Put games back as [`Self::capture`] saw them.
     pub fn restore(&self, snap: &BulkSnapshot) {
-        self.update(None, |d| d.restore(snap));
+        let mut overrides_changed = false;
+        self.update(None, |d| {
+            let before = d.overrides.clone();
+            d.restore(snap);
+            overrides_changed = d.overrides != before;
+        });
+        if overrides_changed && let Some(id) = snap.first_game_id() {
+            self.bus.emit(Event::GameChanged(id));
+        }
     }
 
     /// Write one of a game's notes on `day`: the note of `entry.id`, or a
@@ -2151,5 +2180,55 @@ mod tests {
         d.restore(&before);
         assert!(d.smart_categories["s-souls"].included_games.is_empty());
         assert!(d.smart_categories["s-souls"].excluded_games.is_empty());
+    }
+
+    #[test]
+    fn bulk_snapshot_restores_metadata_overrides() {
+        let mut d = UserData::default();
+        let a = GameId::new(irori_core::Runner::Gog, "1");
+        let b = GameId::new(irori_core::Runner::Gog, "2");
+        let untouched = GameId::new(irori_core::Runner::Gog, "3");
+        d.overrides.insert(
+            a.key(),
+            GameOverrides {
+                developer: Some("Supergiant".into()),
+                genres: Some(vec!["Action".into()]),
+                ..Default::default()
+            },
+        );
+        d.overrides.insert(
+            untouched.key(),
+            GameOverrides {
+                developer: Some("Valve".into()),
+                ..Default::default()
+            },
+        );
+
+        let before = d.capture(&[a.clone(), b.clone()]);
+        let edit = irori_core::MetadataEdit {
+            developer: Some(Some("New Studio".into())),
+            publisher: Some(Some("New Pub".into())),
+            genres: Some(Some(vec!["RPG".into()])),
+        };
+        edit_overrides(&mut d, &a.key(), |o| edit.apply(o));
+        edit_overrides(&mut d, &b.key(), |o| edit.apply(o));
+        assert_eq!(
+            d.overrides[&a.key()].developer.as_deref(),
+            Some("New Studio")
+        );
+        assert_eq!(d.overrides[&b.key()].publisher.as_deref(), Some("New Pub"));
+
+        d.restore(&before);
+        assert_eq!(
+            d.overrides[&a.key()].developer.as_deref(),
+            Some("Supergiant")
+        );
+        assert_eq!(d.overrides[&a.key()].publisher, None);
+        assert_eq!(d.overrides[&a.key()].genres, Some(vec!["Action".into()]));
+        assert!(!d.overrides.contains_key(&b.key()));
+        assert_eq!(
+            d.overrides[&untouched.key()].developer.as_deref(),
+            Some("Valve")
+        );
     }
 }

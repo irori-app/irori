@@ -162,6 +162,8 @@ impl MetadataDialog {
         self.saving = true;
         cx.notify();
         let (b, ids) = (backend(cx), self.ids.clone());
+        let count = ids.len();
+        let before = b.userdata.capture(&ids);
         let task = irori_ui::run(cx, async move {
             let writer = b.clone();
             b.spawn_blocking(move || writer.userdata.set_metadata(&ids, &edit))
@@ -173,7 +175,38 @@ impl MetadataDialog {
             let _ = this.update_in(cx, |this, window, cx| {
                 this.saving = false;
                 match result {
-                    Ok(()) => window.close_dialog(cx),
+                    Ok(()) => {
+                        window.close_dialog(cx);
+                        let msg = if count == 1 {
+                            t("library.metadata.saved_one")
+                        } else {
+                            t_args(
+                                "library.metadata.saved_other",
+                                &[("count", &count.to_string())],
+                            )
+                        };
+                        let before = before.clone();
+                        window.push_notification(
+                            Notification::success(msg)
+                                .action(move |_, _, cx| {
+                                    let note = cx.entity().downgrade();
+                                    let before = before.clone();
+                                    Button::new("bulk-metadata-undo")
+                                        .label(t("library.bulk.undo"))
+                                        .small()
+                                        .on_click(move |_, window, cx| {
+                                            let (b, before) = (backend(cx), before.clone());
+                                            irori_ui::state::run_infallible(cx, async move {
+                                                b.userdata.restore(&before)
+                                            })
+                                            .detach();
+                                            let _ = note.update(cx, |n, cx| n.dismiss(window, cx));
+                                        })
+                                })
+                                .autohide(true),
+                            cx,
+                        );
+                    }
                     Err(e) => window.push_notification(
                         Notification::error(format!("{e:#}")).title(t("library.metadata.failed")),
                         cx,
