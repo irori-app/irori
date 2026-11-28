@@ -2,8 +2,10 @@
 //! Loads lazily on first visit, reads disk cache off the UI thread first, and
 //! fetches stale apps in paced batches without background polling.
 
+mod gaming_news;
 mod my_games;
 mod reader;
+mod sources_dialog;
 #[cfg(test)]
 mod tests;
 
@@ -12,9 +14,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{WindowExt as _, v_flex};
+use gpui_kit::component::{Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::{
     App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Pixels, Render,
     Styled as _, Subscription, Window, px,
@@ -24,7 +27,16 @@ use irori_ui::art::LruImageCache;
 use irori_ui::i18n::t;
 use irori_ui::{backend, models};
 
+use self::gaming_news::GamingNewsState;
 use self::my_games::MyGamesState;
+
+/// Sub-sections inside `Stores -> News`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum NewsSubTab {
+    #[default]
+    MyGames,
+    GamingNews,
+}
 
 /// Image cache capacity for Steam CDN banners and covers inside News.
 const NEWS_IMAGE_CACHE_CAPACITY: usize = 64;
@@ -50,9 +62,13 @@ pub fn set_news_shown(shown: bool, window: &mut Window, cx: &mut App) {
 
 /// Unified News hub mounted inside `StoresView` when `iroriNews` is enabled.
 pub struct NewsSection {
+    pub(crate) subtab: NewsSubTab,
     pub(crate) my_games: MyGamesState,
+    pub(crate) gaming: GamingNewsState,
     pub(crate) search: Entity<InputState>,
+    pub(crate) gaming_search: Entity<InputState>,
     pub(crate) body_width: Rc<Cell<Pixels>>,
+    pub(crate) grid_width: Rc<Cell<Pixels>>,
     pub(crate) images: Entity<LruImageCache>,
     load_gen: u64,
     visit_marked: bool,
@@ -64,6 +80,8 @@ impl NewsSection {
         crate::i18n::register();
         let search =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.news.filter_games")));
+        let gaming_search =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.news.gaming.search")));
         let m = models(cx).clone();
         let subscriptions = vec![
             cx.observe_in(&m.library, window, |this, _, window, cx| {
@@ -82,12 +100,22 @@ impl NewsSection {
                     cx.notify();
                 }
             }),
+            cx.subscribe(&gaming_search, |this, input, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.gaming.query = input.read(cx).value().to_string();
+                    cx.notify();
+                }
+            }),
         ];
 
         let mut section = Self {
+            subtab: NewsSubTab::MyGames,
             my_games: MyGamesState::default(),
+            gaming: GamingNewsState::default(),
             search,
+            gaming_search,
             body_width: Rc::new(Cell::new(px(0.))),
+            grid_width: Rc::new(Cell::new(px(0.))),
             images: LruImageCache::new(NEWS_IMAGE_CACHE_CAPACITY, cx),
             load_gen: 0,
             visit_marked: false,
@@ -241,10 +269,50 @@ impl NewsSection {
 
 impl Render for NewsSection {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let subtab = self.subtab;
+        let seg_btn = |id: &'static str, label: gpui_kit::SharedString, target: NewsSubTab| {
+            let active = subtab == target;
+            let btn = Button::new(id).small().label(label);
+            let btn = if active { btn.primary() } else { btn.outline() };
+            btn.on_click(cx.listener(move |this, _, window, cx| {
+                if this.subtab != target {
+                    this.subtab = target;
+                    if target == NewsSubTab::GamingNews
+                        && !this.gaming.loaded
+                        && !this.gaming.refreshing
+                    {
+                        this.load_gaming_news(false, window, cx);
+                    }
+                    cx.notify();
+                }
+            }))
+        };
+
+        let switcher = h_flex()
+            .flex_wrap()
+            .items_center()
+            .gap_1p5()
+            .child(seg_btn(
+                "news-subtab-my-games",
+                t("manage.news.subtab.my_games"),
+                NewsSubTab::MyGames,
+            ))
+            .child(seg_btn(
+                "news-subtab-gaming",
+                t("manage.news.subtab.gaming"),
+                NewsSubTab::GamingNews,
+            ));
+
+        let active_body = match self.subtab {
+            NewsSubTab::MyGames => self.render_my_games(window, cx),
+            NewsSubTab::GamingNews => self.render_gaming_news(window, cx),
+        };
+
         v_flex()
             .w_full()
             .gap_4()
             .image_cache(self.images.clone())
-            .child(self.render_my_games(window, cx))
+            .child(switcher)
+            .child(active_body)
     }
 }
