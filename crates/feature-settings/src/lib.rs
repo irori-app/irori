@@ -54,6 +54,7 @@ mod replay;
 mod reshade;
 mod restore_paths;
 mod saves;
+pub mod search_catalog;
 mod setup_card;
 mod steam_compat;
 mod steam_launch;

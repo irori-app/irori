@@ -9,23 +9,21 @@ use std::sync::Arc;
 use irori_core::GameInfo;
 use irori_services::search::{Query, SearchIndex};
 
-/// The most game rows a query lists; typing more narrows them.
-pub(super) const MAX_GAMES: usize = 40;
-
-/// The installed games a query also offers to play at once, before the game
-/// rows.
-pub(super) const MAX_PLAY_ROWS: usize = 4;
+/// The most game rows a query lists when games are the only section; typing
+/// more narrows them.
+pub(super) const MAX_GAMES: usize = 25;
 
 /// The games of `games` (in the order `index` was built for) that `query`
-/// finds and `keep` lets through, best match first, at most `cap`. Equal
-/// matches keep the library's order. Nothing for an empty query.
-pub(super) fn rank_games(
+/// finds and `keep` lets through, best match first with their relevance score,
+/// at most `cap`. Equal matches keep the library's order. Nothing for an empty
+/// query.
+pub(super) fn rank_games_scored(
     games: &[Arc<GameInfo>],
     index: &SearchIndex,
     query: &str,
     keep: impl Fn(&GameInfo) -> bool,
     cap: usize,
-) -> Vec<Arc<GameInfo>> {
+) -> Vec<(i64, Arc<GameInfo>)> {
     let Some(query) = Query::new(query) else {
         return Vec::new();
     };
@@ -40,7 +38,23 @@ pub(super) fn rank_games(
     found
         .into_iter()
         .take(cap)
-        .map(|(_, ix)| games[ix].clone())
+        .map(|(score, ix)| (score, games[ix].clone()))
+        .collect()
+}
+
+/// The games of `games` that `query` finds and `keep` lets through, without
+/// scores.
+#[cfg(test)]
+pub(super) fn rank_games(
+    games: &[Arc<GameInfo>],
+    index: &SearchIndex,
+    query: &str,
+    keep: impl Fn(&GameInfo) -> bool,
+    cap: usize,
+) -> Vec<Arc<GameInfo>> {
+    rank_games_scored(games, index, query, keep, cap)
+        .into_iter()
+        .map(|(_, g)| g)
         .collect()
 }
 

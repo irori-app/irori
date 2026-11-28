@@ -1,6 +1,9 @@
 //! The shell's translation catalogs (`shell.` keys).
 
+use std::collections::HashMap;
+
 use irori_ui::i18n::Catalogs;
+use once_cell::sync::Lazy;
 
 pub static CATALOGS: Catalogs = &[
     ("en", include_str!("../locales/en.json")),
@@ -23,6 +26,19 @@ pub static CATALOGS: Catalogs = &[
     ("zh_Hans", include_str!("../locales/zh_Hans.json")),
     ("zh_Hant", include_str!("../locales/zh_Hant.json")),
 ];
+
+static ENGLISH: Lazy<HashMap<String, String>> = Lazy::new(|| {
+    serde_json::from_str(include_str!("../locales/en.json")).unwrap_or_else(|e| {
+        tracing::error!("invalid English shell catalog: {e}");
+        HashMap::new()
+    })
+});
+
+/// English text of `key` whatever the interface language (used for bilingual
+/// command palette search); empty for an unknown key.
+pub(crate) fn english(key: &str) -> &'static str {
+    ENGLISH.get(key).map(String::as_str).unwrap_or("")
+}
 
 #[cfg(test)]
 mod tests {

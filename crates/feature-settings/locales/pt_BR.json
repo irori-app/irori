@@ -2373,5 +2373,8 @@
   "settings.page.accounts": "Contas",
   "settings.page.wine_manager": "Wine e Proton",
   "settings.page.wine_manager_macos": "Gerenciador do Wine",
-  "settings.page.emulators": "Emuladores"
+  "settings.page.emulators": "Emuladores",
+  "settings.preview.on": "Ativado",
+  "settings.preview.off": "Desativado",
+  "settings.preview.default": "Padrão"
 }

@@ -1,8 +1,8 @@
-//! The palette's view: the search field and its rows, and beside them a
-//! preview of the highlighted row. Commands are built once when the palette
-//! opens; games are found per query with the library's search and drawn with
-//! their cover, so only a bounded number of game rows exists at a time. The
-//! rows for running games follow the games as they start and end.
+//! The palette's view: the search field and its grouped rows, and beside them
+//! a preview of the highlighted row. Commands, pages, and settings are built
+//! and pre-folded once when the palette opens; games are scored per query with
+//! the library's search and drawn with their cover, while groups reorder
+//! dynamically by relevance and host context.
 //!
 //! → on a game lists that game's actions (a second level, searched like the
 //! first); ←, Escape and the "Back" row return to the first level.
@@ -12,16 +12,19 @@ use std::sync::Arc;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::actions::Cancel;
-use gpui_kit::component::command::{Command, CommandItem, CommandState};
+use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
 use gpui_kit::component::input::{Enter as InputEnter, Escape as InputEscape, MoveLeft, MoveRight};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{ActiveTheme as _, IndexPath, WindowExt as _, h_flex};
+use gpui_kit::component::{
+    ActiveTheme as _, Icon, IndexPath, Sizable as _, WindowExt as _, h_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     App, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div, px, rems,
 };
 use irori_core::{GameId, GameInfo, StatusKind};
+use irori_services::search::Query;
 use irori_ui::art::LruImageCache;
 use irori_ui::components::GameCover;
 use irori_ui::i18n::{t, t_args};
@@ -29,20 +32,24 @@ use irori_ui::models;
 
 use super::entry::Entry;
 use super::preview::PreviewPane;
-use super::search::{MAX_GAMES, MAX_PLAY_ROWS, rank_games};
+use super::score::{
+    EntryKind, GroupKind, ScopeFilter, ScoredGroup, ShownGroup, parse_input, rank_groups,
+};
+use super::search::{MAX_GAMES, rank_games_scored};
 use super::{PaletteTarget, run_target};
+use crate::strings::english;
 
 /// Where the palette shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Host {
-    /// A dialog of the main window (Ctrl+K).
+    /// A dialog of the main window (`Ctrl+K`).
     Dialog,
     /// The quick launcher's own window (`crate::quick_launch`): Enter plays.
     Window,
 }
 
-/// One row: what it says, what confirming it does, and the game it is
-/// about, if any (drawn with its cover, previewed beside the list).
+/// One row: what it says, what confirming it does, and the game or setting it
+/// represents.
 #[derive(Clone)]
 pub(super) struct Row {
     pub(super) entry: Entry,
@@ -51,8 +58,13 @@ pub(super) struct Row {
     /// The game a command row acts on, previewed beside the list but drawn
     /// as a command.
     pub(super) about: Option<Arc<GameInfo>>,
-    /// The store and state shown at the end of a game row.
+    /// Subtle trailing detail (store & state for games, breadcrumb for settings
+    /// and settings pages).
     pub(super) detail: Option<SharedString>,
+    /// Registry path when this row represents an individual editable setting.
+    pub(super) setting_path: Option<&'static str>,
+    /// Plain-language help shown in the preview pane for settings.
+    pub(super) help: Option<SharedString>,
 }
 
 impl Row {
@@ -63,6 +75,8 @@ impl Row {
             game: None,
             about: None,
             detail: None,
+            setting_path: None,
+            help: None,
         }
     }
 
@@ -72,12 +86,19 @@ impl Row {
     }
 
     fn item(&self) -> CommandItem {
-        let Some(game) = self.game.clone() else {
-            return self.entry.item();
-        };
-        let (label, detail) = (self.entry.label.clone(), self.detail.clone());
-        self.entry
-            .item_with(move |_, _| game_row(game.clone(), label.clone(), detail.clone()))
+        if let Some(game) = self.game.clone() {
+            let (label, detail) = (self.entry.label.clone(), self.detail.clone());
+            return self
+                .entry
+                .item_with(move |_, _| game_row(game.clone(), label.clone(), detail.clone()));
+        }
+        if let Some(detail) = self.detail.clone() {
+            let (icon, label) = (self.entry.icon, self.entry.label.clone());
+            return self
+                .entry
+                .item_with(move |_, _| detail_row(icon, label.clone(), detail.clone()));
+        }
+        self.entry.item()
     }
 }
 
@@ -101,6 +122,30 @@ fn game_row(
         })
 }
 
+/// A page or setting row with a subtle trailing breadcrumb.
+fn detail_row(
+    icon: Option<IconName>,
+    label: SharedString,
+    detail: SharedString,
+) -> impl IntoElement {
+    h_flex()
+        .flex_1()
+        .min_w_0()
+        .gap_2()
+        .items_center()
+        .when_some(icon, |row, icon| row.child(Icon::new(icon).small()))
+        .child(div().flex_1().min_w_0().truncate().child(label))
+        .child(
+            div()
+                .flex_shrink_0()
+                .max_w(rems(14.))
+                .truncate()
+                .text_xs()
+                .opacity(0.65)
+                .child(detail),
+        )
+}
+
 /// The width below which the preview is left out, in rems of the window.
 const PREVIEW_ROOM_REMS: f32 = 46.;
 
@@ -122,6 +167,19 @@ pub(super) fn state_label(game: &GameInfo, kind: Option<StatusKind>) -> SharedSt
         Some(StatusKind::Launching) => t("shell.palette.state_launching"),
         _ if game.is_installed => t("shell.palette.state_installed"),
         _ => t("shell.palette.state_not_installed"),
+    }
+}
+
+/// Play/resume target for `game` (used by Quick Launcher `Enter`, Dialog
+/// `Shift+Enter`, and explicit `play <game>` / `jogar <game>` queries).
+fn play_or_resume_target(game: &GameInfo, kind: Option<StatusKind>) -> PaletteTarget {
+    let id = game.id();
+    match kind {
+        Some(StatusKind::Playing) => PaletteTarget::BackToGame(id),
+        Some(StatusKind::Launching) => PaletteTarget::CancelLaunch(id),
+        Some(k) if k.is_busy() => PaletteTarget::Open(id),
+        _ if game.is_installed => PaletteTarget::Play(id),
+        _ => PaletteTarget::Open(id),
     }
 }
 
@@ -156,8 +214,14 @@ fn lead_rows(live: &[(GameId, StatusKind)], cx: &App) -> Vec<Row> {
                     "shell.palette.back_to_game",
                     &[("title", &title(id))],
                 ))
-                .keywords([t("shell.palette.back_to_game_keywords")])
-                .icon(IconName::AppWindow),
+                .keywords([
+                    t("shell.palette.back_to_game_keywords"),
+                    english("shell.palette.back_to_game_keywords").into(),
+                ])
+                .icon(IconName::AppWindow)
+                .kind(EntryKind::Live)
+                .show_when_empty(true)
+                .finish(),
             PaletteTarget::BackToGame(id.clone()),
         ));
     }
@@ -171,8 +235,14 @@ fn lead_rows(live: &[(GameId, StatusKind)], cx: &App) -> Vec<Row> {
                         "shell.palette.cancel_launch",
                         &[("title", &title(id))],
                     ))
-                    .keywords([t("shell.palette.cancel_launch_keywords")])
-                    .icon(IconName::X),
+                    .keywords([
+                        t("shell.palette.cancel_launch_keywords"),
+                        english("shell.palette.cancel_launch_keywords").into(),
+                    ])
+                    .icon(IconName::X)
+                    .kind(EntryKind::Live)
+                    .show_when_empty(true)
+                    .finish(),
                 PaletteTarget::CancelLaunch(id.clone()),
             ),
         );
@@ -183,7 +253,7 @@ fn lead_rows(live: &[(GameId, StatusKind)], cx: &App) -> Vec<Row> {
 /// Which rows the palette lists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Level {
-    /// Commands and games.
+    /// Commands, pages, settings, and games.
     Root,
     /// One game's actions.
     Game(GameId),
@@ -204,8 +274,12 @@ fn random_rows(level: &Level, cx: &mut App) -> Vec<Row> {
                     Row::command(
                         Entry::new()
                             .label(label)
-                            .keywords([t("shell.palette.random_keywords")])
-                            .icon(IconName::Dices),
+                            .keywords([
+                                t("shell.palette.random_keywords"),
+                                english("shell.palette.random_keywords").into(),
+                            ])
+                            .icon(IconName::Dices)
+                            .finish(),
                         PaletteTarget::RandomFrom(pool),
                     )
                 })
@@ -224,14 +298,16 @@ fn random_rows(level: &Level, cx: &mut App) -> Vec<Row> {
                 Some(StatusKind::Playing) => rows.push(Row::command(
                     Entry::new()
                         .label(t_args("shell.palette.back_to_game", &[("title", title)]))
-                        .icon(IconName::AppWindow),
+                        .icon(IconName::AppWindow)
+                        .finish(),
                     PaletteTarget::BackToGame(id.clone()),
                 )),
                 Some(kind) if kind.is_busy() => {}
                 _ if game.is_installed => rows.push(Row::command(
                     Entry::new()
                         .label(t_args("shell.palette.play", &[("title", title)]))
-                        .icon(IconName::Play),
+                        .icon(IconName::Play)
+                        .finish(),
                     PaletteTarget::Play(id.clone()),
                 )),
                 _ => {}
@@ -239,19 +315,24 @@ fn random_rows(level: &Level, cx: &mut App) -> Vec<Row> {
             rows.push(Row::command(
                 Entry::new()
                     .label(t_args("shell.palette.show_game", &[("title", title)]))
-                    .icon(IconName::Gamepad2),
+                    .icon(IconName::Gamepad2)
+                    .finish(),
                 PaletteTarget::Open(id.clone()),
             ));
             rows.push(Row::command(
                 Entry::new()
                     .label(t("shell.palette.pick_another"))
-                    .icon(IconName::Dices),
+                    .english_label(english("shell.palette.pick_another"))
+                    .icon(IconName::Dices)
+                    .finish(),
                 PaletteTarget::RandomFrom(pool.clone()),
             ));
             rows.push(Row::command(
                 Entry::new()
                     .label(t("shell.palette.pick_other_games"))
-                    .icon(IconName::ListFilter),
+                    .english_label(english("shell.palette.pick_other_games"))
+                    .icon(IconName::ListFilter)
+                    .finish(),
                 PaletteTarget::Random,
             ));
             rows.push(back_row());
@@ -271,8 +352,22 @@ fn back_row() -> Row {
     Row::command(
         Entry::new()
             .label(t("shell.palette.back"))
-            .icon(IconName::ArrowLeft),
+            .english_label(english("shell.palette.back"))
+            .icon(IconName::ArrowLeft)
+            .finish(),
         PaletteTarget::Back,
+    )
+}
+
+/// Whether `row` belongs to the `#` categories / saved-views scope.
+fn is_category_or_view(row: &Row) -> bool {
+    matches!(
+        row.target,
+        PaletteTarget::Category(_)
+            | PaletteTarget::View(_)
+            | PaletteTarget::NewSmartCategory
+            | PaletteTarget::ManageCategories
+            | PaletteTarget::ManageViews
     )
 }
 
@@ -311,29 +406,30 @@ fn game_facts(game: &GameInfo, cx: &mut App) -> super::game::GameFacts {
     }
 }
 
-/// The palette: a search over commands and games, with a preview.
+/// The palette: a unified grouped search over pages, settings, commands, and
+/// games, with a live preview pane.
 pub(crate) struct PaletteView {
     state: Entity<CommandState>,
     preview: Entity<PreviewPane>,
     images: Entity<LruImageCache>,
     host: Host,
     level: Level,
-    /// The command rows, built when the palette opened.
+    /// Pre-folded pages, settings, and commands built when the palette opened.
     commands: Vec<Row>,
     /// The running and starting games the first rows are about.
     live: Vec<(GameId, StatusKind)>,
     /// The library revision the game rows were found in.
     revision: u64,
     query: String,
-    /// The rows the list holds now, in order.
-    shown: Rc<Vec<Row>>,
+    /// The grouped rows the list holds now, in order.
+    shown: Rc<Vec<ShownGroup>>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl PaletteView {
     pub(crate) fn new(host: Host, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let m = models(cx).clone();
-        let subscriptions = vec![
+        let mut subscriptions = vec![
             cx.observe(&m.statuses, |this, _, cx| {
                 let live = live_games(cx);
                 if live != this.live {
@@ -354,7 +450,6 @@ impl PaletteView {
                 }
             }),
         ];
-        let mut subscriptions = subscriptions;
         if host == Host::Window {
             // Only once it had the focus: some desktops report the new
             // window inactive before they hand it the keyboard.
@@ -427,10 +522,15 @@ impl PaletteView {
         }
     }
 
+    /// Look up the row at `ix` inside `self.shown`.
+    fn row_at(&self, ix: IndexPath) -> Option<&Row> {
+        self.shown.get(ix.section)?.rows.get(ix.row)
+    }
+
     /// The highlighted row.
     fn selected(&self, cx: &App) -> Option<&Row> {
         let ix = self.state.read(cx).selected_index()?;
-        self.shown.get(ix.row)
+        self.row_at(ix)
     }
 
     pub(super) fn set_query(&mut self, query: &str, cx: &mut Context<Self>) {
@@ -440,10 +540,210 @@ impl PaletteView {
         }
     }
 
-    /// Find the rows for the query again. The list highlights its first row
-    /// after a change, so the preview follows it.
+    /// Build a game row for `g`.
+    fn make_game_row(&self, g: Arc<GameInfo>, kind: Option<StatusKind>) -> Row {
+        let id = g.id();
+        let detail = format!("{} · {}", g.runner().short_name(), state_label(&g, kind));
+        let target = match self.host {
+            Host::Dialog => PaletteTarget::Open(id),
+            Host::Window => play_or_resume_target(&g, kind),
+        };
+        Row {
+            entry: Entry::new()
+                .label(g.title.clone())
+                .keywords([g.runner().short_name(), g.runner().store_name()])
+                .icon(IconName::Gamepad2)
+                .kind(EntryKind::Game),
+            target,
+            game: Some(g),
+            about: None,
+            detail: Some(detail.into()),
+            setting_path: None,
+            help: None,
+        }
+    }
+
+    /// The top recently played games as rows.
+    fn recent_game_rows(&mut self, cx: &App) -> Vec<Row> {
+        let recent = crate::sidebar::recent_games(cx);
+        self.revision = models(cx).library.read(cx).snapshot.revision;
+        let statuses = models(cx).statuses.read(cx);
+        recent
+            .into_iter()
+            .map(|g| {
+                let kind = statuses.kind(&g.id());
+                self.make_game_row(g, kind)
+            })
+            .collect()
+    }
+
+    /// Games matched and scored by `SearchIndex`.
+    fn scored_games(&mut self, query: &str, cx: &App) -> Vec<(i64, Arc<GameInfo>)> {
+        let library = models(cx).library.read(cx);
+        self.revision = library.snapshot.revision;
+        let (user, locked) = (&library.user, library.snapshot.hidden_locked);
+        // Hidden games behind the PIN aren't found here either.
+        let keep = |g: &GameInfo| !(locked && user.hidden.contains(&g.id().key()));
+        rank_games_scored(
+            &library.snapshot.games,
+            library.snapshot.search(),
+            query,
+            keep,
+            MAX_GAMES,
+        )
+    }
+
+    /// Curated empty-query home groups, tailored to `Host::Dialog` vs
+    /// `Host::Window` (Quick Launcher).
+    fn empty_groups(&mut self, cx: &App) -> Vec<ShownGroup> {
+        let mut groups = Vec::new();
+        let mut push_group = |kind: GroupKind, rows: Vec<Row>| {
+            if !rows.is_empty() {
+                groups.push(ShownGroup {
+                    #[cfg(test)]
+                    kind,
+                    heading: t(kind.heading_key()),
+                    rows,
+                });
+            }
+        };
+
+        let mut live = lead_rows(&self.live, cx);
+        live.extend(
+            self.commands
+                .iter()
+                .filter(|r| r.entry.kind == EntryKind::Live && r.entry.show_when_empty)
+                .cloned(),
+        );
+        push_group(GroupKind::Live, live);
+
+        let recent = self.recent_game_rows(cx);
+        match self.host {
+            Host::Dialog => {
+                let current_game: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| r.entry.kind == EntryKind::CurrentGame && r.entry.show_when_empty)
+                    .cloned()
+                    .collect();
+                push_group(GroupKind::CurrentGame, current_game);
+                push_group(GroupKind::Recent, recent);
+                let pages: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| r.entry.kind == EntryKind::Page && r.entry.show_when_empty)
+                    .cloned()
+                    .collect();
+                push_group(GroupKind::Pages, pages);
+                let quick: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| r.entry.kind == EntryKind::Command && r.entry.show_when_empty)
+                    .cloned()
+                    .collect();
+                push_group(GroupKind::QuickActions, quick);
+            }
+            Host::Window => {
+                push_group(GroupKind::Recent, recent);
+                let pages: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| {
+                        r.entry.kind == EntryKind::Page
+                            && r.entry.show_when_empty
+                            && r.entry.quick_launch
+                    })
+                    .cloned()
+                    .collect();
+                push_group(GroupKind::Pages, pages);
+            }
+        }
+        groups
+    }
+
+    /// Curated view when the user typed only a scope prefix (`,`, `>`, `#`).
+    fn scoped_empty_groups(&self, scope: ScopeFilter) -> Vec<ShownGroup> {
+        let mut groups = Vec::new();
+        let allowed = |r: &Row| self.host == Host::Dialog || r.entry.quick_launch;
+        match scope {
+            ScopeFilter::Settings => {
+                let pages: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| allowed(r) && r.entry.kind == EntryKind::Page)
+                    .take(16)
+                    .cloned()
+                    .collect();
+                if !pages.is_empty() {
+                    groups.push(ShownGroup {
+                        #[cfg(test)]
+                        kind: GroupKind::Pages,
+                        heading: t(GroupKind::Pages.heading_key()),
+                        rows: pages,
+                    });
+                }
+                let settings: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| allowed(r) && r.entry.kind == EntryKind::Setting)
+                    .take(15)
+                    .cloned()
+                    .collect();
+                if !settings.is_empty() {
+                    groups.push(ShownGroup {
+                        #[cfg(test)]
+                        kind: GroupKind::Settings,
+                        heading: t(GroupKind::Settings.heading_key()),
+                        rows: settings,
+                    });
+                }
+            }
+            ScopeFilter::Commands => {
+                let cmds: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| {
+                        allowed(r)
+                            && matches!(r.entry.kind, EntryKind::CurrentGame | EntryKind::Command)
+                    })
+                    .take(25)
+                    .cloned()
+                    .collect();
+                if !cmds.is_empty() {
+                    groups.push(ShownGroup {
+                        #[cfg(test)]
+                        kind: GroupKind::Commands,
+                        heading: t(GroupKind::Commands.heading_key()),
+                        rows: cmds,
+                    });
+                }
+            }
+            ScopeFilter::Categories => {
+                let cats: Vec<Row> = self
+                    .commands
+                    .iter()
+                    .filter(|r| allowed(r) && is_category_or_view(r))
+                    .take(25)
+                    .cloned()
+                    .collect();
+                if !cats.is_empty() {
+                    groups.push(ShownGroup {
+                        #[cfg(test)]
+                        kind: GroupKind::Commands,
+                        heading: t(GroupKind::Commands.heading_key()),
+                        rows: cats,
+                    });
+                }
+            }
+            ScopeFilter::All | ScopeFilter::PlayIntent => {}
+        }
+        groups
+    }
+
+    /// Find the grouped rows for the query again. The list highlights its first
+    /// row after a change, so the preview follows it.
     fn rebuild(&mut self, cx: &mut Context<Self>) {
-        let query = self.query.trim().to_lowercase();
+        let raw_query = self.query.trim().to_owned();
         if let Level::Game(id) = self.level.clone() {
             let game = models(cx).library.read(cx).snapshot.get(&id).cloned();
             let Some(game) = game else {
@@ -454,107 +754,225 @@ impl PaletteView {
             let facts = game_facts(&game, cx);
             let rows: Vec<Row> = super::game::level_rows(&game, &facts)
                 .into_iter()
-                .filter(|(entry, _)| entry.matches(&query))
+                .filter(|(entry, _)| entry.matches_text(&raw_query))
                 .map(|(entry, target)| Row {
                     about: Some(game.clone()),
                     ..Row::command(entry, target)
                 })
                 .collect();
-            return self.show_rows(rows, cx);
+            return self.show_flat(rows, cx);
         }
         if matches!(self.level, Level::Random | Level::Picked(..)) {
             let rows = random_rows(&self.level, cx)
                 .into_iter()
-                .filter(|r| r.entry.matches(&query))
+                .filter(|r| r.entry.matches_text(&raw_query))
                 .collect();
-            return self.show_rows(rows, cx);
+            return self.show_flat(rows, cx);
         }
-        let games = self.game_rows(&query, cx);
-        // A running game's rows come along when its game is found, typo and
-        // all, not only when their own words hold the query.
-        let found = |target: &PaletteTarget| match target {
-            PaletteTarget::BackToGame(id) | PaletteTarget::CancelLaunch(id) => games
-                .iter()
-                .any(|g| g.game.as_ref().is_some_and(|g| g.id() == *id)),
-            _ => false,
+
+        let parsed = parse_input(&raw_query);
+        if parsed.text.is_empty() {
+            let groups = if parsed.scope == ScopeFilter::All {
+                self.empty_groups(cx)
+            } else {
+                self.scoped_empty_groups(parsed.scope)
+            };
+            return self.show_groups(groups, cx);
+        }
+
+        let Some(query) = Query::new(parsed.text) else {
+            return self.show_groups(Vec::new(), cx);
         };
-        let mut rows: Vec<Row> = lead_rows(&self.live, cx)
-            .into_iter()
-            .chain(self.commands.iter().cloned())
-            .filter(|r| r.entry.matches(&query) || found(&r.target))
-            .collect();
-        rows.extend(games);
-        self.show_rows(rows, cx);
+        let full_query = Query::new(parsed.full);
+
+        let include_games = matches!(parsed.scope, ScopeFilter::All | ScopeFilter::PlayIntent);
+        let scored_games = if include_games {
+            self.scored_games(parsed.text, cx)
+        } else {
+            Vec::new()
+        };
+
+        let mut live_rows: Vec<(i64, Row)> = Vec::new();
+        let mut current_game_rows: Vec<(i64, Row)> = Vec::new();
+        let mut page_rows: Vec<(i64, Row)> = Vec::new();
+        let mut setting_rows: Vec<(i64, Row)> = Vec::new();
+        let mut game_rows: Vec<(i64, Row)> = Vec::new();
+        let mut command_rows: Vec<(i64, Row)> = Vec::new();
+
+        // Explicit `play <game>` / `jogar <game>` puts direct Play rows first.
+        if parsed.scope == ScopeFilter::PlayIntent {
+            let statuses = models(cx).statuses.read(cx);
+            for (score, g) in scored_games.iter().filter(|(_, g)| g.is_installed).take(4) {
+                let kind = statuses.kind(&g.id());
+                let target = play_or_resume_target(g, kind);
+                let (label, icon) = match &target {
+                    PaletteTarget::BackToGame(_) => (
+                        t_args("shell.palette.back_to_game", &[("title", &g.title)]),
+                        IconName::AppWindow,
+                    ),
+                    PaletteTarget::CancelLaunch(_) => (
+                        t_args("shell.palette.cancel_launch", &[("title", &g.title)]),
+                        IconName::X,
+                    ),
+                    _ => (
+                        t_args("shell.palette.play", &[("title", &g.title)]),
+                        IconName::Play,
+                    ),
+                };
+                live_rows.push((
+                    score + 1000,
+                    Row {
+                        about: Some(g.clone()),
+                        ..Row::command(
+                            Entry::new()
+                                .label(label)
+                                .icon(icon)
+                                .kind(EntryKind::Live)
+                                .finish(),
+                            target,
+                        )
+                    },
+                ));
+            }
+        }
+
+        // Running/launching lead rows match either directly or via their game.
+        if parsed.scope == ScopeFilter::All {
+            for row in lead_rows(&self.live, cx) {
+                let matched_game = match &row.target {
+                    PaletteTarget::BackToGame(id) | PaletteTarget::CancelLaunch(id) => scored_games
+                        .iter()
+                        .find(|(_, g)| g.id() == *id)
+                        .map(|(s, _)| *s),
+                    _ => None,
+                };
+                if let Some(score) = row.entry.score(&query).or(matched_game) {
+                    live_rows.push((score, row));
+                }
+            }
+        }
+
+        {
+            let statuses = models(cx).statuses.read(cx);
+            for (score, g) in &scored_games {
+                let kind = statuses.kind(&g.id());
+                game_rows.push((*score, self.make_game_row(g.clone(), kind)));
+            }
+        }
+
+        // For `PlayIntent`, score commands against the full string so queries
+        // like `"play status"` still match `"Group the library by play status"`.
+        let cmd_query = if parsed.scope == ScopeFilter::PlayIntent {
+            full_query.as_ref().unwrap_or(&query)
+        } else {
+            &query
+        };
+
+        for row in &self.commands {
+            if self.host == Host::Window && !row.entry.quick_launch {
+                continue;
+            }
+            let in_scope = match parsed.scope {
+                ScopeFilter::All | ScopeFilter::PlayIntent => true,
+                ScopeFilter::Settings => {
+                    matches!(row.entry.kind, EntryKind::Page | EntryKind::Setting)
+                }
+                ScopeFilter::Commands => {
+                    matches!(row.entry.kind, EntryKind::Command | EntryKind::CurrentGame)
+                }
+                ScopeFilter::Categories => is_category_or_view(row),
+            };
+            if !in_scope {
+                continue;
+            }
+            let Some(score) = row.entry.score(cmd_query) else {
+                continue;
+            };
+            match GroupKind::from_entry_kind(row.entry.kind) {
+                GroupKind::Live => live_rows.push((score, row.clone())),
+                GroupKind::CurrentGame => current_game_rows.push((score, row.clone())),
+                GroupKind::Pages => page_rows.push((score, row.clone())),
+                GroupKind::Settings => setting_rows.push((score, row.clone())),
+                GroupKind::Games => game_rows.push((score, row.clone())),
+                GroupKind::Commands | GroupKind::Recent | GroupKind::QuickActions => {
+                    command_rows.push((score, row.clone()))
+                }
+            }
+        }
+
+        let groups = rank_groups(
+            self.host,
+            vec![
+                ScoredGroup {
+                    kind: GroupKind::Live,
+                    heading: t(GroupKind::Live.heading_key()),
+                    rows: live_rows,
+                },
+                ScoredGroup {
+                    kind: GroupKind::CurrentGame,
+                    heading: t(GroupKind::CurrentGame.heading_key()),
+                    rows: current_game_rows,
+                },
+                ScoredGroup {
+                    kind: GroupKind::Pages,
+                    heading: t(GroupKind::Pages.heading_key()),
+                    rows: page_rows,
+                },
+                ScoredGroup {
+                    kind: GroupKind::Settings,
+                    heading: t(GroupKind::Settings.heading_key()),
+                    rows: setting_rows,
+                },
+                ScoredGroup {
+                    kind: GroupKind::Games,
+                    heading: t(GroupKind::Games.heading_key()),
+                    rows: game_rows,
+                },
+                ScoredGroup {
+                    kind: GroupKind::Commands,
+                    heading: t(GroupKind::Commands.heading_key()),
+                    rows: command_rows,
+                },
+            ],
+        );
+        self.show_groups(groups, cx);
     }
 
-    fn show_rows(&mut self, rows: Vec<Row>, cx: &mut Context<Self>) {
-        self.shown = Rc::new(rows);
-        let first = self.shown.first().cloned();
+    fn show_flat(&mut self, rows: Vec<Row>, cx: &mut Context<Self>) {
+        let groups = if rows.is_empty() {
+            Vec::new()
+        } else {
+            vec![ShownGroup {
+                #[cfg(test)]
+                kind: GroupKind::Commands,
+                heading: SharedString::default(),
+                rows,
+            }]
+        };
+        self.show_groups(groups, cx);
+    }
+
+    fn show_groups(&mut self, groups: Vec<ShownGroup>, cx: &mut Context<Self>) {
+        let first = groups.first().and_then(|g| g.rows.first()).cloned();
+        self.shown = Rc::new(groups);
         self.preview.update(cx, |p, cx| p.show(first, cx));
         cx.notify();
     }
 
-    /// The games `query` finds (the recently played ones without a query),
-    /// and before them the installed ones to play at once.
-    fn game_rows(&mut self, query: &str, cx: &App) -> Vec<Row> {
-        let recent = query.is_empty().then(|| crate::sidebar::recent_games(cx));
-        let library = models(cx).library.read(cx);
-        self.revision = library.snapshot.revision;
-        let games = recent.unwrap_or_else(|| {
-            let (user, locked) = (&library.user, library.snapshot.hidden_locked);
-            // Hidden games behind the PIN aren't found here either.
-            let keep = |g: &GameInfo| !(locked && user.hidden.contains(&g.id().key()));
-            rank_games(
-                &library.snapshot.games,
-                library.snapshot.search(),
-                query,
-                keep,
-                MAX_GAMES,
-            )
-        });
-        let statuses = models(cx).statuses.read(cx);
-        let mut rows = Vec::with_capacity(games.len() + MAX_PLAY_ROWS);
-        // The launcher plays from the game rows themselves.
-        if !query.is_empty() && self.host == Host::Dialog {
-            for g in games.iter().filter(|g| g.is_installed).take(MAX_PLAY_ROWS) {
-                rows.push(Row::command(
-                    Entry::new()
-                        .label(t_args("shell.palette.play", &[("title", &g.title)]))
-                        .keywords([g.runner().short_name()])
-                        .icon(IconName::Play),
-                    PaletteTarget::Play(g.id()),
-                ));
-            }
-        }
-        for g in games {
-            let id = g.id();
-            let kind = statuses.kind(&id);
-            let detail = format!("{} · {}", g.runner().short_name(), state_label(&g, kind));
-            let target = match (self.host, kind) {
-                (Host::Dialog, _) => PaletteTarget::Open(id),
-                (Host::Window, Some(StatusKind::Playing)) => PaletteTarget::BackToGame(id),
-                (Host::Window, Some(StatusKind::Launching)) => PaletteTarget::CancelLaunch(id),
-                (Host::Window, Some(kind)) if kind.is_busy() => PaletteTarget::Open(id),
-                (Host::Window, _) if g.is_installed => PaletteTarget::Play(id),
-                (Host::Window, _) => PaletteTarget::Open(id),
-            };
-            rows.push(Row {
-                entry: Entry::new()
-                    .label(g.title.clone())
-                    .keywords([g.runner().short_name(), g.runner().store_name()])
-                    .icon(IconName::Gamepad2),
-                target,
-                game: Some(g),
-                about: None,
-                detail: Some(detail.into()),
-            });
-        }
-        rows
-    }
-
-    /// The rows the list holds now.
+    /// All rows currently displayed across every group, flattened in order.
     #[cfg(test)]
     pub(super) fn shown_rows(&self) -> Rc<Vec<Row>> {
+        Rc::new(
+            self.shown
+                .iter()
+                .flat_map(|g| g.rows.iter().cloned())
+                .collect(),
+        )
+    }
+
+    /// The groups currently displayed, in order.
+    #[cfg(test)]
+    pub(super) fn shown_groups(&self) -> Rc<Vec<ShownGroup>> {
         self.shown.clone()
     }
 
@@ -608,7 +1026,6 @@ impl Render for PaletteView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let weak = cx.entity().downgrade();
         let host = self.host;
-        let items: Vec<CommandItem> = self.shown.iter().map(Row::item).collect();
         let on_query = {
             let weak = weak.clone();
             move |query: &str, _: &mut Window, cx: &mut App| {
@@ -621,14 +1038,14 @@ impl Render for PaletteView {
                 let Some(view) = weak.upgrade() else { return };
                 let (row, preview) = {
                     let v = view.read(cx);
-                    (v.shown.get(ix.row).cloned(), v.preview.clone())
+                    (v.row_at(ix).cloned(), v.preview.clone())
                 };
                 preview.update(cx, |p, cx| p.show(row, cx));
             }
         };
         let on_confirm = move |ix: IndexPath, window: &mut Window, cx: &mut App| {
             let Some(view) = weak.upgrade() else { return };
-            let row = view.read(cx).shown.get(ix.row).cloned();
+            let row = view.read(cx).row_at(ix).cloned();
             if let Some(row) = row {
                 Self::confirm(&view, host, row, window, cx);
             }
@@ -651,16 +1068,26 @@ impl Render for PaletteView {
                 t_args("shell.palette.picked_placeholder", &[("title", &title)])
             }
         };
-        let list = Command::new(&self.state)
+        let mut list = Command::new(&self.state)
             .bordered(false)
             .rounded(cx.theme().radius_lg)
             .placeholder(placeholder)
             .max_h(px(440.))
             .filterable(false)
-            .items(items)
             .on_query(on_query)
             .on_select(on_select)
             .on_confirm(on_confirm);
+        for (ix, group) in self.shown.iter().enumerate() {
+            if ix > 0 {
+                list = list.separator();
+            }
+            let mut cmd_group = CommandGroup::new();
+            if !group.heading.is_empty() {
+                cmd_group = cmd_group.label(group.heading.clone());
+            }
+            cmd_group = cmd_group.items(group.rows.iter().map(Row::item));
+            list = list.group(cmd_group);
+        }
         let launcher = self.host == Host::Window;
         let theme = cx.theme();
         let (surface, border) = (theme.popover, theme.border);
@@ -698,18 +1125,28 @@ impl Render for PaletteView {
                 cx.listener(|this, _: &InputEscape, window, cx| this.escape(window, cx)),
             )
             .capture_action(cx.listener(|this, _: &Cancel, window, cx| this.escape(window, cx)))
-            .capture_action(cx.listener(|this, enter: &InputEnter, _, cx| {
-                // Shift+Enter shows the launcher's game in Irori.
-                if this.host == Host::Window
-                    && enter.shift
-                    && let Some(id) = this
-                        .selected(cx)
-                        .and_then(|r| r.game.as_ref())
-                        .map(|g| g.id())
-                {
-                    cx.stop_propagation();
-                    crate::quick_launch::close(cx);
-                    crate::quick_launch::show_in_main(PaletteTarget::Open(id), cx);
+            .capture_action(cx.listener(|this, enter: &InputEnter, window, cx| {
+                if !enter.shift {
+                    return;
+                }
+                let Some(game) = this.selected(cx).and_then(|r| r.game.clone()) else {
+                    return;
+                };
+                match this.host {
+                    // Shift+Enter in Quick Launcher opens the game in Irori.
+                    Host::Window => {
+                        cx.stop_propagation();
+                        crate::quick_launch::close(cx);
+                        crate::quick_launch::show_in_main(PaletteTarget::Open(game.id()), cx);
+                    }
+                    // Shift+Enter in the in-app palette plays/resumes directly.
+                    Host::Dialog => {
+                        let kind = models(cx).statuses.read(cx).kind(&game.id());
+                        let target = play_or_resume_target(&game, kind);
+                        cx.stop_propagation();
+                        window.close_dialog(cx);
+                        run_target(target, window, cx);
+                    }
                 }
             }))
             .child(div().flex_1().min_w_0().child(list))

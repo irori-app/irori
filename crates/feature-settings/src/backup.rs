@@ -87,10 +87,21 @@ impl BackupPanel {
         this
     }
 
+    pub(crate) fn set_tab(&mut self, tab: BackupTab, cx: &mut Context<Self>) {
+        if self.tab != tab {
+            self.tab = tab;
+            cx.notify();
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn set_tab_for_test(&mut self, tab: BackupTab, cx: &mut Context<Self>) {
-        self.tab = tab;
-        cx.notify();
+        self.set_tab(tab, cx);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn tab_for_test(&self) -> BackupTab {
+        self.tab
     }
 
     /// Read the backup folder off the UI thread.

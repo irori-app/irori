@@ -2399,5 +2399,8 @@
   "settings.page.accounts": "Accounts",
   "settings.page.wine_manager": "Wine & Proton",
   "settings.page.wine_manager_macos": "Wine manager",
-  "settings.page.emulators": "Emulators"
+  "settings.page.emulators": "Emulators",
+  "settings.preview.on": "On",
+  "settings.preview.off": "Off",
+  "settings.preview.default": "Default"
 }

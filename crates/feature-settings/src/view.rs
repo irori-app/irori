@@ -178,6 +178,38 @@ impl SettingsSection {
         t(self.label_key())
     }
 
+    /// Name of the section in English (for bilingual search).
+    pub fn english_label(self) -> &'static str {
+        english(self.label_key())
+    }
+
+    /// Top-level route that opens this settings section.
+    pub fn route(self) -> nav::Route {
+        match self {
+            SettingsSection::Accounts => nav::Route::Accounts,
+            SettingsSection::WineManager => nav::Route::WineManager,
+            SettingsSection::Emulators => nav::Route::Emulators,
+            other => nav::Route::Settings(other.id().into()),
+        }
+    }
+
+    /// Map a registry [`FieldSection`] to the settings page that hosts it.
+    pub fn from_field_section(section: FieldSection) -> Self {
+        match section {
+            FieldSection::General => SettingsSection::General,
+            FieldSection::Controller => SettingsSection::Controller,
+            FieldSection::Appearance => SettingsSection::Appearance,
+            FieldSection::Advanced => SettingsSection::Advanced,
+            FieldSection::Saves => SettingsSection::Saves,
+            FieldSection::Wine
+            | FieldSection::Performance
+            | FieldSection::Gpu
+            | FieldSection::Launch
+            | FieldSection::CloudSaves
+            | FieldSection::Artwork => SettingsSection::GameDefaults,
+        }
+    }
+
     fn description(self) -> SharedString {
         let key = match self {
             SettingsSection::Accounts
@@ -204,7 +236,8 @@ impl SettingsSection {
         t(key)
     }
 
-    fn icon(self) -> IconName {
+    /// Icon representing this settings section.
+    pub fn icon(self) -> IconName {
         match self {
             SettingsSection::Accounts => IconName::CircleUser,
             SettingsSection::WineManager => IconName::Wine,
@@ -224,8 +257,9 @@ impl SettingsSection {
         }
     }
 
-    /// English search terms for pages without fields.
-    fn keywords(self) -> &'static str {
+    /// English search terms for this section (used by both settings search and
+    /// the global command palette).
+    pub fn search_keywords(self) -> &'static str {
         match self {
             SettingsSection::Accounts => {
                 "accounts login sign in logout store epic gog amazon zoom itch xbox steam friends"
@@ -236,18 +270,38 @@ impl SettingsSection {
             SettingsSection::Emulators => {
                 "emulators emulation rom roms bios retroarch cores retroachievements console systems"
             }
+            SettingsSection::General => {
+                "general language folder install updates tray window autostart startup quick launch stores shortcuts downloads network discord sunshine"
+            }
+            SettingsSection::Controller => {
+                "controller controllers gamepad buttons mapping pointer overlay big picture guide chord"
+            }
+            SettingsSection::GameDefaults => {
+                "game defaults default launch wine proton performance gpu graphics replay saves gamescope gamemode optiscaler"
+            }
             SettingsSection::PerformanceHud => {
-                "performance hud mangohud metal overlay fps frametime gpu cpu vram temperature"
+                "performance hud mangohud metal overlay fps frametime gpu cpu vram temperature in-game stats"
             }
-            SettingsSection::Logs => "logs log launcher debug report problem crash panic backtrace",
-            SettingsSection::SystemInfo => {
-                "system information hardware cpu gpu memory driver os report"
+            SettingsSection::Appearance => {
+                "appearance theme colors accent translucency font size layout covers library accessibility reduce motion"
             }
-            SettingsSection::About => "about version license credits",
             SettingsSection::Storage => {
                 "storage disk drive space size free clean cleanup delete prefix cache"
             }
-            _ => "",
+            SettingsSection::Saves => "game saves save backups ludusavi snapshots cloud restore",
+            SettingsSection::Backup => {
+                "backup restore sync export csv json schedule automatic computers devices settings library"
+            }
+            SettingsSection::Advanced => {
+                "advanced helpers binaries caches reset logs import heroic lutris bottles faugus playnite igdb steamgriddb launchbox"
+            }
+            SettingsSection::Logs => "logs log launcher debug report problem crash panic backtrace",
+            SettingsSection::SystemInfo => {
+                "system information hardware cpu gpu memory driver os display monitor hdr report"
+            }
+            SettingsSection::About => {
+                "about version license credits update feedback bug issue tour"
+            }
         }
     }
 
@@ -369,10 +423,7 @@ impl SettingsView {
                 cx.observe(&accounts, |_, _, cx| cx.notify()),
             ],
         };
-        if section.as_ref() == "downloads" {
-            this.general_tab = "integrations";
-        }
-        this.open(SettingsSection::from_id(&section), false, window, cx);
+        this.open_route_id(&section, true, window, cx);
         this
     }
 
@@ -386,22 +437,111 @@ impl SettingsView {
         &self.query
     }
 
-    /// Show a section (route id); the shell calls this when the route
-    /// changes while the page is open.
+    /// Show a section (route id), sub-tab (`<section>/<subtab>`), or direct
+    /// setting (`field:<path>`); the shell calls this when the route changes
+    /// while the page is open.
     pub fn set_section(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let target = SettingsSection::from_id(id);
+        self.open_route_id(id, false, window, cx);
+    }
+
+    fn open_route_id(
+        &mut self,
+        id: &str,
+        force: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(path) = id.strip_prefix("field:") {
+            if self.open_field(path, window, cx) {
+                return;
+            }
+            self.open(SettingsSection::General, false, window, cx);
+            return;
+        }
         if id == "downloads" {
             self.general_tab = "integrations";
+            self.open(SettingsSection::General, false, window, cx);
+            return;
+        }
+        if let Some((sec, sub)) = id.split_once('/') {
+            let target = SettingsSection::from_id(sec);
+            self.apply_subtab_id(target, sub, cx);
             self.open(target, false, window, cx);
             return;
         }
-        if target == self.section
+        let target = SettingsSection::from_id(id);
+        if !force
+            && target == self.section
             && self.query.is_empty()
             && (!target.is_embedded() || self.embedded_view(target).is_some())
         {
             return;
         }
         self.open(target, false, window, cx);
+    }
+
+    fn apply_subtab_id(&mut self, section: SettingsSection, tab: &str, cx: &mut Context<Self>) {
+        match section {
+            SettingsSection::General => {
+                if let Some(found) = crate::layout::GENERAL_TABS.iter().find(|t| t.id == tab) {
+                    self.general_tab = found.id;
+                }
+            }
+            SettingsSection::GameDefaults => {
+                if let Some(found) = crate::layout::supported_defaults_tabs()
+                    .into_iter()
+                    .find(|t| t.id == tab)
+                {
+                    self.defaults_tab = found.id;
+                }
+            }
+            SettingsSection::Appearance => {
+                if let Some(found) = crate::layout::APPEARANCE_TABS.iter().find(|t| t.id == tab) {
+                    self.appearance_tab = found.id;
+                }
+            }
+            SettingsSection::Backup => {
+                let backup_tab = match tab {
+                    "sync" => Some(crate::backup::BackupTab::Sync),
+                    "export" => Some(crate::backup::BackupTab::Export),
+                    "backup_restore" | "backup" | "restore" => {
+                        Some(crate::backup::BackupTab::BackupRestore)
+                    }
+                    _ => None,
+                };
+                if let Some(backup_tab) = backup_tab {
+                    self.backup.update(cx, |b, cx| b.set_tab(backup_tab, cx));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn open_field(&mut self, path: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(spec) = crate::registry::find(path) else {
+            return false;
+        };
+        if !spec.supported_on_host() || spec.scope == crate::registry::Scope::GameOnly {
+            return false;
+        }
+        let target = SettingsSection::from_field_section(spec.section);
+        if let Some(tab) = crate::layout::subtab_of(spec) {
+            self.apply_subtab_id(target, tab, cx);
+        }
+        self.open(target, false, window, cx);
+        let form = match spec.scope {
+            crate::registry::Scope::App => self.app_form.clone(),
+            crate::registry::Scope::Shared => self.defaults_form.clone(),
+            crate::registry::Scope::GameOnly => return false,
+        };
+        let revealed = form.update(cx, |f, cx| f.reveal_field(spec, window, cx));
+        if !revealed {
+            let label = spec.label_text().to_string();
+            self.search
+                .update(cx, |s, cx| s.set_value(label.clone(), window, cx));
+            self.set_query(label, window, cx);
+        }
+        true
     }
 
     fn embedded_view(&self, section: SettingsSection) -> Option<AnyView> {
@@ -708,16 +848,24 @@ impl SettingsView {
     }
 
     fn render_search(&self, cx: &mut Context<Self>) -> AnyElement {
-        let q = self.query.trim().to_lowercase();
-        let pages: Vec<SettingsSection> = SettingsSection::ALL
-            .into_iter()
-            .filter(|s| s.supported_on_host())
-            .filter(|s| {
-                let hay = format!("{} {} {}", s.label(), english(s.label_key()), s.keywords())
-                    .to_lowercase();
-                !s.keywords().is_empty() && q.split_whitespace().all(|t| hay.contains(t))
-            })
-            .collect();
+        let q = irori_services::search::fold(&self.query);
+        let pages: Vec<SettingsSection> = if q.is_empty() {
+            Vec::new()
+        } else {
+            SettingsSection::ALL
+                .into_iter()
+                .filter(|s| s.supported_on_host())
+                .filter(|s| {
+                    let hay = irori_services::search::fold(&format!(
+                        "{} {} {}",
+                        s.label(),
+                        s.english_label(),
+                        s.search_keywords()
+                    ));
+                    q.split(' ').all(|t| hay.contains(t))
+                })
+                .collect()
+        };
         let count =
             self.app_form.read(cx).visible_count() + self.defaults_form.read(cx).visible_count();
         if count == 0 && pages.is_empty() {

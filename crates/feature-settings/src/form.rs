@@ -188,6 +188,9 @@ pub struct SettingsForm {
     compact: bool,
     /// Disclosure keys (`<target>-<subtab>`) currently expanded by the user.
     expanded_advanced: HashSet<String>,
+    /// Field briefly highlighted after a deep link from global search.
+    highlighted_field: Option<&'static str>,
+    highlight_timer: Option<Task<()>>,
     busy: HashSet<ActionKind>,
     import_summary: Option<SharedString>,
     heroic_detected: bool,
@@ -263,6 +266,8 @@ impl SettingsForm {
             subtab: None,
             compact: false,
             expanded_advanced: HashSet::new(),
+            highlighted_field: None,
+            highlight_timer: None,
             busy: HashSet::new(),
             import_summary: None,
             heroic_detected: irori_ui::hooks::heroic_detected(),
@@ -398,6 +403,45 @@ impl SettingsForm {
     /// Number of fields that differ from the global defaults (game target).
     pub fn overridden_count(&self) -> usize {
         self.overridden.len()
+    }
+
+    /// Reveal `spec` inside the current section/sub-tab (expanding "More
+    /// options" if needed) and briefly highlight its row. Returns `false` if
+    /// the field is currently hidden behind a disabled parent in compact mode.
+    pub(crate) fn reveal_field(
+        &mut self,
+        spec: &'static FieldSpec,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.compact && crate::layout::is_hidden_by_parent(spec, &self.snapshot) {
+            self.highlighted_field = None;
+            self.highlight_timer = None;
+            return false;
+        }
+        if self.compact && (crate::layout::is_advanced(spec) || self.hardware_blocked(spec)) {
+            self.expanded_advanced.insert(self.advanced_bucket_key());
+        }
+        self.highlighted_field = Some(spec.path);
+        let path = spec.path;
+        self.highlight_timer = Some(cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(2500))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.highlighted_field == Some(path) {
+                    this.highlighted_field = None;
+                    cx.notify();
+                }
+            });
+        }));
+        cx.notify();
+        true
+    }
+
+    #[cfg(test)]
+    pub(crate) fn highlighted_field_for_test(&self) -> Option<&'static str> {
+        self.highlighted_field
     }
 }
 

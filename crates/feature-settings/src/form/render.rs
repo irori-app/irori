@@ -96,9 +96,17 @@ impl SettingsForm {
             stacked: false,
         };
         let control = self.render_control(spec, disabled, false, Some(&mut row), window, cx);
+        let highlighted = self.highlighted_field == Some(path);
+        let theme = cx.theme();
         field_row(row, control, cx)
             .id(id("row"))
             .debug_selector(move || format!("row-{path}"))
+            .when(highlighted, |d| {
+                d.rounded(theme.radius)
+                    .bg(theme.primary.opacity(0.14))
+                    .border_1()
+                    .border_color(theme.primary.opacity(0.45))
+            })
             .into_any_element()
     }
 
@@ -137,6 +145,9 @@ impl SettingsForm {
         let pair_id = pair.first;
         let tooltip = (!pair.tooltip_key.is_empty())
             .then(|| (SharedString::new_static(pair_id), t(pair.tooltip_key)));
+        let highlighted = self.highlighted_field == Some(first.path)
+            || self.highlighted_field == Some(second.path);
+        let theme = cx.theme();
         paired_field_row(
             PairedRow {
                 label: t(pair.label_key),
@@ -153,6 +164,12 @@ impl SettingsForm {
         )
         .id(ElementId::Name(format!("pair-{pair_id}").into()))
         .debug_selector(move || format!("pair-{pair_id}"))
+        .when(highlighted, |d| {
+            d.rounded(theme.radius)
+                .bg(theme.primary.opacity(0.14))
+                .border_1()
+                .border_color(theme.primary.opacity(0.45))
+        })
         .into_any_element()
     }
 

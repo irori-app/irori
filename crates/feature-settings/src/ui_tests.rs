@@ -1342,3 +1342,231 @@ fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext)
         );
     }
 }
+
+#[gpui_kit::test]
+fn settings_search_finds_every_section_with_keywords_and_accents(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    for (query, page_id) in [
+        ("báckup", "search-page-backup"),
+        ("game defaults", "search-page-game-defaults"),
+        ("ludusavi", "search-page-saves"),
+        ("appêarance", "search-page-appearance"),
+        ("gamepad", "search-page-controller"),
+        ("autostart", "search-page-general"),
+        ("launchbox", "search-page-advanced"),
+    ] {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section("general", window, cx));
+            let search = view.read(cx).search_input();
+            search.read(cx).focus_handle(cx).focus(window, cx);
+        })
+        .unwrap();
+        vcx.simulate_input(query);
+        vcx.run_until_parked();
+        vcx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert!(
+            vcx.debug_bounds(page_id).is_some(),
+            "expected {page_id} for query {query:?}"
+        );
+    }
+}
+
+#[gpui_kit::test]
+fn field_and_subtab_deep_links_open_expand_and_highlight(cx: &mut TestAppContext) {
+    use crate::backup::BackupTab;
+    use gpui_kit::VisualTestContext;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("appearance".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+
+    // Advanced "More options" field: jumps to General, expands More options, highlights row.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_section("field:checkUpdatesInterval", window, cx)
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).section()),
+        SettingsSection::General
+    );
+    assert_eq!(
+        vcx.read(|cx| view
+            .read(cx)
+            .app_form()
+            .read(cx)
+            .highlighted_field_for_test()),
+        Some("checkUpdatesInterval")
+    );
+    assert!(
+        vcx.debug_bounds("row-checkUpdatesInterval").is_some(),
+        "deep-link must auto-expand More options so row-checkUpdatesInterval draws"
+    );
+
+    // Dependent field hidden behind a disabled parent falls back to search query.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_section("field:iroriAutoUpdateFrom", window, cx)
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    assert!(
+        !vcx.read(|cx| view.read(cx).query().is_empty()),
+        "hidden dependent field deep-link should fall back to search mode"
+    );
+    assert!(vcx.read(|cx| {
+        view.read(cx)
+            .app_form()
+            .read(cx)
+            .visible_paths()
+            .contains(&"iroriAutoUpdateFrom")
+    }));
+
+    // Sub-tab deep-links for Backup › Sync and Backup › Export.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("backup/sync", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).section()),
+        SettingsSection::Backup
+    );
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).backup_panel().read(cx).tab_for_test()),
+        BackupTab::Sync
+    );
+
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("backup/export", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).backup_panel().read(cx).tab_for_test()),
+        BackupTab::Export
+    );
+}
+
+#[gpui_kit::test]
+fn game_settings_search_surfaces_non_form_pages(cx: &mut TestAppContext) {
+    use std::sync::{Arc, Mutex};
+
+    use crate::game_view::GameSettingsView;
+    use gpui_kit::VisualTestContext;
+
+    cx.executor().allow_parking();
+    let _ = test_backend();
+    let tmp = tempfile::tempdir().expect("temp dir");
+    let rom = tmp.path().join("chrono.sfc");
+    std::fs::write(&rom, b"test-rom").expect("write rom");
+    let cfg_dir = tmp.path().join("emu-cfg");
+    let cache_dir = tmp.path().join("emu-cache");
+    std::fs::create_dir_all(&cfg_dir).expect("cfg dir");
+    std::fs::create_dir_all(&cache_dir).expect("cache dir");
+
+    let slot: Arc<Mutex<Option<Arc<irori_emulation::EmulationStore>>>> = Arc::default();
+    let slot_in = slot.clone();
+    let backend = Backend::start_for_tests(move |bus, settings| {
+        let store = irori_emulation::EmulationStore::with_dirs(bus, settings, cfg_dir, cache_dir);
+        *slot_in.lock().expect("store slot") = Some(store.clone());
+        vec![store]
+    })
+    .expect("backend");
+    let store = slot.lock().expect("store slot").clone().expect("store");
+    let id = backend
+        .runtime()
+        .block_on(store.add_game(&rom, Some("snes"), Some("Chrono Trigger".into())))
+        .expect("add rom");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while backend.game(&id).is_none() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        backend.game(&id).is_some(),
+        "backend never indexed the test ROM"
+    );
+
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        irori_ui::init(backend.clone(), cx);
+        crate::init(cx);
+    });
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, move |window, cx| {
+            cx.new(|cx| GameSettingsView::new(id, "wine".into(), window, cx))
+        })
+        .expect("open window")
+    });
+    cx.run_until_parked();
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+
+    for (query, selector) in [
+        ("winetricks", "search-game-page-tools"),
+        ("log", "search-game-page-log"),
+        ("changed", "search-game-page-changed"),
+    ] {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section("wine", window, cx));
+            let search = view.read(cx).search_input();
+            search.read(cx).focus_handle(cx).focus(window, cx);
+        })
+        .unwrap();
+        vcx.simulate_input(query);
+        vcx.run_until_parked();
+        vcx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "expected {selector} in GameSettingsView search for {query:?}"
+        );
+    }
+}
+
+#[gpui_kit::test]
+fn search_catalog_exposes_entries_and_hides_secrets_in_preview(cx: &mut TestAppContext) {
+    let (_, _) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    cx.update(|cx| {
+        let entries = crate::search_catalog::searchable_settings(cx);
+        assert!(entries.len() > 20);
+        assert!(entries.iter().any(|e| e.path == "checkUpdatesInterval"));
+
+        let subtabs = crate::search_catalog::searchable_subtabs();
+        assert!(subtabs.iter().any(|s| s.route_id == "backup/export"));
+        assert!(subtabs.iter().any(|s| s.route_id == "backup/sync"));
+
+        assert!(
+            crate::search_catalog::current_value_preview("autoUpdateGames", cx).is_some(),
+            "toggles should format On/Off preview"
+        );
+        assert_eq!(
+            crate::search_catalog::current_value_preview("steamGridDbApiKey", cx),
+            None,
+            "secret fields must never expose their value"
+        );
+    });
+}
