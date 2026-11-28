@@ -2313,16 +2313,13 @@ fn filters_more_section_collapses_by_default_and_auto_expands_when_active(cx: &m
         assert!(vcx.debug_bounds("library-filters-more-body").is_none());
     }
 
-    // Setting a secondary filter with a very long Developer name auto-expands
-    // More filters and truncates the chip cleanly inside the popover width.
-    const LONG_DEV: &str =
-        "Super Extremely Long Independent Game Development Studio International Entertainment Corp";
-    const LONG_DEV_SELECTOR: &str = "developer-super extremely long independent game development studio international entertainment corp";
+    // Setting a secondary filter (Released) auto-expands More filters, showing
+    // Released and Hidden games while keeping removed sections absent.
     cx.update(|cx| {
         model.update(cx, |m, cx| {
             m.update(
                 |f| {
-                    f.developers.insert(LONG_DEV.into());
+                    f.released = crate::filter::ReleaseWindow::ThisYear;
                 },
                 cx,
             );
@@ -2331,27 +2328,23 @@ fn filters_more_section_collapses_by_default_and_auto_expands_when_active(cx: &m
     draw(cx);
     {
         let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
-        let panel_bounds = vcx
-            .debug_bounds("library-filters-panel")
-            .expect("filters panel rendered");
         assert!(
             vcx.debug_bounds("library-filters-more-body").is_some(),
             "active secondary filter must auto-expand More filters"
         );
-        let chip_bounds = vcx
-            .debug_bounds(LONG_DEV_SELECTOR)
-            .expect("long developer chip rendered");
-        assert!(
-            chip_bounds.right() <= panel_bounds.right(),
-            "long developer chip must not overflow popover: chip={chip_bounds:?} panel={panel_bounds:?}"
-        );
+        assert!(vcx.debug_bounds("released-1").is_some());
+        assert!(vcx.debug_bounds("hidden-0").is_some());
+        // Removed sections must not appear in the Filters popover.
+        assert!(vcx.debug_bounds("game-mode-coop").is_none());
+        assert!(vcx.debug_bounds("controller-Full").is_none());
+        assert!(vcx.debug_bounds("age-0").is_none());
     }
 
     // Unchecking the last secondary filter keeps More filters open so it does
     // not slam shut under the user's cursor while editing.
     cx.update(|cx| {
         model.update(cx, |m, cx| {
-            m.update(|f| f.developers.clear(), cx);
+            m.update(|f| f.released = crate::filter::ReleaseWindow::Any, cx);
         });
     });
     draw(cx);
@@ -2375,12 +2368,25 @@ fn filters_more_section_collapses_by_default_and_auto_expands_when_active(cx: &m
         );
     }
 
-    // Tags is a primary filter now, so activating it must NOT expand More filters.
+    // A very long Steam tag truncates cleanly inside the popover width, and
+    // primary or removed facets must NOT expand More filters.
+    const LONG_TAG: &str =
+        "Super Extremely Long Independent Action Adventure Steam Store Tag International Edition";
+    const LONG_TAG_SELECTOR: &str =
+        "tag-superextremelylongindependentactionadventuresteamstoretaginternationaledition";
+    assert_eq!(
+        format!("tag-{}", irori_services::search::tag_key(LONG_TAG)),
+        LONG_TAG_SELECTOR
+    );
     cx.update(|cx| {
         model.update(cx, |m, cx| {
             m.update(
                 |f| {
-                    f.tags.insert("Roguelike".into());
+                    f.tags.insert(LONG_TAG.into());
+                    f.favourites_only = true;
+                    f.offline_only = true;
+                    f.developers.insert("Valve".into());
+                    f.publishers.insert("Devolver".into());
                 },
                 cx,
             );
@@ -2389,19 +2395,29 @@ fn filters_more_section_collapses_by_default_and_auto_expands_when_active(cx: &m
     draw(cx);
     {
         let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let panel_bounds = vcx
+            .debug_bounds("library-filters-panel")
+            .expect("filters panel rendered");
+        let chip_bounds = vcx
+            .debug_bounds(LONG_TAG_SELECTOR)
+            .expect("long tag chip rendered");
+        assert!(
+            chip_bounds.right() <= panel_bounds.right(),
+            "long tag chip must not overflow popover: chip={chip_bounds:?} panel={panel_bounds:?}"
+        );
         assert!(
             vcx.debug_bounds("library-filters-more-body").is_none(),
-            "primary Tags filter must leave More filters collapsed"
+            "primary and removed facets must leave More filters collapsed"
         );
     }
 
-    // Activating a new secondary filter (Show only: Offline) auto-expands
+    // Activating a new secondary filter (Hidden games: Show) auto-expands
     // More filters again even after a manual collapse.
     cx.update(|cx| {
         model.update(cx, |m, cx| {
             m.update(
                 |f| {
-                    f.offline_only = true;
+                    f.hidden = crate::filter::HiddenMode::Show;
                 },
                 cx,
             );

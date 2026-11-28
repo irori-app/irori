@@ -336,43 +336,6 @@ pub fn company_key(company: &str) -> String {
     company.trim().to_lowercase()
 }
 
-/// Developers or publishers the Filters popover offers: the commonest in
-/// the library (a big library names hundreds). Picked ones stay offered.
-pub const SHOWN_COMPANIES: usize = 30;
-
-/// Pick `name` in `set`, or unpick every spelling of `key` (as `fold`
-/// compares names) when one is picked.
-pub fn toggle_named(set: &mut BTreeSet<String>, key: &str, name: String, fold: fn(&str) -> String) {
-    let before = set.len();
-    set.retain(|n| fold(n) != key);
-    if set.len() == before {
-        set.insert(name);
-    }
-}
-
-/// The [`SHOWN_COMPANIES`] commonest developers or publishers among the
-/// library's games, as (key, the name it is shown with: the library's first
-/// spelling), by name.
-pub fn present_companies(library: &LibrarySnapshot, company: Company) -> Vec<(String, String)> {
-    let mut counts: HashMap<String, (usize, String)> = HashMap::new();
-    for name in library.games.iter().filter_map(|g| company.of(g)) {
-        counts
-            .entry(company_key(name))
-            .or_insert_with(|| (0, name.to_owned()))
-            .0 += 1;
-    }
-    let mut common: Vec<(String, usize, String)> = counts
-        .into_iter()
-        .map(|(k, (n, name))| (k, n, name))
-        .collect();
-    common.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    common.truncate(SHOWN_COMPANIES);
-    let mut shown: Vec<(String, String)> =
-        common.into_iter().map(|(k, _, name)| (k, name)).collect();
-    shown.sort_by_cached_key(|(key, name)| (name.to_lowercase(), key.clone()));
-    shown
-}
-
 /// The first spelling of each genre key among `games`.
 fn genre_names(games: &[Arc<GameInfo>]) -> std::collections::HashMap<String, String> {
     let mut names = std::collections::HashMap::new();
@@ -1534,12 +1497,6 @@ pub(crate) mod tests {
         ]);
         let user = Arc::new(UserData::default());
         let none = Arc::new(HashSet::new());
-        // One developer spelled two ways is offered once, as first seen.
-        let offered: Vec<String> = present_companies(&library, Company::Developer)
-            .into_iter()
-            .map(|(_, n)| n)
-            .collect();
-        assert_eq!(offered, ["Supergiant Games", "Valve"]);
         let f = ViewFilter {
             developers: ["valve".to_string()].into(),
             ..Default::default()
@@ -1561,12 +1518,6 @@ pub(crate) mod tests {
         let mut reset = f.clone();
         reset.reset_filters();
         assert!(reset.developers.is_empty() && reset.publishers.is_empty());
-        // Picking a spelling again unpicks every spelling of it.
-        let mut picked = BTreeSet::from(["VALVE".to_string()]);
-        toggle_named(&mut picked, "valve", "Valve".into(), company_key);
-        assert!(picked.is_empty());
-        toggle_named(&mut picked, "valve", "Valve".into(), company_key);
-        assert_eq!(picked, BTreeSet::from(["Valve".to_string()]));
         // Views saved before these facets read as before.
         let old: ViewFilter = serde_json::from_str(r#"{"genres":["Action"]}"#).unwrap();
         assert!(old.developers.is_empty() && old.unknown.is_empty());

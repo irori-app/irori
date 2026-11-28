@@ -21,16 +21,13 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, Subscription, Task, WeakEntity, Window, div,
     rems, transparent_black,
 };
-use irori_core::{GameMode, InstallPlatform, Runner};
+use irori_core::{InstallPlatform, Runner};
 use irori_services::{EffectiveStatus, StoreFilter};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::style::{KeyboardFocusable as _, TEXT_CONTRAST, legible};
 use irori_ui::{models, play_status};
 
-use crate::filter::{
-    self, AccountFilter, CategoryFilter, Company, HiddenMode, InstallFilter, ReleaseWindow,
-    ViewFilter,
-};
+use crate::filter::{self, AccountFilter, HiddenMode, InstallFilter, ReleaseWindow, ViewFilter};
 use crate::value_search::{self, Section, ValueCache};
 
 /// Owner of the library's [`ViewFilter`]. Persists every change except the
@@ -136,9 +133,6 @@ pub struct FiltersPanel {
     genres: crate::filter::PerRevision<Vec<(String, String)>>,
     /// The commonest store tags, as (key, name).
     tags: crate::filter::PerRevision<Vec<(String, String)>>,
-    /// The commonest developers and publishers, as (key, name).
-    developers: crate::filter::PerRevision<Vec<(String, String)>>,
-    publishers: crate::filter::PerRevision<Vec<(String, String)>>,
     /// Whether the library holds any browser / web-app games.
     has_browser_games: crate::filter::PerRevision<bool>,
     /// Bottom edge of the Filters trigger button in window coordinates,
@@ -200,8 +194,6 @@ impl FiltersPanel {
             systems: Default::default(),
             genres: Default::default(),
             tags: Default::default(),
-            developers: Default::default(),
-            publishers: Default::default(),
             has_browser_games: Default::default(),
             anchor_bottom: Rc::new(Cell::new(None)),
             search: None,
@@ -281,14 +273,10 @@ impl FiltersPanel {
 /// The popover section a found value belongs to.
 fn section_label(section: Section) -> SharedString {
     match section {
-        Section::Category => t("library.filters.section.categories"),
         Section::System => t("library.filters.section.system"),
         Section::Status => t("library.filters.section.play_status"),
-        Section::Mode => irori_ui::game_mode::title(),
         Section::Genre => t("library.filters.section.genre"),
         Section::Tag => t("library.filters.section.steam_tags"),
-        Section::Developer => t("library.filters.section.developer"),
-        Section::Publisher => t("library.filters.section.publisher"),
     }
 }
 
@@ -302,32 +290,22 @@ impl FiltersPanel {
         max_h: Pixels,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let (snapshot, user, index) = {
+        let (snapshot, user) = {
             let lib = models(cx).library.read(cx);
-            (
-                lib.snapshot.clone(),
-                lib.user.clone(),
-                lib.categories.clone(),
-            )
+            (lib.snapshot.clone(), lib.user.clone())
         };
         let all = self
             .values
-            .get(&snapshot, &user, &index, irori_ui::i18n::language(), || {
-                let categories: Vec<_> = irori_ui::categories::entries(&user, &index)
-                    .into_iter()
-                    .map(|e| (e.category, e.name, e.count))
-                    .collect();
+            .get(&snapshot, &user, irori_ui::i18n::language(), || {
                 let system = |id: &str| {
                     irori_engines::systems::get(id).map_or(id.to_owned(), |s| s.short.clone())
                 };
                 let status = |s: EffectiveStatus| play_status::label(s).to_string();
-                let mode = |m: GameMode| irori_ui::game_mode::label(m).to_string();
                 let labels = value_search::Labels {
                     system: &system,
                     status: &status,
-                    mode: &mode,
                 };
-                value_search::candidates(&snapshot, &user, &categories, &labels)
+                value_search::candidates(&snapshot, &user, &labels)
             });
         let hits = value_search::find(&all, query);
         let muted = cx.theme().muted_foreground;
@@ -406,132 +384,6 @@ impl FiltersPanel {
     }
 }
 
-impl FiltersPanel {
-    /// Category checkboxes, both kinds (smart ones marked): games in any
-    /// checked category are shown. Each category's "leave out" button
-    /// hides its games instead, whatever else picks them.
-    fn render_categories(
-        &self,
-        f: &ViewFilter,
-        categories: &[irori_ui::categories::CategoryEntry],
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let muted = cx.theme().muted_foreground;
-        let mut boxes: Vec<AnyElement> = Vec::with_capacity(categories.len() + 1);
-        if !categories.is_empty() {
-            let entry = CategoryFilter::Uncategorized;
-            boxes.push(
-                Checkbox::new("filter-category-none")
-                    .label(entry.label())
-                    .checked(f.categories.contains(&entry))
-                    .on_change(cx.listener(move |this, _: &bool, _, cx| {
-                        let entry = entry.clone();
-                        this.set(move |f| f.toggle_category(entry), cx)
-                    }))
-                    .into_any_element(),
-            );
-        }
-        for (ix, entry) in categories.iter().enumerate() {
-            let category = entry.category.clone();
-            let excluded = f.excludes_category(&category);
-            let check = Checkbox::new(SharedString::from(format!("filter-category-{ix}")))
-                .label(entry.name.clone())
-                .checked(f.shows_category(&category))
-                .on_change(cx.listener(move |this, _: &bool, _, cx| {
-                    let category = category.clone();
-                    this.set(move |f| f.toggle(&category), cx)
-                }));
-            let category = entry.category.clone();
-            let danger = cx.theme().danger;
-            let leave_out = Button::new(SharedString::from(format!("filter-category-out-{ix}")))
-                .xsmall()
-                .ghost()
-                .icon(IconName::Ban)
-                .when(excluded, |b| b.text_color(danger))
-                .tooltip(if excluded {
-                    t("library.filters.categories.stop_leaving_out")
-                } else {
-                    t("library.filters.categories.leave_out")
-                })
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    let category = category.clone();
-                    this.set(move |f| f.toggle_excluded(&category), cx)
-                }));
-            boxes.push(
-                h_flex()
-                    .gap_1p5()
-                    .min_w_0()
-                    .child(leave_out)
-                    .child(
-                        div()
-                            .min_w_0()
-                            .when(excluded, |el| el.line_through())
-                            .child(check),
-                    )
-                    .when(entry.is_smart(), |el| {
-                        el.child(
-                            Icon::new(irori_ui::categories::icon_for(
-                                &entry.category,
-                                entry.icon.as_deref(),
-                            ))
-                            .xsmall()
-                            .text_color(muted),
-                        )
-                    })
-                    .into_any_element(),
-            );
-        }
-        v_flex()
-            .gap_2()
-            .child(
-                h_flex()
-                    .justify_between()
-                    .child(section(t("library.filters.section.categories"), cx))
-                    .child(
-                        h_flex()
-                            .gap_1()
-                            .when(f.has_categories() || f.has_excluded_categories(), |el| {
-                                el.child(
-                                    Button::new("filter-categories-clear")
-                                        .xsmall()
-                                        .ghost()
-                                        .label(t("library.filters.categories.show_all"))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.set(|f| f.clear_categories(), cx)
-                                        })),
-                                )
-                            })
-                            .child(
-                                Button::new("filter-categories-manage")
-                                    .xsmall()
-                                    .ghost()
-                                    .icon(IconName::Settings2)
-                                    .label(t("library.filters.categories.manage"))
-                                    .on_click(|_, window, cx| {
-                                        crate::open_categories_dialog(None, window, cx)
-                                    }),
-                            ),
-                    ),
-            )
-            .when(categories.is_empty(), |el| {
-                el.child(
-                    div()
-                        .text_xs()
-                        .text_color(muted)
-                        .child(t("library.filters.categories.empty")),
-                )
-            })
-            .child(
-                v_flex()
-                    .id("filter-categories")
-                    .gap_2()
-                    .max_h_40()
-                    .overflow_y_scroll()
-                    .children(boxes),
-            )
-    }
-}
-
 fn section(title: SharedString, cx: &App) -> impl IntoElement {
     div()
         .text_xs()
@@ -547,7 +399,7 @@ fn active_accent(cx: &App) -> Hsla {
 }
 
 /// Accent-highlighted toggle chip that caps its width to the popover so long
-/// metadata labels (e.g. developer and publisher names) truncate cleanly.
+/// metadata labels (e.g. genre and Steam tag names) truncate cleanly.
 fn filter_chip(
     id: impl Into<SharedString>,
     icon: Option<IconName>,
@@ -701,19 +553,8 @@ pub(crate) fn library_has_browser_games(library: &irori_services::LibrarySnapsho
 /// Number of active filters housed inside the collapsible "More filters" group.
 pub(crate) fn more_filters_active(f: &ViewFilter) -> usize {
     [
-        f.favourites_only,
-        f.updates_only,
-        f.offline_only,
-        f.hide_unavailable,
-        f.hide_third_party,
-        f.has_categories() || f.has_excluded_categories(),
-        !f.modes.is_empty(),
-        f.controller.is_some(),
         f.released != ReleaseWindow::Any,
-        f.max_age.is_some(),
         f.hidden != HiddenMode::Hide,
-        !f.developers.is_empty(),
-        !f.publishers.is_empty(),
     ]
     .into_iter()
     .filter(|b| *b)
@@ -954,87 +795,6 @@ impl FiltersPanel {
             ))
             .into_any_element()
     }
-
-    /// Controller support: any or full; a second click shows every game.
-    fn render_controller(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
-        use irori_core::ControllerSupport;
-        let model = self.model.clone();
-        v_flex()
-            .w_full()
-            .min_w_0()
-            .gap_2()
-            .child(section(t("library.filters.section.controller"), cx))
-            .child(
-                h_flex().w_full().min_w_0().flex_wrap().gap_1p5().children(
-                    [ControllerSupport::Partial, ControllerSupport::Full]
-                        .into_iter()
-                        .map(|level| {
-                            let model = model.clone();
-                            filter_chip(
-                                SharedString::from(format!("controller-{level:?}")),
-                                Some(IconName::Gamepad2),
-                                crate::filter::controller_label(level),
-                                f.controller == Some(level),
-                                move |_, cx| {
-                                    model.update(cx, |m, cx| {
-                                        m.update(
-                                            move |f| {
-                                                f.controller =
-                                                    (f.controller != Some(level)).then_some(level)
-                                            },
-                                            cx,
-                                        )
-                                    });
-                                },
-                                cx,
-                            )
-                        }),
-                ),
-            )
-            .into_any_element()
-    }
-
-    /// Game modes: games with any of the chosen ones are shown.
-    fn render_modes(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
-        let muted = cx.theme().muted_foreground;
-        let model = self.model.clone();
-        v_flex()
-            .w_full()
-            .min_w_0()
-            .gap_2()
-            .child(section(irori_ui::game_mode::title(), cx))
-            .child(h_flex().w_full().min_w_0().flex_wrap().gap_1p5().children(
-                GameMode::ALL.into_iter().map(|mode| {
-                    let model = model.clone();
-                    filter_chip(
-                        SharedString::from(format!("game-mode-{}", mode.id())),
-                        Some(irori_ui::game_mode::icon(mode)),
-                        irori_ui::game_mode::label(mode),
-                        f.modes.contains(&mode),
-                        move |_, cx| {
-                            model.update(cx, |m, cx| {
-                                m.update(
-                                    move |f| {
-                                        if !f.modes.remove(&mode) {
-                                            f.modes.insert(mode);
-                                        }
-                                    },
-                                    cx,
-                                )
-                            });
-                        },
-                        cx,
-                    )
-                }),
-            ))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(t("library.filters.modes.hint")),
-            )
-            .into_any_element()
-    }
 }
 
 impl FiltersPanel {
@@ -1166,86 +926,6 @@ impl FiltersPanel {
         )
     }
 
-    /// One chip per common developer or publisher, and any picked ones;
-    /// several may be picked. `None` when no store names one.
-    fn render_companies(
-        &mut self,
-        f: &ViewFilter,
-        company: Company,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let snapshot = models(cx).library.read(cx).snapshot.clone();
-        let (cache, picked, title, id) = match company {
-            Company::Developer => (
-                &mut self.developers,
-                &f.developers,
-                "library.filters.section.developer",
-                "developer",
-            ),
-            Company::Publisher => (
-                &mut self.publishers,
-                &f.publishers,
-                "library.filters.section.publisher",
-                "publisher",
-            ),
-        };
-        let mut offered = cache
-            .get(&snapshot, |l| filter::present_companies(l, company))
-            .clone();
-        for name in picked {
-            let key = filter::company_key(name);
-            if !offered.iter().any(|(k, _)| *k == key) {
-                offered.push((key, name.clone()));
-            }
-        }
-        if offered.is_empty() {
-            return None;
-        }
-        let picked: std::collections::HashSet<String> =
-            picked.iter().map(|c| filter::company_key(c)).collect();
-        let model = self.model.clone();
-        Some(
-            v_flex()
-                .w_full()
-                .min_w_0()
-                .gap_2()
-                .child(section(t(title), cx))
-                .child(h_flex().w_full().min_w_0().flex_wrap().gap_1p5().children(
-                    offered.into_iter().map(|(key, name)| {
-                        let model = model.clone();
-                        filter_chip(
-                            SharedString::from(format!("{id}-{key}")),
-                            None,
-                            name.clone(),
-                            picked.contains(&key),
-                            move |_, cx| {
-                                let (key, name) = (key.clone(), name.clone());
-                                model.update(cx, |m, cx| {
-                                    m.update(
-                                        move |f| {
-                                            let set = match company {
-                                                Company::Developer => &mut f.developers,
-                                                Company::Publisher => &mut f.publishers,
-                                            };
-                                            filter::toggle_named(
-                                                set,
-                                                &key,
-                                                name,
-                                                filter::company_key,
-                                            )
-                                        },
-                                        cx,
-                                    )
-                                });
-                            },
-                            cx,
-                        )
-                    }),
-                ))
-                .into_any_element(),
-        )
-    }
-
     /// Hide / show / only hidden games, behind the PIN when one is set, and
     /// the PIN itself: set it, lock again, or change it.
     fn render_hidden(
@@ -1328,56 +1008,6 @@ impl FiltersPanel {
             ))
             .into_any_element()
     }
-
-    /// The age limit: "Any" or the youngest age every rating must allow,
-    /// and, with a limit, whether games no board rated are shown.
-    fn render_age(&self, f: &ViewFilter, cx: &mut Context<Self>) -> AnyElement {
-        let muted = cx.theme().muted_foreground;
-        let limits = std::iter::once(None).chain(filter::AGE_LIMITS.into_iter().map(Some));
-        let model = self.model.clone();
-        v_flex()
-            .w_full()
-            .min_w_0()
-            .gap_2()
-            .child(section(t("library.filters.section.age"), cx))
-            .child(segmented_filter_bar(
-                limits.enumerate().map(|(ix, limit)| {
-                    let model = model.clone();
-                    let label: SharedString = match limit {
-                        None => t("library.filters.age.any"),
-                        Some(age) => age.to_string().into(),
-                    };
-                    FilterSegment::new(
-                        SharedString::from(format!("age-{ix}")),
-                        None,
-                        label,
-                        f.max_age == limit,
-                        move |_, cx| {
-                            model.update(cx, |m, cx| m.update(move |f| f.max_age = limit, cx));
-                        },
-                    )
-                }),
-                cx,
-            ))
-            .when(f.max_age.is_some(), |el| {
-                el.child(
-                    Checkbox::new("filter-age-unrated")
-                        .label(t("library.filters.age.include_unrated"))
-                        .checked(f.include_unrated)
-                        .on_change(cx.listener(|this, v: &bool, _, cx| {
-                            let v = *v;
-                            this.set(move |f| f.include_unrated = v, cx)
-                        })),
-                )
-            })
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(t("library.filters.age.hint")),
-            )
-            .into_any_element()
-    }
 }
 
 impl Render for FiltersPanel {
@@ -1389,16 +1019,11 @@ impl Render for FiltersPanel {
         let systems = self.render_systems(&f, cx);
         let genres = self.render_genres(&f, cx);
         let tags = self.render_tags(&f, cx);
-        let developers = self.render_companies(&f, Company::Developer, cx);
-        let publishers = self.render_companies(&f, Company::Publisher, cx);
-        let (categories, has_browser) = {
-            let lib = models(cx).library.read(cx);
-            let cats = irori_ui::categories::entries(&lib.user, &lib.categories);
-            let snapshot = lib.snapshot.clone();
-            let has_browser = *self
+        let has_browser = {
+            let snapshot = models(cx).library.read(cx).snapshot.clone();
+            *self
                 .has_browser_games
-                .get(&snapshot, library_has_browser_games);
-            (cats, has_browser)
+                .get(&snapshot, library_has_browser_games)
         };
         let theme = cx.theme();
         let muted = theme.muted_foreground;
@@ -1493,67 +1118,6 @@ impl Render for FiltersPanel {
                         .w_full()
                         .min_w_0()
                         .gap_2()
-                        .child(section(t("library.filters.section.show_only"), cx))
-                        .child(
-                            Checkbox::new("filter-favourites")
-                                .label(t("library.filters.favourites"))
-                                .checked(f.favourites_only)
-                                .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                    let v = *v;
-                                    this.set(move |f| f.favourites_only = v, cx)
-                                })),
-                        )
-                        .child(
-                            Checkbox::new("filter-updates")
-                                .label(t("library.filters.updates"))
-                                .checked(f.updates_only)
-                                .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                    let v = *v;
-                                    this.set(move |f| f.updates_only = v, cx)
-                                })),
-                        )
-                        .child(
-                            Checkbox::new("filter-offline")
-                                .label(t("library.filters.offline"))
-                                .checked(f.offline_only)
-                                .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                    let v = *v;
-                                    this.set(move |f| f.offline_only = v, cx)
-                                })),
-                        )
-                        .child(
-                            Checkbox::new("filter-unavailable")
-                                .label(t("library.filters.hide_missing"))
-                                .checked(f.hide_unavailable)
-                                .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                    let v = *v;
-                                    this.set(move |f| f.hide_unavailable = v, cx)
-                                })),
-                        )
-                        .child(
-                            Checkbox::new("filter-third-party")
-                                .label(t("library.filters.hide_third_party"))
-                                .checked(f.hide_third_party)
-                                .on_change(cx.listener(|this, v: &bool, _, cx| {
-                                    let v = *v;
-                                    this.set(move |f| f.hide_third_party = v, cx)
-                                })),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted)
-                                .child(t("library.filters.third_party_hint")),
-                        ),
-                )
-                .child(self.render_categories(&f, &categories, cx))
-                .child(self.render_modes(&f, cx))
-                .child(self.render_controller(&f, cx))
-                .child(
-                    v_flex()
-                        .w_full()
-                        .min_w_0()
-                        .gap_2()
                         .child(section(t("library.filters.section.released"), cx))
                         .child(segmented_filter_bar(
                             released.iter().enumerate().map(|(ix, &w)| {
@@ -1571,10 +1135,7 @@ impl Render for FiltersPanel {
                             cx,
                         )),
                 )
-                .child(self.render_age(&f, cx))
                 .child(self.render_hidden(&f, hidden, cx))
-                .when_some(developers, |el, d| el.child(d))
-                .when_some(publishers, |el, p| el.child(p))
         });
 
         let install_model = model.clone();
@@ -1758,26 +1319,30 @@ mod tests {
     fn more_filters_counts_only_secondary_facets() {
         let mut f = ViewFilter::default();
         assert_eq!(more_filters_active(&f), 0);
-        // Primary facets (including Tags, Genres, Install) do not trigger More filters.
+        // Primary facets and facets not housed in More filters do not trigger it.
         f.install = InstallFilter::Installed;
         f.genres.insert("RPG".into());
         f.tags.insert("Roguelike".into());
-        assert_eq!(more_filters_active(&f), 0);
-
-        // Secondary facets (including Show only and Categories) each count once.
         f.favourites_only = true;
-        f.categories.insert(CategoryFilter::Named("Backlog".into()));
+        f.updates_only = true;
+        f.offline_only = true;
+        f.hide_unavailable = true;
+        f.hide_third_party = true;
+        f.categories
+            .insert(crate::filter::CategoryFilter::Named("Backlog".into()));
         f.developers.insert("Supergiant Games".into());
-        f.released = ReleaseWindow::ThisYear;
-        assert_eq!(more_filters_active(&f), 4);
-
         f.publishers.insert("Devolver".into());
         f.max_age = Some(12);
-        f.hidden = HiddenMode::Show;
-        f.modes.insert(GameMode::Coop);
+        f.modes.insert(irori_core::GameMode::Coop);
         f.controller = Some(irori_core::ControllerSupport::Full);
-        f.offline_only = true;
-        assert_eq!(more_filters_active(&f), 10);
+        assert_eq!(more_filters_active(&f), 0);
+
+        // Secondary facets (Released and Hidden games) each count once.
+        f.released = ReleaseWindow::ThisYear;
+        assert_eq!(more_filters_active(&f), 1);
+
+        f.hidden = HiddenMode::Show;
+        assert_eq!(more_filters_active(&f), 2);
     }
 
     #[test]
