@@ -1342,3 +1342,46 @@ fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext)
         );
     }
 }
+
+#[gpui_kit::test]
+fn logs_hub_hosts_diagnostics_and_is_searchable(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    // Diagnostics fields moved out of Advanced into the Logs header.
+    assert!(crate::registry::find("disableLogs").is_none());
+    assert!(crate::registry::find("action.open-logs").is_none());
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("logs".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).section()),
+        SettingsSection::Logs
+    );
+
+    for query in ["disableLogs", "logs folder", "write diagnostic logs"] {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_section("general", window, cx));
+            let search = view.read(cx).search_input();
+            search.read(cx).focus_handle(cx).focus(window, cx);
+        })
+        .unwrap();
+        vcx.simulate_input(query);
+        vcx.run_until_parked();
+        vcx.update_window(handle, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert!(
+            vcx.debug_bounds("search-page-logs").is_some(),
+            "expected Logs page search hit for query {query:?}"
+        );
+    }
+}

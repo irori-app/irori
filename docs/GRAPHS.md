@@ -104,6 +104,7 @@ flowchart TD
     Core --> Ui
     Runtime --> Ui
     Engines --> Ui
+    Extras --> Ui
 
     Ui -- "models + irori_ui::hooks" --> FeatLib
     Ui -- "models + irori_ui::hooks" --> FeatGame

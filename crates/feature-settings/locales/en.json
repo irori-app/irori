@@ -2399,5 +2399,19 @@
   "settings.page.accounts": "Accounts",
   "settings.page.wine_manager": "Wine & Proton",
   "settings.page.wine_manager_macos": "Wine manager",
-  "settings.page.emulators": "Emulators"
+  "settings.page.emulators": "Emulators",
+  "settings.logs.badge_err": "{count} err",
+  "settings.logs.badge_warn": "{count} warn",
+  "settings.logs.group.app": "Irori app",
+  "settings.logs.group.crashes": "Crash reports",
+  "settings.logs.group.games": "Recent game logs",
+  "settings.logs.logs_folder": "Logs folder",
+  "settings.logs.logs_folder_tip": "Open the folder where Irori saves app, game, and crash logs",
+  "settings.logs.open_in_editor": "Open in editor",
+  "settings.logs.source.app_current": "Current session",
+  "settings.logs.source.app_previous": "Previous session",
+  "settings.logs.source.game_install": "Install log",
+  "settings.logs.source.game_launch": "Launch log",
+  "settings.logs.write_diagnostic": "Write diagnostic logs",
+  "settings.logs.write_diagnostic_tip": "Save app and game diagnostic logs to disk. Leave enabled when troubleshooting issues or reporting bugs."
 }

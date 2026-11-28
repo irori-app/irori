@@ -73,7 +73,7 @@ pub use crash_report::open_crash_report_sheet;
 pub use form::{FormTarget, GameSettingsForm, SettingsForm};
 pub use game_view::{GameSection, GameSettingsView};
 pub use i18n::CATALOGS;
-pub use logs::LogViewer;
+pub use logs::{LogViewer, LogsHubView};
 pub use setup_card::setup_card;
 pub use stores::{install_emulation_store, install_store_handles};
 pub use view::{SettingsSection, SettingsView};
