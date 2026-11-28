@@ -3116,6 +3116,98 @@ fn collection_dialog_scrolls_all_tags_and_supports_icon_and_manual_games(cx: &mu
         );
     }
 
+    // Open the extended icon picker popover and verify it scrolls all the way
+    // to the final row without clipping and allows picking the last icon.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let more_btn = vcx
+            .debug_bounds("collection-icon-more")
+            .expect("more icons trigger must render");
+        vcx.simulate_click(more_btn.center(), Default::default());
+        vcx.run_until_parked();
+        vcx.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+
+        let viewport = vcx
+            .debug_bounds("collection-icon-popover-viewport")
+            .expect("icon popover viewport must render");
+        assert!(
+            viewport.size.height <= px(225.),
+            "icon popover viewport must stay bounded (~13.5rem), got {:?}",
+            viewport.size.height
+        );
+
+        let first_icon = vcx
+            .debug_bounds("collection-more-icon-flame")
+            .expect("first icon must render");
+        assert!(
+            first_icon.top() >= viewport.top() && first_icon.bottom() <= viewport.bottom(),
+            "first icon must be visible at top of viewport: icon={first_icon:?} viewport={viewport:?}"
+        );
+
+        let last_icon_before = vcx
+            .debug_bounds("collection-more-icon-flag")
+            .expect("last icon (flag) must be laid out in icon popover");
+        let last_rel_before = last_icon_before.origin.y - viewport.origin.y;
+        assert!(
+            last_icon_before.bottom() > viewport.bottom(),
+            "64-icon grid must overflow the 13.5rem viewport before scrolling: last={last_icon_before:?} viewport={viewport:?}"
+        );
+
+        vcx.simulate_event(ScrollWheelEvent {
+            position: viewport.center(),
+            delta: ScrollDelta::Pixels(point(px(0.), px(-240.))),
+            ..Default::default()
+        });
+        vcx.run_until_parked();
+        vcx.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+
+        let viewport_after = vcx
+            .debug_bounds("collection-icon-popover-viewport")
+            .expect("icon popover viewport must remain rendered after scrolling");
+        let last_icon_after = vcx
+            .debug_bounds("collection-more-icon-flag")
+            .expect("last icon (flag) must remain laid out after scrolling");
+        let last_rel_after = last_icon_after.origin.y - viewport_after.origin.y;
+        assert!(
+            last_rel_after < last_rel_before,
+            "icon popover grid must scroll vertically (before={last_rel_before:?}, after={last_rel_after:?})"
+        );
+        assert!(
+            last_icon_after.top() >= viewport_after.top()
+                && last_icon_after.bottom() <= viewport_after.bottom(),
+            "last icon must scroll completely inside viewport without clipping: last={last_icon_after:?} viewport={viewport_after:?}"
+        );
+
+        let row7_icon = vcx
+            .debug_bounds("collection-more-icon-medal")
+            .expect("row 7 icon (medal) must render after scrolling");
+        assert!(
+            row7_icon.top() >= viewport_after.top()
+                && row7_icon.bottom() <= viewport_after.bottom(),
+            "row 7 icon must be fully visible after scrolling: medal={row7_icon:?} viewport={viewport_after:?}"
+        );
+
+        // Pick the last icon once scrolled into view; popover closes and quick row surfaces it.
+        vcx.simulate_click(last_icon_after.center(), Default::default());
+        vcx.run_until_parked();
+        vcx.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+
+        assert!(
+            vcx.debug_bounds("collection-icon-popover-body").is_none(),
+            "picking an icon from the popover must close it"
+        );
+        assert!(
+            vcx.debug_bounds("collection-icon-flag").is_some(),
+            "picked extended icon (flag) must appear in the quick icon row"
+        );
+    }
+
     cx.update_window(window, |_, window, cx| window.close_dialog(cx))
         .unwrap();
     settle(cx);
