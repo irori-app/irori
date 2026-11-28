@@ -1343,6 +1343,58 @@ fn emulators_page_opens_retroarch_cores_dialog(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn emulators_page_features_retroarch_and_avoids_false_bios_badge(cx: &mut TestAppContext) {
+    setup(cx);
+    let options = cx.update(|cx| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(1400.), px(900.)),
+            cx,
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| crate::EmulatorsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    for _ in 0..200 {
+        vcx.run_until_parked();
+        if vcx.debug_bounds("engine-retroarch").is_some()
+            && vcx.debug_bounds("engine-duckstation").is_some()
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    vcx.update(|window, cx| {
+        let _ = window.draw(cx);
+    });
+    vcx.run_until_parked();
+
+    let retro = vcx
+        .debug_bounds("engine-retroarch")
+        .expect("featured RetroArch card rendered");
+    let duck = vcx
+        .debug_bounds("engine-duckstation")
+        .expect("standalone DuckStation card rendered");
+    assert!(
+        retro.size.width > duck.size.width * 1.5,
+        "RetroArch spans full width above the standalone grid: retro={retro:?}, duck={duck:?}"
+    );
+    assert!(
+        duck.top() >= retro.bottom(),
+        "standalone grid starts below featured RetroArch card"
+    );
+    assert!(
+        vcx.debug_bounds("systems-attention-badge").is_none(),
+        "no false Systems warning badge when the library has zero emulated games"
+    );
+}
+
+#[gpui_kit::test]
 fn downloads_view_draws_irori_banner_states_and_clears_restarting_on_failure(
     cx: &mut TestAppContext,
 ) {
