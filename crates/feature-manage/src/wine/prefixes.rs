@@ -26,6 +26,7 @@ use irori_ui::components::EmptyState;
 use irori_ui::i18n::{t, t_args};
 
 use super::WineManagerView;
+use super::ui::PAGE_MAX_WIDTH_REM;
 use crate::common::card;
 
 /// Height of one row in rem: name, path and who uses it.
@@ -107,6 +108,16 @@ pub(super) fn used_by(entry: &PrefixEntry) -> SharedString {
 }
 
 impl WineManagerView {
+    /// Total prefixes and how many are currently unused, once loaded.
+    pub(super) fn prefix_counts(&self) -> Option<(usize, usize)> {
+        match &self.prefixes {
+            Some(PrefixState::Loaded { list, .. }) => {
+                Some((list.len(), list.iter().filter(|e| e.unused()).count()))
+            }
+            _ => None,
+        }
+    }
+
     /// Recompute visible indices and virtual row sizes for the current search
     /// query and status filter.
     pub(super) fn refresh_prefix_filter(&mut self, cx: &mut Context<Self>) {
@@ -337,6 +348,8 @@ impl WineManagerView {
 
         v_flex()
             .w_full()
+            .max_w(rems(PAGE_MAX_WIDTH_REM))
+            .mx_auto()
             .flex_1()
             .min_h_0()
             .px_6()

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use gpui_kit::SharedString;
 use irori_core::{WineInstallation, WineKind};
+use irori_runtime::manager::Release;
 use irori_ui::i18n::t;
 
 /// Where a Wine or Proton build was found.
@@ -88,6 +89,32 @@ pub(crate) fn kind_label(kind: WineKind) -> &'static str {
     }
 }
 
+/// Remove installations already represented by `managed` Irori releases so a
+/// Proton build installed into Steam's `compatibilitytools.d` (or Irori's own
+/// tools folder) is not listed twice.
+pub(crate) fn exclude_managed(
+    installs: &[WineInstallation],
+    managed: &[Release],
+) -> Vec<WineInstallation> {
+    let dirs: Vec<&Path> = managed
+        .iter()
+        .filter_map(|r| r.install_dir.as_deref().filter(|d| !d.is_empty()))
+        .map(Path::new)
+        .collect();
+    let bins: Vec<String> = managed
+        .iter()
+        .filter_map(|r| r.installation().map(|w| w.bin))
+        .collect();
+    installs
+        .iter()
+        .filter(|w| {
+            let path = Path::new(&w.bin);
+            !bins.iter().any(|b| b == &w.bin) && !dirs.iter().any(|d| path.starts_with(d))
+        })
+        .cloned()
+        .collect()
+}
+
 /// Installations grouped by origin in display order; empty groups omitted.
 pub(crate) fn group(
     installs: &[WineInstallation],
@@ -110,7 +137,7 @@ pub(crate) fn group(
 }
 
 /// Newest-looking names first: compare digit runs numerically.
-fn natural_desc(a: &str, b: &str) -> std::cmp::Ordering {
+pub(crate) fn natural_desc(a: &str, b: &str) -> std::cmp::Ordering {
     natural_key(b).cmp(&natural_key(a))
 }
 
@@ -198,5 +225,29 @@ mod tests {
         assert_eq!(g[0].1[0].name, "GE-Proton9-20");
         assert_eq!(g[0].1[1].name, "GE-Proton9-9");
         assert_eq!(g[1].0, WineOrigin::System);
+    }
+
+    #[test]
+    fn excludes_managed_install_dirs_including_steam_compat_tools() {
+        let managed = vec![Release {
+            version: "GE-Proton-latest".into(),
+            kind: "GE-Proton".into(),
+            is_installed: Some(true),
+            install_dir: Some("/home/u/.steam/root/compatibilitytools.d/GE-Proton-latest".into()),
+            ..Default::default()
+        }];
+        let installs = vec![
+            w(
+                "GE-Proton-latest",
+                "/home/u/.steam/root/compatibilitytools.d/GE-Proton-latest/proton",
+            ),
+            w(
+                "Proton 9.0",
+                "/home/u/.steam/steam/steamapps/common/Proton 9.0/proton",
+            ),
+        ];
+        let remaining = exclude_managed(&installs, &managed);
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].name, "Proton 9.0");
     }
 }

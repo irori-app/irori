@@ -1239,7 +1239,7 @@ fn steam_library_dialog_keeps_cancel_button_inside_footer(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn wine_manager_fills_width_and_switches_large_tabs(cx: &mut TestAppContext) {
+fn wine_manager_uses_two_tabs_and_constrains_width(cx: &mut TestAppContext) {
     setup(cx);
     let options = cx.update(|_| WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(Bounds::new(
@@ -1257,22 +1257,63 @@ fn wine_manager_fills_width_and_switches_large_tabs(cx: &mut TestAppContext) {
     let mut vcx = VisualTestContext::from_window(handle, cx);
     vcx.run_until_parked();
 
-    let viewport = vcx.update(|window, _| window.viewport_size());
     let header = vcx
         .debug_bounds("wine-header")
         .expect("wine header is rendered");
     assert!(
-        header.size.width >= px(2300.) && header.size.width >= viewport.width - px(2.),
-        "wine manager fills width: header={:?}, viewport={:?}",
-        header.size.width,
-        viewport.width
+        header.size.width <= px(1320.),
+        "wine manager constrains width on ultrawide: header={:?}",
+        header.size.width
     );
-
-    click(&mut vcx, "wine-tab-system");
-    assert!(vcx.debug_bounds("wine-content").is_some());
+    assert!(vcx.debug_bounds("wine-controls").is_some());
+    assert!(vcx.debug_bounds("wine-installed-pane").is_some());
+    if !irori_runtime::manager::ReleaseKind::available().is_empty() {
+        assert!(vcx.debug_bounds("wine-catalog-pane").is_some());
+    }
 
     click(&mut vcx, "wine-tab-prefixes");
     assert!(vcx.debug_bounds("wine-header").is_some());
+    assert!(vcx.debug_bounds("wine-controls").is_none());
+
+    click(&mut vcx, "wine-tab-builds");
+    assert!(vcx.debug_bounds("wine-content").is_some());
+    assert!(vcx.debug_bounds("wine-installed-pane").is_some());
+}
+
+#[gpui_kit::test]
+fn wine_manager_switches_panes_on_narrow_viewport(cx: &mut TestAppContext) {
+    if irori_runtime::manager::ReleaseKind::available().is_empty() {
+        return;
+    }
+    setup(cx);
+    let options = cx.update(|_| WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+            Default::default(),
+            size(px(820.), px(900.)),
+        ))),
+        ..Default::default()
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(options, cx, |window, cx| {
+            cx.new(|cx| crate::WineManagerView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+
+    // First frame measures viewport width via canvas and triggers refresh.
+    assert!(vcx.debug_bounds("wine-pane-installed").is_some());
+    assert!(vcx.debug_bounds("wine-pane-download").is_some());
+    assert!(vcx.debug_bounds("wine-installed-pane").is_some());
+    assert!(vcx.debug_bounds("wine-catalog-pane").is_none());
+
+    click(&mut vcx, "wine-pane-download");
+    assert!(vcx.debug_bounds("wine-catalog-pane").is_some());
+    assert!(vcx.debug_bounds("wine-installed-pane").is_none());
+
+    click(&mut vcx, "wine-pane-installed");
+    assert!(vcx.debug_bounds("wine-installed-pane").is_some());
 }
 
 #[gpui_kit::test]
