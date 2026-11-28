@@ -357,6 +357,61 @@ pub fn by_id(uploads: &[Upload]) -> BTreeMap<u64, &Upload> {
     uploads.iter().map(|u| (u.id, u)).collect()
 }
 
+/// Aggregated playtime summary itch.io stores for one user and game.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GameSessionSummary {
+    pub seconds_run: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_run_at: Option<String>,
+}
+
+impl GameSessionSummary {
+    /// Whether the summary carries any recorded playtime or timestamp.
+    pub fn has_activity(&self) -> bool {
+        self.seconds_run > 0 || self.last_run_at.as_deref().is_some_and(|s| !s.is_empty())
+    }
+}
+
+/// Parameters for `POST /profile/game-sessions`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreateGameSessionRequest {
+    pub game_id: u64,
+    pub upload_id: u64,
+    pub build_id: Option<u64>,
+    pub download_key_id: Option<u64>,
+    pub seconds_run: u64,
+    /// RFC 3339 UTC timestamp when the session ended.
+    pub last_run_at: String,
+    /// `"linux"`, `"macos"`, or `"windows"`.
+    pub platform: Option<String>,
+    /// `"amd64"`, `"arm64"`, `"386"`, or `"arm"`.
+    pub architecture: Option<String>,
+}
+
+/// Deserialize an optional [`GameSessionSummary`], treating PHP's empty list
+/// `[]`, empty object `{}`, or `null` as `None`.
+pub(crate) fn lenient_summary<'de, D>(
+    deserializer: D,
+) -> Result<Option<GameSessionSummary>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Value::deserialize(deserializer)? {
+        Value::Null => Ok(None),
+        Value::Array(items) if items.is_empty() => Ok(None),
+        Value::Object(map) if map.is_empty() => Ok(None),
+        Value::Object(map) => {
+            let summary: GameSessionSummary =
+                serde_json::from_value(Value::Object(map)).map_err(D::Error::custom)?;
+            Ok(summary.has_activity().then_some(summary))
+        }
+        other => Err(D::Error::custom(format!(
+            "unexpected itch.io summary value: {other}"
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

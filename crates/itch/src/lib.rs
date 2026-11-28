@@ -19,7 +19,10 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 pub use api::{API_BASE, ApiError, Client};
-pub use model::{Build, Game, Os, OwnedKey, Platforms, Upload, User, best_upload, is_installable};
+pub use model::{
+    Build, CreateGameSessionRequest, Game, GameSessionSummary, Os, OwnedKey, Platforms, Upload,
+    User, best_upload, is_installable,
+};
 
 /// Where the user creates and views API keys.
 pub const LOGIN_URL: &str = "https://itch.io/user/settings/api-keys";
