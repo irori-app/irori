@@ -270,48 +270,63 @@ impl Render for IconPickerPopover {
                     ))
                     .into_any_element()
             } else {
+                // Keep `max_h` outside `overflow_y_scrollbar()`: `Scrollable`
+                // retains `max_size` on its inner content element, which caps
+                // content height to the viewport and disables vertical scroll.
                 v_flex()
-                    .id("collection-icon-popover-grid")
+                    .debug_selector(|| "collection-icon-popover-viewport".into())
                     .w_full()
                     .max_h(rems(13.5))
-                    .overflow_y_scrollbar()
-                    .pr_2()
                     .child(
-                        h_flex()
-                            .w_full()
-                            .flex_wrap()
-                            .gap_1()
-                            .children(matches.into_iter().map(|entry| {
-                                let slug = entry.slug;
-                                let selected = self.selected_slug == slug;
-                                let on_pick = self.on_pick.clone();
-                                div()
-                                    .id(SharedString::from(format!("collection-more-icon-{slug}")))
-                                    .debug_selector(move || format!("collection-more-icon-{slug}"))
-                                    .size(rems(1.8))
-                                    .rounded(radius)
-                                    .border_1()
-                                    .cursor_pointer()
-                                    .keyboard_focusable(cx)
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .when(selected, |el| {
-                                        el.bg(tint.opacity(0.2))
-                                            .border_color(tint)
-                                            .text_color(active_fg)
-                                    })
-                                    .when(!selected, |el| {
-                                        el.bg(idle_bg)
-                                            .border_color(border)
-                                            .text_color(muted)
-                                            .hover(move |s| s.bg(hover_bg).text_color(fg))
-                                    })
-                                    .child(Icon::new(entry.icon).small())
-                                    .on_click(move |_, window, cx| {
-                                        on_pick(slug, window, cx);
-                                    })
-                            })),
+                        v_flex().flex_1().w_full().overflow_hidden().child(
+                            div().flex_1().w_full().overflow_hidden().child(
+                                v_flex()
+                                    .id("collection-icon-popover-grid")
+                                    .debug_selector(|| "collection-icon-popover-grid".into())
+                                    .size_full()
+                                    .overflow_y_scrollbar()
+                                    .pr_3()
+                                    .child(h_flex().w_full().flex_wrap().gap_1().children(
+                                        matches.into_iter().map(|entry| {
+                                            let slug = entry.slug;
+                                            let selected = self.selected_slug == slug;
+                                            let on_pick = self.on_pick.clone();
+                                            div()
+                                                .id(SharedString::from(format!(
+                                                    "collection-more-icon-{slug}"
+                                                )))
+                                                .debug_selector(move || {
+                                                    format!("collection-more-icon-{slug}")
+                                                })
+                                                .size(rems(1.8))
+                                                .rounded(radius)
+                                                .border_1()
+                                                .cursor_pointer()
+                                                .keyboard_focusable(cx)
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .when(selected, |el| {
+                                                    el.bg(tint.opacity(0.2))
+                                                        .border_color(tint)
+                                                        .text_color(active_fg)
+                                                })
+                                                .when(!selected, |el| {
+                                                    el.bg(idle_bg)
+                                                        .border_color(border)
+                                                        .text_color(muted)
+                                                        .hover(move |s| {
+                                                            s.bg(hover_bg).text_color(fg)
+                                                        })
+                                                })
+                                                .child(Icon::new(entry.icon).small())
+                                                .on_click(move |_, window, cx| {
+                                                    on_pick(slug, window, cx);
+                                                })
+                                        }),
+                                    )),
+                            ),
+                        ),
                     )
                     .into_any_element()
             })
