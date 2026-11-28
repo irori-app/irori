@@ -445,6 +445,8 @@ pub struct ArtPicker {
     igdb_on: bool,
     /// `iroriVndb` is on: VNDB can be searched too.
     vndb_on: bool,
+    /// Place "Web" first on the left in the source switcher.
+    web_first: bool,
     source: ArtSource,
     query: Entity<InputState>,
     phase: Phase,
@@ -485,18 +487,32 @@ impl EventEmitter<ArtPickerEvent> for ArtPicker {}
 /// Where a picker may search: keyless Steam for covers/backgrounds, SteamGridDB
 /// with its key, IGDB and VNDB while they are on, LaunchBox for this ROM library
 /// game's cover.
+#[derive(Default)]
 struct Sources {
     key: Option<ApiKey>,
     steam_on: bool,
     igdb_on: bool,
     vndb_on: bool,
     rom: Option<String>,
+    web_first: bool,
 }
 
 impl ArtPicker {
-    /// A picker for `kind`, searching for `title` right away when a source is ready.
-    pub fn new(kind: ArtKind, title: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        Self::for_game(kind, None, title, window, cx)
+    /// A picker for "Add game" / "Edit app": omits Steam (covered by "Fetch art")
+    /// and opens directly on Web, offering only Web (first) and SteamGridDB.
+    pub fn for_sideload(
+        kind: ArtKind,
+        title: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let key = ApiKey::from_settings(&models(cx).settings.read(cx).app);
+        let sources = Sources {
+            key,
+            web_first: true,
+            ..Default::default()
+        };
+        Self::build(kind, title, sources, window, cx)
     }
 
     /// A picker for `game`'s `kind`: a ROM's cover starts on LaunchBox's
@@ -523,6 +539,7 @@ impl ArtPicker {
             igdb_on,
             vndb_on,
             rom,
+            ..Default::default()
         };
         Self::build(kind, title, sources, window, cx)
     }
@@ -542,8 +559,7 @@ impl ArtPicker {
             key,
             steam_on: matches!(kind, ArtKind::Cover | ArtKind::Wide | ArtKind::Background),
             igdb_on,
-            vndb_on: false,
-            rom: None,
+            ..Default::default()
         };
         Self::build(kind, title, sources, window, cx)
     }
@@ -566,6 +582,7 @@ impl ArtPicker {
             igdb_on,
             vndb_on,
             rom: None,
+            web_first: false,
         };
         Self::build(kind, title, sources, window, cx)
     }
@@ -583,19 +600,25 @@ impl ArtPicker {
             igdb_on,
             vndb_on,
             rom,
+            web_first,
         } = sources;
-        // A ROM's boxes first; else all ready sources when 2+ can be searched,
-        // or the single ready source (including keyless Steam for covers/heroes).
-        let source = match (rom.is_some(), key.is_some(), igdb_on, vndb_on, steam_on) {
-            (true, _, _, _, _) => ArtSource::LaunchBox,
-            (_, true, true, _, _) | (_, true, false, _, true) | (_, false, true, _, true) => {
-                ArtSource::All
+        // Sideload "Find online…" starts on Web; otherwise a ROM's boxes first,
+        // else all ready sources when 2+ can be searched, or the single ready
+        // source (including keyless Steam for covers/heroes).
+        let source = if web_first {
+            ArtSource::Web
+        } else {
+            match (rom.is_some(), key.is_some(), igdb_on, vndb_on, steam_on) {
+                (true, _, _, _, _) => ArtSource::LaunchBox,
+                (_, true, true, _, _) | (_, true, false, _, true) | (_, false, true, _, true) => {
+                    ArtSource::All
+                }
+                (_, true, false, _, false) => ArtSource::SteamGridDb,
+                (_, false, true, _, false) => ArtSource::Igdb,
+                (_, false, false, true, _) => ArtSource::Vndb,
+                (_, false, false, false, true) => ArtSource::Steam,
+                _ => ArtSource::SteamGridDb,
             }
-            (_, true, false, _, false) => ArtSource::SteamGridDb,
-            (_, false, true, _, false) => ArtSource::Igdb,
-            (_, false, false, true, _) => ArtSource::Vndb,
-            (_, false, false, false, true) => ArtSource::Steam,
-            _ => ArtSource::SteamGridDb,
         };
         let query = cx.new(|cx| {
             InputState::new(window, cx)
@@ -622,6 +645,7 @@ impl ArtPicker {
             steam_on,
             igdb_on,
             vndb_on,
+            web_first,
             source,
             query,
             games: Vec::new(),
@@ -673,6 +697,9 @@ impl ArtPicker {
     /// once when two or more can be searched.
     fn offered(&self) -> Vec<ArtSource> {
         let mut sources = Vec::new();
+        if self.web_first {
+            sources.push(ArtSource::Web);
+        }
         if self.searchable().len() >= 2 {
             sources.push(ArtSource::All);
         }
@@ -689,8 +716,10 @@ impl ArtPicker {
         if self.vndb_on {
             sources.push(ArtSource::Vndb);
         }
-        // Explicit on-demand web image search; never included in searchable() or All.
-        sources.push(ArtSource::Web);
+        if !self.web_first {
+            // Explicit on-demand web image search; never included in searchable() or All.
+            sources.push(ArtSource::Web);
+        }
         sources
     }
 
@@ -733,6 +762,12 @@ impl ArtPicker {
     #[cfg(test)]
     pub(crate) fn source(&self) -> (ArtSource, bool) {
         (self.source, matches!(self.phase, Phase::NoKey))
+    }
+
+    /// The sources offered in left-to-right tab order (tests).
+    #[cfg(test)]
+    pub(crate) fn offered_sources(&self) -> Vec<ArtSource> {
+        self.offered()
     }
 
     /// The captions of the pictures shown, and whether it offers to
@@ -889,7 +924,7 @@ impl ArtPicker {
     }
 
     /// Search web images directly (DuckDuckGo -> Bing -> Google), only when
-    /// the user explicitly selects the "Web" tab.
+    /// explicitly opened on or switched to the "Web" tab.
     fn search_web(&mut self, cx: &mut Context<Self>) {
         let raw_query = self.query.read(cx).value().trim().to_string();
         if raw_query.is_empty() {
@@ -1976,6 +2011,7 @@ impl Render for ArtPicker {
                     };
                     row = row.child(
                         Button::new(id)
+                            .debug_selector(move || id.into())
                             .ghost()
                             .small()
                             .label(option.name())

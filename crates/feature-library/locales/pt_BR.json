@@ -1253,7 +1253,7 @@
   "library.sideload.fetch_art": "Buscar arte",
   "library.sideload.fetch_art_failed": "Não foi possível buscar arte na Steam",
   "library.sideload.fetch_art_found": "Arte de “{name}” carregada da Steam",
-  "library.sideload.fetch_art_none": "Nenhum resultado na Steam para “{title}”",
+  "library.sideload.fetch_art_none": "Nenhum resultado na Steam para “{title}”. Clique em “Buscar on-line…” abaixo para buscar arte na web.",
   "library.sideload.fetch_art_tooltip": "Buscar capa e fundo oficiais na Steam (sem chave de API)",
   "library.sideload.platform.pc_linux": "Jogo de PC (Linux)",
   "library.sideload.platform.pc_mac": "Jogo de PC (macOS)",

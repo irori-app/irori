@@ -21,6 +21,7 @@ use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
@@ -36,10 +37,10 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, AppContext as _, Context, ElementId, Entity, Focusable as _, Hsla,
-    InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Task, Window,
-    div, rems, transparent_black,
+    Animation, AnimationExt as _, App, AppContext as _, BoxShadow, Context, ElementId, Entity,
+    Focusable as _, Hsla, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
+    Render, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
+    Subscription, Task, Window, div, point, px, rems, transparent_black,
 };
 use irori_core::process::CancellationToken;
 use irori_core::{GameId, GameInfo, GameMode, Runner, Store as _};
@@ -95,6 +96,13 @@ fn platform_icon(platform: SideloadPlatform) -> IconName {
 fn active_accent(cx: &App) -> Hsla {
     let theme = cx.theme();
     legible(theme.primary, &[theme.background], TEXT_CONTRAST, cx)
+}
+
+const FIND_ONLINE_FLASH_DURATION: Duration = Duration::from_millis(1300);
+
+/// Smooth two-pulse curve in `0.0..=1.0` (peaks at `0.25` and `0.75`, `0.0` at `1.0`).
+fn double_flash_strength(t: f32) -> f32 {
+    (t.clamp(0.0, 1.0) * std::f32::consts::TAU).sin().powi(2)
 }
 
 /// Active tab inside the expanded "More details" section.
@@ -201,6 +209,9 @@ pub struct SideloadDialog {
     /// One-click keyless Steam artwork fetch is currently running.
     fetching_art: bool,
     _fetch_art_task: Option<Task<()>>,
+    /// Active 2x border-flash generation on "Find online…" after a Steam miss.
+    find_online_flash: Option<u64>,
+    next_flash_seq: u64,
     /// The SteamGridDB picker, shown instead of the form while open.
     picker: Option<Entity<ArtPicker>>,
     _picker_subscription: Option<Subscription>,
@@ -484,6 +495,8 @@ impl SideloadDialog {
             details_tab,
             fetching_art: false,
             _fetch_art_task: None,
+            find_online_flash: None,
+            next_flash_seq: 0,
             picker: None,
             _picker_subscription: None,
             _subscriptions: subscriptions,
@@ -541,39 +554,55 @@ impl SideloadDialog {
         self._fetch_art_task = Some(cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
-                this.fetching_art = false;
-                match result {
-                    Ok(Some((name, cover_url, hero_url))) => {
-                        this.cover
-                            .update(cx, |s, cx| s.set_value(cover_url, window, cx));
-                        this.background
-                            .update(cx, |s, cx| s.set_value(hero_url, window, cx));
-                        this.more = true;
-                        this.details_tab = DetailsTab::Artwork;
-                        window.push_notification(
-                            Notification::success(t_args(
-                                "library.sideload.fetch_art_found",
-                                &[("name", &name)],
-                            )),
-                            cx,
-                        );
-                    }
-                    Ok(None) => {
-                        window.push_notification(
-                            Notification::info(t_args(
-                                "library.sideload.fetch_art_none",
-                                &[("title", &title)],
-                            )),
-                            cx,
-                        );
-                    }
-                    Err(e) => {
-                        crate::notify_error(t("library.sideload.fetch_art_failed"), &e, window, cx);
-                    }
-                }
-                cx.notify();
+                this.apply_fetch_art_result(&title, result, window, cx);
             });
         }));
+    }
+
+    /// Apply the outcome of a keyless Steam artwork fetch to the dialog.
+    pub(crate) fn apply_fetch_art_result(
+        &mut self,
+        title: &str,
+        result: anyhow::Result<Option<(String, String, String)>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.fetching_art = false;
+        match result {
+            Ok(Some((name, cover_url, hero_url))) => {
+                self.cover
+                    .update(cx, |s, cx| s.set_value(cover_url, window, cx));
+                self.background
+                    .update(cx, |s, cx| s.set_value(hero_url, window, cx));
+                self.more = true;
+                self.details_tab = DetailsTab::Artwork;
+                self.find_online_flash = None;
+                window.push_notification(
+                    Notification::success(t_args(
+                        "library.sideload.fetch_art_found",
+                        &[("name", &name)],
+                    )),
+                    cx,
+                );
+            }
+            Ok(None) => {
+                self.more = true;
+                self.details_tab = DetailsTab::Artwork;
+                self.next_flash_seq = self.next_flash_seq.wrapping_add(1).max(1);
+                self.find_online_flash = Some(self.next_flash_seq);
+                window.push_notification(
+                    Notification::info(t_args(
+                        "library.sideload.fetch_art_none",
+                        &[("title", title)],
+                    )),
+                    cx,
+                );
+            }
+            Err(e) => {
+                crate::notify_error(t("library.sideload.fetch_art_failed"), &e, window, cx);
+            }
+        }
+        cx.notify();
     }
 
     /// Remove the entry created for an installer when the app was not saved.
@@ -599,8 +628,9 @@ impl SideloadDialog {
     }
 
     fn find_art(&mut self, kind: ArtKind, window: &mut Window, cx: &mut Context<Self>) {
+        self.find_online_flash = None;
         let title = text(&self.title, cx);
-        let picker = cx.new(|cx| ArtPicker::new(kind, &title, window, cx));
+        let picker = cx.new(|cx| ArtPicker::for_sideload(kind, &title, window, cx));
         picker.update(cx, |p, cx| p.focus(window, cx));
         self._picker_subscription = Some(cx.subscribe_in(
             &picker,
@@ -1145,18 +1175,42 @@ impl SideloadDialog {
         kind: ArtKind,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let find_id = if kind == ArtKind::Background {
-            "find-background"
+        let (find_id, flash_name) = if kind == ArtKind::Background {
+            ("find-background", "find-background-flash")
         } else {
-            "find-cover"
+            ("find-cover", "find-cover-flash")
         };
-        self.path_row(id, target, false, cx).child(
-            Button::new(find_id)
-                .outline()
-                .icon(IconName::Globe)
-                .label(t("library.common.find_online"))
-                .on_click(cx.listener(move |this, _, window, cx| this.find_art(kind, window, cx))),
-        )
+        let (base_border, accent) = (cx.theme().input, cx.theme().ring);
+        let button = Button::new(find_id)
+            .debug_selector(move || find_id.into())
+            .outline()
+            .icon(IconName::Globe)
+            .label(t("library.common.find_online"))
+            .on_click(cx.listener(move |this, _, window, cx| this.find_art(kind, window, cx)));
+        let find_btn = match self.find_online_flash {
+            Some(seq) => button
+                .with_animation(
+                    ElementId::NamedInteger(flash_name.into(), seq),
+                    Animation::new(FIND_ONLINE_FLASH_DURATION),
+                    move |btn, delta| {
+                        let s = double_flash_strength(delta);
+                        if s <= 0.01 {
+                            return btn;
+                        }
+                        btn.border_color(base_border.blend(accent.opacity(s)))
+                            .shadow(vec![BoxShadow {
+                                color: accent.opacity(0.45 * s),
+                                offset: point(px(0.), px(0.)),
+                                blur_radius: px(2. * s),
+                                spread_radius: px(1.5 * s),
+                                inset: false,
+                            }])
+                    },
+                )
+                .into_any_element(),
+            None => button.into_any_element(),
+        };
+        self.path_row(id, target, false, cx).child(find_btn)
     }
 }
 
@@ -1506,6 +1560,7 @@ impl SideloadDialog {
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if this.details_tab != tab {
                             this.details_tab = tab;
+                            this.find_online_flash = None;
                             cx.notify();
                         }
                     }))
@@ -1659,6 +1714,16 @@ impl SideloadDialog {
     pub(crate) fn set_details_tab_for_test(&mut self, tab: DetailsTab, cx: &mut Context<Self>) {
         self.details_tab = tab;
         cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn find_online_flash_for_test(&self) -> Option<u64> {
+        self.find_online_flash
+    }
+
+    #[cfg(test)]
+    pub(crate) fn picker_for_test(&self) -> Option<Entity<ArtPicker>> {
+        self.picker.clone()
     }
 
     /// Status banner or executable selector shown below the Executable row
@@ -2007,6 +2072,7 @@ impl Render for SideloadDialog {
                         })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.more = !this.more;
+                            this.find_online_flash = None;
                             cx.notify();
                         })),
                 ),
@@ -2326,5 +2392,14 @@ mod tests {
             Some("Void Reaver")
         );
         assert_eq!(title_from_executable(Path::new("/")), None);
+    }
+
+    #[test]
+    fn double_flash_curve_peaks_twice_and_settles_at_zero() {
+        assert!(double_flash_strength(0.0) < 0.01);
+        assert!((double_flash_strength(0.25) - 1.0).abs() < 1e-5);
+        assert!(double_flash_strength(0.5) < 0.01);
+        assert!((double_flash_strength(0.75) - 1.0).abs() < 1e-5);
+        assert!(double_flash_strength(1.0) < 0.01);
     }
 }

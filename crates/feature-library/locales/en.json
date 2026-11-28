@@ -1262,7 +1262,7 @@
   "library.sideload.fetch_art": "Fetch art",
   "library.sideload.fetch_art_failed": "Couldn’t fetch art from Steam",
   "library.sideload.fetch_art_found": "Loaded art for “{name}” from Steam",
-  "library.sideload.fetch_art_none": "No Steam match found for “{title}”",
+  "library.sideload.fetch_art_none": "No Steam match found for “{title}”. Click “Find online…” below to search for art on the web.",
   "library.sideload.fetch_art_tooltip": "Fetch official cover and background from Steam (no API key needed)",
   "library.sideload.platform.pc_linux": "PC game (Linux)",
   "library.sideload.platform.pc_mac": "PC game (macOS)",
