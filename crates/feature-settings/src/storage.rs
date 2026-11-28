@@ -18,6 +18,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
@@ -26,9 +27,10 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, ElementId, Entity, Hsla, InteractiveElement as _, IntoElement,
-    ObjectFit, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, StyledImage as _, Subscription, Window, div, px, relative, rems, uniform_list,
+    AnyElement, App, AppContext as _, Context, ElementId, Entity, Hsla, InteractiveElement as _,
+    IntoElement, ObjectFit, ParentElement as _, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Subscription, Window, div, px,
+    relative, rems, uniform_list,
 };
 use irori_core::GameId;
 use irori_core::util::format_bytes;
@@ -37,34 +39,39 @@ use irori_services::storage::{
     StorageReport,
 };
 use irori_ui::art::LruImageCache;
-use irori_ui::components::SectionTitle;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::style::{KeyboardFocusable as _, caption};
 use irori_ui::{Route, backend, models, navigate};
 
+use crate::i18n::LanguageStamp;
 use crate::treemap::{self, Rect};
-use crate::widgets::{muted, panel};
+use crate::widgets::{muted, plain_tooltip};
 
 /// Maximum width of the Storage content column in `SettingsView`.
 pub(crate) const STORAGE_MAX_WIDTH_REM: f32 = 74.;
 /// Games drawn as their own treemap tile per disk; the rest share one.
 const TREEMAP_TILES: usize = 30;
 /// The treemap's width over its height, for the tiles' shapes.
-const TREEMAP_ASPECT: f64 = 2.6;
+const TREEMAP_ASPECT: f64 = 3.1;
 /// Height of the treemap, in rem.
-const TREEMAP_REM: f32 = 13.;
+const TREEMAP_REM: f32 = 14.;
 /// Tiles narrower or shorter than this share of the treemap carry no label.
-const LABEL_MIN: (f32, f32) = (0.09, 0.22);
-/// Width of the art thumbnails in treemap tiles, in pixels.
+const LABEL_MIN: (f32, f32) = (0.095, 0.19);
+/// Width of the art thumbnails in treemap tiles and list rows, in pixels.
 const TILE_ART_PX: u32 = 480;
+const THUMB_ART_PX: u32 = 160;
+/// Smallest share of a disk's games shown as its own tile before grouping the tail.
+const CLUSTER_MIN_SHARE: f64 = 0.036;
 /// Items of a cleanup listed before "and N more".
 const LISTED_ITEMS: usize = 8;
 /// Rows of the game list shown before it scrolls.
-const GAME_ROWS: usize = 8;
+const GAME_ROWS: usize = 9;
 /// Height of a game list row, in rem.
-const GAME_ROW_REM: f32 = 3.25;
+const GAME_ROW_REM: f32 = 3.5;
 /// A game not played for this many days is marked as one to consider.
 const IDLE_DAYS: i64 = 182;
+/// Percentage at or above which a drive usage pill uses the warning tone.
+const DRIVE_WARN_PERCENT: u64 = 70;
 
 /// Active workspace tab in the Storage view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -79,6 +86,7 @@ struct Palette {
     bg: Hsla,
     secondary: Hsla,
     border: Hsla,
+    fg: Hsla,
     muted_fg: Hsla,
     track: Hsla,
     primary: Hsla,
@@ -87,6 +95,7 @@ struct Palette {
     warning: Hsla,
     radius: gpui_kit::Pixels,
     radius_lg: gpui_kit::Pixels,
+    charts: [Hsla; 5],
 }
 
 impl Palette {
@@ -96,6 +105,7 @@ impl Palette {
             bg: th.background,
             secondary: th.secondary,
             border: th.border,
+            fg: th.foreground,
             muted_fg: th.muted_foreground,
             track: th.muted,
             primary: th.primary,
@@ -104,6 +114,7 @@ impl Palette {
             warning: th.warning,
             radius: th.radius,
             radius_lg: th.radius_lg,
+            charts: [th.chart_1, th.chart_2, th.chart_3, th.chart_4, th.chart_5],
         }
     }
 
@@ -160,6 +171,16 @@ fn card_box(p: Palette) -> gpui_kit::Div {
         .overflow_hidden()
 }
 
+fn seg_bar(p: Palette) -> gpui_kit::Div {
+    h_flex()
+        .gap_1()
+        .p_0p5()
+        .rounded(p.radius)
+        .bg(p.bg)
+        .border_1()
+        .border_color(p.border)
+}
+
 fn count_text(n: usize, one: &str, other: &str) -> SharedString {
     if n == 1 {
         t(one)
@@ -190,27 +211,65 @@ pub(crate) enum GameSort {
     Size,
     /// Played longest ago first, never played before all.
     LastPlayed,
+    /// Alphabetical by title.
+    Name,
 }
 
-/// Every disk's games in `sort` order.
-pub(crate) fn sorted_games(report: &StorageReport, sort: GameSort) -> Vec<GameSize> {
-    let mut games: Vec<GameSize> = report
-        .disks
-        .iter()
-        .flat_map(|d| d.games.iter().cloned())
-        .collect();
+fn sort_games_by<T>(items: &mut [T], sort: GameSort, game: impl Fn(&T) -> &GameSize) {
     let played = |g: &GameSize| {
         g.last_played
             .as_deref()
             .and_then(irori_core::util::parse_rfc3339)
     };
     match sort {
-        GameSort::Size => games.sort_by_key(|g| std::cmp::Reverse(g.bytes)),
-        GameSort::LastPlayed => {
-            games.sort_by(|a, b| played(a).cmp(&played(b)).then(b.bytes.cmp(&a.bytes)))
+        GameSort::Size => items.sort_by_key(|x| std::cmp::Reverse(game(x).bytes)),
+        GameSort::LastPlayed => items.sort_by(|a, b| {
+            let (ga, gb) = (game(a), game(b));
+            played(ga).cmp(&played(gb)).then(gb.bytes.cmp(&ga.bytes))
+        }),
+        GameSort::Name => items.sort_by(|a, b| {
+            let (ga, gb) = (game(a), game(b));
+            ga.title
+                .to_lowercase()
+                .cmp(&gb.title.to_lowercase())
+                .then(gb.bytes.cmp(&ga.bytes))
+        }),
+    }
+}
+
+/// Every disk's games in `sort` order.
+#[cfg(test)]
+pub(crate) fn sorted_games(report: &StorageReport, sort: GameSort) -> Vec<GameSize> {
+    let mut games: Vec<GameSize> = report
+        .disks
+        .iter()
+        .flat_map(|d| d.games.iter().cloned())
+        .collect();
+    sort_games_by(&mut games, sort, |g| g);
+    games
+}
+
+fn partition_treemap(games: &[GameSize]) -> (Vec<&GameSize>, Vec<&GameSize>) {
+    let nonzero: Vec<&GameSize> = games.iter().filter(|g| g.bytes > 0).collect();
+    let total: f64 = nonzero.iter().map(|g| g.bytes as f64).sum();
+    if total <= 0. {
+        return (Vec::new(), Vec::new());
+    }
+    let threshold = total * CLUSTER_MIN_SHARE;
+    let (mut major, mut minor) = (Vec::new(), Vec::new());
+    for g in nonzero {
+        if major.len() >= TREEMAP_TILES || (major.len() >= 4 && (g.bytes as f64) < threshold) {
+            minor.push(g);
+        } else {
+            major.push(g);
         }
     }
-    games
+    if minor.len() == 1
+        && let Some(single) = minor.pop()
+    {
+        major.push(single);
+    }
+    (major, minor)
 }
 
 /// Whole days since `last_played` (RFC 3339), if it was ever played.
@@ -423,6 +482,14 @@ fn kind_safety_badge(kind: CleanupKind) -> (&'static str, PillTone) {
     }
 }
 
+fn holding_cleanup_target(holding: Holding) -> Option<CleanupKind> {
+    match holding {
+        Holding::IroriData => Some(CleanupKind::ArtCache),
+        Holding::Unfinished => Some(CleanupKind::DownloadLeftovers),
+        _ => None,
+    }
+}
+
 fn art_cache_limit_text(limit_mib: u32) -> SharedString {
     match limit_mib {
         0 => t("settings.option.art_cache_limit.0"),
@@ -493,7 +560,15 @@ pub(crate) struct StoragePanel {
     loading: bool,
     error: Option<SharedString>,
     active_tab: StorageTab,
+    selected_drive: Option<usize>,
+    treemap_drive: usize,
+    treemap_collapsed: bool,
+    search: Entity<InputState>,
+    search_query: String,
     sort: GameSort,
+    only_never_played: bool,
+    only_managed: bool,
+    cached_rows: Rc<Vec<GameRow>>,
     selection: Selection,
     cleaning: bool,
     cleaning_kind: Option<CleanupKind>,
@@ -501,30 +576,57 @@ pub(crate) struct StoragePanel {
     already_clean_open: bool,
     highlighted_cleanup: Option<CleanupKind>,
     images: Entity<LruImageCache>,
+    language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
 }
 
 impl StoragePanel {
-    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let art = irori_ui::art::art_store(cx);
         let library = models(cx).library.clone();
         let settings = models(cx).settings.clone();
+        let search = cx
+            .new(|cx| InputState::new(window, cx).placeholder(t("settings.storage.search_games")));
+        let search_sub =
+            cx.subscribe_in(&search, window, |this, state, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) {
+                    let q = state.read(cx).value().to_string();
+                    if q != this.search_query {
+                        this.search_query = q;
+                        this.rebuild_game_rows(cx);
+                        cx.notify();
+                    }
+                }
+            });
         Self {
             report: None,
             loading: false,
             error: None,
             active_tab: StorageTab::Games,
+            selected_drive: None,
+            treemap_drive: 0,
+            treemap_collapsed: false,
+            search,
+            search_query: String::new(),
             sort: GameSort::default(),
+            only_never_played: false,
+            only_managed: false,
+            cached_rows: Rc::new(Vec::new()),
             selection: Selection::default(),
             cleaning: false,
             cleaning_kind: None,
             expanded: HashSet::new(),
             already_clean_open: false,
             highlighted_cleanup: None,
-            images: LruImageCache::new(TREEMAP_TILES * 2, cx),
+            images: LruImageCache::new(TREEMAP_TILES * 3, cx),
+            language: LanguageStamp::new(),
             _subscriptions: vec![
+                search_sub,
                 cx.observe(&art, |_, _, cx| cx.notify()),
-                cx.observe(&library, |_, _, cx| cx.notify()),
+                cx.observe(&library, |this, _, cx| {
+                    this.rebuild_game_rows(cx);
+                    cx.notify();
+                }),
                 cx.observe(&settings, |_, _, cx| cx.notify()),
             ],
         }
@@ -587,6 +689,7 @@ impl StoragePanel {
         self.selection.sync(&report);
         self.report = Some(Arc::new(report));
         self.loading = false;
+        self.rebuild_game_rows(cx);
         cx.notify();
     }
 
@@ -604,6 +707,76 @@ impl StoragePanel {
     pub(crate) fn set_tab_for_test(&mut self, tab: StorageTab, cx: &mut Context<Self>) {
         self.active_tab = tab;
         cx.notify();
+    }
+
+    fn clear_filters(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.selected_drive = None;
+        self.only_never_played = false;
+        self.only_managed = false;
+        if !self.search_query.is_empty() {
+            self.search_query.clear();
+            self.search.update(cx, |s, cx| s.set_value("", window, cx));
+        }
+        self.rebuild_game_rows(cx);
+        cx.notify();
+    }
+
+    /// Pre-compute filtered and sorted rows outside `Render::render`.
+    fn rebuild_game_rows(&mut self, cx: &App) {
+        let Some(report) = &self.report else {
+            self.cached_rows = Rc::new(Vec::new());
+            return;
+        };
+        let library = models(cx).library.read(cx).snapshot.clone();
+        let now = irori_core::util::unix_now() as i64;
+        let query = self.search_query.trim().to_lowercase();
+        let max_bytes = report
+            .disks
+            .iter()
+            .flat_map(|d| d.games.iter())
+            .map(|g| g.bytes)
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        let mut pairs: Vec<(GameSize, SharedString)> = report
+            .disks
+            .iter()
+            .enumerate()
+            .filter(|(ix, _)| self.selected_drive.is_none_or(|sel| sel == *ix))
+            .flat_map(|(_, d)| {
+                let label: SharedString = d.drive.label().into();
+                d.games.iter().cloned().map(move |g| (g, label.clone()))
+            })
+            .filter(|(g, _)| !self.only_never_played || g.last_played.is_none())
+            .filter(|(g, _)| !self.only_managed || g.id.runner.manages_installs())
+            .filter(|(g, _)| {
+                query.is_empty()
+                    || g.title.to_lowercase().contains(&query)
+                    || g.id.runner.short_name().to_lowercase().contains(&query)
+                    || g.id.runner.store_name().to_lowercase().contains(&query)
+            })
+            .collect();
+        sort_games_by(&mut pairs, self.sort, |(g, _)| g);
+        self.cached_rows = Rc::new(
+            pairs
+                .into_iter()
+                .map(|(g, drive_label)| {
+                    let info = library.get(&g.id);
+                    GameRow {
+                        folder: info
+                            .and_then(|info| info.install.as_ref())
+                            .map(|i| PathBuf::from(&i.install_path))
+                            .filter(|p| !p.as_os_str().is_empty()),
+                        art_url: info.and_then(|info| info.hero_art().map(str::to_owned)),
+                        can_uninstall: g.id.runner.manages_installs(),
+                        days: days_since(g.last_played.as_deref(), now),
+                        drive_label,
+                        share: (g.bytes as f32 / max_bytes as f32).clamp(0.03, 1.0),
+                        game: g,
+                    }
+                })
+                .collect(),
+        );
     }
 
     fn cleanup_totals(&self, report: &StorageReport) -> (u64, usize, u64) {
@@ -636,7 +809,14 @@ impl StoragePanel {
                 match result {
                     Ok(report) => {
                         this.selection.sync(&report);
+                        if this.selected_drive.is_some_and(|i| i >= report.disks.len()) {
+                            this.selected_drive = None;
+                        }
+                        if this.treemap_drive >= report.disks.len() {
+                            this.treemap_drive = 0;
+                        }
                         this.report = Some(report);
+                        this.rebuild_game_rows(cx);
                     }
                     Err(e) => this.error = Some(format!("{e:#}").into()),
                 }
@@ -864,142 +1044,401 @@ impl StoragePanel {
         cx.notify();
     }
 
-    fn render_summary(&self, report: &StorageReport, cx: &App) -> AnyElement {
+    fn render_summary(&self, report: &StorageReport, cx: &mut Context<Self>) -> AnyElement {
+        let p = Palette::of(cx);
         let games: u64 = report.disks.iter().map(DiskUsage::games_bytes).sum();
+        let game_count: usize = report.disks.iter().map(|d| d.games.len()).sum();
         let support: u64 = report.disks.iter().map(DiskUsage::support_bytes).sum();
-        let freeable: u64 = report
-            .cleanups
+        let (freeable, chosen_count, total_offered) = self.cleanup_totals(report);
+        let optional_bytes = total_offered.saturating_sub(freeable);
+        let (never_bytes, never_count) = report
+            .disks
             .iter()
-            .map(|c| self.selection.bytes(c))
-            .sum();
-        let theme = cx.theme();
-        let stat = |label: SharedString, value: String| {
+            .flat_map(|d| d.games.iter())
+            .filter(|g| g.last_played.is_none())
+            .fold((0u64, 0usize), |(b, n), g| (b + g.bytes, n + 1));
+        let games_sub = if report.disks.len() == 1 {
+            t_args(
+                "settings.storage.kpi.games_sub_one_drive",
+                &[("games", &game_count.to_string())],
+            )
+        } else {
+            t_args(
+                "settings.storage.kpi.games_sub",
+                &[
+                    ("games", &game_count.to_string()),
+                    ("drives", &report.disks.len().to_string()),
+                ],
+            )
+        };
+        let freeable_sub = if freeable > 0 {
+            count_text(
+                chosen_count,
+                "settings.storage.kpi.freeable_ready_one",
+                "settings.storage.kpi.freeable_ready",
+            )
+        } else if optional_bytes > 0 {
+            t_args(
+                "settings.storage.kpi.freeable_optional",
+                &[("size", &format_bytes(optional_bytes))],
+            )
+        } else {
+            t("settings.storage.kpi.freeable_none")
+        };
+        let never_sub = count_text(
+            never_count,
+            "settings.storage.kpi.never_played_sub_one",
+            "settings.storage.kpi.never_played_sub_other",
+        );
+        let kpi = |id, dot, label, val: String, sub, hi, active| {
             v_flex()
+                .id(id)
                 .flex_1()
-                .min_w_32()
-                .gap_0p5()
+                .min_w(rems(13.))
+                .p_3p5()
+                .gap_1()
+                .rounded(p.radius_lg)
+                .bg(if hi {
+                    p.primary.opacity(0.08)
+                } else {
+                    p.secondary
+                })
+                .border_1()
+                .border_color(if active {
+                    p.primary
+                } else if hi {
+                    p.primary.opacity(0.36)
+                } else {
+                    p.border
+                })
+                .child(
+                    h_flex()
+                        .gap_1p5()
+                        .items_center()
+                        .child(div().size_2().rounded_full().bg(dot).flex_shrink_0())
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(p.muted_fg)
+                                .truncate()
+                                .child(label),
+                        ),
+                )
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(theme.muted_foreground)
-                        .truncate()
-                        .child(label),
+                        .text_xl()
+                        .font_semibold()
+                        .when(hi, |d| d.text_color(p.primary))
+                        .child(val),
                 )
-                .child(div().text_xl().font_semibold().child(value))
+                .child(div().text_xs().text_color(p.muted_fg).truncate().child(sub))
         };
+        let to_cleanup = cx.listener(|this, _, _, cx| {
+            this.active_tab = StorageTab::Cleanup;
+            cx.notify();
+        });
         h_flex()
+            .w_full()
             .flex_wrap()
-            .gap_4()
-            .child(stat(t("settings.storage.games"), format_bytes(games)))
-            .child(stat(t("settings.storage.support"), format_bytes(support)))
-            .child(stat(t("settings.storage.freeable"), format_bytes(freeable)))
+            .gap_3()
+            .child(kpi(
+                "storage-kpi-games",
+                p.charts[0],
+                t("settings.storage.games"),
+                format_bytes(games),
+                games_sub,
+                false,
+                false,
+            ))
+            .child(
+                kpi(
+                    "storage-kpi-support",
+                    p.charts[1],
+                    t("settings.storage.support"),
+                    format_bytes(support),
+                    t("settings.storage.kpi.support_sub"),
+                    false,
+                    false,
+                )
+                .keyboard_focusable(cx)
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.active_tab = StorageTab::Cleanup;
+                    cx.notify();
+                })),
+            )
+            .child(
+                kpi(
+                    "storage-kpi-freeable",
+                    if freeable > 0 { p.primary } else { p.success },
+                    t("settings.storage.freeable"),
+                    format_bytes(freeable),
+                    freeable_sub,
+                    freeable > 0,
+                    false,
+                )
+                .keyboard_focusable(cx)
+                .cursor_pointer()
+                .on_click(to_cleanup),
+            )
+            .child(
+                kpi(
+                    "storage-kpi-never",
+                    p.warning,
+                    t("settings.storage.kpi.never_played"),
+                    format_bytes(never_bytes),
+                    never_sub,
+                    false,
+                    self.only_never_played,
+                )
+                .keyboard_focusable(cx)
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.only_never_played = !this.only_never_played;
+                    this.active_tab = StorageTab::Games;
+                    this.rebuild_game_rows(cx);
+                    cx.notify();
+                })),
+            )
             .into_any_element()
     }
 
-    fn render_disk(&self, ix: usize, disk: &DiskUsage, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
-        let (muted_fg, track) = (theme.muted_foreground, theme.muted);
-        let colors = [theme.chart_1, theme.chart_2, theme.chart_3];
+    fn render_drives(&self, report: &StorageReport, cx: &mut Context<Self>) -> AnyElement {
+        let p = Palette::of(cx);
+        let filter_info: AnyElement = match self.selected_drive.and_then(|ix| report.disks.get(ix))
+        {
+            Some(disk) => h_flex()
+                .gap_2()
+                .items_center()
+                .child(div().text_xs().text_color(p.muted_fg).child(t_args(
+                    "settings.storage.filtering_drive",
+                    &[("drive", &disk.drive.label())],
+                )))
+                .child(
+                    Button::new("storage-show-all-drives")
+                        .outline()
+                        .xsmall()
+                        .label(t("settings.storage.show_all_drives"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.selected_drive = None;
+                            this.rebuild_game_rows(cx);
+                            cx.notify();
+                        })),
+                )
+                .into_any_element(),
+            None => div()
+                .text_xs()
+                .text_color(p.muted_fg)
+                .child(t("settings.storage.drives_hint"))
+                .into_any_element(),
+        };
+        let cards: Vec<AnyElement> = report
+            .disks
+            .iter()
+            .enumerate()
+            .map(|(ix, disk)| self.render_disk(ix, disk, report, cx))
+            .collect();
+        v_flex()
+            .w_full()
+            .gap_2()
+            .child(
+                h_flex()
+                    .w_full()
+                    .justify_between()
+                    .items_center()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(caption(t("settings.storage.drives"), cx))
+                    .child(filter_info),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .flex_wrap()
+                    .items_stretch()
+                    .gap_3()
+                    .children(cards),
+            )
+            .into_any_element()
+    }
+
+    fn render_disk(
+        &self,
+        ix: usize,
+        disk: &DiskUsage,
+        report: &StorageReport,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let p = Palette::of(cx);
         let drive = &disk.drive;
+        let selected = self.selected_drive == Some(ix);
+        let used_pct = if drive.total > 0 {
+            ((drive.used() as f64 / drive.total as f64) * 100.0).round() as u64
+        } else {
+            0
+        };
         let parts = [
-            (t("settings.storage.games"), disk.games_bytes(), colors[0]),
+            (t("settings.storage.games"), disk.games_bytes(), p.charts[0]),
             (
                 t("settings.storage.support"),
                 disk.support_bytes(),
-                colors[1],
+                p.charts[1],
             ),
-            (t("settings.storage.other"), disk.other_bytes(), colors[2]),
+            (t("settings.storage.other"), disk.other_bytes(), p.charts[2]),
         ];
         let total = drive.total.max(1) as f32;
         let bar = h_flex()
             .w_full()
-            .h(px(10.))
+            .h(px(9.))
             .rounded(px(5.))
             .overflow_hidden()
-            .bg(track)
-            .children(parts.iter().map(|(_, bytes, color)| {
+            .bg(p.track)
+            .children(parts.iter().filter(|(_, b, _)| *b > 0).map(|(_, b, c)| {
                 div()
                     .h_full()
-                    .w(relative((*bytes as f32 / total).clamp(0., 1.)))
-                    .bg(*color)
+                    .w(relative((*b as f32 / total).clamp(0., 1.)))
+                    .bg(*c)
             }));
+        let legend_item = |dot: gpui_kit::Div, what: &str, bytes: u64| {
+            h_flex().gap_1p5().items_center().child(dot).child(t_args(
+                "settings.storage.legend",
+                &[("what", what), ("size", &format_bytes(bytes))],
+            ))
+        };
         let legend = h_flex()
             .flex_wrap()
-            .gap_x_4()
+            .gap_x_3()
             .gap_y_1()
             .text_xs()
-            .text_color(muted_fg)
-            .children(parts.iter().map(|(label, bytes, color)| {
-                h_flex()
-                    .gap_1p5()
-                    .child(div().size_2p5().rounded_full().bg(*color))
-                    .child(t_args(
-                        "settings.storage.legend",
-                        &[("what", label), ("size", &format_bytes(*bytes))],
-                    ))
-            }))
-            .child(
-                h_flex()
-                    .gap_1p5()
-                    .child(
-                        div()
-                            .size_2p5()
-                            .rounded_full()
-                            .bg(track)
-                            .border_1()
-                            .border_color(theme.border),
-                    )
-                    .child(t_args(
-                        "settings.storage.legend",
-                        &[
-                            ("what", &t("settings.storage.free")),
-                            ("size", &format_bytes(drive.free)),
-                        ],
-                    )),
-            );
+            .text_color(p.muted_fg)
+            .children(
+                parts
+                    .iter()
+                    .filter(|(_, b, _)| *b > 0)
+                    .map(|(l, b, c)| legend_item(div().size_2().rounded_full().bg(*c), l, *b)),
+            )
+            .child(legend_item(
+                div()
+                    .size_2()
+                    .rounded_full()
+                    .bg(p.track)
+                    .border_1()
+                    .border_color(p.muted_fg),
+                &t("settings.storage.free"),
+                drive.free,
+            ));
         let support: Vec<AnyElement> = Holding::SUPPORT
             .into_iter()
             .filter_map(|h| Some((h, *disk.support.get(&h)?)))
             .filter(|(_, bytes)| *bytes > 0)
             .map(|(holding, bytes)| {
-                h_flex()
-                    .gap_1()
+                let target = holding_cleanup_target(holding)
+                    .filter(|k| report.cleanup(*k).is_some_and(|c| !c.items.is_empty()));
+                let chip = h_flex()
+                    .id(ElementId::Name(
+                        format!("storage-holding-{ix}-{holding:?}").into(),
+                    ))
+                    .gap_1p5()
+                    .items_center()
                     .px_2()
                     .py_0p5()
-                    .rounded(theme.radius)
-                    .bg(theme.background)
+                    .rounded(p.radius)
                     .border_1()
-                    .border_color(theme.border)
                     .text_xs()
+                    .bg(if target.is_some() {
+                        p.primary.opacity(0.09)
+                    } else {
+                        p.bg
+                    })
+                    .border_color(if target.is_some() {
+                        p.primary.opacity(0.32)
+                    } else {
+                        p.border
+                    })
+                    .when(target.is_some(), |c| c.cursor_pointer())
                     .child(holding_label(holding))
-                    .child(div().text_color(muted_fg).child(format_bytes(bytes)))
-                    .into_any_element()
+                    .child(div().font_medium().child(format_bytes(bytes)))
+                    .when(target.is_some(), |c| {
+                        c.child(
+                            div()
+                                .text_color(p.primary)
+                                .font_semibold()
+                                .child(t("settings.storage.cleanable_badge")),
+                        )
+                    });
+                match target {
+                    Some(kind) => chip
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.open_cleanup_focus(Some(kind), window, cx);
+                        }))
+                        .into_any_element(),
+                    None => chip.into_any_element(),
+                }
             })
             .collect();
-        let treemap = (!disk.games.is_empty()).then(|| self.render_treemap(ix, &disk.games, cx));
-        panel(cx)
+        v_flex()
             .id(ElementId::Name(format!("storage-disk-{ix}").into()))
             .debug_selector(move || format!("storage-disk-{ix}"))
+            .flex_1()
+            .min_w(rems(25.))
+            .p_4()
             .gap_3()
+            .rounded(p.radius_lg)
+            .bg(if selected {
+                p.primary.opacity(0.05)
+            } else {
+                p.secondary
+            })
+            .border_1()
+            .border_color(if selected { p.primary } else { p.border })
+            .keyboard_focusable(cx)
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.selected_drive = (this.selected_drive != Some(ix)).then_some(ix);
+                if this.selected_drive.is_some() {
+                    this.treemap_drive = ix;
+                }
+                this.rebuild_game_rows(cx);
+                cx.notify();
+            }))
             .child(
                 h_flex()
                     .flex_wrap()
                     .justify_between()
-                    .gap_x_4()
+                    .items_center()
+                    .gap_2()
                     .child(
                         h_flex()
                             .gap_2()
+                            .items_center()
                             .min_w_0()
-                            .child(Icon::new(IconName::HardDrive).text_color(muted_fg))
+                            .child(
+                                Icon::new(IconName::HardDrive)
+                                    .small()
+                                    .text_color(if selected { p.primary } else { p.muted_fg }),
+                            )
                             .child(
                                 div()
                                     .min_w_0()
                                     .font_semibold()
                                     .truncate()
                                     .child(drive.label()),
-                            ),
+                            )
+                            .child(pill_badge(
+                                t_args(
+                                    "settings.storage.used_percent",
+                                    &[("percent", &used_pct.to_string())],
+                                ),
+                                if used_pct >= DRIVE_WARN_PERCENT {
+                                    PillTone::Warning
+                                } else {
+                                    PillTone::Muted
+                                },
+                                p,
+                            )),
                     )
-                    .child(div().text_sm().text_color(muted_fg).child(t_args(
+                    .child(div().text_xs().text_color(p.muted_fg).child(t_args(
                         "settings.storage.disk_summary",
                         &[
                             ("free", &format_bytes(drive.free)),
@@ -1009,10 +1448,17 @@ impl StoragePanel {
             )
             .child(bar)
             .child(legend)
-            .when(!support.is_empty(), |p| {
-                p.child(h_flex().flex_wrap().gap_2().children(support))
+            .when(!support.is_empty(), |card| {
+                card.child(
+                    h_flex()
+                        .flex_wrap()
+                        .gap_1p5()
+                        .pt_2()
+                        .border_t_1()
+                        .border_color(p.border)
+                        .children(support),
+                )
             })
-            .children(treemap)
             .into_any_element()
     }
 
@@ -1052,124 +1498,230 @@ impl StoragePanel {
             .into_any_element()
     }
 
-    fn render_treemap(
-        &self,
-        disk: usize,
-        games: &[GameSize],
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let mut shown: Vec<&GameSize> = games.iter().take(TREEMAP_TILES).collect();
-        shown.retain(|g| g.bytes > 0);
-        let rest: Vec<&GameSize> = games.iter().skip(TREEMAP_TILES).collect();
-        let rest_bytes: u64 = rest.iter().map(|g| g.bytes).sum();
-        let mut values: Vec<f64> = shown.iter().map(|g| g.bytes as f64).collect();
-        if rest_bytes > 0 {
-            values.push(rest_bytes as f64);
-        }
-        let rects = treemap::squarify(&values, TREEMAP_ASPECT, 1.);
-        let library = models(cx).library.read(cx).snapshot.clone();
-        let theme = cx.theme();
-        let charts = [
-            theme.chart_1,
-            theme.chart_2,
-            theme.chart_3,
-            theme.chart_4,
-            theme.chart_5,
-        ];
-        let (radius, popover, popover_fg, muted_fg, rest_fill) = (
-            theme.radius,
-            theme.popover,
-            theme.popover_foreground,
-            theme.muted_foreground,
-            theme.muted,
-        );
-        let mut tiles: Vec<AnyElement> = Vec::new();
-        for (ix, (game, rect)) in shown.iter().zip(&rects).enumerate() {
-            let art = library
-                .get(&game.id)
-                .and_then(|g| g.hero_art().map(str::to_owned))
-                .and_then(|url| irori_ui::components::art_img(&url, TILE_ART_PX, false, cx));
-            let id = game.id.clone();
-            let label = (rect.w >= LABEL_MIN.0 && rect.h >= LABEL_MIN.1)
-                .then(|| tile_label(&game.title, game.bytes, popover, popover_fg, muted_fg));
-            let tile = tile_frame(radius, charts[ix % charts.len()])
-                .id(ElementId::Name(
-                    format!("storage-tile-{disk}-{}", game.id.key()).into(),
-                ))
-                .keyboard_focusable(cx)
-                .cursor_pointer()
-                .when_some(art, |d, img| {
-                    d.child(
-                        img.absolute()
-                            .top_0()
-                            .left_0()
-                            .size_full()
-                            .object_fit(ObjectFit::Cover),
-                    )
-                })
-                .children(label)
-                .on_click(move |_, _, cx| navigate(Route::Game(id.clone()), cx));
-            tiles.push(wrap_tile(*rect, tile.into_any_element()));
-        }
-        if rest_bytes > 0
-            && let Some(rect) = rects.last()
-        {
-            let title = if rest.len() == 1 {
-                t("settings.storage.more_games_one")
-            } else {
-                t_args(
-                    "settings.storage.more_games_other",
-                    &[("count", &rest.len().to_string())],
-                )
-            };
-            let label = (rect.w >= LABEL_MIN.0 && rect.h >= LABEL_MIN.1)
-                .then(|| tile_label(&title, rest_bytes, popover, popover_fg, muted_fg));
-            tiles.push(wrap_tile(
-                *rect,
-                tile_frame(radius, rest_fill)
-                    .children(label)
-                    .into_any_element(),
-            ));
-        }
-        v_flex()
-            .gap_2()
-            .child(SectionTitle::new(t("settings.storage.games_by_size")))
-            .child(
-                div()
-                    .image_cache(self.images.clone())
-                    .relative()
-                    .w_full()
-                    .h(rems(TREEMAP_REM))
-                    .children(tiles),
+    fn render_treemap_card(&self, report: &StorageReport, cx: &mut Context<Self>) -> AnyElement {
+        let active_ix = self
+            .selected_drive
+            .unwrap_or(self.treemap_drive)
+            .min(report.disks.len().saturating_sub(1));
+        let Some(disk) = report.disks.get(active_ix) else {
+            return div().into_any_element();
+        };
+        let p = Palette::of(cx);
+        let drive_label = disk.drive.label();
+        let summary = if disk.games.len() == 1 {
+            t_args(
+                "settings.storage.treemap_summary_one",
+                &[
+                    ("drive", &drive_label),
+                    ("size", &format_bytes(disk.games_bytes())),
+                ],
             )
-            .into_any_element()
+        } else {
+            t_args(
+                "settings.storage.treemap_summary",
+                &[
+                    ("drive", &drive_label),
+                    ("size", &format_bytes(disk.games_bytes())),
+                    ("count", &disk.games.len().to_string()),
+                ],
+            )
+        };
+        let drive_pills = (report.disks.len() > 1).then(|| {
+            seg_bar(p).children(report.disks.iter().enumerate().map(|(ix, d)| {
+                Button::new(ElementId::Name(format!("storage-tm-drive-{ix}").into()))
+                    .xsmall()
+                    .when(ix == active_ix, |b| b.primary())
+                    .when(ix != active_ix, |b| b.ghost())
+                    .label(d.drive.label())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.treemap_drive = ix;
+                        if this.selected_drive.is_some() {
+                            this.selected_drive = Some(ix);
+                            this.rebuild_game_rows(cx);
+                        }
+                        cx.notify();
+                    }))
+            }))
+        });
+        let header = h_flex()
+            .w_full()
+            .px_4()
+            .py_3()
+            .justify_between()
+            .items_center()
+            .flex_wrap()
+            .gap_2()
+            .when(!self.treemap_collapsed, |h| {
+                h.border_b_1().border_color(p.border)
+            })
+            .child(
+                h_flex()
+                    .gap_2p5()
+                    .items_baseline()
+                    .flex_wrap()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_semibold()
+                            .child(t("settings.storage.games_by_size")),
+                    )
+                    .child(div().text_xs().text_color(p.muted_fg).child(summary)),
+            )
+            .child(
+                h_flex().gap_2().items_center().children(drive_pills).child(
+                    Button::new("storage-toggle-treemap")
+                        .ghost()
+                        .small()
+                        .icon(if self.treemap_collapsed {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronUp
+                        })
+                        .label(t(if self.treemap_collapsed {
+                            "settings.storage.show_map"
+                        } else {
+                            "settings.storage.hide_map"
+                        }))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.treemap_collapsed = !this.treemap_collapsed;
+                            cx.notify();
+                        })),
+                ),
+            );
+        let body = if self.treemap_collapsed {
+            None
+        } else if disk.games.is_empty() {
+            Some(
+                div()
+                    .p_4()
+                    .child(muted(t("settings.storage.no_games_match"), cx))
+                    .into_any_element(),
+            )
+        } else {
+            let (major, minor) = partition_treemap(&disk.games);
+            let minor_bytes: u64 = minor.iter().map(|g| g.bytes).sum();
+            let mut values: Vec<f64> = major.iter().map(|g| g.bytes as f64).collect();
+            if minor_bytes > 0 {
+                values.push(minor_bytes as f64);
+            }
+            let rects = treemap::squarify(&values, TREEMAP_ASPECT, 1.);
+            let library = models(cx).library.read(cx).snapshot.clone();
+            let scrim_bg = p.bg.opacity(0.84);
+            let now = irori_core::util::unix_now() as i64;
+            let mut tiles: Vec<AnyElement> = Vec::with_capacity(rects.len());
+            for (ix, (game, rect)) in major.iter().zip(&rects).enumerate() {
+                let art = library
+                    .get(&game.id)
+                    .and_then(|g| g.hero_art().map(str::to_owned))
+                    .and_then(|url| irori_ui::components::art_img(&url, TILE_ART_PX, false, cx));
+                let id = game.id.clone();
+                let show_label = rect.w >= LABEL_MIN.0 && rect.h >= LABEL_MIN.1;
+                let tip: SharedString = format!(
+                    "{} · {} · {}",
+                    game.title,
+                    format_bytes(game.bytes),
+                    played_label(days_since(game.last_played.as_deref(), now))
+                )
+                .into();
+                let tile = tile_frame(p.radius, p.charts[ix % p.charts.len()])
+                    .id(ElementId::Name(
+                        format!("storage-tile-{active_ix}-{}", game.id.key()).into(),
+                    ))
+                    .keyboard_focusable(cx)
+                    .cursor_pointer()
+                    .tooltip(move |window, cx| plain_tooltip(tip.clone(), window, cx))
+                    .when_some(art, |d, img| {
+                        d.child(
+                            img.absolute()
+                                .top_0()
+                                .left_0()
+                                .size_full()
+                                .object_fit(ObjectFit::Cover),
+                        )
+                    })
+                    .when(show_label, |d| {
+                        d.child(tile_label(
+                            &game.title,
+                            game.bytes,
+                            scrim_bg,
+                            p.fg,
+                            p.muted_fg,
+                        ))
+                    })
+                    .on_click(move |_, _, cx| navigate(Route::Game(id.clone()), cx));
+                tiles.push(wrap_tile(*rect, tile.into_any_element()));
+            }
+            if minor_bytes > 0
+                && let Some(rect) = rects.last()
+            {
+                let label = t_args(
+                    "settings.storage.smaller_games",
+                    &[("count", &minor.len().to_string())],
+                );
+                let cluster = tile_frame(p.radius, p.track)
+                    .id(ElementId::Name(
+                        format!("storage-cluster-{active_ix}").into(),
+                    ))
+                    .border_1()
+                    .border_color(p.border)
+                    .keyboard_focusable(cx)
+                    .cursor_pointer()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .p_2()
+                    .child(div().text_xs().font_semibold().truncate().child(label))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_fg)
+                            .child(format_bytes(minor_bytes)),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.selected_drive = Some(active_ix);
+                        this.sort = GameSort::Size;
+                        this.rebuild_game_rows(cx);
+                        cx.notify();
+                    }));
+                tiles.push(wrap_tile(*rect, cluster.into_any_element()));
+            }
+            Some(
+                div()
+                    .p_3()
+                    .child(
+                        div()
+                            .image_cache(self.images.clone())
+                            .relative()
+                            .w_full()
+                            .h(rems(TREEMAP_REM))
+                            .children(tiles),
+                    )
+                    .into_any_element(),
+            )
+        };
+        card_box(p).child(header).children(body).into_any_element()
     }
 
-    /// Every installed game with its size and when it was last played, in
-    /// the chosen order, each with Open folder and Uninstall.
+    /// Every installed game with aligned columns, search, filters and sort.
     fn render_games(&self, report: &StorageReport, cx: &mut Context<Self>) -> AnyElement {
-        let games = sorted_games(report, self.sort);
-        let library = models(cx).library.read(cx).snapshot.clone();
-        let now = irori_core::util::unix_now() as i64;
-        let rows: Rc<Vec<GameRow>> = Rc::new(
-            games
-                .into_iter()
-                .map(|g| {
-                    let game = library.get(&g.id);
-                    GameRow {
-                        folder: game
-                            .and_then(|g| g.install.as_ref())
-                            .map(|i| PathBuf::from(&i.install_path))
-                            .filter(|p| !p.as_os_str().is_empty()),
-                        can_uninstall: g.id.runner.manages_installs(),
-                        days: days_since(g.last_played.as_deref(), now),
-                        game: g,
-                    }
-                })
-                .collect(),
-        );
+        let p = Palette::of(cx);
+        let rows = self.cached_rows.clone();
         let count = rows.len();
-        let sort_button = |id: &'static str, sort: GameSort, label: &str| {
+        let filtered_bytes: u64 = rows.iter().map(|r| r.game.bytes).sum();
+        let never_count = report
+            .disks
+            .iter()
+            .enumerate()
+            .filter(|(ix, _)| self.selected_drive.is_none_or(|sel| sel == *ix))
+            .flat_map(|(_, d)| d.games.iter())
+            .filter(|g| g.last_played.is_none())
+            .count();
+        let has_filters = self.selected_drive.is_some()
+            || self.only_never_played
+            || self.only_managed
+            || !self.search_query.trim().is_empty();
+        let sort_btn = |id: &'static str, sort: GameSort, label: &str| {
             Button::new(id)
                 .small()
                 .when(self.sort == sort, |b| b.primary())
@@ -1177,47 +1729,181 @@ impl StoragePanel {
                 .label(t(label))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.sort = sort;
+                    this.rebuild_game_rows(cx);
                     cx.notify();
                 }))
         };
-        let list = uniform_list("storage-games", count, move |range, _, cx| {
-            range
-                .filter_map(|ix| rows.get(ix).map(|row| game_row(ix, row, cx)))
-                .collect()
-        })
-        .h(rems(GAME_ROW_REM * count.clamp(1, GAME_ROWS) as f32));
-        v_flex()
+        let header = h_flex()
+            .w_full()
+            .px_4()
+            .py_3()
+            .border_b_1()
+            .border_color(p.border)
+            .justify_between()
+            .items_center()
+            .flex_wrap()
             .gap_2()
             .child(
                 h_flex()
-                    .flex_wrap()
-                    .justify_between()
-                    .gap_2()
-                    .child(SectionTitle::new(t("settings.storage.game_list")))
+                    .gap_2p5()
+                    .items_baseline()
                     .child(
-                        h_flex()
-                            .gap_1()
-                            .child(sort_button(
-                                "storage-sort-size",
-                                GameSort::Size,
-                                "settings.storage.sort_size",
-                            ))
-                            .child(sort_button(
-                                "storage-sort-played",
-                                GameSort::LastPlayed,
-                                "settings.storage.sort_last_played",
-                            )),
+                        div()
+                            .text_sm()
+                            .font_semibold()
+                            .child(t("settings.storage.game_list")),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(p.muted_fg)
+                            .child(format!("{count} · {}", format_bytes(filtered_bytes))),
                     ),
             )
             .child(
-                div()
-                    .rounded(cx.theme().radius_lg)
-                    .bg(cx.theme().secondary)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .py_1()
-                    .child(list),
+                seg_bar(p)
+                    .child(sort_btn(
+                        "storage-sort-size",
+                        GameSort::Size,
+                        "settings.storage.sort_size",
+                    ))
+                    .child(sort_btn(
+                        "storage-sort-played",
+                        GameSort::LastPlayed,
+                        "settings.storage.sort_last_played",
+                    ))
+                    .child(sort_btn(
+                        "storage-sort-name",
+                        GameSort::Name,
+                        "settings.storage.sort_name",
+                    )),
+            );
+        let toolbar = h_flex()
+            .w_full()
+            .px_4()
+            .py_2p5()
+            .border_b_1()
+            .border_color(p.border)
+            .bg(p.bg.opacity(0.45))
+            .justify_between()
+            .items_center()
+            .flex_wrap()
+            .gap_2()
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_w(rems(14.))
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div().w(rems(16.)).max_w_full().child(
+                            Input::new(&self.search)
+                                .id("storage-games-search")
+                                .small()
+                                .aria_label(t("settings.storage.search_games"))
+                                .prefix(Icon::new(IconName::Search).small())
+                                .cleanable(true),
+                        ),
+                    )
+                    .child(
+                        Button::new("storage-filter-never")
+                            .small()
+                            .when(self.only_never_played, |b| b.primary())
+                            .when(!self.only_never_played, |b| b.outline())
+                            .label(t_args(
+                                "settings.storage.filter_never_played",
+                                &[("count", &never_count.to_string())],
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.only_never_played = !this.only_never_played;
+                                this.rebuild_game_rows(cx);
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        Button::new("storage-filter-managed")
+                            .small()
+                            .when(self.only_managed, |b| b.primary())
+                            .when(!self.only_managed, |b| b.outline())
+                            .label(t("settings.storage.filter_managed"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.only_managed = !this.only_managed;
+                                this.rebuild_game_rows(cx);
+                                cx.notify();
+                            })),
+                    ),
             )
+            .when(has_filters, |h| {
+                h.child(
+                    Button::new("storage-clear-filters")
+                        .ghost()
+                        .small()
+                        .label(t("settings.storage.clear_filters"))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.clear_filters(window, cx)),
+                        ),
+                )
+            });
+        let table_head = h_flex()
+            .w_full()
+            .px_4()
+            .py_2()
+            .gap_3()
+            .border_b_1()
+            .border_color(p.border)
+            .bg(p.bg.opacity(0.35))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(caption(t("settings.storage.col_game"), cx)),
+            )
+            .child(
+                div()
+                    .w(rems(8.))
+                    .flex_shrink_0()
+                    .child(caption(t("settings.storage.col_share"), cx)),
+            )
+            .child(
+                div()
+                    .w(rems(5.5))
+                    .flex_shrink_0()
+                    .text_right()
+                    .child(caption(t("settings.storage.col_size"), cx)),
+            )
+            .child(
+                div()
+                    .w(rems(6.75))
+                    .flex_shrink_0()
+                    .text_right()
+                    .child(caption(t("settings.storage.col_actions"), cx)),
+            );
+        let body: AnyElement = if count == 0 {
+            div()
+                .p_6()
+                .text_center()
+                .child(muted(t("settings.storage.no_games_match"), cx))
+                .into_any_element()
+        } else {
+            let list = uniform_list("storage-games", count, move |range, _, cx| {
+                range
+                    .filter_map(|ix| rows.get(ix).map(|row| game_row(ix, row, cx)))
+                    .collect()
+            })
+            .w_full()
+            .h(rems(GAME_ROW_REM * count.clamp(1, GAME_ROWS) as f32));
+            div()
+                .image_cache(self.images.clone())
+                .w_full()
+                .child(list)
+                .into_any_element()
+        };
+        card_box(p)
+            .child(header)
+            .child(toolbar)
+            .child(table_head)
+            .child(body)
             .into_any_element()
     }
 
@@ -1730,100 +2416,167 @@ impl StoragePanel {
 /// One game of the game list, ready to draw.
 struct GameRow {
     game: GameSize,
+    drive_label: SharedString,
     folder: Option<PathBuf>,
+    art_url: Option<String>,
     can_uninstall: bool,
     days: Option<i64>,
+    share: f32,
 }
 
 fn game_row(ix: usize, row: &GameRow, cx: &mut App) -> AnyElement {
-    let theme = cx.theme();
-    let (muted_fg, warning, radius, border) = (
-        theme.muted_foreground,
-        theme.warning,
-        theme.radius,
-        theme.border,
-    );
+    let p = Palette::of(cx);
     let id: GameId = row.game.id.clone();
+    let nav_id = id.clone();
     let idle = row.days.is_some_and(|d| d >= IDLE_DAYS);
+    let never = row.days.is_none();
     let folder = row.folder.clone();
+    let thumb_art = row
+        .art_url
+        .as_deref()
+        .and_then(|u| irori_ui::components::art_img(u, THUMB_ART_PX, false, cx));
+    let thumb = h_flex()
+        .w(rems(3.25))
+        .h(rems(2.0))
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .rounded(p.radius)
+        .overflow_hidden()
+        .bg(p.bg)
+        .border_1()
+        .border_color(p.border)
+        .map(|box_| match thumb_art {
+            Some(img) => box_.child(img.size_full().object_fit(ObjectFit::Cover)),
+            None => box_.child(Icon::new(IconName::Gamepad2).small().text_color(p.muted_fg)),
+        });
+    let uninstall_btn = Button::new(ElementId::Name(format!("storage-uninstall-{ix}").into()))
+        .ghost()
+        .small()
+        .icon(IconName::Trash)
+        .disabled(!row.can_uninstall)
+        .tooltip(if row.can_uninstall {
+            t("settings.storage.uninstall")
+        } else {
+            t_args(
+                "settings.storage.managed_by",
+                &[("store", row.game.id.runner.store_name())],
+            )
+        })
+        .when(row.can_uninstall, |b| {
+            let uid = id.clone();
+            b.on_click(move |_, window, cx| irori_ui::hooks::uninstall(uid.clone(), window, cx))
+        });
     h_flex()
         .id(ElementId::Name(format!("storage-game-{ix}").into()))
+        .w_full()
         .h(rems(GAME_ROW_REM))
         .px_4()
         .gap_3()
-        .when(ix > 0, |d| d.border_t_1().border_color(border))
+        .items_center()
+        .when(ix > 0, |d| d.border_t_1().border_color(p.border))
         .child(
-            v_flex()
+            h_flex()
                 .flex_1()
                 .min_w_0()
+                .gap_3()
+                .items_center()
+                .child(thumb)
                 .child(
-                    div()
-                        .text_sm()
-                        .font_medium()
-                        .truncate()
-                        .child(row.game.title.clone()),
-                )
-                .child(
-                    h_flex()
-                        .gap_2()
+                    v_flex()
+                        .flex_1()
                         .min_w_0()
-                        .text_xs()
-                        .text_color(muted_fg)
-                        .child(div().truncate().child(played_label(row.days)))
-                        .when(idle, |h| {
-                            h.child(
-                                div()
-                                    .flex_shrink_0()
-                                    .px_1p5()
-                                    .rounded(radius)
-                                    .border_1()
-                                    .border_color(warning)
-                                    .text_color(warning)
-                                    .child(t("settings.storage.idle")),
-                            )
-                        }),
+                        .gap_0p5()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_medium()
+                                .truncate()
+                                .child(row.game.title.clone()),
+                        )
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .min_w_0()
+                                .items_center()
+                                .text_xs()
+                                .text_color(if never { p.warning } else { p.muted_fg })
+                                .child(div().truncate().child(played_label(row.days)))
+                                .child(
+                                    div()
+                                        .flex_shrink_0()
+                                        .px_1p5()
+                                        .rounded(p.radius)
+                                        .bg(p.bg)
+                                        .border_1()
+                                        .border_color(p.border)
+                                        .text_color(p.muted_fg)
+                                        .child(row.drive_label.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .flex_shrink_0()
+                                        .text_color(p.muted_fg)
+                                        .child(row.game.id.runner.short_name()),
+                                )
+                                .when(idle, |h| {
+                                    h.child(pill_badge(
+                                        t("settings.storage.idle"),
+                                        PillTone::Warning,
+                                        p,
+                                    ))
+                                }),
+                        ),
                 ),
         )
         .child(
+            div().w(rems(8.)).flex_shrink_0().child(
+                div()
+                    .w_full()
+                    .h(px(6.))
+                    .rounded(px(3.))
+                    .bg(p.track)
+                    .overflow_hidden()
+                    .child(div().h_full().w(relative(row.share)).bg(p.charts[0])),
+            ),
+        )
+        .child(
             div()
+                .w(rems(5.5))
                 .flex_shrink_0()
+                .text_right()
                 .text_sm()
-                .text_color(muted_fg)
+                .font_medium()
                 .child(format_bytes(row.game.bytes)),
         )
         .child(
-            Button::new(ElementId::Name(format!("storage-open-{ix}").into()))
-                .ghost()
-                .small()
-                .icon(IconName::FolderOpen)
-                .tooltip(t("settings.storage.open_folder"))
-                .disabled(folder.is_none())
-                .on_click(move |_, _, cx| {
-                    if let Some(folder) = &folder {
-                        cx.open_with_system(folder);
-                    }
-                }),
-        )
-        .when(row.can_uninstall, |h| {
-            let id = id.clone();
-            h.child(
-                Button::new(ElementId::Name(format!("storage-uninstall-{ix}").into()))
-                    .ghost()
-                    .small()
-                    .icon(IconName::Trash)
-                    .tooltip(t("settings.storage.uninstall"))
-                    .on_click(move |_, window, cx| {
-                        irori_ui::hooks::uninstall(id.clone(), window, cx)
-                    }),
-            )
-        })
-        .child(
-            Button::new(ElementId::Name(format!("storage-page-{ix}").into()))
-                .ghost()
-                .small()
-                .icon(IconName::ChevronRight)
-                .tooltip(t("settings.storage.open_game"))
-                .on_click(move |_, _, cx| navigate(Route::Game(id.clone()), cx)),
+            h_flex()
+                .w(rems(6.75))
+                .flex_shrink_0()
+                .justify_end()
+                .gap_1()
+                .child(
+                    Button::new(ElementId::Name(format!("storage-open-{ix}").into()))
+                        .ghost()
+                        .small()
+                        .icon(IconName::FolderOpen)
+                        .tooltip(t("settings.storage.open_folder"))
+                        .disabled(folder.is_none())
+                        .on_click(move |_, _, cx| {
+                            if let Some(folder) = &folder {
+                                cx.open_with_system(folder);
+                            }
+                        }),
+                )
+                .child(uninstall_btn)
+                .child(
+                    Button::new(ElementId::Name(format!("storage-page-{ix}").into()))
+                        .ghost()
+                        .small()
+                        .icon(IconName::ChevronRight)
+                        .tooltip(t("settings.storage.open_game"))
+                        .on_click(move |_, _, cx| navigate(Route::Game(nav_id.clone()), cx)),
+                ),
         )
         .into_any_element()
 }
@@ -1869,17 +2622,15 @@ fn tile_frame(radius: gpui_kit::Pixels, fill: Hsla) -> gpui_kit::Div {
         .bg(fill)
 }
 
-/// A game's title and size on a chip at the bottom of its tile, in the
-/// popover's colours so it reads over any art.
+/// Edge-to-edge bottom scrim for a game tile so text reads cleanly over art.
 fn tile_label(title: &str, bytes: u64, bg: Hsla, fg: Hsla, muted_fg: Hsla) -> AnyElement {
     v_flex()
         .absolute()
-        .left_1()
-        .bottom_1()
-        .max_w(relative(0.92))
-        .px_1p5()
-        .py_0p5()
-        .rounded_sm()
+        .left_0()
+        .right_0()
+        .bottom_0()
+        .px_2()
+        .py_1p5()
         .bg(bg)
         .text_xs()
         .child(
@@ -1887,7 +2638,7 @@ fn tile_label(title: &str, bytes: u64, bg: Hsla, fg: Hsla, muted_fg: Hsla) -> An
                 .min_w_0()
                 .truncate()
                 .text_color(fg)
-                .font_medium()
+                .font_semibold()
                 .child(title.to_string()),
         )
         .child(div().text_color(muted_fg).child(format_bytes(bytes)))
@@ -1895,7 +2646,14 @@ fn tile_label(title: &str, bytes: u64, bg: Hsla, fg: Hsla, muted_fg: Hsla) -> An
 }
 
 impl Render for StoragePanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.language.changed() {
+            cx.defer_in(window, |this, window, cx| {
+                let placeholder = t("settings.storage.search_games");
+                this.search
+                    .update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
+            });
+        }
         let error = self
             .error
             .clone()
@@ -1912,32 +2670,23 @@ impl Render for StoragePanel {
         let refreshing = models(cx).library.read(cx).refreshing;
         let (info, radius) = (cx.theme().info, cx.theme().radius);
         let tab_body: AnyElement = match self.active_tab {
-            StorageTab::Games => {
-                let disks: Vec<AnyElement> = report
-                    .disks
-                    .iter()
-                    .enumerate()
-                    .map(|(ix, disk)| self.render_disk(ix, disk, cx))
-                    .collect();
-                v_flex()
-                    .id("storage-tab-games")
-                    .debug_selector(|| "storage-tab-games".into())
-                    .w_full()
-                    .gap_3()
-                    .when(disks.is_empty(), |v| {
-                        v.child(muted(t("settings.storage.no_disks"), cx))
-                    })
-                    .children(disks)
-                    .when(report.disks.iter().any(|d| !d.games.is_empty()), |v| {
-                        v.child(self.render_games(&report, cx))
-                    })
-                    .into_any_element()
-            }
+            StorageTab::Games => v_flex()
+                .id("storage-tab-games")
+                .debug_selector(|| "storage-tab-games".into())
+                .w_full()
+                .gap_4()
+                .when(!report.disks.is_empty(), |v| {
+                    v.child(self.render_treemap_card(&report, cx))
+                })
+                .when(report.disks.iter().any(|d| !d.games.is_empty()), |v| {
+                    v.child(self.render_games(&report, cx))
+                })
+                .into_any_element(),
             StorageTab::Cleanup => self.render_cleanup_tab(&report, cx),
         };
         v_flex()
             .w_full()
-            .gap_3()
+            .gap_4()
             .children(error)
             .when(refreshing, |v| {
                 v.child(
@@ -1957,6 +2706,12 @@ impl Render for StoragePanel {
                 )
             })
             .child(self.render_summary(&report, cx))
+            .when(report.disks.is_empty(), |v| {
+                v.child(muted(t("settings.storage.no_disks"), cx))
+            })
+            .when(!report.disks.is_empty(), |v| {
+                v.child(self.render_drives(&report, cx))
+            })
             .child(self.render_tabs(&report, cx))
             .child(tab_body)
             .into_any_element()
@@ -2047,6 +2802,22 @@ mod tests {
         };
         assert_eq!(order(GameSort::Size), ["big", "old", "never"]);
         assert_eq!(order(GameSort::LastPlayed), ["never", "old", "big"]);
+        assert_eq!(order(GameSort::Name), ["big", "never", "old"]);
+    }
+
+    #[test]
+    fn treemap_groups_multiple_tiny_tail_games() {
+        let games = vec![
+            sized("a", 400, None),
+            sized("b", 250, None),
+            sized("c", 200, None),
+            sized("d", 120, None),
+            sized("tiny1", 15, None),
+            sized("tiny2", 10, None),
+        ];
+        let (major, minor) = partition_treemap(&games);
+        assert_eq!(major.len(), 4);
+        assert_eq!(minor.len(), 2);
     }
 
     #[test]
