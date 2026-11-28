@@ -53,40 +53,38 @@ impl HistoryRow {
     }
 }
 
-/// Which finished downloads the history shows.
+/// Which finished downloads the completed/history list shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum HistoryFilter {
     #[default]
     All,
-    /// Downloads that finished.
-    Done,
-    /// Downloads that failed or were canceled.
-    Unfinished,
+    /// Store installs and updates.
+    Store,
+    /// Direct links and BitTorrent downloads.
+    Links,
 }
 
 impl HistoryFilter {
     /// Every choice, in the order the page offers them.
     pub const ALL: [HistoryFilter; 3] = [
         HistoryFilter::All,
-        HistoryFilter::Done,
-        HistoryFilter::Unfinished,
+        HistoryFilter::Store,
+        HistoryFilter::Links,
     ];
 
-    pub fn matches(self, state: DownloadState) -> bool {
-        match self {
-            HistoryFilter::All => true,
-            HistoryFilter::Done => state == DownloadState::Done,
-            HistoryFilter::Unfinished => {
-                matches!(state, DownloadState::Failed | DownloadState::Canceled)
-            }
-        }
+    pub fn includes_store(self) -> bool {
+        matches!(self, HistoryFilter::All | HistoryFilter::Store)
+    }
+
+    pub fn includes_links(self) -> bool {
+        matches!(self, HistoryFilter::All | HistoryFilter::Links)
     }
 
     pub fn label(self) -> SharedString {
         match self {
             HistoryFilter::All => t("manage.downloads.history.filter.all"),
-            HistoryFilter::Done => t("manage.downloads.history.filter.done"),
-            HistoryFilter::Unfinished => t("manage.downloads.history.filter.unfinished"),
+            HistoryFilter::Store => t("manage.downloads.history.filter.store"),
+            HistoryFilter::Links => t("manage.downloads.history.filter.links"),
         }
     }
 }
@@ -167,11 +165,9 @@ impl QueuePresentation {
         self.current.is_none() && self.waiting.is_empty() && self.history.is_empty()
     }
 
-    /// The history rows `filter` keeps, most recent first.
+    /// The store history rows `filter` keeps, most recent first.
     pub fn history_in(&self, filter: HistoryFilter) -> impl Iterator<Item = &HistoryRow> {
-        self.history
-            .iter()
-            .filter(move |r| filter.matches(r.item.state))
+        self.history.iter().filter(move |_| filter.includes_store())
     }
 
     pub fn has_active(&self) -> bool {
@@ -506,8 +502,8 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(apps(HistoryFilter::All).len(), 4);
-        assert_eq!(apps(HistoryFilter::Done), ["done", "gone"]);
-        assert_eq!(apps(HistoryFilter::Unfinished), ["failed", "canceled"]);
+        assert_eq!(apps(HistoryFilter::Store).len(), 4);
+        assert!(apps(HistoryFilter::Links).is_empty());
         let playable: Vec<_> = p
             .history
             .iter()

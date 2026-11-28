@@ -89,6 +89,7 @@ pub mod updates;
 pub mod user_actions;
 pub mod userdata;
 mod vndb;
+pub mod web_downloads;
 mod windows_files;
 
 use std::collections::BTreeMap;
@@ -162,6 +163,11 @@ pub use updates::{
     PreviousBuild,
 };
 pub use userdata::{BulkSnapshot, UserData, UserDataService};
+pub use web_downloads::{
+    Aria2Status, DownloadSource, PostAction, SideloadBridge, SideloadCandidate, TorrentFileEntry,
+    TorrentPreview, WebDownload, WebDownloadId, WebDownloadKind, WebDownloadRequest,
+    WebDownloadSnapshot, WebDownloadState,
+};
 pub use windows_files::{can_open_windows_files_by_default, opens_windows_files};
 
 /// Whether a store's library refresh reads only this computer while Irori
@@ -217,6 +223,13 @@ pub struct Inner {
     downloads_wake: Notify,
     files: Mutex<files::FilesState>,
     files_wake: Notify,
+    rate_limiter: irori_depot::SharedRateLimiter,
+    web_downloads: Mutex<web_downloads::WebDownloadsState>,
+    web_downloads_wake: Notify,
+    web_downloads_progress_wake: Notify,
+    web_extract_slots: Arc<tokio::sync::Semaphore>,
+    aria2: Arc<web_downloads::aria2::Aria2Supervisor>,
+    sideload_bridge: RwLock<Option<Arc<dyn web_downloads::SideloadBridge>>>,
     running: Mutex<BTreeMap<irori_core::GameId, games::RunningGame>>,
     /// Game sessions running or still ending (saves, mods), which powering
     /// off waits for ([`power::OpenSession`]).
@@ -234,6 +247,8 @@ pub struct Inner {
     isolated: bool,
     /// The queue was paused by [`Backend::pause_downloads_while_offline`].
     auto_paused: AtomicBool,
+    /// Web downloads were paused by [`Backend::pause_downloads_while_offline`].
+    web_auto_paused: AtomicBool,
     /// The computer is kept awake for downloads after the screen was turned
     /// off (`screen.rs`).
     screen_off_hold: AtomicBool,
@@ -332,6 +347,8 @@ impl Backend {
             Arc::new(move || settings.app())
         };
         let stores = make_stores(bus.clone(), settings_fn);
+        let initial_speed_bps = u64::from(settings.app().max_download_speed) * 1024;
+        let allow_web_auto_start = interactive && !isolated;
         let backend = Backend(Arc::new(Inner {
             rt,
             settings,
@@ -349,6 +366,13 @@ impl Backend {
             downloads_wake: Notify::new(),
             files: Mutex::new(files::FilesState::default()),
             files_wake: Notify::new(),
+            rate_limiter: irori_depot::SharedRateLimiter::new(initial_speed_bps),
+            web_downloads: Mutex::new(web_downloads::WebDownloadsState::load(allow_web_auto_start)),
+            web_downloads_wake: Notify::new(),
+            web_downloads_progress_wake: Notify::new(),
+            web_extract_slots: Arc::new(tokio::sync::Semaphore::new(1)),
+            aria2: web_downloads::aria2::Aria2Supervisor::new(),
+            sideload_bridge: RwLock::new(None),
             running: Mutex::new(BTreeMap::new()),
             open_sessions: tokio::sync::watch::Sender::new(0),
             power_system: RwLock::new(Arc::new(power::ThisSystem)),
@@ -358,6 +382,7 @@ impl Backend {
             online: AtomicBool::new(true),
             isolated,
             auto_paused: AtomicBool::new(false),
+            web_auto_paused: AtomicBool::new(false),
             screen_off_hold: AtomicBool::new(false),
             steam_shortcuts_shown: std::sync::atomic::AtomicUsize::new(0),
             presence: discord::Presence::default(),
@@ -461,9 +486,109 @@ impl Backend {
         let was_online = self.is_online_now();
         let online = self.check_connectivity().await;
         self.pause_downloads_while_offline(was_online, online);
+        if self.working_offline() {
+            self.aria2.shutdown().await;
+        }
         if online && !was_online {
             self.downloads_wake.notify_one();
+            self.web_downloads_wake.notify_one();
         }
+    }
+
+    /// Inject the sideload scanning/registration bridge from the app crate.
+    pub fn set_sideload_bridge(&self, bridge: Arc<dyn web_downloads::SideloadBridge>) {
+        *self.sideload_bridge.write() = Some(bridge);
+    }
+
+    /// Shared dynamic bandwidth limiter used across store, file, and direct web downloads.
+    pub fn shared_rate_limiter(&self) -> irori_depot::SharedRateLimiter {
+        self.rate_limiter.clone()
+    }
+
+    /// Pause both store downloads and web/torrent downloads together.
+    pub fn pause_all_downloads(&self) {
+        self.auto_paused.store(false, Ordering::Relaxed);
+        self.web_auto_paused.store(false, Ordering::Relaxed);
+        self.pause_downloads();
+        self.pause_web_downloads();
+    }
+
+    /// Resume both store downloads and web/torrent downloads together.
+    pub fn resume_all_downloads(&self) {
+        self.auto_paused.store(false, Ordering::Relaxed);
+        self.web_auto_paused.store(false, Ordering::Relaxed);
+        self.resume_downloads();
+        self.resume_web_downloads();
+    }
+
+    /// Whether ANY store download, file extra download, or web download /
+    /// extraction / setup installation is actively running or unpaused in queue.
+    pub fn has_active_transfers(&self) -> bool {
+        let store_active = {
+            let q = self.downloads.lock();
+            !q.paused && !q.active.is_empty()
+        };
+        let files_active = self.files.lock().list.iter().any(FileDownload::is_active);
+        let web_active = self.web_downloads.lock().has_busy_or_unpaused_work();
+        store_active || files_active || web_active
+    }
+
+    /// Gracefully stop active web downloads and shut down any on-demand `aria2c`
+    /// daemon before application exit.
+    pub async fn shutdown(&self) {
+        self.cancel_torrent_preview();
+        self.pause_web_downloads_for_shutdown();
+        self.aria2.shutdown().await;
+    }
+
+    /// Reconcile the dynamic bandwidth budget across `SharedRateLimiter` (`depot`)
+    /// and `aria2c` so combined throughput stays within `1x maxDownloadSpeed`.
+    pub(crate) fn reconcile_bandwidth_limits(&self) {
+        let total_cap = u64::from(self.settings.app().max_download_speed) * 1024;
+        let depot_active = {
+            let store_running = self
+                .downloads
+                .lock()
+                .active
+                .iter()
+                .any(|d| d.state == DownloadState::Running);
+            let file_running = self
+                .files
+                .lock()
+                .list
+                .iter()
+                .any(|f| f.state == FileState::Running);
+            let direct_running = self.web_downloads.lock().has_running_direct();
+            store_running || file_running || direct_running
+        };
+        let aria2_active =
+            self.web_downloads.lock().has_running_bt() || self.aria2.has_active_leases();
+        let (depot_cap, aria2_cap) = split_bandwidth_budget(total_cap, depot_active, aria2_active);
+        self.rate_limiter.set_limit(depot_cap);
+        if aria2_active {
+            let aria2 = self.aria2.clone();
+            self.spawn(async move {
+                aria2.set_global_download_limit(aria2_cap).await;
+            });
+        }
+    }
+
+    pub(crate) fn current_aria2_cap(&self) -> u64 {
+        let total_cap = u64::from(self.settings.app().max_download_speed) * 1024;
+        let depot_active = self
+            .downloads
+            .lock()
+            .active
+            .iter()
+            .any(|d| d.state == DownloadState::Running)
+            || self
+                .files
+                .lock()
+                .list
+                .iter()
+                .any(|f| f.state == FileState::Running)
+            || self.web_downloads.lock().has_running_direct();
+        split_bandwidth_budget(total_cap, depot_active, true).1
     }
 
     /// The connection as last probed, whatever the network mode.
@@ -522,6 +647,7 @@ impl Backend {
             if !interactive || b.isolated {
                 return;
             }
+            b.web_downloads_wake.notify_one();
             // The clip shortcut works from the first game on.
             if cfg!(target_os = "linux") && b.settings.app().game.replay.enabled {
                 let shortcut = b.clone();
@@ -568,6 +694,9 @@ impl Backend {
             let mut tag_limit = b.settings.app().steam_tag_limit;
             let mut proton_to_steam = b.settings.app().download_proton_to_steam;
             let mut network_mode = b.settings.app().network_mode;
+            let mut max_download_speed = b.settings.app().max_download_speed;
+            let mut web_bittorrent = b.settings.app().web_downloads.bittorrent;
+            let mut web_max_concurrent = b.settings.app().web_downloads.max_concurrent;
             loop {
                 match rx.recv().await {
                     Ok(Event::LibraryChanged(_) | Event::GameChanged(_)) => {
@@ -598,6 +727,23 @@ impl Backend {
                             let b = b.clone();
                             b.clone()
                                 .spawn(async move { b.follow_network_mode().await });
+                        }
+                        if app.max_download_speed != max_download_speed {
+                            max_download_speed = app.max_download_speed;
+                            b.reconcile_bandwidth_limits();
+                        }
+                        if app.web_downloads.bittorrent != web_bittorrent {
+                            let was_bt = web_bittorrent;
+                            web_bittorrent = app.web_downloads.bittorrent;
+                            if was_bt && !web_bittorrent {
+                                b.on_bittorrent_disabled();
+                            } else if web_bittorrent {
+                                b.web_downloads_wake.notify_one();
+                            }
+                        }
+                        if app.web_downloads.max_concurrent != web_max_concurrent {
+                            web_max_concurrent = app.web_downloads.max_concurrent;
+                            b.web_downloads_wake.notify_one();
                         }
                         let now = switches(&app);
                         for (runner, (was, is)) in [Runner::Zoom, Runner::Itch]
@@ -666,6 +812,12 @@ impl Backend {
         // Download queue worker.
         let b = self.clone();
         self.spawn(async move { b.download_worker().await });
+
+        // Web & BitTorrent download worker pool + 500ms coalesced progress emitter.
+        let b = self.clone();
+        self.spawn(async move { b.web_download_worker().await });
+        let b = self.clone();
+        self.spawn(async move { b.web_progress_emitter().await });
 
         // Periodic update checks and connectivity.
         if interactive && !self.isolated {
@@ -874,35 +1026,66 @@ impl Backend {
         }
     }
 
-    /// Pause the queue when the connection drops and resume it when it
-    /// returns, unless the user paused it themselves.
+    /// Pause store and web download queues when the connection drops and resume
+    /// them when it returns, unless the user paused them themselves.
     fn pause_downloads_while_offline(&self, was_online: bool, online: bool) {
-        if was_online && !online && !self.downloads().paused && self.downloads().current().is_some()
-        {
-            self.auto_paused.store(true, Ordering::Relaxed);
-            self.pause_downloads();
-            let notice = if self.working_offline() {
-                irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
-                    .message(
-                        "Irori is working offline. Downloads resume when you work online again.",
-                    )
-                    .keys(
-                        "shell.notice.downloads_paused",
-                        Some("shell.notice.downloads_paused_working_offline"),
-                        &[],
-                    )
-            } else {
-                irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
-                    .message("You're offline. Downloads resume when the connection is back.")
-                    .keys(
-                        "shell.notice.downloads_paused",
-                        Some("shell.notice.downloads_paused_message"),
-                        &[],
-                    )
+        if was_online && !online {
+            let mut paused_any = false;
+            if !self.downloads().paused && self.downloads().current().is_some() {
+                self.auto_paused.store(true, Ordering::Relaxed);
+                self.pause_downloads();
+                paused_any = true;
+            }
+            let web_should_pause = {
+                let web = self.web_downloads.lock();
+                !web.paused
+                    && web.active.iter().any(|w| {
+                        !w.user_paused
+                            && matches!(
+                                w.state,
+                                WebDownloadState::Queued
+                                    | WebDownloadState::FetchingMetadata
+                                    | WebDownloadState::Running
+                            )
+                    })
             };
-            self.bus.notice(notice);
-        } else if online && !was_online && self.auto_paused.swap(false, Ordering::Relaxed) {
-            self.resume_downloads();
+            if web_should_pause {
+                self.web_auto_paused.store(true, Ordering::Relaxed);
+                self.pause_web_downloads_for_offline();
+                paused_any = true;
+            } else {
+                let aria2 = self.aria2.clone();
+                self.spawn(async move { aria2.shutdown().await });
+            }
+            if paused_any {
+                let notice = if self.working_offline() {
+                    irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
+                        .message(
+                            "Irori is working offline. Downloads resume when you work online again.",
+                        )
+                        .keys(
+                            "shell.notice.downloads_paused",
+                            Some("shell.notice.downloads_paused_working_offline"),
+                            &[],
+                        )
+                } else {
+                    irori_core::Notice::new(irori_core::NoticeLevel::Warning, "Downloads paused")
+                        .message("You're offline. Downloads resume when the connection is back.")
+                        .keys(
+                            "shell.notice.downloads_paused",
+                            Some("shell.notice.downloads_paused_message"),
+                            &[],
+                        )
+                };
+                self.bus.notice(notice);
+            }
+        } else if online && !was_online {
+            if self.auto_paused.swap(false, Ordering::Relaxed) {
+                self.resume_downloads();
+            }
+            if self.web_auto_paused.swap(false, Ordering::Relaxed) {
+                self.resume_web_downloads_from_offline();
+            }
         }
     }
 
@@ -1167,6 +1350,25 @@ impl Backend {
                 )
                 .account(runner),
         );
+    }
+}
+
+/// Split a total download speed cap (`0` = unlimited) across the native `depot`
+/// engine and `aria2c` so their combined throughput stays within `1x` cap.
+pub(crate) fn split_bandwidth_budget(
+    total_cap: u64,
+    depot_active: bool,
+    aria2_active: bool,
+) -> (u64, u64) {
+    if total_cap == 0 {
+        return (0, 0);
+    }
+    if depot_active && aria2_active {
+        let depot = (total_cap / 2).max(1);
+        let aria2 = total_cap.saturating_sub(depot).max(1);
+        (depot, aria2)
+    } else {
+        (total_cap, total_cap)
     }
 }
 

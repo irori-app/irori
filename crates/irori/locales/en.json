@@ -296,5 +296,10 @@
   "shell.palette.latest_crash_report": "View latest crash report",
   "shell.palette.latest_crash_report_keywords": "crash report log panic backtrace bug",
   "shell.notice.manage_rollback": "Manage / Rollback",
+  "shell.quit_downloads.title": "Downloads in progress",
+  "shell.quit_downloads.body": "Irori is still downloading. Pausing saves your progress so you can resume next time.",
+  "shell.quit_downloads.keep_open": "Keep open",
+  "shell.quit_downloads.minimize": "Minimize",
+  "shell.quit_downloads.pause_and_quit": "Pause & quit",
   "shell.nav.pinned": "Pinned"
 }

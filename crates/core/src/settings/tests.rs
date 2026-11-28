@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde_json::{Map, Value};
 
 use crate::Runner;
@@ -556,6 +558,104 @@ fn heroic_global_config_parses() {
     let back = serde_json::to_value(&s).unwrap();
     assert_eq!(back["steamRuntime"], Value::Bool(false));
     assert_eq!(back["enviromentOptions"][0]["value"], "1");
+}
+
+#[test]
+fn web_download_prefs_default_round_trip_and_folder_fallbacks() {
+    let app: AppSettings = serde_json::from_str("{}").unwrap();
+    assert_eq!(app.web_downloads, WebDownloadPrefs::default());
+    assert_eq!(app.web_downloads.default_folder, "");
+    assert_eq!(app.web_downloads.max_concurrent, 3);
+    assert_eq!(app.web_downloads.clamped_max_concurrent(), 3);
+    assert!(app.web_downloads.auto_extract);
+    assert!(!app.web_downloads.delete_archive_after_extract);
+    assert!(app.web_downloads.auto_add_to_library);
+    assert!(!app.web_downloads.bittorrent, "BitTorrent must be opt-in");
+    assert_eq!(app.web_downloads.aria2_path, "");
+
+    let custom: AppSettings = serde_json::from_str(
+        r#"{
+            "iroriWebDownloads": {
+                "defaultFolder": "/downloads/custom",
+                "maxConcurrent": 99,
+                "autoExtract": false,
+                "deleteArchiveAfterExtract": true,
+                "autoAddToLibrary": false,
+                "bittorrent": true,
+                "aria2Path": "/usr/local/bin/aria2c"
+            }
+        }"#,
+    )
+    .unwrap();
+    assert_eq!(custom.web_downloads.default_folder, "/downloads/custom");
+    assert_eq!(custom.web_downloads.max_concurrent, 99);
+    assert_eq!(custom.web_downloads.clamped_max_concurrent(), 5);
+    assert!(!custom.web_downloads.auto_extract);
+    assert!(custom.web_downloads.delete_archive_after_extract);
+    assert!(!custom.web_downloads.auto_add_to_library);
+    assert!(custom.web_downloads.bittorrent);
+    assert_eq!(custom.web_downloads.aria2_path, "/usr/local/bin/aria2c");
+
+    let zero: WebDownloadPrefs = serde_json::from_str(r#"{"maxConcurrent": 0}"#).unwrap();
+    assert_eq!(zero.clamped_max_concurrent(), 1);
+
+    let json = serde_json::to_value(&custom).unwrap();
+    assert_eq!(
+        json["iroriWebDownloads"]["defaultFolder"],
+        "/downloads/custom"
+    );
+    assert_eq!(json["iroriWebDownloads"]["maxConcurrent"], 99);
+    assert_eq!(json["iroriWebDownloads"]["autoExtract"], false);
+    assert_eq!(json["iroriWebDownloads"]["deleteArchiveAfterExtract"], true);
+    assert_eq!(json["iroriWebDownloads"]["autoAddToLibrary"], false);
+    assert_eq!(json["iroriWebDownloads"]["bittorrent"], true);
+    assert_eq!(
+        json["iroriWebDownloads"]["aria2Path"],
+        "/usr/local/bin/aria2c"
+    );
+    let back: AppSettings = serde_json::from_value(json).unwrap();
+    assert_eq!(back.web_downloads, custom.web_downloads);
+
+    // Default folder resolution precedence:
+    // configured -> portable/Downloads -> os_downloads/Irori -> home/Downloads/Irori -> default_install_path.
+    assert_eq!(
+        resolve_web_download_folder_with(
+            "/explicit",
+            Some(PathBuf::from("/portable")),
+            Some(PathBuf::from("/os-dl")),
+            Some(PathBuf::from("/home/u")),
+            "/games",
+        ),
+        PathBuf::from("/explicit")
+    );
+    assert_eq!(
+        resolve_web_download_folder_with(
+            "",
+            Some(PathBuf::from("/portable")),
+            Some(PathBuf::from("/os-dl")),
+            Some(PathBuf::from("/home/u")),
+            "/games",
+        ),
+        PathBuf::from("/portable/Downloads")
+    );
+    assert_eq!(
+        resolve_web_download_folder_with(
+            "",
+            None,
+            Some(PathBuf::from("/os-dl")),
+            Some(PathBuf::from("/home/u")),
+            "/games",
+        ),
+        PathBuf::from("/os-dl/Irori")
+    );
+    assert_eq!(
+        resolve_web_download_folder_with("", None, None, Some(PathBuf::from("/home/u")), "/games",),
+        PathBuf::from("/home/u/Downloads/Irori")
+    );
+    assert_eq!(
+        resolve_web_download_folder_with("", None, None, None, "/games"),
+        PathBuf::from("/games")
+    );
 }
 
 #[test]

@@ -1727,25 +1727,35 @@ impl Backend {
         irori_runtime::rosetta::install().await
     }
 
-    /// Run a Windows installer in the game's prefix and wait for it (and any
-    /// child processes in the prefix) to finish.
+    /// Run a Windows installer and wait for it to finish: natively on Windows
+    /// (falling back to UAC elevation via `ShellExecuteExW("runas")` when
+    /// `ERROR_ELEVATION_REQUIRED = 740` is returned), or in the game's Wine
+    /// prefix elsewhere.
     pub async fn run_installer_in_prefix(
         &self,
         id: &GameId,
         installer: &Path,
         cancel: CancellationToken,
     ) -> Result<ExecResult> {
-        let game = self.game(id).context("unknown game")?;
-        let app = self.settings.app();
-        let settings = self.settings.game(id);
-        let target = Target {
-            id,
-            game: &game,
-            platform: InstallPlatform::Windows,
-        };
-        let argv = irori_runtime::windows_file::installer_command(installer);
-        let ctx = self.op_context(id, cancel);
-        irori_runtime::run_in_prefix(&app, &settings, target, argv, true, ctx).await
+        #[cfg(windows)]
+        {
+            let _game = self.game(id).context("unknown game")?;
+            run_windows_installer(installer, cancel).await
+        }
+        #[cfg(not(windows))]
+        {
+            let game = self.game(id).context("unknown game")?;
+            let app = self.settings.app();
+            let settings = self.settings.game(id);
+            let target = Target {
+                id,
+                game: &game,
+                platform: InstallPlatform::Windows,
+            };
+            let argv = irori_runtime::windows_file::installer_command(installer);
+            let ctx = self.op_context(id, cancel);
+            irori_runtime::run_in_prefix(&app, &settings, target, argv, true, ctx).await
+        }
     }
 
     /// Install the launcher a game starts through ([`irori_core::LauncherMissing`],
@@ -2253,9 +2263,208 @@ mod platform_tests {
     }
 }
 
+#[cfg(any(windows, test))]
+const ERROR_ELEVATION_REQUIRED: i32 = 740;
+
+#[cfg(any(windows, test))]
+fn is_elevation_required(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .and_then(std::io::Error::raw_os_error)
+            == Some(ERROR_ELEVATION_REQUIRED)
+    })
+}
+
+#[cfg(any(windows, test))]
+fn format_shell_execute_parameters(spec: &process::CommandSpec) -> String {
+    let mut parts: Vec<String> = spec
+        .args
+        .iter()
+        .map(|arg| {
+            let s = arg.to_string_lossy();
+            if s.is_empty() || s.contains([' ', '\t', '"']) {
+                process::windows_arg(&s)
+            } else {
+                s.into_owned()
+            }
+        })
+        .collect();
+    parts.extend(
+        spec.raw_args
+            .iter()
+            .map(|raw| raw.to_string_lossy().into_owned()),
+    );
+    parts.join(" ")
+}
+
+#[cfg(windows)]
+pub(crate) async fn run_windows_command_spec(
+    spec: &process::CommandSpec,
+    cancel: CancellationToken,
+) -> Result<ExecResult> {
+    match process::run(spec, RunOptions::default().cancel(cancel.clone())).await {
+        Ok(res) => Ok(res),
+        Err(err) if is_elevation_required(&err) => run_elevated_windows(spec, cancel).await,
+        Err(err) => Err(err),
+    }
+}
+
+#[cfg(windows)]
+async fn run_windows_installer(installer: &Path, cancel: CancellationToken) -> Result<ExecResult> {
+    let argv = irori_runtime::windows_file::installer_command(installer);
+    let Some((program, rest)) = argv.split_first() else {
+        bail!("installer command is empty");
+    };
+    let mut spec = process::CommandSpec::new(program).args(rest);
+    if let Some(dir) = installer.parent().filter(|p| !p.as_os_str().is_empty()) {
+        spec = spec.cwd(dir);
+    }
+    run_windows_command_spec(&spec, cancel).await
+}
+
+#[cfg(windows)]
+async fn run_elevated_windows(
+    spec: &process::CommandSpec,
+    cancel: CancellationToken,
+) -> Result<ExecResult> {
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_CANCELLED, GetLastError, HANDLE, WAIT_OBJECT_0,
+    };
+    use windows_sys::Win32::System::Threading::{
+        CreateEventW, GetExitCodeProcess, INFINITE, SetEvent, TerminateProcess,
+        WaitForMultipleObjects,
+    };
+    use windows_sys::Win32::UI::Shell::{
+        SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    struct OwnedHandle(HANDLE);
+    impl Drop for OwnedHandle {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                // SAFETY: `self.0` is an open Win32 kernel handle owned exclusively here.
+                unsafe { CloseHandle(self.0) };
+            }
+        }
+    }
+    // SAFETY: Win32 event and process handles can be signaled and waited on across threads.
+    unsafe impl Send for OwnedHandle {}
+    // SAFETY: `SetEvent` and `WaitForMultipleObjects` are thread-safe on the same kernel handle.
+    unsafe impl Sync for OwnedHandle {}
+
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    if cancel.is_cancelled() {
+        return Ok(ExecResult {
+            aborted: true,
+            ..Default::default()
+        });
+    }
+
+    // SAFETY: null security attributes and unnamed manual-reset event are always valid.
+    let raw_event = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
+    if raw_event.is_null() {
+        return Err(anyhow::anyhow!(std::io::Error::last_os_error()))
+            .context("Could not prepare cancellation handle for elevated installer");
+    }
+    let cancel_event = Arc::new(OwnedHandle(raw_event));
+    let watcher_event = Arc::clone(&cancel_event);
+    let watcher_cancel = cancel.clone();
+    let cancel_watcher = tokio::spawn(async move {
+        watcher_cancel.cancelled().await;
+        // SAFETY: `watcher_event` keeps the event handle open for the lifetime of the task.
+        unsafe { SetEvent(watcher_event.0) };
+    });
+
+    let program = spec.program.clone();
+    let parameters = format_shell_execute_parameters(spec);
+    let cwd = spec.cwd.clone();
+    let wait_event = Arc::clone(&cancel_event);
+    let result = tokio::task::spawn_blocking(move || -> Result<ExecResult> {
+        if cancel.is_cancelled() {
+            return Ok(ExecResult {
+                aborted: true,
+                ..Default::default()
+            });
+        }
+        let verb = wide("runas");
+        let file = wide(&program.to_string_lossy());
+        let params_wide = (!parameters.is_empty()).then(|| wide(&parameters));
+        let dir_wide = cwd.as_ref().map(|d| wide(&d.to_string_lossy()));
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOCLOSEPROCESS,
+            lpVerb: verb.as_ptr(),
+            lpFile: file.as_ptr(),
+            lpParameters: params_wide.as_ref().map_or(std::ptr::null(), Vec::as_ptr),
+            lpDirectory: dir_wide.as_ref().map_or(std::ptr::null(), Vec::as_ptr),
+            nShow: SW_SHOWNORMAL,
+            ..Default::default()
+        };
+        // SAFETY: all wide string buffers are NUL-terminated and live until after the call.
+        if unsafe { ShellExecuteExW(&mut info) } == 0 {
+            // SAFETY: immediately reads the Win32 error from the failed `ShellExecuteExW` call.
+            let error = unsafe { GetLastError() };
+            if error == ERROR_CANCELLED {
+                bail!("Windows' permission prompt was declined");
+            }
+            return Err(anyhow::anyhow!(std::io::Error::from_raw_os_error(
+                error as i32
+            )))
+            .with_context(|| format!("failed to start elevated {}", program.display()));
+        }
+        if info.hProcess.is_null() {
+            return Ok(ExecResult {
+                code: Some(0),
+                ..Default::default()
+            });
+        }
+        let process_handle = OwnedHandle(info.hProcess);
+        let handles = [process_handle.0, wait_event.0];
+        // SAFETY: both handles are valid open kernel handles for the duration of the wait.
+        let waited =
+            unsafe { WaitForMultipleObjects(handles.len() as u32, handles.as_ptr(), 0, INFINITE) };
+        if waited == WAIT_OBJECT_0 {
+            let mut exit_code = 0u32;
+            // SAFETY: `process_handle` is a valid process handle and `exit_code` is a live local.
+            let ok = unsafe { GetExitCodeProcess(process_handle.0, &mut exit_code) } != 0;
+            Ok(ExecResult {
+                code: ok.then_some(exit_code as i32),
+                stdout: String::new(),
+                stderr: String::new(),
+                aborted: false,
+            })
+        } else if waited == WAIT_OBJECT_0 + 1 {
+            // SAFETY: best-effort termination on cancellation; may fail if the elevated token denies it.
+            let _ = unsafe { TerminateProcess(process_handle.0, 1) };
+            Ok(ExecResult {
+                code: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                aborted: true,
+            })
+        } else {
+            Err(anyhow::anyhow!(std::io::Error::last_os_error()))
+                .context("failed while waiting for elevated installer")
+        }
+    })
+    .await
+    .context("elevated installer task failed")?;
+
+    cancel_watcher.abort();
+    result
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{failed_start, launch_sandbox, launch_steam_runtime, propagate_env_remove};
+    use super::{
+        ERROR_ELEVATION_REQUIRED, failed_start, format_shell_execute_parameters,
+        is_elevation_required, launch_sandbox, launch_steam_runtime, propagate_env_remove,
+    };
     use irori_core::process::CommandSpec;
     use irori_core::{InstallPlatform, Runner, SandboxSettings};
     use std::process::ExitStatus;
@@ -2344,6 +2553,42 @@ mod tests {
         assert_eq!(
             cmd.env_remove,
             vec!["MANGOHUD_CONFIG", "DISABLE_MANGOHUD", "MTL_HUD_ALIGNMENT"]
+        );
+    }
+
+    #[test]
+    fn detects_windows_elevation_required_error() {
+        let err = anyhow::Error::new(std::io::Error::from_raw_os_error(ERROR_ELEVATION_REQUIRED))
+            .context("failed to start setup.exe");
+        assert!(is_elevation_required(&err));
+
+        let other = anyhow::Error::new(std::io::Error::from_raw_os_error(2))
+            .context("failed to start setup.exe");
+        assert!(!is_elevation_required(&other));
+        assert!(!is_elevation_required(&anyhow::anyhow!("plain error")));
+    }
+
+    #[test]
+    fn formats_shell_execute_parameters_with_quoted_and_raw_args() {
+        let spec = CommandSpec::new(r"C:\dl\setup.exe")
+            .args(["/S", r"C:\My Folder\pkg.msi"])
+            .raw_arg(r"/D=C:\Games\My Game");
+        assert_eq!(
+            format_shell_execute_parameters(&spec),
+            r#"/S "C:\My Folder\pkg.msi" /D=C:\Games\My Game"#
+        );
+
+        let msi = CommandSpec::new("msiexec").args([
+            "/i",
+            r"C:\My Folder\game.msi",
+            "/qn",
+            "/norestart",
+            r"INSTALLDIR=C:\Games\My Game",
+            "",
+        ]);
+        assert_eq!(
+            format_shell_execute_parameters(&msi),
+            r#"/i "C:\My Folder\game.msi" /qn /norestart "INSTALLDIR=C:\Games\My Game" """#
         );
     }
 }

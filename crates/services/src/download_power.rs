@@ -107,18 +107,21 @@ impl Backend {
         self.downloads.lock().when_done.length = Some(length);
     }
 
-    /// After the worker ran an item: start the countdown when the queue is
-    /// done and a choice is made.
+    /// After any download worker ran an item: start the countdown when store,
+    /// file, and web download queues (including extraction/setup stages) are
+    /// all done, none are paused, and a choice is made.
     pub(crate) fn queue_ran(&self) {
+        let files_active = self.files.lock().list.iter().any(|f| f.is_active());
+        let (web_active, web_paused) = {
+            let web = self.web_downloads.lock();
+            (web.has_active(), web.has_paused_items())
+        };
         let (action, length) = {
             let q = self.downloads.lock();
             let w = &q.when_done;
-            if !countdown_due(
-                w.choice,
-                q.active.is_empty(),
-                q.paused,
-                w.countdown.is_some(),
-            ) {
+            let all_empty = q.active.is_empty() && !files_active && !web_active;
+            let any_paused = q.paused || web_paused;
+            if !countdown_due(w.choice, all_empty, any_paused, w.countdown.is_some()) {
                 return;
             }
             let Some(action) = w.choice else { return };

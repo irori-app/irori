@@ -107,7 +107,9 @@ async fn serve(
 ) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
-    reader.read_line(&mut line).await?;
+    if reader.read_line(&mut line).await? == 0 || line.trim().is_empty() {
+        return Ok(());
+    }
     let mut parts = line.split_whitespace();
     let method = parts.next().unwrap_or_default().to_string();
     let path = parts.next().unwrap_or_default().to_string();

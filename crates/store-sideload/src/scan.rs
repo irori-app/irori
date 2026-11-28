@@ -152,6 +152,104 @@ pub fn game_of_file(path: &Path) -> Option<FoundGame> {
     })
 }
 
+/// Structural child folder names inside a game root that must never be
+/// mistaken for a single-child archive wrapper directory.
+const NON_WRAPPER_DIRS: &[&str] = &[
+    "bin", "binaries", "win64", "win32", "x64", "x86", "x86_64", "linux", "linux64", "macos",
+    "osx", "data",
+];
+
+fn is_archive_metadata_entry(lower_name: &str) -> bool {
+    matches!(lower_name, "__macosx" | ".ds_store" | "thumbs.db")
+}
+
+/// Unwrap nested single-child wrapper folders (e.g. `<dest>/<GameFolder>/`)
+/// produced by archives that package their files under a top-level directory.
+fn unwrap_single_child_dir(root: &Path) -> PathBuf {
+    let mut dir = root.to_path_buf();
+    for _ in 0..4 {
+        let mut only_subdir: Option<PathBuf> = None;
+        let mut count = 0usize;
+        for entry in read_dir(&dir) {
+            let path = entry.path();
+            let lower = file_name(&path).to_lowercase();
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_symlink() || is_archive_metadata_entry(&lower) {
+                continue;
+            }
+            count += 1;
+            if count > 1 {
+                break;
+            }
+            let is_app_bundle = cfg!(target_os = "macos") && lower.ends_with(".app");
+            if kind.is_dir()
+                && !is_app_bundle
+                && !is_ignored_dir(&lower)
+                && !NON_WRAPPER_DIRS.contains(&lower.as_str())
+            {
+                only_subdir = Some(path);
+            }
+        }
+        if count == 1
+            && let Some(next) = only_subdir
+        {
+            dir = next;
+            continue;
+        }
+        break;
+    }
+    dir
+}
+
+/// Scan an extracted download directory (or a single downloaded executable)
+/// and return the ONE primary game it contains, if any.
+///
+/// Unlike [`scan_folder`], which treats each subfolder as a separate game,
+/// this unwraps single-child archive wrapper directories (`<dest>/<Game>/`)
+/// and delegates to `game_in_folder` so multi-executable engines (such as
+/// Unreal Engine shipping binaries next to a root stub) resolve to one
+/// [`FoundGame`] with alternates listed in [`FoundGame::others`].
+pub fn scan_extracted_game(root: &Path) -> Option<FoundGame> {
+    if !root.exists() {
+        return None;
+    }
+    if root.is_file()
+        || (cfg!(target_os = "macos")
+            && root.is_dir()
+            && file_name(root).to_lowercase().ends_with(".app"))
+    {
+        let lower = file_name(root).to_lowercase();
+        if is_ignored_program(&lower) {
+            return None;
+        }
+        return game_of_file(root);
+    }
+    if !root.is_dir() {
+        return None;
+    }
+    let dir = unwrap_single_child_dir(root);
+    if let Some(game) = game_in_folder(&dir) {
+        return Some(game);
+    }
+    let mut files = Vec::new();
+    for entry in read_dir(&dir) {
+        let path = entry.path();
+        let lower = file_name(&path).to_lowercase();
+        if is_archive_metadata_entry(&lower) {
+            continue;
+        }
+        if !is_ignored_program(&lower) {
+            files.push(path);
+        }
+    }
+    let [only] = files.as_slice() else {
+        return None;
+    };
+    game_of_file(only)
+}
+
 fn read_dir(dir: &Path) -> impl Iterator<Item = std::fs::DirEntry> + use<> {
     std::fs::read_dir(dir)
         .into_iter()
@@ -1720,5 +1818,67 @@ mod tests {
             }
             other => panic!("expected Picked, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn scan_extracted_game_unwraps_wrapper_and_handles_unreal_multi_exe_without_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("extract_out");
+
+        // Archive extracted into a single-child wrapper folder alongside macOS junk.
+        let game_root = dest.join("MyGame");
+        let stub_exe = game_root.join("MyGame.exe");
+        let shipping_exe = game_root.join("MyGame/Binaries/Win64/MyGame-Win64-Shipping.exe");
+        write(&stub_exe, &[0; 1024]);
+        write(&shipping_exe, &[0; 8192]);
+        write(
+            &game_root.join("Engine/Binaries/Win64/CrashReportClient.exe"),
+            &[0; 512],
+        );
+        write(&game_root.join("unins000.exe"), &[0; 2048]);
+        write(&dest.join("__MACOSX/._MyGame"), &[0; 8]);
+
+        let found = scan_extracted_game(&dest).expect("should detect one game");
+        assert_eq!(found.title, "My Game");
+        assert_eq!(found.executable, stub_exe);
+        assert_eq!(found.install_folder.as_deref(), Some(game_root.as_path()));
+        assert_eq!(found.platform, SideloadPlatform::Windows);
+        assert_eq!(found.others.len(), 1);
+        assert_eq!(found.others[0].0, shipping_exe);
+
+        // Scanning the unwrapped game root directly yields the exact same single game.
+        let direct = scan_extracted_game(&game_root).expect("should detect directly");
+        assert_eq!(direct.executable, stub_exe);
+        assert_eq!(direct.others.len(), 1);
+        assert_eq!(direct.others[0].0, shipping_exe);
+    }
+
+    #[test]
+    fn scan_extracted_game_handles_single_executable_and_ignores_non_games() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("SuperGame.exe");
+        write(&exe, &[0; 64]);
+        let found = scan_extracted_game(&exe).expect("single exe");
+        assert_eq!(found.title, "Super Game");
+        assert_eq!(found.executable, exe);
+
+        // Standalone installer or non-game folder returns None.
+        let setup = dir.path().join("setup.exe");
+        write(&setup, &[0; 64]);
+        assert_eq!(scan_extracted_game(&setup), None);
+
+        let docs = dir.path().join("Manual");
+        write(&docs.join("readme.pdf"), b"%PDF");
+        assert_eq!(scan_extracted_game(&docs), None);
+
+        // Does not unwrap a generic `bin/` child into title "Bin".
+        let bin_game = dir.path().join("CoolGame");
+        write(&bin_game.join("bin/CoolGame.exe"), &[0; 64]);
+        let found_bin = scan_extracted_game(&bin_game).expect("bin child game");
+        assert_eq!(found_bin.title, "Cool Game");
+        assert_eq!(
+            found_bin.install_folder.as_deref(),
+            Some(bin_game.as_path())
+        );
     }
 }

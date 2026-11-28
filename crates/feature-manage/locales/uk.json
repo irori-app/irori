@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Видалити з історії",
   "manage.downloads.history.show_more": "Показати ще (приховано: {count})",
   "manage.downloads.history.filter.all": "Усі",
-  "manage.downloads.history.filter.done": "Завершені",
-  "manage.downloads.history.filter.unfinished": "Не завершені",
   "manage.downloads.history.filter.none": "Тут немає завантажень",
   "manage.downloads.history.play": "Грати",
   "manage.downloads.history.play_failed": "Не вдалося запустити {title}",

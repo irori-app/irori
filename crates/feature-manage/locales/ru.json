@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Удалить из истории",
   "manage.downloads.history.show_more": "Показать ещё (скрыто: {count})",
   "manage.downloads.history.filter.all": "Все",
-  "manage.downloads.history.filter.done": "Завершённые",
-  "manage.downloads.history.filter.unfinished": "Не завершённые",
   "manage.downloads.history.filter.none": "Здесь нет загрузок",
   "manage.downloads.history.play": "Играть",
   "manage.downloads.history.play_failed": "Не удалось запустить {title}",

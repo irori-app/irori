@@ -21,11 +21,13 @@ use gpui_kit::{
     Styled as _, Subscription, Task, Window, div,
 };
 use irori_core::InstallProgress;
-use irori_services::{DownloadQueueSnapshot, DownloadState, PowerCountdown};
+use irori_services::{
+    DownloadQueueSnapshot, DownloadState, PowerCountdown, WebDownloadSnapshot, WebDownloadState,
+};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{Route, backend, models, navigate};
 
-use super::when_done;
+use super::{open_add_download_dialog, when_done};
 use crate::format;
 
 /// What the indicators show, derived from the queue and the current
@@ -57,30 +59,92 @@ pub(crate) struct Indicator {
 const SPEED_STEP: u64 = 100 * 1024;
 
 impl Indicator {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(
         queue: &DownloadQueueSnapshot,
         progress: Option<InstallProgress>,
         pending_updates: usize,
     ) -> Self {
-        let current = queue.current();
-        let paused = queue.paused || current.is_some_and(|c| c.state == DownloadState::Paused);
-        let running = current.filter(|_| !paused);
-        let progress = running.and(progress).unwrap_or_default();
+        Self::from_snapshots(
+            queue,
+            &WebDownloadSnapshot::default(),
+            progress,
+            pending_updates,
+        )
+    }
+
+    pub fn from_snapshots(
+        queue: &DownloadQueueSnapshot,
+        web: &WebDownloadSnapshot,
+        progress: Option<InstallProgress>,
+        pending_updates: usize,
+    ) -> Self {
+        let store_current = queue.current();
+        let store_paused =
+            queue.paused || store_current.is_some_and(|c| c.state == DownloadState::Paused);
+        let store_running = store_current.filter(|_| !store_paused);
+        let store_progress = store_running.and(progress).unwrap_or_default();
+
+        let web_all_paused = web.paused
+            || (!web.active.is_empty()
+                && web
+                    .active
+                    .iter()
+                    .all(|w| w.state == WebDownloadState::Paused));
+        let web_running = (!web_all_paused)
+            .then(|| {
+                web.active.iter().find(|w| w.state.is_busy()).or_else(|| {
+                    web.active
+                        .iter()
+                        .find(|w| w.state != WebDownloadState::Paused)
+                })
+            })
+            .flatten();
+        let web_primary = web_running.or_else(|| web.active.first());
+
+        let total_active = queue.active.len() + web.active.len();
+        let combined_paused = match (!queue.active.is_empty(), !web.active.is_empty()) {
+            (true, true) => store_paused && web_all_paused,
+            (true, false) => store_paused,
+            (false, true) => web_all_paused,
+            (false, false) => false,
+        };
+
+        let store_speed = store_progress.download_speed.unwrap_or(0);
+        let web_speed = if web_all_paused { 0 } else { web.total_speed };
+        let combined_speed = store_speed.saturating_add(web_speed);
+
+        let (title, percent, eta) = if let Some(cur) = store_running {
+            (
+                Some(cur.title.clone()),
+                store_progress
+                    .percent
+                    .map(|p| p.clamp(0.0, 100.0).floor() as u8),
+                store_progress.eta_secs,
+            )
+        } else if let Some(w) = web_running {
+            let pct = w
+                .progress_percent()
+                .map(|p| p.clamp(0.0, 100.0).floor() as u8);
+            let eta = w.state.is_network_active().then_some(w.eta_secs).flatten();
+            (Some(w.title.clone()), pct, eta)
+        } else if let Some(cur) = store_current {
+            (Some(cur.title.clone()), None, None)
+        } else if let Some(w) = web_primary {
+            (Some(w.title.clone()), None, None)
+        } else {
+            (None, None, None)
+        };
+
         Self {
-            title: current.map(|c| c.title.clone()),
-            percent: running
-                .and(progress.percent)
-                .map(|p| p.clamp(0.0, 100.0).floor() as u8),
-            speed: progress
-                .download_speed
-                .filter(|s| *s > 0)
-                .map(|s| (s / SPEED_STEP).max(1) * SPEED_STEP),
-            eta: progress
-                .eta_secs
+            title: title.clone(),
+            percent,
+            speed: (combined_speed > 0).then(|| (combined_speed / SPEED_STEP).max(1) * SPEED_STEP),
+            eta: eta
                 .filter(|s| *s > 0)
                 .map(|s| if s > 60 { s.div_ceil(60) * 60 } else { s }),
-            paused,
-            waiting: queue.active.len() - usize::from(current.is_some()),
+            paused: combined_paused,
+            waiting: total_active.saturating_sub(usize::from(title.is_some())),
             pending_updates,
             countdown: queue.countdown,
         }
@@ -107,7 +171,9 @@ impl Indicator {
     /// Read the indicator from the models.
     fn now(cx: &App) -> Self {
         let m = models(cx);
-        let queue = &m.downloads.read(cx).queue;
+        let dl = m.downloads.read(cx);
+        let queue = &dl.queue;
+        let web = &dl.web;
         let progress = queue
             .current()
             .and_then(|c| m.statuses.read(cx).get(&c.id))
@@ -121,8 +187,9 @@ impl Indicator {
             .count();
         let pending_components = m.components.read(cx).report.pending().count();
         let pending_app = usize::from(m.app_update.read(cx).status.has_update());
-        Self::new(
+        Self::from_snapshots(
             queue,
+            web,
             progress,
             pending_games + pending_components + pending_app,
         )
@@ -351,10 +418,15 @@ impl Render for DownloadsPanel {
                 )
             }
         });
-        let (close_open, paused, active) = (self.close.clone(), s.paused, s.is_active());
+        let (close_open, close_add, paused, active) = (
+            self.close.clone(),
+            self.close.clone(),
+            s.paused,
+            s.is_active(),
+        );
         let countdown = s.countdown.map(|c| when_done::countdown_banner(&c, cx));
         v_flex()
-            .w(gpui_kit::rems(18.))
+            .w(gpui_kit::rems(19.))
             .gap_3()
             .children(countdown)
             .child(match &s.title {
@@ -387,31 +459,49 @@ impl Render for DownloadsPanel {
             .child(
                 h_flex()
                     .gap_2()
-                    .when(active, |row| {
-                        row.child(
-                            Button::new("title-downloads-pause")
-                                .small()
-                                .when(paused, |b| b.primary())
-                                .icon(if paused {
-                                    IconName::Play
-                                } else {
-                                    IconName::Pause
-                                })
-                                .label(if paused {
-                                    t("manage.downloads.resume")
-                                } else {
-                                    t("manage.downloads.pause")
-                                })
-                                .on_click(move |_, _, cx| {
-                                    let b = backend(cx);
-                                    if paused {
-                                        b.resume_downloads();
-                                    } else {
-                                        b.pause_downloads();
-                                    }
-                                }),
-                        )
-                    })
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        h_flex()
+                            .gap_1p5()
+                            .when(active, |row| {
+                                row.child(
+                                    Button::new("title-downloads-pause")
+                                        .small()
+                                        .when(paused, |b| b.primary())
+                                        .when(!paused, |b| b.outline())
+                                        .icon(if paused {
+                                            IconName::Play
+                                        } else {
+                                            IconName::Pause
+                                        })
+                                        .label(if paused {
+                                            t("manage.downloads.resume")
+                                        } else {
+                                            t("manage.downloads.pause")
+                                        })
+                                        .on_click(move |_, _, cx| {
+                                            let b = backend(cx);
+                                            if paused {
+                                                b.resume_all_downloads();
+                                            } else {
+                                                b.pause_all_downloads();
+                                            }
+                                        }),
+                                )
+                            })
+                            .child(
+                                Button::new("title-downloads-add")
+                                    .small()
+                                    .primary()
+                                    .icon(IconName::Plus)
+                                    .label(t("manage.downloads.pill.add"))
+                                    .on_click(move |_, window, cx| {
+                                        close_add(cx);
+                                        open_add_download_dialog(None, window, cx);
+                                    }),
+                            ),
+                    )
                     .child(
                         Button::new("title-downloads-open")
                             .small()
@@ -526,6 +616,81 @@ mod tests {
             Some("3"),
             "idle badge surfaces pending updates"
         );
+    }
+
+    #[test]
+    fn aggregates_web_downloads_alone_and_with_store_queue() {
+        let web = WebDownloadSnapshot {
+            active: vec![irori_services::WebDownload {
+                id: "w1".into(),
+                title: "OpenArena Portable".into(),
+                state: WebDownloadState::Running,
+                bytes_total: 1_000,
+                bytes_done: 580,
+                download_speed: 2 * SPEED_STEP,
+                eta_secs: Some(45),
+                ..Default::default()
+            }],
+            finished: Vec::new(),
+            paused: false,
+            total_speed: 2 * SPEED_STEP,
+        };
+        let web_only = Indicator::from_snapshots(&DownloadQueueSnapshot::default(), &web, None, 0);
+        assert_eq!(web_only.title.as_deref(), Some("OpenArena Portable"));
+        assert_eq!(web_only.percent, Some(58));
+        assert_eq!(web_only.speed, Some(2 * SPEED_STEP));
+        assert_eq!(web_only.waiting, 0);
+        assert_eq!(web_only.badge().as_deref(), Some("58%"));
+
+        let queue = DownloadQueueSnapshot {
+            active: vec![item(Runner::Gog, "a", DownloadState::Running)],
+            ..Default::default()
+        };
+        let both = Indicator::from_snapshots(&queue, &web, progress(40.0, 3 * SPEED_STEP, 90), 0);
+        assert_eq!(both.title.as_deref(), Some("A"));
+        assert_eq!(both.percent, Some(40));
+        assert_eq!(both.speed, Some(5 * SPEED_STEP));
+        assert_eq!(both.waiting, 1);
+
+        let paused_store = DownloadQueueSnapshot {
+            active: vec![item(Runner::Gog, "a", DownloadState::Paused)],
+            paused: true,
+            ..Default::default()
+        };
+        let paused_store_running_web =
+            Indicator::from_snapshots(&paused_store, &web, progress(40.0, 3 * SPEED_STEP, 90), 0);
+        assert_eq!(
+            paused_store_running_web.title.as_deref(),
+            Some("OpenArena Portable"),
+            "running web download takes precedence over a paused store item"
+        );
+        assert_eq!(paused_store_running_web.percent, Some(58));
+        assert_eq!(paused_store_running_web.speed, Some(2 * SPEED_STEP));
+        assert_eq!(paused_store_running_web.eta, Some(45));
+        assert!(!paused_store_running_web.paused);
+        assert_eq!(paused_store_running_web.waiting, 1);
+        assert_eq!(paused_store_running_web.badge().as_deref(), Some("58%"));
+
+        let paused_web = WebDownloadSnapshot {
+            active: vec![irori_services::WebDownload {
+                id: "w1".into(),
+                title: "OpenArena Portable".into(),
+                state: WebDownloadState::Paused,
+                bytes_total: 1_000,
+                bytes_done: 580,
+                ..Default::default()
+            }],
+            finished: Vec::new(),
+            paused: true,
+            total_speed: 0,
+        };
+        let both_paused = Indicator::from_snapshots(&paused_store, &paused_web, None, 0);
+        assert!(both_paused.paused);
+        assert_eq!(both_paused.title.as_deref(), Some("A"));
+        assert_eq!(both_paused.percent, None);
+        assert_eq!(both_paused.speed, None);
+        assert_eq!(both_paused.waiting, 1);
+        assert_eq!(both_paused.badge().as_deref(), Some("2"));
     }
 
     #[gpui_kit::test]

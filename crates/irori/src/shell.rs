@@ -29,6 +29,89 @@ use crate::sidebar;
 /// How far a newly shown page rises into place, in pixels.
 const PAGE_RISE_PX: f32 = 8.0;
 
+/// Guard window close when closing would quit the app (not hiding to the tray)
+/// and transfers are active, offering Keep open, Minimize (when tray is
+/// available), and Pause & quit.
+fn install_close_guard(window: &mut Window, cx: &App) {
+    let allow_close = std::rc::Rc::new(std::cell::Cell::new(false));
+    window.on_window_should_close(cx, move |window, cx| {
+        if allow_close.get() {
+            return true;
+        }
+        let b = irori_ui::backend(cx);
+        if crate::tray_hide::available(cx) || !b.has_active_transfers() {
+            return true;
+        }
+        if window.has_active_dialog(cx) {
+            return false;
+        }
+        let allow_quit = allow_close.clone();
+        let show_minimize = crate::tray_hide::tray_running(cx);
+        let width = window.rem_size() * 30.;
+        window.open_dialog(cx, move |dialog, _, cx| {
+            let allow_quit = allow_quit.clone();
+            dialog
+                .title(t("shell.quit_downloads.title"))
+                .w(width)
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(t("shell.quit_downloads.body")),
+                )
+                .footer(
+                    h_flex()
+                        .w_full()
+                        .items_center()
+                        .justify_end()
+                        .gap_2()
+                        .child(
+                            Button::new("quit-downloads-keep")
+                                .ghost()
+                                .label(t("shell.quit_downloads.keep_open"))
+                                .on_click(|_, window, cx| window.close_dialog(cx)),
+                        )
+                        .when(show_minimize, |row| {
+                            row.child(
+                                Button::new("quit-downloads-minimize")
+                                    .outline()
+                                    .label(t("shell.quit_downloads.minimize"))
+                                    .on_click(|_, window, cx| {
+                                        window.close_dialog(cx);
+                                        window.minimize_window();
+                                    }),
+                            )
+                        })
+                        .child(
+                            Button::new("quit-downloads-pause-quit")
+                                .danger()
+                                .label(t("shell.quit_downloads.pause_and_quit"))
+                                .on_click(move |_, window, cx| {
+                                    let b = irori_ui::backend(cx);
+                                    b.pause_all_downloads();
+                                    allow_quit.set(true);
+                                    window.close_dialog(cx);
+                                    let shutdown_b = b.clone();
+                                    let task = irori_ui::state::run_infallible(cx, async move {
+                                        let _ = tokio::time::timeout(
+                                            std::time::Duration::from_secs(5),
+                                            shutdown_b.shutdown(),
+                                        )
+                                        .await;
+                                    });
+                                    cx.spawn(async move |cx| {
+                                        task.await;
+                                        cx.update(|cx| cx.quit());
+                                    })
+                                    .detach();
+                                }),
+                        ),
+                )
+        });
+        false
+    });
+}
+
 pub struct AppShell {
     focus: FocusHandle,
     palette: Palette,
@@ -153,6 +236,7 @@ impl AppShell {
         // The root view exists once this effect cycle ends, before the first
         // frame is drawn.
         cx.defer_in(window, |this, window, cx| this.sync_glass(window, cx));
+        install_close_guard(window, cx);
         // Notices and sessions that ended while no window was open (started
         // in the tray, or closed to it).
         cx.defer_in(window, |this, window, cx| {
@@ -520,7 +604,10 @@ impl AppShell {
 
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let section = navigator(cx).read(cx).current().section();
-        let downloads = models(cx).downloads.read(cx).queue.active.len();
+        let downloads = {
+            let d = models(cx).downloads.read(cx);
+            d.queue.active.len() + d.web.active.len()
+        };
         let updates = models(cx).library.read(cx).updates.len()
             + models(cx).components.read(cx).report.pending().count()
             + usize::from(models(cx).app_update.read(cx).status.has_update());

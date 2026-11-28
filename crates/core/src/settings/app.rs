@@ -8,6 +8,7 @@ use crate::Runner;
 use super::{
     AchievementToastPrefs, BackupPrefs, DEFAULT_ART_CACHE_LIMIT, DEFAULT_STEAM_TAG_LIMIT,
     GameSettings, OverlayPrefs, ProtonCpuLevel, SunshinePrefs, SyncPrefs, UiPrefs,
+    WebDownloadPrefs,
 };
 
 /// Layout of the Stores → Deals view (`iroriDealsLayout`).
@@ -322,6 +323,10 @@ pub struct AppSettings {
     /// Irori-only.
     #[serde(rename = "iroriHud", default)]
     pub hud: crate::hud::GlobalHudSettings,
+    /// Direct HTTP/HTTPS link and opt-in BitTorrent download manager settings
+    /// (`iroriWebDownloads`). Irori-only.
+    #[serde(rename = "iroriWebDownloads")]
+    pub web_downloads: WebDownloadPrefs,
 }
 
 impl Default for AppSettings {
@@ -372,6 +377,7 @@ impl Default for AppSettings {
             sunshine: SunshinePrefs::default(),
             overlay: OverlayPrefs::default(),
             hud: crate::hud::GlobalHudSettings::default(),
+            web_downloads: WebDownloadPrefs::default(),
             game: GameSettings::default(),
             add_desktop_shortcuts: false,
             add_start_menu_shortcuts: false,
@@ -546,6 +552,12 @@ impl AppSettings {
         };
         let base = base.trim_end_matches(['/', '\\']);
         format!("{base}{separator}{}", runner.store_name())
+    }
+
+    /// Effective folder for direct-link and BitTorrent downloads.
+    pub fn web_download_folder(&self) -> PathBuf {
+        self.web_downloads
+            .resolved_default_folder(&self.default_install_path)
     }
 
     /// Every library folder: the default install folder first (unnamed),

@@ -28,29 +28,69 @@ type Hint = (Vec<GamepadInput>, SharedString);
 impl BigPictureView {
     pub(super) fn downloads_summary(cx: &App) -> Option<SharedString> {
         let m = models(cx);
-        let queue = &m.downloads.read(cx).queue;
-        if queue.paused && !queue.active.is_empty() {
+        let dl = m.downloads.read(cx);
+        let queue = &dl.queue;
+        let web = &dl.web;
+        let total_active = queue.active.len() + web.active.len();
+        if total_active == 0 {
+            return None;
+        }
+        let store_current = queue.current();
+        let store_paused = queue.paused
+            || store_current.is_some_and(|c| c.state == irori_services::DownloadState::Paused);
+        let store_running = store_current.filter(|_| !store_paused);
+        let web_all_paused = web.paused
+            || (!web.active.is_empty()
+                && web
+                    .active
+                    .iter()
+                    .all(|w| w.state == irori_services::WebDownloadState::Paused));
+        let all_paused = match (!queue.active.is_empty(), !web.active.is_empty()) {
+            (true, true) => store_paused && web_all_paused,
+            (true, false) => store_paused,
+            (false, true) => web_all_paused,
+            (false, false) => false,
+        };
+        if all_paused {
             return Some(t_args(
                 "bigpicture.downloads.paused",
-                &[("count", queue.active.len().to_string().as_str())],
+                &[("count", total_active.to_string().as_str())],
             ));
         }
-        let current = queue.current()?;
-        let waiting = queue.active.len().saturating_sub(1);
-        let pct = m
-            .statuses
-            .read(cx)
-            .get(&current.id)
-            .and_then(|s| s.progress)
-            .and_then(|p| p.percent)
-            .map(|p| format!("{p:.0}"));
-        let title = current.title.as_str();
+        let web_running = (!web_all_paused)
+            .then(|| {
+                web.active.iter().find(|w| w.state.is_busy()).or_else(|| {
+                    web.active
+                        .iter()
+                        .find(|w| w.state != irori_services::WebDownloadState::Paused)
+                })
+            })
+            .flatten();
+        let waiting = total_active.saturating_sub(1);
+        let (title, pct) = if let Some(current) = store_running {
+            let pct = m
+                .statuses
+                .read(cx)
+                .get(&current.id)
+                .and_then(|s| s.progress)
+                .and_then(|p| p.percent)
+                .map(|p| format!("{p:.0}"));
+            (current.title.clone(), pct)
+        } else if let Some(w) = web_running {
+            let pct = w.progress_percent().map(|p| format!("{p:.0}"));
+            (w.title.clone(), pct)
+        } else if let Some(current) = store_current {
+            (current.title.clone(), None)
+        } else {
+            let w = web.active.first()?;
+            (w.title.clone(), None)
+        };
         let count = waiting.to_string();
         Some(match (pct, waiting) {
-            (None, 0) => SharedString::from(current.title.clone()),
+            (None, 0) => SharedString::from(title),
             (Some(p), 0) => t_args(
                 "bigpicture.downloads.progress",
-                &[("title", title), ("percent", p.as_str())],
+                &[("title", title.as_str()), ("percent", p.as_str())],
             ),
             (None, n) => t_args(
                 if n == 1 {
@@ -58,7 +98,7 @@ impl BigPictureView {
                 } else {
                     "bigpicture.downloads.queued_other"
                 },
-                &[("title", title), ("count", count.as_str())],
+                &[("title", title.as_str()), ("count", count.as_str())],
             ),
             (Some(p), n) => t_args(
                 if n == 1 {
@@ -67,7 +107,7 @@ impl BigPictureView {
                     "bigpicture.downloads.progress_queued_other"
                 },
                 &[
-                    ("title", title),
+                    ("title", title.as_str()),
                     ("percent", p.as_str()),
                     ("count", count.as_str()),
                 ],

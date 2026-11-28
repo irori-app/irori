@@ -18,7 +18,7 @@ tokio = { workspace = true, features = ["net"] }
 futures.workspace = true
 # The Steam client's DevTools endpoint (client_library): plain WebSocket on
 # this computer only, so no TLS.
-tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect"] }
+tokio-tungstenite.workspace = true
 parking_lot.workspace = true
 tracing.workspace = true
 notify = "8"

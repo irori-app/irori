@@ -58,7 +58,7 @@ impl FileDownload {
 
 #[derive(Default)]
 pub(crate) struct FilesState {
-    list: Vec<FileDownload>,
+    pub(crate) list: Vec<FileDownload>,
     running: Option<(String, CancellationToken)>,
 }
 
@@ -96,6 +96,7 @@ impl Backend {
                 error: None,
             });
         }
+        self.downloads.lock().when_done.stop_countdown();
         self.files_wake.notify_one();
         self.bus.emit(Event::DownloadQueueChanged);
     }
@@ -149,6 +150,7 @@ impl Backend {
                 continue;
             };
             self.bus.emit(Event::DownloadQueueChanged);
+            self.reconcile_bandwidth_limits();
             let cancel = self
                 .files
                 .lock()
@@ -187,7 +189,9 @@ impl Backend {
                     }
                 });
             }
+            self.reconcile_bandwidth_limits();
             self.bus.emit(Event::DownloadQueueChanged);
+            self.queue_ran();
         }
     }
 
@@ -208,7 +212,7 @@ impl Backend {
         }
         let entry = FileEntry::whole(name, item.file.size, None, vec![url]);
         let opts = Options {
-            max_bytes_per_sec: u64::from(self.settings.app().max_download_speed) * 1024,
+            rate_limiter: Some(self.rate_limiter.clone()),
             ..Options::default()
         };
         let (b, key) = (self.clone(), item.key.clone());
@@ -223,7 +227,7 @@ impl Backend {
             b.bus.emit(Event::DownloadQueueChanged);
         });
         irori_depot::download(
-            irori_core::http::client(),
+            irori_core::http::download_client(),
             Job {
                 root: &item.folder,
                 files: &[entry],

@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Ta bort från historiken",
   "manage.downloads.history.show_more": "Visa fler ({count} dolda)",
   "manage.downloads.history.filter.all": "Alla",
-  "manage.downloads.history.filter.done": "Klara",
-  "manage.downloads.history.filter.unfinished": "Blev inte klara",
   "manage.downloads.history.filter.none": "Inga nedladdningar att visa här",
   "manage.downloads.history.play": "Spela",
   "manage.downloads.history.play_failed": "Det gick inte att starta {title}",

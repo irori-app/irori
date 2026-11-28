@@ -145,13 +145,11 @@ impl Backend {
         Ok(())
     }
 
-    /// Keep the computer from sleeping until the download queue is done or
-    /// paused, while the display may sleep.
+    /// Keep the computer from sleeping until store, file, and web downloads
+    /// (including extractions and setup installers) are done or paused, while
+    /// the display may sleep.
     fn stay_awake_for_downloads(&self) {
-        let running = |b: &Backend| {
-            let q = b.downloads();
-            !q.paused && !q.active.is_empty()
-        };
+        let running = |b: &Backend| b.has_active_transfers();
         if !running(self)
             || self
                 .screen_off_hold

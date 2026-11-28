@@ -16,13 +16,14 @@ pub(crate) struct SpeedSample {
     pub disk: u64,
 }
 
-/// Rate history of one download. Resets when the tracked download changes.
+/// Rate history of active transfers. Resets when the tracked transfer changes.
 #[derive(Debug, Clone)]
 pub(crate) struct SpeedHistory {
     capacity: usize,
     samples: VecDeque<SpeedSample>,
-    tracking: Option<GameId>,
+    tracking: Option<String>,
     last: Option<InstallProgress>,
+    last_web: Option<(u64, u64)>,
 }
 
 impl SpeedHistory {
@@ -32,6 +33,7 @@ impl SpeedHistory {
             samples: VecDeque::with_capacity(capacity),
             tracking: None,
             last: None,
+            last_web: None,
         }
     }
 
@@ -39,34 +41,84 @@ impl SpeedHistory {
     /// nothing downloads). A sample is added only when progress changed, so
     /// repeated notifications for unrelated games do not stretch the graph.
     /// Returns whether the history changed.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn record(&mut self, id: Option<&GameId>, progress: Option<InstallProgress>) -> bool {
-        if self.tracking.as_ref() != id {
+        self.record_combined(id, progress, false, 0, 0)
+    }
+
+    /// Record aggregated transfer speed across the active store download and
+    /// active web/torrent downloads.
+    pub fn record_combined(
+        &mut self,
+        store_id: Option<&GameId>,
+        progress: Option<InstallProgress>,
+        web_active: bool,
+        web_speed: u64,
+        web_bytes_done: u64,
+    ) -> bool {
+        let key = store_id
+            .map(GameId::key)
+            .or_else(|| web_active.then(|| "__web__".to_string()));
+        if self.tracking != key {
             let had = !self.samples.is_empty();
             self.samples.clear();
             self.last = None;
-            self.tracking = id.cloned();
-            if id.is_none() {
+            self.last_web = None;
+            self.tracking = key;
+            if self.tracking.is_none() {
                 return had;
             }
         }
-        let Some(progress) = progress else {
-            return false;
-        };
-        if self.last == Some(progress) {
-            return false;
+        if store_id.is_some() {
+            let web_sig = web_active.then_some((web_speed, web_bytes_done));
+            let store_changed = progress.is_some() && self.last != progress;
+            let web_changed = web_sig.is_some() && self.last_web != web_sig;
+            if !store_changed && !web_changed {
+                return false;
+            }
+            if let Some(p) = progress {
+                self.last = Some(p);
+            }
+            self.last_web = web_sig;
+            let effective = self.last.unwrap_or_default();
+            let store_has_rates =
+                effective.download_speed.is_some() || effective.disk_speed.is_some();
+            if !store_has_rates && !web_active {
+                return false;
+            }
+            let total_down = effective
+                .download_speed
+                .unwrap_or(0)
+                .saturating_add(if web_active { web_speed } else { 0 });
+            let disk = effective.disk_speed.unwrap_or(0);
+            if self.samples.len() == self.capacity {
+                self.samples.pop_front();
+            }
+            self.samples.push_back(SpeedSample {
+                download: total_down,
+                disk,
+            });
+            return true;
         }
-        self.last = Some(progress);
-        if progress.download_speed.is_none() && progress.disk_speed.is_none() {
-            return false;
+        if web_active {
+            let sig = (web_speed, web_bytes_done);
+            if self.last_web == Some(sig) {
+                return false;
+            }
+            self.last_web = Some(sig);
+            if web_speed == 0 && self.samples.is_empty() {
+                return false;
+            }
+            if self.samples.len() == self.capacity {
+                self.samples.pop_front();
+            }
+            self.samples.push_back(SpeedSample {
+                download: web_speed,
+                disk: 0,
+            });
+            return true;
         }
-        if self.samples.len() == self.capacity {
-            self.samples.pop_front();
-        }
-        self.samples.push_back(SpeedSample {
-            download: progress.download_speed.unwrap_or(0),
-            disk: progress.disk_speed.unwrap_or(0),
-        });
-        true
+        false
     }
 
     pub fn samples(&self) -> impl ExactSizeIterator<Item = &SpeedSample> {
@@ -160,5 +212,21 @@ mod tests {
         });
         assert!(!h.record(Some(&a), pct));
         assert_eq!(h.len(), 0);
+    }
+
+    #[test]
+    fn records_web_only_and_combined_store_plus_web_speeds() {
+        let mut h = SpeedHistory::new(5);
+        assert!(h.record_combined(None, None, true, 1_000, 100));
+        assert!(h.record_combined(None, None, true, 2_000, 300));
+        assert_eq!(h.len(), 2);
+        assert_eq!(h.average_download(), Some(1_500));
+
+        let id = GameId::new(Runner::Gog, "a");
+        assert!(h.record_combined(Some(&id), p(3_000, 500), true, 1_000, 400));
+        assert_eq!(h.len(), 1);
+        let sample = h.samples().next().copied().unwrap();
+        assert_eq!(sample.download, 4_000);
+        assert_eq!(sample.disk, 500);
     }
 }

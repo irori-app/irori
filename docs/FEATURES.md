@@ -56,7 +56,8 @@ This document holds the full feature reference alongside the concise overview in
 ## Downloads and Updates
 
 - Single unified **Downloads** view covering active transfers, queued installs, game updates, component updates (Wine/Proton builds, DXVK, VKD3D-Proton, umu, anticheat runtimes, emulators, and RetroArch cores), a dedicated Irori app update banner (separate from "Update all", with copyable `apt`, `dnf`, and `pacman` commands for Linux system packages), offline files, and history.
-- "Download now" button to jump any queued item to the front while safely pausing the active download without losing progress, offline auto-pause and automatic resume after restarts, post-download power actions menu, version pinning, metered-connection and active-hours controls, and a live sidebar badge showing transfer percentage, queued count, or pending updates.
+- Direct HTTP/HTTPS link downloads (resumable multi-segment transfers with optional automatic archive extraction and one-click Library registration) and opt-in `.torrent` / `magnet:` downloads powered by on-demand `aria2c` (file selection preview, automatic stop at 100% with zero seeding).
+- Chunk-level resume and dynamic bandwidth limiting across Epic, GOG, Amazon, ZOOM, itch.io, and Xbox stores, "Download now" button to jump any queued item to the front while safely pausing the active download without losing progress, offline auto-pause and automatic resume after restarts, post-download power actions menu, version pinning, metered-connection and active-hours controls, and a live sidebar badge showing transfer percentage, queued count, or pending updates.
 
 <p align="center">
   <img src="../website/public/screenshots/downloads.webp" width="80%" alt="Download queue with progress, speed and time left">

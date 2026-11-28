@@ -4,6 +4,8 @@
 //! thread, and again only when the queue's items, configured library folders,
 //! or route visits change, never on a progress tick.
 
+use std::path::PathBuf;
+
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -13,21 +15,42 @@ use gpui_kit::{
 };
 use irori_core::GameId;
 use irori_core::util::format_bytes;
-use irori_services::{DownloadQueueSnapshot, DownloadState, QueueDisk};
+use irori_services::{
+    DownloadQueueSnapshot, DownloadState, QueueDisk, WebDownloadId, WebDownloadSnapshot,
+    WebDownloadState,
+};
 use irori_ui::i18n::t_args;
 
 use crate::common::plain_tooltip;
 
-/// What the queue disk reading depends on: the queue's items and their states.
-/// Progress isn't part of it, so a running download doesn't reread disks.
-pub(crate) type SpaceKey = Vec<(GameId, DownloadState, u64)>;
+/// What the queue disk reading depends on: active store and web items and their
+/// states/destinations. Progress isn't part of it, so running transfers do not
+/// reread disks on every tick.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct SpaceKey {
+    store: Vec<(GameId, DownloadState, u64)>,
+    web: Vec<(WebDownloadId, WebDownloadState, PathBuf, u64)>,
+}
 
-pub(crate) fn key_of(queue: &DownloadQueueSnapshot) -> SpaceKey {
-    queue
-        .active
-        .iter()
-        .map(|i| (i.id.clone(), i.state, i.download_size))
-        .collect()
+impl SpaceKey {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+}
+
+pub(crate) fn key_of(queue: &DownloadQueueSnapshot, web: &WebDownloadSnapshot) -> SpaceKey {
+    SpaceKey {
+        store: queue
+            .active
+            .iter()
+            .map(|i| (i.id.clone(), i.state, i.download_size))
+            .collect(),
+        web: web
+            .active
+            .iter()
+            .map(|w| (w.id.clone(), w.state, w.destination.clone(), w.bytes_total))
+            .collect(),
+    }
 }
 
 /// Proportional segments of a disk bar: `(already_used, queued_downloads)` in
@@ -271,5 +294,27 @@ mod tests {
         assert_eq!(bar_fractions(&disk(400, Some(1000), Some(0))), None);
         assert_eq!(bar_fractions(&disk(400, Some(1000), None)), None);
         assert_eq!(bar_fractions(&disk(400, None, Some(4000))), None);
+    }
+
+    #[test]
+    fn space_key_tracks_active_web_destinations() {
+        let empty = key_of(
+            &DownloadQueueSnapshot::default(),
+            &WebDownloadSnapshot::default(),
+        );
+        let with_web = key_of(
+            &DownloadQueueSnapshot::default(),
+            &WebDownloadSnapshot {
+                active: vec![irori_services::WebDownload {
+                    id: "w1".into(),
+                    destination: PathBuf::from("/downloads"),
+                    bytes_total: 2048,
+                    state: WebDownloadState::Running,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        );
+        assert_ne!(empty, with_web);
     }
 }

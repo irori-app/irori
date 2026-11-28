@@ -7,6 +7,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Once};
 
 use anyhow::{Result, bail};
+use futures::future::BoxFuture;
 use gpui_kit::{
     AppContext as _, Bounds, Modifiers, TestAppContext, VisualTestContext, WindowBounds,
     WindowOptions, px, size,
@@ -16,11 +17,31 @@ use irori_core::{
     InstallRequest, LaunchPlan, LaunchRequest, LoginFlow, MAIN_ACCOUNT, OpContext, Outcome, Paths,
     RemoveArgs, Runner, Store, StoreAccount, UpdateRequest, UserInfo, async_trait,
 };
-use irori_services::{Backend, DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState};
+use irori_services::{
+    Backend, DownloadItem, DownloadKind, DownloadQueueSnapshot, DownloadState, Permission,
+    PowerAction, PowerSystem,
+};
 use irori_ui::models;
 
 use crate::onboarding::OnboardingStep;
 use crate::{AccountsView, DownloadsView, OnboardingEvent, OnboardingView, should_show_onboarding};
+
+struct FakePower;
+
+impl PowerSystem for FakePower {
+    fn permissions(&self) -> BoxFuture<'_, Vec<(PowerAction, Permission)>> {
+        Box::pin(async {
+            vec![
+                (PowerAction::Sleep, Permission::Yes),
+                (PowerAction::PowerOff, Permission::Yes),
+            ]
+        })
+    }
+
+    fn perform(&self, _: PowerAction) -> BoxFuture<'_, Result<()>> {
+        Box::pin(async { Ok(()) })
+    }
+}
 
 pub(crate) fn setup(cx: &mut TestAppContext) {
     setup_with(cx, Vec::new);
@@ -35,9 +56,16 @@ fn setup_with(cx: &mut TestAppContext, stores: impl FnOnce() -> Vec<DynStore>) {
         Paths::init(Paths::under(&dir));
     });
     let backend = Backend::start_for_tests(|_, _| stores()).expect("backend starts");
+    // Never probe the host's real power manager (`logind`/D-Bus) asynchronously
+    // during UI tests, which would race header layout and click assertions.
+    backend.set_power_system(Arc::new(FakePower));
     cx.update(|cx| {
         gpui_kit::init(cx);
         irori_ui::init(backend, cx);
+        crate::downloads::set_power_choices_for_tests(
+            vec![PowerAction::Sleep, PowerAction::PowerOff],
+            cx,
+        );
     });
 }
 

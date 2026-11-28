@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Elimină din istoric",
   "manage.downloads.history.show_more": "Arată mai multe (ascunse: {count})",
   "manage.downloads.history.filter.all": "Toate",
-  "manage.downloads.history.filter.done": "Finalizate",
-  "manage.downloads.history.filter.unfinished": "Neterminate",
   "manage.downloads.history.filter.none": "Nicio descărcare de afișat aici",
   "manage.downloads.history.play": "Joacă",
   "manage.downloads.history.play_failed": "{title} nu a putut porni",

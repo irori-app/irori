@@ -136,6 +136,7 @@ impl Client {
             .user_agent("AGSLauncher/1.0.0")
             .connect_timeout(Duration::from_secs(15))
             .read_timeout(Duration::from_secs(60))
+            .pool_max_idle_per_host(32)
             .build()?)
     }
 

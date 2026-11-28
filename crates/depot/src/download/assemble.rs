@@ -1,0 +1,688 @@
+//! Multi-chunk file assembly: prefetches shared chunks, decodes and verifies
+//! them off the async workers, and writes files in order.
+
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Instant;
+
+use futures::{StreamExt as _, TryStreamExt as _};
+use tokio::io::{AsyncSeekExt as _, AsyncWriteExt as _};
+
+use super::journal::{Journal, PartCheckpoint, hash_file_tail, parts_fingerprint};
+use super::support::{decode, file_len, read_at, redact, set_executable, stalled};
+use super::{CHECKERS, Ctx, Error, Kind, STALL};
+use crate::adapt::Watchdog;
+use crate::hash::{Digest, hash_file};
+use crate::path;
+use crate::plan::{Chunk, FileEntry, Part};
+use crate::progress::Stats;
+
+/// Persist a multi-chunk checkpoint after this many bytes written.
+const CHECKPOINT_BYTES: u64 = if cfg!(test) { 64 * 1024 } else { 16 << 20 };
+
+/// Where the bytes of one part come from.
+enum PartData {
+    Chunk(Arc<Vec<u8>>),
+    Local(Vec<u8>),
+}
+
+impl Ctx {
+    /// Skip files already in place: recorded in the journal, or of the
+    /// right size and matching their digest. Returns the indices of the
+    /// files still to download.
+    pub(super) async fn check_existing(
+        &self,
+        files: &[FileEntry],
+        on_disk: &[Option<u64>],
+    ) -> Result<Vec<usize>, Error> {
+        let mut pending = Vec::new();
+        let mut to_hash = Vec::new();
+        for (i, f) in files.iter().enumerate() {
+            if (self.allow_unknown_size && f.size == 0 && f.is_stream())
+                || on_disk[i] != Some(f.size)
+            {
+                pending.push(i);
+            } else if self.journal.as_ref().is_some_and(|j| j.has(f)) {
+                self.skip(f);
+            } else if f.hash.is_none() {
+                self.skip(f);
+                self.record(f).await;
+            } else {
+                to_hash.push(i);
+            }
+        }
+        use std::sync::atomic::Ordering::Relaxed;
+        self.stats.check_total.store(to_hash.len() as u64, Relaxed);
+        let checked: Vec<(usize, bool)> = futures::stream::iter(to_hash)
+            .map(|i| async move {
+                let f = &files[i];
+                let ok = self.intact(&path::join(&self.root, &f.path), f).await?;
+                self.stats.checked.fetch_add(1, Relaxed);
+                Ok::<_, Error>((i, ok))
+            })
+            .buffer_unordered(CHECKERS)
+            .try_collect()
+            .await?;
+        for (i, ok) in checked {
+            if ok {
+                self.skip(&files[i]);
+                self.record(&files[i]).await;
+            } else {
+                pending.push(i);
+            }
+        }
+        pending.sort_unstable();
+        Ok(pending)
+    }
+
+    pub(super) async fn process_file(&self, f: &FileEntry) -> Result<(), Error> {
+        self.check_cancel()?;
+        let dest = path::join(&self.root, &f.path);
+        if let Some(parent) = dest.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        // Chunks retry on their own; whole files retry here, moving to the
+        // next server after each failure.
+        let order = match f.parts.first() {
+            Some(p) if f.is_stream() => self.hosts.order(&p.chunk.urls),
+            _ => Vec::new(),
+        };
+        let mirrors = order.len().max(1) as u32;
+        let (mut attempt, mut failures, mut corrupt) = (0, 0, 0);
+        loop {
+            let result = if f.parts.is_empty() {
+                self.write_empty(f, &dest).await
+            } else if f.is_stream() {
+                self.stream_file(f, &dest, &order, attempt).await
+            } else {
+                // Bound concurrent multi-chunk writers so small stream files keep
+                // running at full concurrency.
+                let _slot = tokio::select! {
+                    biased;
+                    () = self.cancel.cancelled() => return Err(Error::Cancelled),
+                    permit = self.assemble_slots.acquire() => {
+                        permit.map_err(|_| Error::Cancelled)?
+                    }
+                };
+                // Local copies and partial checkpoints are only trusted on the first attempt.
+                self.assemble(f, &dest, attempt == 0).await
+            };
+            let e = match result {
+                Ok(()) => break,
+                Err(e) => e,
+            };
+            let kind = e.kind();
+            if kind == Kind::Recycled && !self.cancel.is_cancelled() {
+                continue;
+            }
+            if self.cancel.is_cancelled()
+                || kind == Kind::Fatal
+                || (kind == Kind::Corrupt && corrupt >= self.retries)
+            {
+                return Err(match e {
+                    Error::Cancelled => e,
+                    e => Error::Other(anyhow::Error::from(e).context(f.path.clone())),
+                });
+            }
+            tracing::warn!("{} (attempt {}): {e}", f.path, attempt + 1);
+            attempt += 1;
+            if kind == Kind::Corrupt {
+                corrupt += 1;
+                self.backoff(corrupt).await?;
+            } else {
+                failures += 1;
+                // Every server gets a try before waiting.
+                if failures >= mirrors {
+                    self.backoff(failures + 1 - mirrors).await?;
+                }
+            }
+        }
+        if f.executable {
+            set_executable(&dest).await;
+        }
+        self.record(f).await;
+        Ok(())
+    }
+
+    /// Whether the file on disk (of the right size) matches its digest.
+    pub(super) async fn intact(&self, dest: &Path, f: &FileEntry) -> Result<bool, Error> {
+        let Some(hash) = f.hash.clone() else {
+            return Ok(true);
+        };
+        let dest = dest.to_path_buf();
+        let cancel = self.cancel.clone();
+        let res = tokio::task::spawn_blocking(move || {
+            hash_file(&dest, &hash, |_| !cancel.is_cancelled())
+        })
+        .await
+        .map_err(|e| Error::Other(e.into()))?;
+        match res {
+            Ok(ok) => Ok(ok),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Err(Error::Cancelled),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn skip(&self, f: &FileEntry) {
+        self.stats.add_done(f.size);
+        for p in &f.parts {
+            self.cache.release(&p.chunk.key);
+        }
+    }
+
+    async fn record(&self, f: &FileEntry) {
+        if let Some(j) = &self.journal {
+            j.record(f).await;
+        }
+    }
+
+    async fn write_empty(&self, f: &FileEntry, dest: &Path) -> Result<(), Error> {
+        if f.size != 0 {
+            return Err(Error::Other(anyhow::anyhow!(
+                "the manifest lists no content for a {}-byte file",
+                f.size
+            )));
+        }
+        tokio::fs::File::create(dest).await?;
+        Ok(())
+    }
+
+    /// Build a file from chunk slices (or local copies of them), verify it
+    /// and move it into place. Resumes a checkpointed `.irori-part` when
+    /// `allow_resume` is true and a valid journal checkpoint exists.
+    async fn assemble(&self, f: &FileEntry, dest: &Path, allow_resume: bool) -> Result<(), Error> {
+        // Tracks bytes added to `stats.done` since the last persisted
+        // checkpoint so errors and future-drop cancellations roll back
+        // uncommitted progress before a final sample is read.
+        struct Uncommitted<'a> {
+            stats: &'a Stats,
+            written: u64,
+        }
+        impl Drop for Uncommitted<'_> {
+            fn drop(&mut self) {
+                if self.written > 0 {
+                    self.stats.sub_done(self.written);
+                }
+            }
+        }
+
+        let part = path::part_path(dest);
+        let fingerprint = if self.journal.is_some() {
+            parts_fingerprint(f)
+        } else {
+            String::new()
+        };
+        let resumed = if allow_resume
+            && let Some(journal) = &self.journal
+            && let Some(cp) = journal.checkpoint(&f.path)
+        {
+            validate_checkpoint(&part, f, &fingerprint, &cp).await
+        } else {
+            None
+        };
+
+        let (file, start_part, mut bytes_written, mut hasher) = match resumed {
+            Some((parts_done, bytes_done)) => {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&part)
+                    .await?;
+                file.set_len(bytes_done).await?;
+                file.seek(std::io::SeekFrom::Start(bytes_done)).await?;
+                for p in &f.parts[..parts_done] {
+                    self.cache.release(&p.chunk.key);
+                }
+                self.stats.add_done(bytes_done);
+                (file, parts_done, bytes_done, None)
+            }
+            None => {
+                if !allow_resume && let Some(journal) = &self.journal {
+                    journal.clear_checkpoint(&f.path).await;
+                }
+                (
+                    tokio::fs::File::create(&part).await?,
+                    0,
+                    0,
+                    f.hash.as_ref().map(Digest::hasher),
+                )
+            }
+        };
+
+        let mut checkpointed_bytes = bytes_written;
+        let mut parts_written = start_part;
+        let mut out = tokio::io::BufWriter::with_capacity(1 << 20, file);
+        let mut uncommitted = Uncommitted {
+            stats: &self.stats,
+            written: 0,
+        };
+        let result = async {
+            let mut parts = futures::stream::iter(f.parts[start_part..].to_vec())
+                .map(|p| async move {
+                    let data = self.part_data(&p, allow_resume).await?;
+                    Ok::<_, Error>((p, data))
+                })
+                .buffered(self.prefetch);
+            let mut cancelled = false;
+            loop {
+                let waited = Instant::now();
+                let next = tokio::select! {
+                    biased;
+                    () = self.cancel.cancelled() => {
+                        cancelled = true;
+                        break;
+                    }
+                    item = parts.next() => item,
+                };
+                self.stats.add_net_wait(waited.elapsed());
+                let Some(next) = next else {
+                    break;
+                };
+                let (p, data) = match next {
+                    Ok(item) => item,
+                    Err(Error::Cancelled) => {
+                        cancelled = true;
+                        break;
+                    }
+                    Err(e) => return Err(e),
+                };
+                let slice = match &data {
+                    PartData::Local(bytes) => bytes.as_slice(),
+                    PartData::Chunk(chunk) => usize::try_from(p.offset)
+                        .ok()
+                        .zip(usize::try_from(p.offset + p.size).ok())
+                        .and_then(|(start, end)| chunk.get(start..end))
+                        .ok_or_else(|| {
+                            Error::Corrupt("a file part lies outside its chunk".into())
+                        })?,
+                };
+                let writing = Instant::now();
+                out.write_all(slice).await?;
+                self.stats.add_disk_wait(writing.elapsed());
+                if let Some(h) = &mut hasher {
+                    h.update(slice);
+                }
+                self.cache.release(&p.chunk.key);
+                let n = slice.len() as u64;
+                parts_written += 1;
+                bytes_written += n;
+                uncommitted.written += n;
+                self.stats.add_written(n);
+                self.stats.add_done(n);
+
+                if let Some(journal) = &self.journal
+                    && uncommitted.written >= CHECKPOINT_BYTES
+                    && parts_written < f.parts.len()
+                {
+                    save_part_checkpoint(
+                        &mut out,
+                        &part,
+                        journal,
+                        f,
+                        &fingerprint,
+                        parts_written,
+                        bytes_written,
+                    )
+                    .await?;
+                    checkpointed_bytes = bytes_written;
+                    uncommitted.written = 0;
+                }
+            }
+            drop(parts);
+
+            if cancelled {
+                if let Some(journal) = &self.journal
+                    && uncommitted.written > 0
+                {
+                    save_part_checkpoint(
+                        &mut out,
+                        &part,
+                        journal,
+                        f,
+                        &fingerprint,
+                        parts_written,
+                        bytes_written,
+                    )
+                    .await?;
+                    checkpointed_bytes = bytes_written;
+                    uncommitted.written = 0;
+                }
+                return Err(Error::Cancelled);
+            }
+
+            out.flush().await?;
+            drop(out);
+            if bytes_written != f.size {
+                return Err(Error::Corrupt(format!(
+                    "{} has {} bytes instead of {}",
+                    f.path, bytes_written, f.size
+                )));
+            }
+            if let Some(h) = hasher {
+                if let Some(expected) = &f.hash
+                    && h.finish() != expected.value
+                {
+                    return Err(Error::Corrupt(format!(
+                        "{} does not match its checksum",
+                        f.path
+                    )));
+                }
+            } else if !self.intact(&part, f).await? {
+                return Err(Error::Corrupt(format!(
+                    "{} does not match its checksum",
+                    f.path
+                )));
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(e) = result {
+            if !matches!(e, Error::Cancelled) {
+                let _ = tokio::fs::remove_file(&part).await;
+                if let Some(journal) = &self.journal {
+                    journal.clear_checkpoint(&f.path).await;
+                }
+                if checkpointed_bytes > 0 {
+                    self.stats.sub_done(checkpointed_bytes);
+                }
+            }
+            return Err(e);
+        }
+        irori_core::fs_part::finalize_part_async(&part, dest).await?;
+        uncommitted.written = 0;
+        Ok(())
+    }
+
+    /// The bytes of a part: read from the local copy when allowed and
+    /// readable, else from its (shared, cached) chunk.
+    async fn part_data(&self, p: &Part, use_local: bool) -> Result<PartData, Error> {
+        if use_local && let Some(reuse) = &p.reuse {
+            let src = path::join(&self.root, &reuse.path);
+            let (offset, size) = (reuse.offset, p.size);
+            let read = tokio::task::spawn_blocking(move || read_at(&src, offset, size))
+                .await
+                .map_err(|e| Error::Other(e.into()))?;
+            match read {
+                Ok(bytes) => return Ok(PartData::Local(bytes)),
+                Err(e) => tracing::debug!("reusing {}: {e}; downloading instead", reuse.path),
+            }
+        }
+        Ok(PartData::Chunk(self.chunk(&p.chunk).await?))
+    }
+
+    /// A decoded chunk, downloaded once while other files still need it.
+    async fn chunk(&self, chunk: &Arc<Chunk>) -> Result<Arc<Vec<u8>>, Error> {
+        let cell = self.cache.cell(&chunk.key);
+        cell.get_or_try_init(|| async {
+            let data = self.fetch_chunk(chunk).await?;
+            self.cache.add_bytes(data.len() as u64);
+            Ok::<_, Error>(Arc::new(data))
+        })
+        .await
+        .cloned()
+    }
+
+    /// A chunk from the best server that has it. Failing servers are left
+    /// for the next one right away; once every server failed, the engine
+    /// waits a little longer each round and keeps trying.
+    async fn fetch_chunk(&self, chunk: &Chunk) -> Result<Vec<u8>, Error> {
+        if chunk.urls.is_empty() && self.signing.is_none() {
+            return Err(Error::Other(anyhow::anyhow!(
+                "chunk {} has no address",
+                chunk.key
+            )));
+        }
+        let order = match &self.signing {
+            Some(_) => Vec::new(),
+            None => self.hosts.order(&chunk.urls),
+        };
+        let mirrors = order.len().max(1);
+        let (mut next, mut refused) = (0, 0);
+        let (mut failures, mut corrupt, mut resigned) = (0u32, 0u32, 0u32);
+        loop {
+            let (url, alt) = match &self.signing {
+                Some(s) => {
+                    let url = s.url(&chunk.key, &self.cancel).await?;
+                    (url.clone(), url)
+                }
+                None => (
+                    chunk.urls[order[next % mirrors]].clone(),
+                    chunk.urls[order[(next + 1) % mirrors]].clone(),
+                ),
+            };
+            let e = match self.fetch_raced(chunk, &url, &alt).await {
+                Ok(data) => return Ok(data),
+                Err(e) => e,
+            };
+            if self.cancel.is_cancelled() {
+                return Err(Error::Cancelled);
+            }
+            match e.kind() {
+                // An expired signature: sign again.
+                Kind::Fatal
+                    if self.signing.is_some()
+                        && matches!(&e, Error::Status { status, .. } if matches!(status.as_u16(), 401 | 403))
+                        && resigned < self.retries =>
+                {
+                    if let Some(s) = &self.signing {
+                        s.forget(&chunk.key);
+                    }
+                    resigned += 1;
+                }
+                // Other servers may have what this one refuses.
+                Kind::Fatal if matches!(e, Error::Status { .. }) && refused + 1 < mirrors => {
+                    refused += 1;
+                    next += 1;
+                }
+                Kind::Fatal => return Err(e),
+                Kind::Corrupt => {
+                    corrupt += 1;
+                    if corrupt > self.retries.max(mirrors as u32 - 1) {
+                        return Err(e);
+                    }
+                    tracing::warn!("chunk {} (attempt {corrupt}): {e}", chunk.key);
+                    next += 1;
+                    self.backoff(corrupt).await?;
+                }
+                // Chunk requests finish on their connection; never stopped.
+                Kind::Recycled => {}
+                Kind::Transient => {
+                    failures += 1;
+                    tracing::warn!("chunk {} (failure {failures}): {e}", chunk.key);
+                    next += 1;
+                    if failures as usize >= mirrors {
+                        self.backoff(failures + 1 - mirrors as u32).await?;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Fetch from `url`; when that lags while request slots sit idle (the
+    /// end of a download), race the same chunk from `alt` and take
+    /// whichever arrives first.
+    async fn fetch_raced(&self, chunk: &Chunk, url: &str, alt: &str) -> Result<Vec<u8>, Error> {
+        let first = self.fetch_chunk_once(chunk, url);
+        tokio::pin!(first);
+        let patience = self
+            .hosts
+            .chunk_time()
+            .map_or(STALL, |t| (t * 3).clamp(STALL / 4, STALL * 2));
+        tokio::select! {
+            r = &mut first => return r,
+            () = tokio::time::sleep(patience) => {}
+        }
+        if !self.requests.has_spare() {
+            return first.await;
+        }
+        tracing::debug!("chunk {} is slow; racing a second request", chunk.key);
+        let second = self.fetch_chunk_once(chunk, alt);
+        tokio::pin!(second);
+        tokio::select! {
+            r = &mut first => match r {
+                Err(e) if !matches!(e, Error::Cancelled) => second.await,
+                r => r,
+            },
+            r = &mut second => match r {
+                Err(e) if !matches!(e, Error::Cancelled) => first.await,
+                r => r,
+            },
+        }
+    }
+
+    async fn fetch_chunk_once(&self, chunk: &Chunk, url: &str) -> Result<Vec<u8>, Error> {
+        let raw = {
+            let _permit = self
+                .requests
+                .acquire(&self.cancel)
+                .await
+                .ok_or(Error::Cancelled)?;
+            let started = Instant::now();
+            let raw = self.request_chunk(chunk, url).await;
+            let bytes = raw.as_ref().map_or(0, |r| r.len() as u64);
+            self.score(url, &raw, bytes, started.elapsed());
+            raw?
+        };
+        // Decoding and hashing are CPU-bound: keep them off the async workers.
+        let (codec, size, hash) = (chunk.codec.clone(), chunk.size, chunk.hash.clone());
+        let decoded = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+            let data = decode(&codec, raw).map_err(|e| format!("{e:#}"))?;
+            if data.len() as u64 != size {
+                return Err(format!("{} bytes instead of {size}", data.len()));
+            }
+            if hash.is_some_and(|h| !h.matches(&data)) {
+                return Err("does not match its checksum".into());
+            }
+            Ok(data)
+        })
+        .await
+        .map_err(|e| Error::Other(e.into()))?
+        .map_err(|e| Error::Corrupt(format!("chunk {}: {e}", chunk.key)));
+        if decoded.is_err() {
+            self.hosts.record_failure(url);
+        }
+        decoded
+    }
+
+    /// The raw bytes of `chunk` from `url`.
+    async fn request_chunk(&self, chunk: &Chunk, url: &str) -> Result<Vec<u8>, Error> {
+        let mut req = self
+            .client
+            .get(url)
+            .header(reqwest::header::ACCEPT_ENCODING, "identity");
+        if let Some((start, len)) = chunk.range {
+            req = req.header(
+                reqwest::header::RANGE,
+                format!("bytes={start}-{}", start + len - 1),
+            );
+        }
+        let resp = self.send(req, url).await?;
+        if !resp.status().is_success() {
+            return Err(Error::Status {
+                status: resp.status(),
+                url: redact(url),
+            });
+        }
+        if chunk.range.is_some() && resp.status() != reqwest::StatusCode::PARTIAL_CONTENT {
+            return Err(Error::Other(anyhow::anyhow!(
+                "the server does not support partial downloads"
+            )));
+        }
+        let mut raw = Vec::with_capacity(chunk.download_size as usize);
+        let mut body = resp.bytes_stream();
+        let mut watch = Watchdog::new(STALL, Instant::now());
+        loop {
+            let next = tokio::select! {
+                _ = self.cancel.cancelled() => return Err(Error::Cancelled),
+                n = tokio::time::timeout(STALL, body.next()) => n.map_err(|_| stalled(url))?,
+            };
+            let Some(bytes) = next else { break };
+            let bytes = bytes?;
+            watch.pause(self.throttle(bytes.len()).await?);
+            self.stats.add_received(bytes.len() as u64);
+            raw.extend_from_slice(&bytes);
+            if chunk.download_size > 0 && raw.len() as u64 > chunk.download_size {
+                return Err(Error::Corrupt(format!(
+                    "{} sent more than the chunk's {} bytes",
+                    redact(url),
+                    chunk.download_size
+                )));
+            }
+            watch
+                .feed(bytes.len() as u64, Instant::now())
+                .map_err(|e| Error::Interrupted(format!("{}: {e}", redact(url))))?;
+        }
+        Ok(raw)
+    }
+}
+
+/// Validate a journaled [`PartCheckpoint`] against `f` and the on-disk `.irori-part`.
+async fn validate_checkpoint(
+    part: &Path,
+    f: &FileEntry,
+    fingerprint: &str,
+    cp: &PartCheckpoint,
+) -> Option<(usize, u64)> {
+    if cp.size != f.size
+        || cp.parts_fingerprint != fingerprint
+        || cp.parts_done == 0
+        || cp.parts_done > f.parts.len()
+        || cp.bytes_done == 0
+        || cp.bytes_done > f.size
+    {
+        return None;
+    }
+    let expected_bytes = f.parts[..cp.parts_done]
+        .iter()
+        .try_fold(0u64, |acc, p| acc.checked_add(p.size))?;
+    if expected_bytes != cp.bytes_done {
+        return None;
+    }
+    let disk_len = file_len(part).await?;
+    if disk_len < cp.bytes_done {
+        return None;
+    }
+    let part_path = part.to_path_buf();
+    let bytes_done = cp.bytes_done;
+    let tail = tokio::task::spawn_blocking(move || hash_file_tail(&part_path, bytes_done))
+        .await
+        .ok()?
+        .ok()?;
+    if tail != cp.tail_sha256 {
+        tracing::debug!(
+            "discarding stale checkpoint for {}: tail digest mismatch",
+            f.path
+        );
+        return None;
+    }
+    Some((cp.parts_done, cp.bytes_done))
+}
+
+async fn save_part_checkpoint(
+    out: &mut tokio::io::BufWriter<tokio::fs::File>,
+    part: &Path,
+    journal: &Journal,
+    f: &FileEntry,
+    fingerprint: &str,
+    parts_done: usize,
+    bytes_done: u64,
+) -> Result<(), Error> {
+    out.flush().await?;
+    out.get_ref().sync_data().await?;
+    let part_path = part.to_path_buf();
+    let tail_sha256 = tokio::task::spawn_blocking(move || hash_file_tail(&part_path, bytes_done))
+        .await
+        .map_err(|e| Error::Other(e.into()))??;
+    journal
+        .save_checkpoint(PartCheckpoint {
+            path: f.path.clone(),
+            size: f.size,
+            parts_fingerprint: fingerprint.to_string(),
+            parts_done,
+            bytes_done,
+            tail_sha256,
+        })
+        .await;
+    Ok(())
+}

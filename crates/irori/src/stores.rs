@@ -98,8 +98,9 @@ pub fn build(bus: EventBus, settings: SettingsFn) -> Vec<DynStore> {
     let emulation = irori_emulation::EmulationStore::new(bus.clone(), settings.clone());
     let _ = EMULATION.set(emulation.clone());
     stores.push(emulation);
-    let sideload = irori_sideload::SideloadStore::new(bus, settings);
+    let sideload = irori_sideload::SideloadStore::new(bus, settings.clone());
     let _ = SIDELOAD.set(sideload.clone());
+    let _ = SETTINGS.set(settings);
     stores.push(sideload);
     stores
 }
@@ -148,6 +149,8 @@ pub static EMULATION: once_cell::sync::OnceCell<Arc<irori_emulation::EmulationSt
 /// own API, which `dyn Store` does not expose).
 pub static SIDELOAD: once_cell::sync::OnceCell<Arc<irori_sideload::SideloadStore>> =
     once_cell::sync::OnceCell::new();
+
+static SETTINGS: once_cell::sync::OnceCell<SettingsFn> = once_cell::sync::OnceCell::new();
 
 pub fn hooks() -> Hooks {
     Hooks {
@@ -210,6 +213,108 @@ pub fn hooks() -> Hooks {
         install: Some(Arc::new(|id, window, cx| {
             irori_game::ops::install(&id, window, cx)
         })),
+        add_to_library: Some(Arc::new(irori_library::open_sideload_dialog_for_path)),
+    }
+}
+
+fn canonical_key(path: &std::path::Path) -> String {
+    let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let text = resolved.to_string_lossy().into_owned();
+    if cfg!(windows) {
+        text.trim_start_matches(r"\\?\").to_ascii_lowercase()
+    } else {
+        text
+    }
+}
+
+struct SideloadBridgeImpl {
+    store: Arc<irori_sideload::SideloadStore>,
+    settings: Option<SettingsFn>,
+}
+
+#[irori_core::async_trait]
+impl irori_services::SideloadBridge for SideloadBridgeImpl {
+    async fn scan_extracted(
+        &self,
+        root: &std::path::Path,
+    ) -> Option<irori_services::SideloadCandidate> {
+        let root = root.to_path_buf();
+        let found =
+            tokio::task::spawn_blocking(move || irori_sideload::scan::scan_extracted_game(&root))
+                .await
+                .ok()??;
+        Some(irori_services::SideloadCandidate {
+            title: found.title,
+            executable: found.executable,
+            install_folder: found.install_folder,
+            platform: found.platform.install_platform(),
+            launcher_args: found.args,
+            cover_art: found.icon.map(|p| p.display().to_string()),
+            background_art: None,
+        })
+    }
+
+    async fn register_game(
+        &self,
+        mut candidate: irori_services::SideloadCandidate,
+    ) -> anyhow::Result<irori_core::GameId> {
+        let want_exe = canonical_key(&candidate.executable);
+        let want_dir = candidate.install_folder.as_deref().map(canonical_key);
+        if let Some(existing) = self.store.games().into_iter().find(|g| {
+            let Some(inst) = &g.install else {
+                return false;
+            };
+            if !inst.executable.is_empty()
+                && canonical_key(std::path::Path::new(&inst.executable)) == want_exe
+            {
+                return true;
+            }
+            if let Some(dir) = &want_dir
+                && !inst.install_path.is_empty()
+                && canonical_key(std::path::Path::new(&inst.install_path)) == *dir
+            {
+                return true;
+            }
+            false
+        }) {
+            return Ok(existing.id());
+        }
+        let allow_network = self
+            .settings
+            .as_ref()
+            .is_none_or(|f| f().network_mode != irori_core::net::NetworkMode::Offline);
+        if candidate.cover_art.is_none()
+            && allow_network
+            && let Some((cover, hero)) =
+                irori_extras::wiki::steam_art_for_title(&candidate.title).await
+        {
+            candidate.cover_art = Some(cover);
+            candidate.background_art = Some(hero);
+        }
+        let platform = irori_sideload::SideloadPlatform::from_install_platform(candidate.platform)
+            .unwrap_or_default();
+        let app = irori_sideload::SideloadApp {
+            title: candidate.title,
+            executable: Some(candidate.executable),
+            platform,
+            cover_art: candidate.cover_art,
+            background_art: candidate.background_art,
+            install_folder: candidate.install_folder,
+            launcher_args: candidate.launcher_args,
+            ..Default::default()
+        };
+        self.store.add_app(app).await
+    }
+}
+
+/// Wire the sideload bridge into `backend` so completed web downloads can scan
+/// extracted folders and auto-register games in the Library.
+pub fn install_sideload_bridge(backend: &irori_services::Backend) {
+    if let Some(store) = SIDELOAD.get().cloned() {
+        backend.set_sideload_bridge(Arc::new(SideloadBridgeImpl {
+            store,
+            settings: SETTINGS.get().cloned(),
+        }));
     }
 }
 

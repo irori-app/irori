@@ -12,6 +12,7 @@ use crate::downloads::{DownloadItem, DownloadKind, DownloadState};
 use crate::drives::{
     DetectedDrive, extra_drives_for_snapshot, resolve_disk_label, snapshot_system_disks,
 };
+use crate::web_downloads::{WebDownload, WebDownloadState};
 
 /// One disk the queue downloads to, or an install drive shown when idle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,6 +85,29 @@ fn remaining(total: u64, percent: Option<f32>) -> u64 {
         }
         _ => total,
     }
+}
+
+/// Remaining bytes of active web and BitTorrent downloads with a known size.
+pub(crate) fn web_queue_needs(active: &[WebDownload]) -> Vec<(PathBuf, u64)> {
+    active
+        .iter()
+        .filter_map(|item| {
+            if item.destination.as_os_str().is_empty() || item.bytes_total == 0 {
+                return None;
+            }
+            if !matches!(
+                item.state,
+                WebDownloadState::Queued
+                    | WebDownloadState::FetchingMetadata
+                    | WebDownloadState::Running
+                    | WebDownloadState::Paused
+            ) {
+                return None;
+            }
+            let left = item.remaining_bytes();
+            (left > 0).then(|| (item.destination.clone(), left))
+        })
+        .collect()
 }
 
 /// Add the needs up per disk, in the order the queue reaches each disk.
@@ -176,18 +200,26 @@ pub(crate) fn merge_install_disks(
 }
 
 impl Backend {
+    /// Available bytes on the disk holding `path` (or its nearest existing ancestor).
+    /// Reads the disk, so call it off the UI thread.
+    pub fn free_space_at(&self, path: &Path) -> Option<u64> {
+        let existing = path.ancestors().find(|p| p.is_dir())?;
+        fs4::available_space(existing).ok()
+    }
+
     /// What the queue still downloads to each disk, against the space free
     /// there. Reads the disks, so call it off the UI thread, and only when
     /// the queue changes.
     pub fn download_disks(&self) -> Vec<QueueDisk> {
         let active = self.downloads().active;
-        let needs = queue_needs(&active, |id| {
+        let mut needs = queue_needs(&active, |id| {
             self.statuses
                 .get(id)
                 .and_then(|s| s.progress)
                 .or_else(|| active.iter().find(|i| &i.id == id).and_then(|i| i.progress))
                 .and_then(|p| p.percent)
         });
+        needs.extend(web_queue_needs(&self.web_downloads().active));
         if needs.is_empty() {
             return Vec::new();
         }

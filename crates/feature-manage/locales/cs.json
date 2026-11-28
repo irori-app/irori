@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Odebrat z historie",
   "manage.downloads.history.show_more": "Zobrazit další (skryto: {count})",
   "manage.downloads.history.filter.all": "Vše",
-  "manage.downloads.history.filter.done": "Dokončené",
-  "manage.downloads.history.filter.unfinished": "Nedokončené",
   "manage.downloads.history.filter.none": "Žádná stahování k zobrazení",
   "manage.downloads.history.play": "Hrát",
   "manage.downloads.history.play_failed": "{title} se nepodařilo spustit",

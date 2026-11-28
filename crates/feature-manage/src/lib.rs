@@ -47,7 +47,8 @@ pub use accounts::AccountsView;
 pub use deals::set_deals_shown;
 pub use downloads::{
     DownloadCommand, DownloadsBadge, DownloadsPanel, DownloadsPill, DownloadsView,
-    download_command_keywords, download_commands, keep_on, run_download_command,
+    download_command_keywords, download_commands, keep_on, open_add_download_dialog,
+    run_download_command,
 };
 pub use emulators::{
     EmulatorsView, InstallTarget, OpenableEngine, choice_name, open_custom_engine_dialog,
@@ -81,10 +82,32 @@ pub use xbox::{open_offline_play_dialog, xbox_offline_available};
 
 pub use i18n::CATALOGS;
 
-/// Register this crate's translations (`manage.` keys). Idempotent; the
-/// views also call it on construction.
-pub fn init(_cx: &mut gpui_kit::App) {
+gpui_kit::actions!(
+    manage,
+    [
+        /// Paste a link or magnet URI from the clipboard into the Add download dialog.
+        PasteDownloadLink,
+    ]
+);
+
+pub(crate) const DOWNLOADS_CONTEXT: &str = "Downloads";
+
+struct KeysBound;
+impl gpui_kit::Global for KeysBound {}
+
+/// Register this crate's translations (`manage.` keys) and key bindings.
+/// Idempotent; the views also call it on construction.
+pub fn init(cx: &mut gpui_kit::App) {
     i18n::register();
+    if cx.has_global::<KeysBound>() {
+        return;
+    }
+    cx.set_global(KeysBound);
+    cx.bind_keys([
+        gpui_kit::KeyBinding::new("ctrl-v", PasteDownloadLink, Some(DOWNLOADS_CONTEXT)),
+        #[cfg(target_os = "macos")]
+        gpui_kit::KeyBinding::new("cmd-v", PasteDownloadLink, Some(DOWNLOADS_CONTEXT)),
+    ]);
 }
 
 #[cfg(test)]

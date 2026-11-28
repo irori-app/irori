@@ -286,6 +286,22 @@ impl ItchStore {
             hash,
             Vec::new(),
         );
+        // Clean stale partial/segment files from an earlier upload with a different filename.
+        let keep_part = irori_depot::path::part_path(&staging.join(&name));
+        let keep_seg = irori_depot::path::seg_path(&staging.join(&name));
+        if let Ok(mut rd) = tokio::fs::read_dir(&staging).await {
+            while let Ok(Some(e)) = rd.next_entry().await {
+                let p = e.path();
+                let fname = e.file_name();
+                let fname = fname.to_string_lossy();
+                if (fname.ends_with(".irori-part") || fname.ends_with(".irori-part.seg"))
+                    && p != keep_part
+                    && p != keep_seg
+                {
+                    let _ = tokio::fs::remove_file(&p).await;
+                }
+            }
+        }
         let settings = (self.settings)();
         let finished = irori_depot::download(
             irori_core::http::download_client(),

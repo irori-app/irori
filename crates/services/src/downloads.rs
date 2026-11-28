@@ -417,7 +417,9 @@ impl Backend {
             match next {
                 Some((item, cancel)) => {
                     self.bus.emit(Event::DownloadQueueChanged);
+                    self.reconcile_bandwidth_limits();
                     self.run_download(item, cancel).await;
+                    self.reconcile_bandwidth_limits();
                     self.queue_ran();
                 }
                 None => self.downloads_wake.notified().await,

@@ -101,6 +101,7 @@ pub fn protected_dirs(app: &AppSettings) -> Vec<PathBuf> {
         &app.default_install_path,
         &app.default_wine_prefix_dir,
         &app.compat_tools_path,
+        &app.web_downloads.default_folder,
     ] {
         if !s.is_empty() {
             dirs.push(expand_home(s));

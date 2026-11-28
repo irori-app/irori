@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Aus dem Verlauf entfernen",
   "manage.downloads.history.show_more": "Mehr anzeigen ({count} ausgeblendet)",
   "manage.downloads.history.filter.all": "Alle",
-  "manage.downloads.history.filter.done": "Fertig",
-  "manage.downloads.history.filter.unfinished": "Nicht abgeschlossen",
   "manage.downloads.history.filter.none": "Hier gibt es keine Downloads",
   "manage.downloads.history.play": "Spielen",
   "manage.downloads.history.play_failed": "{title} konnte nicht gestartet werden",

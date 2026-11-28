@@ -182,8 +182,6 @@
   "manage.downloads.history.remove": "Rimuovi dalla cronologia",
   "manage.downloads.history.show_more": "Mostra altro ({count} nascosti)",
   "manage.downloads.history.filter.all": "Tutti",
-  "manage.downloads.history.filter.done": "Completati",
-  "manage.downloads.history.filter.unfinished": "Non completati",
   "manage.downloads.history.filter.none": "Nessun download da mostrare qui",
   "manage.downloads.history.play": "Gioca",
   "manage.downloads.history.play_failed": "Impossibile avviare {title}",
