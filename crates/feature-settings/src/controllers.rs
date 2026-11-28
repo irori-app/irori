@@ -1,9 +1,9 @@
-//! The "Connected controllers" panel of Settings → Controller.
+//! The "Connected controllers" panel of Settings -> Controller.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, Render,
@@ -27,7 +27,7 @@ pub(crate) fn kind_label(kind: ControllerKind) -> &'static str {
 }
 
 /// Display name of a controller family in the interface language.
-fn kind_text(kind: ControllerKind) -> SharedString {
+pub(crate) fn kind_text(kind: ControllerKind) -> SharedString {
     match kind {
         ControllerKind::Generic => t("settings.controllers.kind_generic"),
         other => kind_label(other).into(),
@@ -77,64 +77,129 @@ impl ControllersPanel {
 impl Render for ControllersPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let (border, muted_fg, danger) = (theme.border, theme.muted_foreground, theme.danger);
+        let (border, muted_fg, danger, primary, bg, success) = (
+            theme.border,
+            theme.muted_foreground,
+            theme.danger,
+            theme.primary,
+            theme.background,
+            theme.success,
+        );
+        let count = self.controllers.len();
+        let status_tag = if count == 0 {
+            Tag::secondary()
+                .xsmall()
+                .outline()
+                .child(t("settings.controllers.count_none"))
+        } else {
+            let key = if count == 1 {
+                "settings.controllers.count_one"
+            } else {
+                "settings.controllers.count_other"
+            };
+            Tag::success()
+                .xsmall()
+                .child(t_args(key, &[("count", &count.to_string())]))
+        };
         let refresh = Button::new("controllers-refresh")
             .ghost()
             .xsmall()
             .icon(IconName::RefreshCw)
             .label(t("settings.common.refresh"))
             .on_click(cx.listener(|this, _, _, cx| this.refresh(cx)));
+        let header = h_flex()
+            .w_full()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(status_tag)
+            .child(refresh);
+        let icon_badge = |bg_tint, fg_tint| {
+            div()
+                .size_8()
+                .rounded(theme.radius)
+                .bg(bg_tint)
+                .flex()
+                .flex_shrink_0()
+                .items_center()
+                .justify_center()
+                .child(Icon::new(IconName::Gamepad2).small().text_color(fg_tint))
+        };
         let list = if self.controllers.is_empty() {
-            panel(cx).child(
+            panel(cx).bg(bg.opacity(0.45)).child(
                 h_flex()
-                    .gap_2()
-                    .p_3()
-                    .child(Icon::new(IconName::Gamepad2).small().text_color(muted_fg))
-                    .child(muted(t("settings.controllers.empty"), cx)),
+                    .gap_3()
+                    .px_3()
+                    .py_2p5()
+                    .items_center()
+                    .child(icon_badge(theme.muted, muted_fg))
+                    .child(
+                        muted(t("settings.controllers.empty"), cx)
+                            .flex_1()
+                            .min_w_0(),
+                    ),
             )
         } else {
-            self.controllers
-                .iter()
-                .enumerate()
-                .fold(panel(cx), |list, (ix, c)| {
+            self.controllers.iter().enumerate().fold(
+                panel(cx).bg(bg.opacity(0.45)),
+                |list, (ix, c)| {
                     let battery = battery_text(c.battery);
                     let low = c.battery.is_low();
+                    let player = t_args(
+                        "settings.controllers.player_slot",
+                        &[("index", &(ix + 1).to_string())],
+                    );
                     list.child(
                         h_flex()
                             .id(ElementId::Name(format!("controller-{ix}").into()))
                             .gap_3()
                             .px_3()
-                            .py_2()
+                            .py_2p5()
+                            .items_center()
                             .when(ix > 0, |r| r.border_t_1().border_color(border))
-                            .child(Icon::new(IconName::Gamepad2).small())
+                            .child(icon_badge(primary.opacity(0.16), primary))
                             .child(
-                                div()
+                                h_flex()
                                     .flex_1()
                                     .min_w_0()
-                                    .truncate()
-                                    .text_sm()
-                                    .child(c.name.clone()),
+                                    .items_center()
+                                    .gap_2()
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .truncate()
+                                            .text_sm()
+                                            .font_medium()
+                                            .child(c.name.clone()),
+                                    )
+                                    .child(Tag::secondary().xsmall().outline().child(player)),
                             )
                             .child(Tag::secondary().xsmall().outline().child(kind_text(c.kind)))
                             .when_some(battery, |r, b| {
                                 r.child(
-                                    div()
-                                        .min_w_24()
+                                    h_flex()
                                         .flex_shrink_0()
-                                        .text_xs()
-                                        .text_right()
-                                        .text_color(if low { danger } else { muted_fg })
-                                        .child(b),
+                                        .items_center()
+                                        .gap_1p5()
+                                        .child(div().size_1p5().rounded_full().bg(if low {
+                                            danger
+                                        } else {
+                                            success
+                                        }))
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(if low { danger } else { muted_fg })
+                                                .child(b),
+                                        ),
                                 )
                             }),
                     )
-                })
+                },
+            )
         };
-        v_flex()
-            .w_full()
-            .gap_2()
-            .child(list)
-            .child(h_flex().justify_end().child(refresh))
+        v_flex().w_full().gap_2().child(header).child(list)
     }
 }
 

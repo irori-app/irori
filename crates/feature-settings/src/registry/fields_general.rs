@@ -799,25 +799,6 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     .tooltip("settings.field.download_no_https.tip")
     .keywords(&["https", "lancache", "cdn", "cache"]),
     app(
-        "panel.button-map",
-        "settings.field.panel_button_map.label",
-        Controller,
-        "settings.group.buttons",
-        Panel(PanelKind::ButtonMap),
-    )
-    .keywords(&[
-        "gamepad",
-        "controller",
-        "buttons",
-        "bindings",
-        "remap",
-        "rebind",
-        "confirm",
-        "nintendo",
-        "glyphs",
-        "layout",
-    ]),
-    app(
         "panel.controllers",
         "settings.field.panel_controllers.label",
         Controller,
@@ -837,19 +818,39 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     ]),
     app(
         "disableController",
-        "settings.field.disable_controller.label",
+        "settings.field.controller_navigation.label",
         Controller,
         "settings.group.controller",
         Toggle,
     )
-    .help("settings.field.disable_controller.help")
-    .tooltip("settings.field.disable_controller.tip")
-    .keywords(&["gamepad", "controller", "joystick"]),
+    .inverted()
+    .help("settings.field.controller_navigation.help")
+    .tooltip("settings.field.controller_navigation.tip")
+    .keywords(&["gamepad", "controller", "joystick", "disable", "navigation"]),
+    app(
+        "panel.button-map",
+        "settings.field.panel_button_map.label",
+        Controller,
+        "settings.group.buttons",
+        Panel(PanelKind::ButtonMap),
+    )
+    .keywords(&[
+        "gamepad",
+        "controller",
+        "buttons",
+        "bindings",
+        "remap",
+        "rebind",
+        "confirm",
+        "nintendo",
+        "glyphs",
+        "layout",
+    ]),
     app(
         "iroriController.hidePointer",
         "settings.field.hide_pointer.label",
         Controller,
-        "settings.group.controller",
+        "settings.group.controller_behavior",
         Toggle,
     )
     .help("settings.field.hide_pointer.help")
@@ -866,7 +867,7 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "gamepadInitialRepeatDelay",
         "settings.field.gamepad_initial_repeat_delay.label",
         Controller,
-        "settings.group.controller",
+        "settings.group.controller_behavior",
         Text(TextKind::Number { min: 50, max: 500 }),
     )
     .help("settings.field.gamepad_initial_repeat_delay.help")
@@ -877,7 +878,7 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "gamepadRepeatDelay",
         "settings.field.gamepad_repeat_delay.label",
         Controller,
-        "settings.group.controller",
+        "settings.group.controller_behavior",
         Text(TextKind::Number { min: 5, max: 150 }),
     )
     .help("settings.field.gamepad_repeat_delay.help")
@@ -888,7 +889,7 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "iroriUi.bigPictureHoldButton",
         "settings.field.big_picture_hold_button.label",
         Controller,
-        "settings.group.controller",
+        "settings.group.controller_behavior",
         Choice(BIG_PICTURE_HOLD),
     )
     .help("settings.field.big_picture_hold_button.help")
@@ -907,7 +908,7 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "iroriUi.bigPictureHoldMs",
         "settings.field.big_picture_hold_ms.label",
         Controller,
-        "settings.group.controller",
+        "settings.group.controller_behavior",
         Text(TextKind::Number {
             min: 300,
             max: 3000,

@@ -181,7 +181,7 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
 
 #[gpui_kit::test]
 fn the_controller_page_draws_the_button_map_and_saves_choices(cx: &mut TestAppContext) {
-    use irori_core::controller_prefs::ConfirmButton;
+    use irori_core::controller_prefs::{ConfirmButton, GlyphStyle};
 
     let (handle, view) = open(cx, |window, cx| {
         SettingsView::new("gamepad".into(), window, cx)
@@ -195,9 +195,19 @@ fn the_controller_page_draws_the_button_map_and_saves_choices(cx: &mut TestAppCo
         assert_eq!(view.read(cx).section(), SettingsSection::Controller);
         irori_ui::backend(cx)
     });
-    backend
-        .settings
-        .update_app(|s| s.controller.confirm_button = ConfirmButton::East);
+
+    // Verify inverted positive-framed toggle spec stays wired to disableController.
+    let nav_spec = crate::registry::find("disableController").expect("disableController spec");
+    assert!(nav_spec.inverted);
+    assert_eq!(nav_spec.section, crate::registry::FieldSection::Controller);
+
+    // Confirm preference, glyph style, custom rebind, and paused-navigation banner all render cleanly.
+    backend.settings.update_app(|s| {
+        s.controller.confirm_button = ConfirmButton::East;
+        s.controller.glyphs = GlyphStyle::PlayStation;
+        s.controller.buttons.insert("west".into(), "menu".into());
+        s.controller.buttons.insert("north".into(), "alt".into());
+    });
     cx.run_until_parked();
     cx.update_window(handle, |_, window, cx| {
         window.refresh();
@@ -208,9 +218,21 @@ fn the_controller_page_draws_the_button_map_and_saves_choices(cx: &mut TestAppCo
         backend.settings.app().controller.confirm_button,
         ConfirmButton::East
     );
-    backend
-        .settings
-        .update_app(|s| s.controller = Default::default());
+
+    // Turning controller navigation off shows the paused banner without crashing.
+    backend.settings.update_app(|s| s.disable_controller = true);
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(backend.settings.app().disable_controller);
+
+    backend.settings.update_app(|s| {
+        s.disable_controller = false;
+        s.controller = Default::default();
+    });
     cx.run_until_parked();
 }
 
