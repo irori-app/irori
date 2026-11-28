@@ -946,5 +946,10 @@
   "manage.emulators.systems.section.other": "Outros sistemas",
   "manage.emulators.systems.show_others": "Mostrar todos ({count})",
   "manage.emulators.systems.hide_others": "Ocultar",
-  "manage.retro.connected": "Conectado"
+  "manage.retro.connected": "Conectado",
+  "manage.accounts.turn_off": "Desativar",
+  "manage.accounts.turn_off_tooltip": "Desativa a integração desta loja e remove os jogos dela da sua biblioteca. Você pode ativá-la de novo quando quiser.",
+  "manage.accounts.xbox_market_label": "Região da Microsoft Store",
+  "manage.accounts.xbox_market_help": "Código de país com duas letras (em branco segue o idioma do app).",
+  "manage.accounts.xbox_market_tip": "Define o código regional de duas letras (como BR, US, DE ou GB) usado nas consultas da Microsoft Store. Deixe em branco para seguir o idioma do aplicativo."
 }

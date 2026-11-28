@@ -392,6 +392,10 @@ impl SettingsForm {
                 cx.new(|cx| crate::library_folders::LibraryFoldersPanel::new(window, cx))
                     .into(),
             ),
+            PanelKind::AchievementDetails => Some(
+                cx.new(crate::general_widgets::AchievementDetailsPanel::new)
+                    .into(),
+            ),
             PanelKind::LaunchBox => crate::stores::emulation(cx).map(|store| {
                 cx.new(|cx| crate::launchbox::LaunchBoxPanel::new(store, cx))
                     .into()
@@ -642,6 +646,28 @@ impl SettingsForm {
                 ));
                 self.sliders.insert(spec.path, state);
             }
+            CustomKind::DownloadSpeed => {
+                let text = value_to_text(self.value(spec.path));
+                let state = cx.new(|cx| InputState::new(window, cx).default_value(text));
+                let path = spec.path;
+                self._subscriptions.push(cx.subscribe_in(
+                    &state,
+                    window,
+                    move |this, _, event: &InputEvent, window, cx| match event {
+                        InputEvent::Blur | InputEvent::PressEnter { .. } => {
+                            this.commit_text(path, window, cx)
+                        }
+                        InputEvent::Change => {
+                            if this.errors.remove(path).is_some() {
+                                cx.notify();
+                            }
+                        }
+                        InputEvent::Focus => {}
+                    },
+                ));
+                self.texts.insert(spec.path, state);
+            }
+            CustomKind::NetworkMode => {}
         }
     }
 

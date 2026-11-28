@@ -8,6 +8,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
+use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
@@ -204,7 +205,7 @@ impl SettingsSection {
         t(key)
     }
 
-    fn icon(self) -> IconName {
+    pub(crate) fn icon(self) -> IconName {
         match self {
             SettingsSection::Accounts => IconName::CircleUser,
             SettingsSection::WineManager => IconName::Wine,
@@ -228,7 +229,7 @@ impl SettingsSection {
     fn keywords(self) -> &'static str {
         match self {
             SettingsSection::Accounts => {
-                "accounts login sign in logout store epic gog amazon zoom itch xbox steam friends"
+                "accounts login sign in logout store epic gog amazon zoom itch xbox steam friends hide show turn off region market country microsoft store"
             }
             SettingsSection::WineManager => {
                 "wine proton ge-proton umu runner prefix prefixes bottle download version rollback"
@@ -239,7 +240,9 @@ impl SettingsSection {
             SettingsSection::PerformanceHud => {
                 "performance hud mangohud metal overlay fps frametime gpu cpu vram temperature"
             }
-            SettingsSection::Logs => "logs log launcher debug report problem crash panic backtrace",
+            SettingsSection::Logs => {
+                "logs log launcher debug report problem crash panic backtrace show open launch game starts output console"
+            }
             SettingsSection::SystemInfo => {
                 "system information hardware cpu gpu memory driver os report"
             }
@@ -334,7 +337,10 @@ impl SettingsView {
         let log =
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
         let storage = cx.new(StoragePanel::new);
-        let accounts = models(cx).accounts.clone();
+        let (accounts, settings_model) = {
+            let m = models(cx);
+            (m.accounts.clone(), m.settings.clone())
+        };
         let default_defaults_tab = crate::layout::supported_defaults_tabs()
             .first()
             .map(|tab| tab.id)
@@ -362,15 +368,17 @@ impl SettingsView {
             reporting: false,
             language: LanguageStamp::new(),
             // The header's Rescan button shows the measuring; accounts updates
-            // the expired-login indicator on the Accounts section row.
+            // the expired-login indicator on the Accounts section row; settings
+            // keeps the Logs page's "Show the log when a game starts" toggle live.
             _subscriptions: vec![
                 sub,
                 cx.observe(&storage, |_, _, cx| cx.notify()),
                 cx.observe(&accounts, |_, _, cx| cx.notify()),
+                cx.observe(&settings_model, |_, _, cx| cx.notify()),
             ],
         };
         if section.as_ref() == "downloads" {
-            this.general_tab = "integrations";
+            this.general_tab = "downloads";
         }
         this.open(SettingsSection::from_id(&section), false, window, cx);
         this
@@ -391,7 +399,7 @@ impl SettingsView {
     pub fn set_section(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         let target = SettingsSection::from_id(id);
         if id == "downloads" {
-            self.general_tab = "integrations";
+            self.general_tab = "downloads";
             self.open(target, false, window, cx);
             return;
         }
@@ -445,12 +453,26 @@ impl SettingsView {
 
     fn set_subtab(&mut self, tab: &'static str, window: &mut Window, cx: &mut Context<Self>) {
         match self.section {
-            SettingsSection::General => self.general_tab = tab,
+            SettingsSection::General => {
+                self.general_tab = match tab {
+                    "library" => "integrations",
+                    other => other,
+                };
+            }
             SettingsSection::GameDefaults => self.defaults_tab = tab,
             SettingsSection::Appearance => self.appearance_tab = tab,
             _ => return,
         }
         self.open(self.section, false, window, cx);
+    }
+
+    pub(crate) fn open_section_from_footer(
+        &mut self,
+        section: SettingsSection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open(section, true, window, cx);
     }
 
     fn open(
@@ -1284,13 +1306,41 @@ impl Render for SettingsView {
                     .into_any_element(),
             }
         } else if !searching && section == SettingsSection::Logs {
+            let show_on_launch = models(cx).settings.read(cx).app.show_log_on_launch;
+            let show_label = t("settings.field.show_log_on_launch.label");
+            let show_toggle = h_flex()
+                .id("logs-show-on-launch")
+                .debug_selector(|| "logs-show-on-launch".into())
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(show_label.clone()),
+                )
+                .child(
+                    Switch::new("logs-show-on-launch-switch")
+                        .checked(show_on_launch)
+                        .accessibility_label(show_label)
+                        .on_change(|on: &bool, _, cx| {
+                            let on = *on;
+                            backend(cx)
+                                .settings
+                                .update_app(|s| s.show_log_on_launch = on);
+                        }),
+                );
             v_flex()
                 .flex_1()
                 .min_w_0()
                 .min_h_0()
                 .gap_4()
                 .p_6()
-                .child(PageHeader::new(section.label()).description(section.description()))
+                .child(
+                    PageHeader::new(section.label())
+                        .description(section.description())
+                        .action(show_toggle),
+                )
                 .children(self.render_crash_reports(cx))
                 .child(div().flex_1().min_h_0().child(self.log.clone()))
                 .into_any_element()
@@ -1330,8 +1380,15 @@ impl Render for SettingsView {
                         })
                         .child(self.app_form.clone())
                         .into_any_element(),
-                    SettingsSection::General
-                    | SettingsSection::Controller
+                    SettingsSection::General => v_flex()
+                        .w_full()
+                        .child(self.app_form.clone())
+                        .children(crate::general_widgets::render_general_footer(
+                            self.general_tab,
+                            cx,
+                        ))
+                        .into_any_element(),
+                    SettingsSection::Controller
                     | SettingsSection::Advanced
                     | SettingsSection::Saves => self.app_form.clone().into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),

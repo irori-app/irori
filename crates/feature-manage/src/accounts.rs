@@ -9,6 +9,7 @@ use std::rc::Rc;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
@@ -17,9 +18,9 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, Context, Div, ElementId, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, px, rems,
+    AnyElement, App, AppContext as _, Context, Div, ElementId, Entity, Focusable as _,
+    InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, px, rems,
 };
 use irori_core::{Runner, ShownStores, StoreAccount};
 use irori_ui::components::{PageHeader, SectionTitle};
@@ -110,6 +111,11 @@ pub(crate) fn store_icon(runner: Runner) -> Icon {
             Runner::Launchers => IconName::Rocket,
         },
     )
+}
+
+/// Whether a store is opt-in (turned on or off rather than shown or hidden).
+fn store_is_opt_in(runner: Runner) -> bool {
+    matches!(runner, Runner::Zoom | Runner::Itch | Runner::Xbox)
 }
 
 /// Whether an opt-in store is turned on (stores without a switch always are).
@@ -246,19 +252,38 @@ pub struct AccountsView {
     refreshing: BTreeSet<(Runner, String)>,
     logging_out: BTreeSet<(Runner, String)>,
     steam_ops: gpui_kit::Entity<crate::steam_library::SteamLibraryOps>,
+    xbox_market: Entity<InputState>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl AccountsView {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         crate::i18n::register();
         let m = models(cx).clone();
         let steam_ops = crate::steam_library::steam_library_ops(cx);
+        let initial_market = m.settings.read(cx).app.xbox_market.clone();
+        let xbox_market = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("US")
+                .default_value(initial_market)
+        });
         let subscriptions = vec![
             cx.observe(&m.accounts, |this, _, cx| this.rebuild(cx)),
             cx.observe(&m.library, |this, _, cx| this.rebuild(cx)),
-            cx.observe(&m.settings, |this, _, cx| this.rebuild(cx)),
+            cx.observe_in(&m.settings, window, |this, _, window, cx| {
+                this.sync_xbox_market(window, cx);
+                this.rebuild(cx);
+            }),
             cx.observe(&steam_ops, |_, _, cx| cx.notify()),
+            cx.subscribe_in(
+                &xbox_market,
+                window,
+                |this, _, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::Blur | InputEvent::PressEnter { .. }) {
+                        this.commit_xbox_market(window, cx);
+                    }
+                },
+            ),
         ];
         let mut this = Self {
             cards: Vec::new(),
@@ -270,10 +295,43 @@ impl AccountsView {
             refreshing: BTreeSet::new(),
             logging_out: BTreeSet::new(),
             steam_ops,
+            xbox_market,
             _subscriptions: subscriptions,
         };
         this.rebuild(cx);
         this
+    }
+
+    fn sync_xbox_market(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .xbox_market
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
+            return;
+        }
+        let current = models(cx).settings.read(cx).app.xbox_market.clone();
+        if self.xbox_market.read(cx).value().as_ref() != current {
+            self.xbox_market
+                .update(cx, |s, cx| s.set_value(current, window, cx));
+        }
+    }
+
+    fn commit_xbox_market(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let next = self
+            .xbox_market
+            .read(cx)
+            .value()
+            .trim()
+            .to_ascii_uppercase();
+        if self.xbox_market.read(cx).value().as_ref() != next {
+            self.xbox_market
+                .update(cx, |s, cx| s.set_value(next.clone(), window, cx));
+        }
+        if models(cx).settings.read(cx).app.xbox_market != next {
+            backend_op(cx, move |b| b.settings.update_app(|s| s.xbox_market = next));
+        }
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
@@ -457,6 +515,32 @@ impl AccountsView {
         })
     }
 
+    fn turn_off_button(runner: Runner) -> Option<AnyElement> {
+        store_is_opt_in(runner).then(|| {
+            let tip_id = ElementId::Name(format!("turn-off-tip-{}", runner.id()).into());
+            let btn_id = format!("turn-off-{}", runner.id());
+            div()
+                .id(tip_id)
+                .tooltip(move |window, cx| {
+                    plain_tooltip(t("manage.accounts.turn_off_tooltip"), window, cx)
+                })
+                .child(
+                    Button::new(ElementId::Name(btn_id.clone().into()))
+                        .debug_selector(move || btn_id.clone())
+                        .ghost()
+                        .icon(IconName::PowerOff)
+                        .label(t("manage.accounts.turn_off"))
+                        .on_click(move |_, _, cx| {
+                            backend_op(cx, move |b| {
+                                b.settings
+                                    .update_app(|s| set_store_enabled(s, runner, false))
+                            })
+                        }),
+                )
+                .into_any_element()
+        })
+    }
+
     fn render_inactive_card(&self, card_data: &StoreCard, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let runner = card_data.runner;
@@ -617,7 +701,66 @@ impl AccountsView {
                 ))
                 .into_any_element()
         };
-        let hide = Self::hide_button(runner);
+        let detail = if runner == Runner::Xbox && cfg!(target_os = "linux") {
+            let region_row = h_flex()
+                .w_full()
+                .gap_3()
+                .px_3()
+                .py_2()
+                .items_center()
+                .justify_between()
+                .rounded(radius)
+                .bg(background)
+                .border_1()
+                .border_color(border)
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .items_center()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_medium()
+                                        .child(t("manage.accounts.xbox_market_label")),
+                                )
+                                .child(info_tip(
+                                    "xbox-market",
+                                    t("manage.accounts.xbox_market_tip"),
+                                    cx,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(t("manage.accounts.xbox_market_help")),
+                        ),
+                )
+                .child(
+                    div()
+                        .w_20()
+                        .debug_selector(|| "accounts-xbox-market".into())
+                        .child(
+                            Input::new(&self.xbox_market)
+                                .id("accounts-xbox-market")
+                                .aria_label(t("manage.accounts.xbox_market_label"))
+                                .small(),
+                        ),
+                );
+            v_flex()
+                .gap_2p5()
+                .child(detail)
+                .child(region_row)
+                .into_any_element()
+        } else {
+            detail
+        };
+        let trailing_action = Self::hide_button(runner).or_else(|| Self::turn_off_button(runner));
         let signed_in = card_data.accounts.iter().any(|a| a.signed_in);
         let primary_actions: AnyElement = if signed_in {
             h_flex()
@@ -661,7 +804,7 @@ impl AccountsView {
             .border_t_1()
             .border_color(border)
             .child(primary_actions)
-            .children(hide)
+            .children(trailing_action)
             .into_any_element();
         Self::card_frame(runner, vec![state_tag], detail, footer, cx)
     }

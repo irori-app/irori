@@ -1,10 +1,12 @@
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants as _};
 use gpui_kit::component::input::{Input, Textarea, TextareaState};
 use gpui_kit::component::select::Select;
 use gpui_kit::component::slider::Slider;
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{ActiveTheme as _, Disableable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, Context, ElementId, Entity, InteractiveElement as _, IntoElement,
@@ -15,7 +17,9 @@ use irori_ui::Route;
 use irori_ui::i18n::t;
 use serde_json::Value;
 
-use crate::registry::{ActionKind, CustomKind, FieldKind, FieldSpec, PanelKind, TextKind};
+use crate::registry::{
+    ActionKind, ChoiceValue, CustomKind, FieldKind, FieldSpec, PanelKind, TextKind,
+};
 use crate::widgets::{
     PairedRow, RowState, field_row, group_header, group_panel, muted, paired_field_row, panel,
     section_heading,
@@ -169,14 +173,34 @@ impl SettingsForm {
         let path = spec.path;
         let label = spec.label_text();
         match spec.kind {
-            FieldKind::Toggle => Switch::new(id("field"))
-                .checked(self.bool_value(spec.path))
-                .disabled(disabled)
-                .accessibility_label(label)
-                .on_change(cx.listener(move |this, on: &bool, window, cx| {
-                    this.write(path, Value::Bool(*on), window, cx)
-                }))
-                .into_any_element(),
+            FieldKind::Toggle => {
+                let inverted = spec.inverted;
+                let toggle = Switch::new(id("field"))
+                    .checked(self.bool_value(spec.path) ^ inverted)
+                    .disabled(disabled)
+                    .accessibility_label(label)
+                    .on_change(cx.listener(move |this, on: &bool, window, cx| {
+                        this.write(path, Value::Bool(*on ^ inverted), window, cx)
+                    }));
+                if path == "iroriCheckForAppUpdates" {
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(
+                            Button::new("check-app-updates-now")
+                                .ghost()
+                                .small()
+                                .label(t("settings.updates.check_now"))
+                                .on_click(|_, _, cx| {
+                                    irori_ui::navigate(Route::Settings("about".into()), cx)
+                                }),
+                        )
+                        .child(toggle)
+                        .into_any_element()
+                } else {
+                    toggle.into_any_element()
+                }
+            }
             FieldKind::Text(kind) => {
                 let Some(state) = self.texts.get(spec.path) else {
                     return div().into_any_element();
@@ -239,6 +263,7 @@ impl SettingsForm {
                         | CustomKind::DllOverrides
                         | CustomKind::Wrappers
                         | CustomKind::GogSaves
+                        | CustomKind::DownloadSpeed
                 ) {
                     row.stacked = true;
                 }
@@ -430,6 +455,85 @@ impl SettingsForm {
             | CustomKind::DllOverrides
             | CustomKind::Wrappers
             | CustomKind::GogSaves => self.render_pairs(spec, cx).into_any_element(),
+            CustomKind::DownloadSpeed => {
+                let Some(state) = self.texts.get(path) else {
+                    return div().into_any_element();
+                };
+                let current = self.value(path).and_then(Value::as_u64).unwrap_or(0);
+                let muted_fg = cx.theme().muted_foreground;
+                let presets: [(u64, SharedString); 5] = [
+                    (0, t("settings.download_speed.unlimited")),
+                    (5_120, "5 MB/s".into()),
+                    (15_360, "15 MB/s".into()),
+                    (30_720, "30 MB/s".into()),
+                    (51_200, "50 MB/s".into()),
+                ];
+                h_flex()
+                    .w_full()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Input::new(state)
+                            .id("field-maxDownloadSpeed")
+                            .aria_label(spec.label_text())
+                            .w_40()
+                            .suffix(div().text_xs().text_color(muted_fg).child("KB/s")),
+                    )
+                    .child(
+                        h_flex()
+                            .flex_wrap()
+                            .gap_1p5()
+                            .children(presets.into_iter().map(|(kbps, preset_label)| {
+                                let active = current == kbps;
+                                Button::new(ElementId::Name(format!("speed-preset-{kbps}").into()))
+                                    .debug_selector(move || format!("speed-preset-{kbps}"))
+                                    .xsmall()
+                                    .when(active, |b| b.primary())
+                                    .when(!active, |b| b.outline())
+                                    .label(preset_label)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.errors.remove(path);
+                                        if let Some(input) = this.texts.get(path) {
+                                            input.update(cx, |s, cx| {
+                                                s.set_value(kbps.to_string(), window, cx)
+                                            });
+                                        }
+                                        this.write(path, Value::from(kbps), window, cx);
+                                    }))
+                            })),
+                    )
+                    .into_any_element()
+            }
+            CustomKind::NetworkMode => {
+                let current = self.value(path).and_then(Value::as_str).unwrap_or("auto");
+                row.help = match current {
+                    "online" => t("settings.network_mode.hint.online"),
+                    "offline" => t("settings.network_mode.hint.offline"),
+                    _ => t("settings.network_mode.hint.auto"),
+                };
+                ButtonGroup::new("field-iroriNetworkMode")
+                    .outline()
+                    .small()
+                    .children(crate::registry::NETWORK_MODE.iter().map(|opt| {
+                        let key = match opt.value {
+                            ChoiceValue::Str(s) => s,
+                            _ => "auto",
+                        };
+                        Button::new(ElementId::Name(format!("network-mode-{key}").into()))
+                            .debug_selector(move || format!("network-mode-{key}"))
+                            .label(opt.label.text())
+                            .selected(current == key)
+                    }))
+                    .on_click(cx.listener(|this, ix: &Vec<usize>, window, cx| {
+                        if let Some(&i) = ix.first()
+                            && let Some(opt) = crate::registry::NETWORK_MODE.get(i)
+                        {
+                            this.write("iroriNetworkMode", opt.value.to_json(), window, cx);
+                        }
+                    }))
+                    .into_any_element()
+            }
         }
     }
 

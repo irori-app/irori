@@ -5,7 +5,7 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::{
     AnyElement, ClipboardItem, Context, IntoElement, ParentElement as _, Render, Styled as _,
     Subscription, Window, div,
@@ -89,9 +89,50 @@ impl QuickLaunchPanel {
         cx.notify();
     }
 
-    /// The lines in a code box, with a button that copies them.
+    /// The lines in a code box, with a button that copies them. Single-line
+    /// commands render as a compact horizontal bar with Copy inline.
     fn lines(&self, lines: String, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
+        let multiline = lines.contains('\n');
+        let copy_value = lines.clone();
+        let copy_button = Button::new("quick-launch-copy")
+            .outline()
+            .xsmall()
+            .icon(if self.copied {
+                IconName::Check
+            } else {
+                IconName::Copy
+            })
+            .label(if self.copied {
+                t("settings.common.copied")
+            } else {
+                t("settings.replay.copy_lines")
+            })
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.copy(copy_value.clone(), window, cx)),
+            );
+        if !multiline {
+            return h_flex()
+                .w_full()
+                .min_w_0()
+                .px_2p5()
+                .py_1p5()
+                .gap_2()
+                .items_center()
+                .rounded(theme.radius)
+                .bg(theme.muted)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_xs()
+                        .font_family(theme.mono_font_family.clone())
+                        .child(lines),
+                )
+                .child(copy_button)
+                .into_any_element();
+        }
         let code = div()
             .w_full()
             .min_w_0()
@@ -109,26 +150,7 @@ impl QuickLaunchPanel {
             .gap_1()
             .items_start()
             .child(code)
-            .child(
-                Button::new("quick-launch-copy")
-                    .outline()
-                    .xsmall()
-                    .icon(if self.copied {
-                        IconName::Check
-                    } else {
-                        IconName::Copy
-                    })
-                    .label(if self.copied {
-                        t("settings.common.copied")
-                    } else {
-                        t("settings.replay.copy_lines")
-                    })
-                    .on_click(
-                        cx.listener(move |this, _, window, cx| {
-                            this.copy(lines.clone(), window, cx)
-                        }),
-                    ),
-            )
+            .child(copy_button)
             .into_any_element()
     }
 }

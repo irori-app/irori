@@ -744,6 +744,60 @@ fn accounts_page_caps_available_grid_columns_on_ultrawide(cx: &mut TestAppContex
     );
 }
 
+#[gpui_kit::test]
+fn accounts_opt_in_stores_show_turn_off_and_xbox_shows_region(cx: &mut TestAppContext) {
+    setup_with(cx, || {
+        vec![
+            TestStore::signed_out(Runner::Zoom),
+            TestStore::signed_out(Runner::Xbox),
+        ]
+    });
+    cx.update(|cx| {
+        irori_ui::backend(cx).settings.update_app(|s| {
+            s.zoom_platform = true;
+            s.xbox = true;
+        });
+    });
+    let (handle, _view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| AccountsView::new(window, cx))
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    vcx.update(|window, cx| {
+        let _ = window.draw(cx);
+    });
+    vcx.run_until_parked();
+
+    assert!(vcx.debug_bounds("turn-off-zoom").is_some());
+    assert!(vcx.debug_bounds("turn-off-xbox").is_some());
+    assert_eq!(
+        vcx.debug_bounds("accounts-xbox-market").is_some(),
+        cfg!(target_os = "linux")
+    );
+
+    click(&mut vcx, "turn-off-zoom");
+    vcx.update(|window, cx| {
+        let _ = window.draw(cx);
+    });
+    vcx.run_until_parked();
+    assert!(
+        !vcx.update(|_, cx| irori_ui::backend(cx).settings.app().zoom_platform),
+        "clicking Turn off disables the opt-in store"
+    );
+    assert!(vcx.debug_bounds("turn-off-zoom").is_none());
+
+    // Restore defaults on shared settings directory.
+    vcx.update(|_, cx| {
+        irori_ui::backend(cx).settings.update_app(|s| {
+            s.zoom_platform = true;
+            s.xbox = false;
+        });
+    });
+}
+
 /// Steam without an account offers to read its library from the Steam
 /// client; once games were read, the card counts them and offers to remove
 /// them.
