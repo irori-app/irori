@@ -52,6 +52,7 @@ pub mod media;
 pub mod mods;
 mod network;
 pub mod news;
+pub mod news_feeds;
 pub mod optiscaler;
 mod other_launchers;
 pub mod play_status;
@@ -130,6 +131,10 @@ pub use games::{
 };
 pub use igdb::IgdbStatus;
 pub use irori_engines::rom_sources::{Plan as RomPlan, RomSource, SourceKind as RomSourceKind};
+pub use irori_extras::news_feeds::{
+    ArticleContent, CustomFeed, FeedArticle, FeedFetchResult, NewsFeedsConfig, PRESET_FEEDS,
+    validate_feed_url,
+};
 pub use irori_steam_api::{NewsKind, SteamNewsItem, StoreHit as SteamHit};
 pub use journal::{Journal, JournalEntry, LeftOff};
 pub use library::{LibraryFilter, LibrarySnapshot, LibrarySort, StoreFilter};

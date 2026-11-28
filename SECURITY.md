@@ -86,6 +86,7 @@ Network requests fall into two categories:
 
 1. Store backends you sign in to or use: Steam, Epic Games, GOG, Amazon Games, itch.io, Xbox / Microsoft Store, and ZOOM Platform. These domains are contacted only when signing in, refreshing libraries, downloading or updating games, checking cloud saves, or fetching runtime components.
 2. Optional or user-triggered integrations: IGDB, SteamGridDB, VNDB, LaunchBox, ProtonDB, PCGamingWiki, AreWeAntiCheatYet, HowLongToBeat, RetroAchievements, Lutris API, ReShade, RenoDX, and GitHub Releases (for runtime or update checks). Integrations that enrich metadata or check external databases only query those services when enabled or triggered by the user.
+3. Optional gaming news feeds (contacted only when the user opens Stores -> News -> Gaming news): Rock Paper Shotgun (`rockpapershotgun.com`), Eurogamer (`eurogamer.net`), GamingOnLinux (`gamingonlinux.com`), PCGamesN (`pcgamesn.com`), Polygon (`polygon.com`), plus any custom RSS or Atom feed URLs added by the user.
 
 ## Verifying Release Artifacts
 
