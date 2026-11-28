@@ -29,7 +29,7 @@ Never re-sort, re-filter, compile regexes (`Regex::new`), or clone `LibrarySnaps
 - `LibrarySnapshot` rebuilds are debounced by 30 ms after `LibraryChanged` or `GameChanged` events.
 - `CategoryIndex` (manual and smart category membership and counts) rebuilds only when its `IndexKey` changes (library revision, user-data revision, HowLongToBeat cache change, pending updates, or local calendar day), never per frame.
 - `SearchIndex` is built lazily on the first search against a snapshot rather than eagerly on every rebuild.
-- `irori-library`'s filter-value search (`value_search.rs`) computes its index once per library, user-data, and category index change.
+- `irori-library`'s filter-value search (`value_search.rs`) computes its index once per library and user-data change.
 - `sessions::stats()` reads `sessions.jsonl` once at startup and updates incrementally on `append` and `replace_all`, avoiding UI-thread reads during sorting or smart-category evaluation.
 - Library covers in `coverFit = "whole"` mode keep fixed row heights (`grid::whole_sizes`) so virtual list sizing and keyboard navigation stay constant-time.
 - Title-bar download pills and sidebar badges (`downloads/indicator.rs`) are isolated views that redraw only when their displayed values change.
