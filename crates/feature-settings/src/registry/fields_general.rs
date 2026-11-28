@@ -542,6 +542,22 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     )
     .keywords(&["store", "hide", "amazon", "prime", "nile"]),
     app(
+        "iroriNews",
+        "settings.field.news.label",
+        General,
+        "settings.group.stores",
+        Toggle,
+    )
+    .help("settings.field.news.help")
+    .keywords(&[
+        "news",
+        "patch notes",
+        "updates",
+        "releases",
+        "rss",
+        "announcements",
+    ]),
+    app(
         "iroriDeals",
         "settings.field.deals.label",
         General,

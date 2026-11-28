@@ -2010,6 +2010,8 @@
   "settings.field.idle_screen.label": "Tela de descanso",
   "settings.field.steam_tag_limit.help": "Quantas das tags da Steam mais fortes de um jogo a biblioteca mantém, de 5 a 20. Tags dadas por muito menos jogadores do que a mais forte ficam de fora.",
   "settings.field.steam_tag_limit.label": "Tags da Steam por jogo",
+  "settings.field.news.label": "Mostrar notícias",
+  "settings.field.news.help": "Exibe a aba Notícias na página Lojas e nas páginas dos jogos vinculados. Desativado, o Irori não busca notícias.",
   "settings.field.steam_title_match.help": "Vincula os jogos de outras lojas ao app da Steam com o mesmo título (sem contar nomes de edição, lançado com até um ano de diferença) quando nenhuma wiki indica um, para as tags da Steam, os detalhes da loja e o ProtonDB. Poucos jogos são procurados por vez e as respostas ficam guardadas por um mês.",
   "settings.field.steam_title_match.label": "Encontrar jogos na Steam pelo título exato",
   "settings.option.idle_screen.slideshow": "Artes dos seus jogos, uma após a outra",

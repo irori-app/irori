@@ -120,6 +120,8 @@ pub enum Event {
     /// The update manager's components changed (a check started or answered,
     /// an update started or ended, one was skipped).
     ComponentUpdatesChanged,
+    /// Cached game news, follow/mute state, or RSS sources changed.
+    NewsChanged,
     Notice(Notice),
     /// A game process exited after `seconds` of play. `crashed` means it
     /// failed to start: it exited with an error within seconds, unasked.

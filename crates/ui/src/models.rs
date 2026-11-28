@@ -116,6 +116,12 @@ pub struct ComponentsModel {
     pub report: Arc<ComponentReport>,
 }
 
+/// Revision bumped whenever cached news, follow/mute state, or feeds change.
+#[derive(Default)]
+pub struct NewsModel {
+    pub revision: u64,
+}
+
 /// Accounts of every store and connectivity.
 pub struct AccountsModel {
     pub users: BTreeMap<Runner, Option<UserInfo>>,
@@ -226,6 +232,7 @@ pub struct Models {
     pub sessions: Entity<SessionModel>,
     pub app_update: Entity<AppUpdateModel>,
     pub components: Entity<ComponentsModel>,
+    pub news: Entity<NewsModel>,
 }
 
 impl Global for Models {}
@@ -295,6 +302,7 @@ pub(crate) fn install(cx: &mut App) {
     let components = cx.new(|_| ComponentsModel {
         report: b.component_updates(),
     });
+    let news = cx.new(|_| NewsModel::default());
     cx.set_global(Models {
         library,
         statuses,
@@ -305,6 +313,7 @@ pub(crate) fn install(cx: &mut App) {
         sessions,
         app_update,
         components,
+        news,
     });
     spawn_pump(cx);
 }
@@ -352,6 +361,7 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
     let mut settings = resync;
     let mut app_update = resync;
     let mut components = resync;
+    let mut news = false;
     let mut statuses: Vec<Event> = Vec::new();
     let mut changed_game = None;
 
@@ -379,6 +389,7 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
             // The Sunshine panel follows the settings model.
             Event::SunshineChanged => settings = true,
             Event::ComponentUpdatesChanged => components = true,
+            Event::NewsChanged => news = true,
             Event::GameSettingsChanged(id) => changed_game = Some(id),
             Event::Connectivity(online) => {
                 m.accounts.update(cx, |a, cx| {
@@ -470,6 +481,12 @@ fn apply(batch: Vec<Event>, resync: bool, cx: &mut App) {
         let report = b.component_updates();
         m.components.update(cx, |c, cx| {
             c.report = report;
+            cx.notify();
+        });
+    }
+    if news {
+        m.news.update(cx, |n, cx| {
+            n.revision = n.revision.wrapping_add(1);
             cx.notify();
         });
     }
