@@ -187,7 +187,7 @@ async fn run_setup_process(
         let title = clean_game_title(&item.title);
         let game = irori_core::GameInfo {
             runner: Some(irori_core::Runner::Sideload),
-            app_name: game_id.app_name.clone(),
+            app_name: game_id.app_name.to_string(),
             title: title.clone(),
             folder_name: Some(irori_core::fs_part::sanitize_download_name(&title)),
             ..Default::default()
