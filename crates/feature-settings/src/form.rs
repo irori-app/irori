@@ -197,6 +197,8 @@ pub struct SettingsForm {
     playnite_detected: bool,
     /// Self-contained panels (controllers, EOS overlay, EGL sync, save sync).
     panels: HashMap<&'static str, AnyView>,
+    /// Whether the LaunchBox storage panel has active or stored content to show.
+    launchbox_visible: bool,
     /// Per-game OptiScaler panel when built for `FormTarget::Game`.
     optiscaler_panel: Option<Entity<OptiscalerPanel>>,
     /// Game target: the game is installed as this system's own build.
@@ -271,6 +273,7 @@ impl SettingsForm {
             faugus_detected: irori_ui::hooks::faugus_detected(),
             playnite_detected: irori_extras::playnite::is_installed(),
             panels: HashMap::new(),
+            launchbox_visible: false,
             optiscaler_panel: None,
             native: false,
             supports_optiscaler: false,

@@ -157,6 +157,37 @@ pub(crate) const BACKUP_TABS: &[SubTab] = &[
     },
 ];
 
+/// Sub-tabs of Settings -> Advanced.
+pub(crate) const ADVANCED_TABS: &[SubTab] = &[
+    SubTab {
+        id: "artwork",
+        label_key: "settings.subtab.advanced.artwork",
+    },
+    SubTab {
+        id: "compat",
+        label_key: "settings.subtab.advanced.compat",
+    },
+    SubTab {
+        id: "imports",
+        label_key: "settings.subtab.advanced.imports",
+    },
+];
+
+/// Sub-tabs of Settings -> Advanced adjusted for the current host (Windows
+/// hides Wine download settings so the middle tab covers Epic tools only).
+pub(crate) fn supported_advanced_tabs() -> Vec<SubTab> {
+    ADVANCED_TABS
+        .iter()
+        .copied()
+        .map(|mut tab| {
+            if tab.id == "compat" && cfg!(windows) {
+                tab.label_key = "settings.subtab.advanced.compat_windows";
+            }
+            tab
+        })
+        .collect()
+}
+
 /// Map a Game defaults sub-tab ID to its [`FieldSection`].
 pub(crate) fn defaults_section_for_tab(tab: &str) -> FieldSection {
     match tab {
@@ -220,11 +251,39 @@ pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
         FieldSection::CloudSaves => Some("saves"),
         FieldSection::General => general_subtab(spec.path),
         FieldSection::Appearance => appearance_subtab(spec.path),
-        // The Controller page is short enough to stay one page.
-        FieldSection::Advanced
-        | FieldSection::Saves
-        | FieldSection::Artwork
-        | FieldSection::Controller => None,
+        FieldSection::Advanced => advanced_subtab(spec.path),
+        // The Controller and Saves pages are short enough to stay one page.
+        FieldSection::Saves | FieldSection::Artwork | FieldSection::Controller => None,
+    }
+}
+
+fn advanced_subtab(path: &str) -> Option<&'static str> {
+    match path {
+        "steamGridDbApiKey"
+        | "iroriIgdb"
+        | "panel.igdb"
+        | "iroriSteamTitleMatch"
+        | "iroriSteamTagLimit"
+        | "iroriVndb"
+        | "iroriLaunchBox"
+        | "panel.launchbox"
+        | "iroriArtCacheLimit" => Some("artwork"),
+        "panel.eos-overlay"
+        | "panel.egl-sync"
+        | "iroriCompatToolsPath"
+        | "downloadProtonToSteam"
+        | "iroriProtonCpuLevel"
+        | "showValveProton"
+        | "allowInstallationBrokenAnticheat" => Some("compat"),
+        "action.import-heroic"
+        | "action.import-lutris"
+        | "action.import-bottles"
+        | "action.import-faugus"
+        | "iroriLauncherImports.lutris"
+        | "iroriLauncherImports.bottles"
+        | "iroriLauncherImports.faugus"
+        | "action.import-playnite" => Some("imports"),
+        _ => None,
     }
 }
 
@@ -474,6 +533,8 @@ pub(crate) fn group_description_key(group_key: &str) -> Option<&'static str> {
         "settings.group.stores" => Some("settings.group_desc.stores"),
         "settings.group.upscalers" => Some("settings.group_desc.upscalers"),
         "settings.group.wine_sync" => Some("settings.group_desc.wine_sync"),
+        "settings.group.artwork_sources" => Some("settings.group_desc.artwork_sources"),
+        "settings.group.imports" => Some("settings.group_desc.imports"),
         _ => None,
     }
 }
@@ -565,7 +626,9 @@ mod tests {
     fn every_app_and_shared_field_on_subtabbed_pages_has_a_subtab() {
         for f in FIELDS {
             let needs_tab = match f.section {
-                FieldSection::General | FieldSection::Appearance => f.scope == Scope::App,
+                FieldSection::General | FieldSection::Appearance | FieldSection::Advanced => {
+                    f.scope == Scope::App
+                }
                 FieldSection::Wine
                 | FieldSection::Performance
                 | FieldSection::Gpu
@@ -580,6 +643,7 @@ mod tests {
             let valid = match f.section {
                 FieldSection::General => GENERAL_TABS.iter().any(|t| t.id == tab),
                 FieldSection::Appearance => APPEARANCE_TABS.iter().any(|t| t.id == tab),
+                FieldSection::Advanced => ADVANCED_TABS.iter().any(|t| t.id == tab),
                 _ => DEFAULTS_TABS
                     .iter()
                     .any(|t| t.id == tab && defaults_section_for_tab(t.id) == f.section),
@@ -700,6 +764,7 @@ mod tests {
             .chain(GAME_PERFORMANCE_TABS)
             .chain(APPEARANCE_TABS)
             .chain(BACKUP_TABS)
+            .chain(ADVANCED_TABS)
         {
             assert!(
                 !crate::i18n::english(t.label_key).is_empty(),
@@ -707,6 +772,10 @@ mod tests {
                 t.label_key
             );
         }
+        assert!(
+            !crate::i18n::english("settings.subtab.advanced.compat_windows").is_empty(),
+            "settings.subtab.advanced.compat_windows"
+        );
         for p in FIELD_PAIRS {
             assert!(
                 !crate::i18n::english(p.label_key).is_empty(),

@@ -11,6 +11,7 @@ use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::progress::Progress;
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
 };
@@ -320,12 +321,28 @@ impl Render for EosOverlayPanel {
         }
         let update = overlay_update_available(status.version.as_deref(), self.latest.as_deref());
         let installed = status.installed;
+        let status_tag = if !installed {
+            Tag::secondary()
+                .xsmall()
+                .outline()
+                .child(t("settings.eos.status.not_installed"))
+        } else if update {
+            Tag::warning()
+                .xsmall()
+                .child(overlay_status_text(status, self.latest.as_deref()))
+        } else {
+            Tag::success()
+                .xsmall()
+                .child(overlay_status_text(status, self.latest.as_deref()))
+        };
         let actions = if installed {
             h_flex()
                 .gap_2()
+                .flex_shrink_0()
                 .when(update, |r| {
                     r.child(
                         Button::new("eos-overlay-update")
+                            .primary()
                             .small()
                             .label(t("settings.eos.update"))
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -354,8 +371,9 @@ impl Render for EosOverlayPanel {
                         ),
                 )
         } else {
-            h_flex().gap_2().child(
+            h_flex().gap_2().flex_shrink_0().child(
                 Button::new("eos-overlay-install")
+                    .primary()
                     .small()
                     .icon(IconName::Download)
                     .label(t("settings.common.install"))
@@ -364,15 +382,16 @@ impl Render for EosOverlayPanel {
                     })),
             )
         };
-        v_flex()
-            .gap_2()
-            .w_full()
-            .child(
-                div()
-                    .text_sm()
-                    .child(overlay_status_text(status, self.latest.as_deref())),
-            )
-            .child(actions)
+        v_flex().w_full().child(
+            h_flex()
+                .w_full()
+                .gap_3()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .child(status_tag)
+                .child(actions),
+        )
     }
 }
 
@@ -544,19 +563,41 @@ impl Render for EglSyncPanel {
             });
         }
         let linked = backend(cx).settings.app().egs_linked_path.clone();
+        let is_linked = !linked.is_empty();
         let danger = cx.theme().danger;
+        let muted_fg = cx.theme().muted_foreground;
         let busy = self.busy;
+        let status_tag = if is_linked {
+            Tag::success()
+                .xsmall()
+                .child(t("settings.egl.status_linked"))
+        } else {
+            Tag::secondary()
+                .xsmall()
+                .outline()
+                .child(t("settings.egl.status_not_linked"))
+        };
         v_flex()
             .gap_2()
             .w_full()
-            .child(muted(
-                if linked.is_empty() {
-                    t("settings.egl.not_linked")
-                } else {
-                    t_args("settings.egl.linked", &[("path", &linked)])
-                },
-                cx,
-            ))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .items_center()
+                    .flex_wrap()
+                    .child(status_tag)
+                    .when(is_linked, |row| {
+                        row.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .text_xs()
+                                .text_color(muted_fg)
+                                .child(t_args("settings.egl.linked", &[("path", &linked)])),
+                        )
+                    }),
+            )
             .child(
                 h_flex()
                     .gap_2()
@@ -580,6 +621,8 @@ impl Render for EglSyncPanel {
                     )
                     .child(
                         Button::new("egl-sync-link")
+                            .outline()
+                            .small()
                             .label(if linked.is_empty() {
                                 t("settings.egl.sync")
                             } else {
@@ -595,6 +638,7 @@ impl Render for EglSyncPanel {
                         r.child(
                             Button::new("egl-sync-unlink")
                                 .ghost()
+                                .small()
                                 .label(t("settings.egl.unlink"))
                                 .disabled(busy)
                                 .on_click(

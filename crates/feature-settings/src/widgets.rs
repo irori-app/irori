@@ -21,9 +21,13 @@ use irori_ui::i18n::{t, t_args};
 pub(crate) struct RowState {
     pub label: SharedString,
     pub help: SharedString,
+    /// Optional inline link placed beside the help line.
+    pub help_link: Option<AnyElement>,
     /// `(id_key, text)` shown in a wrapped tooltip when hovering the label or its info icon.
     pub tooltip: Option<(SharedString, SharedString)>,
     pub tag: Option<SharedString>,
+    /// Optional status pill placed next to the label (such as Configured / Not set).
+    pub status: Option<AnyElement>,
     /// Shown as "Overridden" with this reset button next to the control.
     pub reset: Option<AnyElement>,
     pub disabled_reason: Option<SharedString>,
@@ -94,6 +98,7 @@ pub(crate) fn field_row(state: RowState, control: AnyElement, cx: &App) -> Div {
         .when_some(state.tag, |this, tag| {
             this.child(Tag::secondary().xsmall().outline().child(tag))
         })
+        .when_some(state.status, |this, status| this.child(status))
         .when(state.reset.is_some(), |this| {
             this.child(Tag::info().xsmall().child(t("settings.field.overridden")))
         });
@@ -102,9 +107,21 @@ pub(crate) fn field_row(state: RowState, control: AnyElement, cx: &App) -> Div {
         .min_w_0()
         .flex_1()
         .child(label)
-        .when(!state.help.is_empty(), |this| {
-            this.child(div().text_xs().text_color(muted).child(state.help))
-        })
+        .when(
+            !state.help.is_empty() || state.help_link.is_some(),
+            |this| {
+                this.child(
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .flex_wrap()
+                        .when(!state.help.is_empty(), |r| {
+                            r.child(div().text_xs().text_color(muted).child(state.help))
+                        })
+                        .when_some(state.help_link, |r, link| r.child(link)),
+                )
+            },
+        )
         .when_some(state.disabled_reason, |this, reason| {
             this.child(
                 h_flex()

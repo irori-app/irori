@@ -1,5 +1,6 @@
 //! The application settings page (`Route::Settings`).
 
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,6 +10,7 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
@@ -26,6 +28,10 @@ use irori_ui::components::{EmptyState, PageHeader};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models, nav};
 
+use crate::advanced::{
+    OpenSectionFn, TOTAL_ARTWORK_SOURCES, count_active_artwork_sources, render_artwork_summary,
+    render_moved_strip,
+};
 use crate::app_update::AppUpdatePanel;
 use crate::appearance::AppearancePreview;
 use crate::backup::BackupPanel;
@@ -33,6 +39,7 @@ use crate::feedback::{self, Feedback};
 use crate::form::{FormTarget, SettingsForm};
 use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::{LanguageStamp, english};
+use crate::imports::ImportsPanel;
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
 use crate::storage::StoragePanel;
@@ -279,10 +286,12 @@ pub struct SettingsView {
     general_tab: &'static str,
     defaults_tab: &'static str,
     appearance_tab: &'static str,
+    advanced_tab: &'static str,
     search: Entity<InputState>,
     query: String,
     app_form: Entity<SettingsForm>,
     defaults_form: Entity<SettingsForm>,
+    imports: Entity<ImportsPanel>,
     hud: Entity<HudPanel>,
     log: Entity<LogViewer>,
     crash_reports: Vec<irori_core::crash::CrashReportMeta>,
@@ -334,7 +343,9 @@ impl SettingsView {
         let log =
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
         let storage = cx.new(StoragePanel::new);
+        let imports = cx.new(ImportsPanel::new);
         let accounts = models(cx).accounts.clone();
+        let settings_model = models(cx).settings.clone();
         let default_defaults_tab = crate::layout::supported_defaults_tabs()
             .first()
             .map(|tab| tab.id)
@@ -344,10 +355,12 @@ impl SettingsView {
             general_tab: "basics",
             defaults_tab: default_defaults_tab,
             appearance_tab: "theme",
+            advanced_tab: "artwork",
             search,
             query: String::new(),
             app_form,
             defaults_form,
+            imports,
             hud,
             log,
             crash_reports: Vec::new(),
@@ -362,18 +375,55 @@ impl SettingsView {
             reporting: false,
             language: LanguageStamp::new(),
             // The header's Rescan button shows the measuring; accounts updates
-            // the expired-login indicator on the Accounts section row.
+            // the expired-login indicator on the Accounts section row; settings
+            // keeps the Advanced summary strip and sub-tab count pills live.
             _subscriptions: vec![
                 sub,
                 cx.observe(&storage, |_, _, cx| cx.notify()),
                 cx.observe(&accounts, |_, _, cx| cx.notify()),
+                cx.observe(&settings_model, |_, _, cx| cx.notify()),
             ],
         };
         if section.as_ref() == "downloads" {
             this.general_tab = "integrations";
         }
-        this.open(SettingsSection::from_id(&section), false, window, cx);
+        if let Some((sec, sub)) = section.split_once('/') {
+            let target = SettingsSection::from_id(sec);
+            this.apply_subtab_id(target, sub);
+            this.open(target, false, window, cx);
+        } else {
+            this.open(SettingsSection::from_id(&section), false, window, cx);
+        }
         this
+    }
+
+    fn apply_subtab_id(&mut self, section: SettingsSection, tab: &str) {
+        match section {
+            SettingsSection::General => {
+                if let Some(found) = crate::layout::GENERAL_TABS.iter().find(|t| t.id == tab) {
+                    self.general_tab = found.id;
+                }
+            }
+            SettingsSection::GameDefaults => {
+                if let Some(found) = crate::layout::supported_defaults_tabs()
+                    .into_iter()
+                    .find(|t| t.id == tab)
+                {
+                    self.defaults_tab = found.id;
+                }
+            }
+            SettingsSection::Appearance => {
+                if let Some(found) = crate::layout::APPEARANCE_TABS.iter().find(|t| t.id == tab) {
+                    self.appearance_tab = found.id;
+                }
+            }
+            SettingsSection::Advanced => {
+                if let Some(found) = crate::layout::ADVANCED_TABS.iter().find(|t| t.id == tab) {
+                    self.advanced_tab = found.id;
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The current section.
@@ -386,9 +436,15 @@ impl SettingsView {
         &self.query
     }
 
-    /// Show a section (route id); the shell calls this when the route
-    /// changes while the page is open.
+    /// Show a section (route id) or `<section>/<subtab>`; the shell calls
+    /// this when the route changes while the page is open.
     pub fn set_section(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((sec, sub)) = id.split_once('/') {
+            let target = SettingsSection::from_id(sec);
+            self.apply_subtab_id(target, sub);
+            self.open(target, false, window, cx);
+            return;
+        }
         let target = SettingsSection::from_id(id);
         if id == "downloads" {
             self.general_tab = "integrations";
@@ -443,11 +499,22 @@ impl SettingsView {
         &self.backup
     }
 
+    #[cfg(test)]
+    pub(crate) fn imports_panel(&self) -> &Entity<ImportsPanel> {
+        &self.imports
+    }
+
+    #[cfg(test)]
+    pub(crate) fn advanced_tab_for_test(&self) -> &'static str {
+        self.advanced_tab
+    }
+
     fn set_subtab(&mut self, tab: &'static str, window: &mut Window, cx: &mut Context<Self>) {
         match self.section {
             SettingsSection::General => self.general_tab = tab,
             SettingsSection::GameDefaults => self.defaults_tab = tab,
             SettingsSection::Appearance => self.appearance_tab = tab,
+            SettingsSection::Advanced => self.advanced_tab = tab,
             _ => return,
         }
         self.open(self.section, false, window, cx);
@@ -477,6 +544,7 @@ impl SettingsView {
             let subtab = match section {
                 SettingsSection::General => Some(self.general_tab),
                 SettingsSection::Appearance => Some(self.appearance_tab),
+                SettingsSection::Advanced => Some(self.advanced_tab),
                 _ => None,
             };
             self.app_form.update(cx, |f, cx| {
@@ -681,6 +749,11 @@ impl SettingsView {
                     crate::layout::APPEARANCE_TABS.to_vec(),
                     self.appearance_tab,
                 ),
+                SettingsSection::Advanced => (
+                    "settings-advanced-tabs",
+                    crate::layout::supported_advanced_tabs(),
+                    self.advanced_tab,
+                ),
                 _ => return None,
             };
         if tabs.len() <= 1 {
@@ -688,6 +761,11 @@ impl SettingsView {
         }
         let selected = tabs.iter().position(|tab| tab.id == current).unwrap_or(0);
         let tab_ids: Vec<&'static str> = tabs.iter().map(|tab| tab.id).collect();
+        let advanced_badges = (self.section == SettingsSection::Advanced).then(|| {
+            let active_sources = count_active_artwork_sources(&models(cx).settings.read(cx).app);
+            let detected_launchers = self.imports.read(cx).detected_count();
+            (active_sources, detected_launchers)
+        });
         Some(
             div()
                 .pb_2()
@@ -696,7 +774,19 @@ impl SettingsView {
                         .underline()
                         .large()
                         .selected_index(selected)
-                        .children(tabs.iter().map(|tab| Tab::new().label(t(tab.label_key))))
+                        .children(tabs.iter().map(|tab| {
+                            let badge =
+                                advanced_badges.and_then(|(sources, launchers)| match tab.id {
+                                    "artwork" => Some(format!("{sources}/{TOTAL_ARTWORK_SOURCES}")),
+                                    "imports" => Some(launchers.to_string()),
+                                    _ => None,
+                                });
+                            Tab::new()
+                                .label(t(tab.label_key))
+                                .when_some(badge, |t, count| {
+                                    t.suffix(Tag::secondary().xsmall().outline().child(count))
+                                })
+                        }))
                         .on_click(cx.listener(move |this, ix: &usize, window, cx| {
                             if let Some(&tab_id) = tab_ids.get(*ix) {
                                 this.set_subtab(tab_id, window, cx);
@@ -1330,9 +1420,37 @@ impl Render for SettingsView {
                         })
                         .child(self.app_form.clone())
                         .into_any_element(),
+                    SettingsSection::Advanced => {
+                        let view = cx.entity().downgrade();
+                        let open_section: OpenSectionFn = Rc::new(move |target, window, cx| {
+                            let _ = view.update(cx, |this, cx| {
+                                this.open(target, true, window, cx);
+                            });
+                        });
+                        let app_snapshot = models(cx).settings.read(cx).app.clone();
+                        let tab_body: AnyElement = match self.advanced_tab {
+                            "imports" => self.imports.clone().into_any_element(),
+                            "artwork" => v_flex()
+                                .gap_2()
+                                .child(render_artwork_summary(
+                                    &app_snapshot,
+                                    cx.listener(|this, _, window, cx| {
+                                        this.open(SettingsSection::Storage, true, window, cx);
+                                    }),
+                                    cx,
+                                ))
+                                .child(self.app_form.clone())
+                                .into_any_element(),
+                            _ => self.app_form.clone().into_any_element(),
+                        };
+                        v_flex()
+                            .w_full()
+                            .child(tab_body)
+                            .child(render_moved_strip(open_section, cx))
+                            .into_any_element()
+                    }
                     SettingsSection::General
                     | SettingsSection::Controller
-                    | SettingsSection::Advanced
                     | SettingsSection::Saves => self.app_form.clone().into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),
                     SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
