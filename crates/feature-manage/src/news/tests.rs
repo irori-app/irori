@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
 use irori_core::{GameId, Runner};
-use irori_services::{GameNewsEntry, NewsKind, SteamNewsItem};
+use irori_services::{FeedArticle, GameNewsEntry, NewsKind, SteamNewsItem};
 
+use super::gaming_news::filter_articles;
 use super::my_games::{TimeBucket, filter_entries, group_rows};
 
 fn sample_entry(
@@ -161,4 +162,29 @@ fn group_rows_collapses_consecutive_hotfixes_and_expands() {
     expanded.insert(rows[0].group_key.clone());
     let rows_expanded = group_rows(&entries, &filtered, now, &expanded);
     assert!(rows_expanded[0].expanded);
+}
+
+#[test]
+fn filter_articles_matches_source_and_query() {
+    let articles = vec![
+        FeedArticle {
+            id: "1".into(),
+            source_id: "rps".into(),
+            source_name: "Rock Paper Shotgun".into(),
+            title: "Baldur's Gate 3 mod tools".into(),
+            summary: "Larian releases official toolkit".into(),
+            ..Default::default()
+        },
+        FeedArticle {
+            id: "2".into(),
+            source_id: "gamingonlinux".into(),
+            source_name: "GamingOnLinux".into(),
+            title: "Proton 10 benchmark".into(),
+            summary: "Vulkan improvements on SteamOS".into(),
+            ..Default::default()
+        },
+    ];
+    assert_eq!(filter_articles(&articles, None, ""), vec![0, 1]);
+    assert_eq!(filter_articles(&articles, Some("rps"), ""), vec![0]);
+    assert_eq!(filter_articles(&articles, None, "steamos"), vec![1]);
 }
