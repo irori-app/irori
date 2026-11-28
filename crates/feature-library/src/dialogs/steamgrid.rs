@@ -459,7 +459,7 @@ impl ArtPicker {
         cx: &mut Context<Self>,
     ) -> Self {
         let app = &models(cx).settings.read(cx).app;
-        let (key, igdb_on, vndb_on) = (ApiKey::from_settings(app), app.igdb, app.vndb);
+        let (key, igdb_on, vndb_on) = (backend(cx).cached_steamgrid_api_key(), app.igdb, app.vndb);
         let rom = game
             .filter(|id| {
                 id.runner == Runner::Emulation

@@ -434,6 +434,11 @@ impl SettingsForm {
     fn placeholder(&self, spec: &FieldSpec, cx: &App) -> SharedString {
         match spec.kind {
             FieldKind::Text(TextKind::Secret)
+                if spec.path == "steamGridDbApiKey" && backend(cx).steamgrid_key_saved_cached() =>
+            {
+                t("settings.field.secret_saved_placeholder")
+            }
+            FieldKind::Text(TextKind::Secret)
                 if !value_to_text(self.value(spec.path)).is_empty() =>
             {
                 t("settings.field.secret_saved_placeholder")

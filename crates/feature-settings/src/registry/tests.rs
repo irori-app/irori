@@ -27,6 +27,16 @@ fn every_value_field_exists_in_the_schema() {
             continue;
         }
         assert!(!f.path.starts_with("panel.") && !f.path.starts_with("action."));
+        // Secret fields backed by `irori-secrets` are intentionally omitted
+        // from serialized `settings.json`.
+        if f.path == "steamGridDbApiKey" {
+            assert!(
+                get_path(&app, f.path).is_none(),
+                "{} must stay out of serialized settings.json",
+                f.path
+            );
+            continue;
+        }
         let root = if f.scope == Scope::App { &app } else { &game };
         assert!(
             get_path(root, f.path).is_some(),

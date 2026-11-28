@@ -42,6 +42,31 @@ impl SettingsForm {
         cx: &mut Context<Self>,
     ) {
         let b = backend(cx);
+        if path == "steamGridDbApiKey"
+            && matches!(self.target, FormTarget::App | FormTarget::Defaults)
+        {
+            let key = value
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
+            let task = irori_ui::run(cx, async move { b.set_steamgrid_api_key(key).await });
+            cx.spawn_in(window, async move |this, cx| {
+                let res = task.await;
+                let _ = this.update_in(cx, |this, window, cx| {
+                    if let Err(e) = res {
+                        window.push_notification(
+                            Notification::error(format!("{e:#}"))
+                                .title(t("settings.error.save_setting")),
+                            cx,
+                        );
+                    }
+                    this.reload(window, cx);
+                });
+            })
+            .detach();
+            return;
+        }
         let result = match &self.target {
             FormTarget::App | FormTarget::Defaults => {
                 let mut result = Ok(());

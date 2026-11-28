@@ -1,27 +1,41 @@
-//! Whether the connection costs money per byte, for automatic updates. Linux
-//! asks the desktop portal and Windows the system's connectivity hint. macOS
-//! has no answer without Network.framework, so there it stays unknown, as it
-//! does wherever nothing answers.
+//! System network state: whether the computer is online (used before falling
+//! back to a connectivity probe) and whether the connection is metered (for
+//! automatic updates). Linux asks the desktop portal (`NetworkMonitor`) and
+//! Windows reads `GetNetworkConnectivityHint`; macOS has no answer without
+//! Network.framework, so there both return `None`.
 
 /// `Some(true)` on a metered connection, `None` when the system can't tell.
 pub(crate) async fn is_metered() -> Option<bool> {
-    let answer = tokio::time::timeout(std::time::Duration::from_secs(3), ask());
+    let answer = tokio::time::timeout(std::time::Duration::from_secs(3), ask_metered());
+    answer.await.ok().flatten()
+}
+
+/// `Some(true)` when the OS reports internet availability, `Some(false)` when
+/// offline, or `None` when the OS cannot report connectivity so callers may
+/// fall back to an explicit probe.
+pub(crate) async fn is_online() -> Option<bool> {
+    let answer = tokio::time::timeout(std::time::Duration::from_secs(3), ask_online());
     answer.await.ok().flatten()
 }
 
 #[cfg(target_os = "linux")]
-async fn ask() -> Option<bool> {
+async fn ask_metered() -> Option<bool> {
     use ashpd::desktop::network_monitor::NetworkMonitor;
     let monitor = NetworkMonitor::new().await.ok()?;
     monitor.is_metered().await.ok()
 }
 
+#[cfg(target_os = "linux")]
+async fn ask_online() -> Option<bool> {
+    use ashpd::desktop::network_monitor::NetworkMonitor;
+    let monitor = NetworkMonitor::new().await.ok()?;
+    monitor.is_available().await.ok()
+}
+
 #[cfg(windows)]
-async fn ask() -> Option<bool> {
-    use windows_sys::Win32::Networking::WinSock::{
-        NL_NETWORK_CONNECTIVITY_HINT, NetworkConnectivityCostHintFixed,
-        NetworkConnectivityCostHintUnrestricted, NetworkConnectivityCostHintVariable,
-    };
+fn connectivity_hint()
+-> Option<windows_sys::Win32::Networking::WinSock::NL_NETWORK_CONNECTIVITY_HINT> {
+    use windows_sys::Win32::Networking::WinSock::NL_NETWORK_CONNECTIVITY_HINT;
     use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
     type GetHint = unsafe extern "system" fn(*mut NL_NETWORK_CONNECTIVITY_HINT) -> u32;
 
@@ -44,7 +58,16 @@ async fn ask() -> Option<bool> {
     if unsafe { get_hint(&mut hint) } != 0 {
         return None;
     }
-    let cost = hint.ConnectivityCost;
+    Some(hint)
+}
+
+#[cfg(windows)]
+async fn ask_metered() -> Option<bool> {
+    use windows_sys::Win32::Networking::WinSock::{
+        NetworkConnectivityCostHintFixed, NetworkConnectivityCostHintUnrestricted,
+        NetworkConnectivityCostHintVariable,
+    };
+    let cost = connectivity_hint()?.ConnectivityCost;
     if cost == NetworkConnectivityCostHintFixed || cost == NetworkConnectivityCostHintVariable {
         Some(true)
     } else if cost == NetworkConnectivityCostHintUnrestricted {
@@ -54,7 +77,33 @@ async fn ask() -> Option<bool> {
     }
 }
 
+#[cfg(windows)]
+async fn ask_online() -> Option<bool> {
+    use windows_sys::Win32::Networking::WinSock::{
+        NetworkConnectivityLevelHintConstrainedInternetAccess,
+        NetworkConnectivityLevelHintInternetAccess, NetworkConnectivityLevelHintLocalAccess,
+        NetworkConnectivityLevelHintNone,
+    };
+    let level = connectivity_hint()?.ConnectivityLevel;
+    if level == NetworkConnectivityLevelHintInternetAccess
+        || level == NetworkConnectivityLevelHintConstrainedInternetAccess
+    {
+        Some(true)
+    } else if level == NetworkConnectivityLevelHintNone
+        || level == NetworkConnectivityLevelHintLocalAccess
+    {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 #[cfg(not(any(target_os = "linux", windows)))]
-async fn ask() -> Option<bool> {
+async fn ask_metered() -> Option<bool> {
+    None
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+async fn ask_online() -> Option<bool> {
     None
 }

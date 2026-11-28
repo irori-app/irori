@@ -124,6 +124,7 @@ pub struct AppSettings {
     pub start_with_system_minimized: bool,
     pub allow_installation_broken_anticheat: bool,
     pub show_valve_proton: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub steam_grid_db_api_key: String,
     pub comet_support: bool,
     pub zoom_platform: bool,

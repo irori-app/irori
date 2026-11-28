@@ -28,9 +28,10 @@ We aim to acknowledge reports within 72 hours and coordinate a fix and release b
 
 ## Credential Storage
 
-Store credentials, refresh tokens, and session cookies are managed by [`crates/secrets`](crates/secrets/src/lib.rs) and [`crates/sign-in`](crates/sign-in/src/lib.rs):
+Store credentials, refresh tokens, session cookies, and third-party API keys (IGDB, GG.deals, SteamGridDB, Nexus Mods, RetroAchievements, Sunshine, WebDAV) are managed by [`crates/secrets`](crates/secrets/src/lib.rs) and [`crates/sign-in`](crates/sign-in/src/lib.rs):
 
-- Per-store login files are encrypted with AES-256-GCM (`aes_gcm::Aes256Gcm`) inside a versioned JSON envelope (`irori_sealed`, `nonce`, `data`).
+- Per-store login files and API key files (including `<config>/steamgriddb.json`, `<config>/igdb.json`, and `<config>/ggdeals.json`) are encrypted with AES-256-GCM (`aes_gcm::Aes256Gcm`) inside a versioned JSON envelope (`irori_sealed`, `nonce`, `data`).
+- Legacy SteamGridDB keys stored in `settings.json` by earlier versions are migrated automatically into `irori-secrets` on first read and cleared from `settings.json`.
 - The encryption key is kept in the OS keyring through `keyring-core` (`zbus-secret-service-keyring-store` on Linux, `apple-native-keyring-store` on macOS, and `windows-native-keyring-store` on Windows) and loaded on demand with a 30-second unlock wait.
 - When no usable keyring is available in the environment, Irori writes files atomically using temporary files created with user-only (`0o600` on Unix) permissions.
 - Interactive web logins run in the separate `irori-sign-in` helper process (`crates/sign-in`). OAuth codes, passwords, cookies, tokens, and authorization headers are kept out of logs and crash dumps.
@@ -82,10 +83,25 @@ Store protocol parsers, cryptography wrappers, archive handlers, script interpre
 
 Irori collects zero telemetry, embeds no analytics SDKs, and does not upload crash dumps automatically.
 
-Network requests fall into two categories:
+Network requests fall into three categories (enforced in CI by [`.github/scripts/check_security_domains.py`](.github/scripts/check_security_domains.py)):
 
-1. Store backends you sign in to or use: Steam, Epic Games, GOG, Amazon Games, itch.io, Xbox / Microsoft Store, and ZOOM Platform. These domains are contacted only when signing in, refreshing libraries, downloading or updating games, checking cloud saves, or fetching runtime components.
-2. Optional or user-triggered integrations: IGDB, SteamGridDB, VNDB, LaunchBox, ProtonDB, PCGamingWiki, AreWeAntiCheatYet, HowLongToBeat, RetroAchievements, Lutris API, ReShade, RenoDX, and GitHub Releases (for runtime or update checks). Integrations that enrich metadata or check external databases only query those services when enabled or triggered by the user.
+1. Store backends and third-party launchers you sign in to or enable:
+   - Steam (`store.steampowered.com`, `api.steampowered.com`, `login.steampowered.com`, `steamcommunity.com`, `steamstatic.com`, `steamdb.info`)
+   - Epic Games (`epicgames.com`, `heroic.legendary.gl`)
+   - GOG (`gog.com`, `gog-statics.com`)
+   - Amazon Games (`amazon.com`, `gaming.amazon.com`)
+   - itch.io (`itch.io`)
+   - ZOOM Platform (`zoom-platform.com`)
+   - Xbox / Microsoft Store (`xboxlive.com`, `xboxservices.com`, `xbox.com`, `microsoft.com`, `login.live.com`, `passport.net`, `gamepass.com`)
+   - Third-party Windows launcher installers (`battle.net`, `origin-a.akamaihd.net`, `static3.cdn.ubi.com`, `rockstargames.com`)
+2. Optional or user-triggered integrations (stay idle until enabled or explicitly triggered by the user):
+   - Metadata and compatibility: IGDB / Twitch (`igdb.com`, `id.twitch.tv`), SteamGridDB (`steamgriddb.com`), VNDB (`vndb.org`), LaunchBox (`launchbox-app.com`), ProtonDB (`protondb.com`), PCGamingWiki (`pcgamingwiki.com`), HowLongToBeat (`howlongtobeat.com`), OpenCritic (`opencritic.com`), Metacritic (`metacritic.com`), RetroAchievements (`retroachievements.org`), libretro thumbnails and cores (`libretro.com`), and AreWeAntiCheatYet (`raw.githubusercontent.com`)
+   - Deals and giveaways: CheapShark (`cheapshark.com`), GamerPower (`gamerpower.com`), and opt-in GG.deals (`gg.deals`)
+   - Mods, graphics mods, and install scripts: Nexus Mods (`nexusmods.com`), Thunderstore (`thunderstore.io`), Lutris (`lutris.net`), ReShade (`reshade.me`), RenoDX / OptiScaler / Wine / Proton / emulator releases (`github.com`, `githubusercontent.com`, `dawn.wine`, `umu.openwinecomponents.org`), Flathub info links (`flathub.org`), Sunshine docs (`lizardbyte.dev`), and rclone downloads (`rclone.org`)
+   - Voluntary log / crash report uploads: `dpaste.com` (only when you explicitly click upload, after home-path redaction)
+3. Connectivity check in automatic network mode (`iroriNetworkMode = auto`):
+   - Irori queries the operating system first (`ashpd::NetworkMonitor` on Linux and `GetNetworkConnectivityHint` on Windows) without sending external traffic.
+   - Only when the operating system cannot report connectivity (such as macOS or minimal Linux sessions without a desktop portal) does Irori send a lightweight `HEAD` request to `www.gstatic.com/generate_204` to pause/resume downloads when going offline. Working offline (`iroriNetworkMode = offline`) disables all probes and outbound requests.
 
 ## Verifying Release Artifacts
 
