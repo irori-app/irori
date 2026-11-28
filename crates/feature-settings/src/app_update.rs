@@ -8,15 +8,18 @@ use std::time::Duration;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::{ActiveTheme as _, Disableable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     ClipboardItem, Context, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
-    Subscription, Task, Window, div,
+    Subscription, Task, Window, div, rems,
 };
 use irori_core::util::unix_now;
 use irori_services::app_update::release_page;
 use irori_services::{AppUpdateStatus, InstallKind, SelfInstall, SelfUpdateChannel};
+use irori_ui::components::BrandMark;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::models::models;
 
@@ -28,6 +31,7 @@ pub struct AppUpdatePanel {
     /// Why the last "Check now" failed.
     error: Option<String>,
     copied: bool,
+    copied_version: bool,
     copy_reset: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -38,6 +42,7 @@ impl AppUpdatePanel {
         Self {
             error: None,
             copied: false,
+            copied_version: false,
             copy_reset: None,
             _subscriptions: vec![cx.observe(&model, |_, _, cx| cx.notify())],
         }
@@ -58,15 +63,20 @@ impl AppUpdatePanel {
         cx.notify();
     }
 
-    fn copy(&mut self, command: &str, window: &mut Window, cx: &mut Context<Self>) {
-        cx.write_to_clipboard(ClipboardItem::new_string(command.to_string()));
-        self.copied = true;
+    fn copy_text(
+        &mut self,
+        text: String,
+        version: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        cx.write_to_clipboard(ClipboardItem::new_string(text));
+        (self.copied, self.copied_version) = (!version, version);
         cx.notify();
         self.copy_reset = Some(cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(2)).await;
             let _ = this.update(cx, |this, cx| {
-                this.copied = false;
-                this.copy_reset = None;
+                (this.copied, this.copied_version, this.copy_reset) = (false, false, None);
                 cx.notify();
             });
         }));
@@ -230,6 +240,61 @@ fn notes_url(status: &AppUpdateStatus) -> Option<String> {
     })
 }
 
+impl AppUpdatePanel {
+    fn command_pill(
+        &self,
+        command: &'static str,
+        big: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Div {
+        let th = cx.theme();
+        let (icon, key) = if self.copied {
+            (IconName::Check, "settings.common.copied")
+        } else {
+            (IconName::Copy, "settings.about.update.copy_command")
+        };
+        let on_copy =
+            cx.listener(move |this, _, w, cx| this.copy_text(command.into(), false, w, cx));
+        let btn = Button::new("app-update-copy").xsmall().icon(icon);
+        let btn = if big {
+            btn.primary().label(t(key))
+        } else {
+            btn.ghost().compact().tooltip(t(key))
+        }
+        .on_click(on_copy);
+        let fg = if big {
+            th.foreground
+        } else {
+            th.muted_foreground
+        };
+        let code = div()
+            .min_w_0()
+            .truncate()
+            .font_family(th.mono_font_family.clone())
+            .text_xs()
+            .text_color(fg);
+        let code = if big { code.flex_1() } else { code }.child(command);
+        let bar = h_flex()
+            .items_center()
+            .rounded(th.radius)
+            .bg(th.background)
+            .border_1()
+            .border_color(th.border);
+        if big {
+            bar.w_full()
+                .justify_between()
+                .gap_3()
+                .pl_3()
+                .pr_1p5()
+                .py_1p5()
+        } else {
+            bar.max_w_full().gap_2().pl_2p5().pr_1().py_0p5()
+        }
+        .child(code)
+        .child(btn)
+    }
+}
+
 impl Render for AppUpdatePanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let model = models(cx).app_update.read(cx);
@@ -249,114 +314,108 @@ impl Render for AppUpdatePanel {
                 ));
         let notes_url = notes_url(&status);
 
-        let mut actions = h_flex().flex_wrap().gap_2().flex_shrink_0();
+        let mut actions = h_flex().flex_wrap().items_center().gap_2().flex_shrink_0();
         if let Some(release) = &status.available
             && status.kind.can_check_manually()
+            && command.is_none()
         {
-            actions = match command {
-                Some(command) => actions.child(
-                    Button::new("app-update-copy")
+            let url = release.url.clone();
+            let installable = can_install(&status);
+            actions = match &status.install {
+                SelfInstall::Ready { .. } if installable => actions.child(
+                    Button::new("app-update-restart")
                         .primary()
-                        .icon(if self.copied {
-                            IconName::Check
-                        } else {
-                            IconName::Copy
-                        })
-                        .label(if self.copied {
-                            t("settings.common.copied")
-                        } else {
-                            t("settings.about.update.copy_command")
-                        })
-                        .on_click(
-                            cx.listener(move |this, _, window, cx| this.copy(command, window, cx)),
-                        ),
+                        .small()
+                        .icon(IconName::RotateCw)
+                        .label(t("settings.about.update.restart"))
+                        .loading(restarting)
+                        .disabled(restarting)
+                        .on_click(cx.listener(|this, _, window, cx| this.restart(window, cx))),
                 ),
-                None => {
-                    let url = release.url.clone();
-                    let installable = can_install(&status);
-                    let actions = match &status.install {
-                        SelfInstall::Ready { .. } if installable => actions.child(
-                            Button::new("app-update-restart")
-                                .primary()
-                                .icon(IconName::RotateCw)
-                                .label(t("settings.about.update.restart"))
-                                .loading(restarting)
-                                .disabled(restarting)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.restart(window, cx)),
-                                ),
-                        ),
-                        install if installable => {
-                            let downloading = matches!(install, SelfInstall::Downloading { .. });
-                            actions.child(
-                                Button::new("app-update-install")
-                                    .primary()
-                                    .icon(IconName::Download)
-                                    .label(t("settings.about.update.install"))
-                                    .loading(downloading)
-                                    .disabled(downloading)
-                                    .on_click(cx.listener(|this, _, _, cx| this.install(cx))),
-                            )
-                        }
-                        _ => actions,
-                    };
-                    let download = Button::new("app-update-download")
-                        .icon(IconName::ExternalLink)
-                        .label(t("settings.about.update.download"))
-                        .on_click(move |_, _, cx| cx.open_url(&url));
-                    actions.child(if installable {
-                        download.outline()
-                    } else {
-                        download.primary()
-                    })
+                install if installable => {
+                    let downloading = matches!(install, SelfInstall::Downloading { .. });
+                    actions.child(
+                        Button::new("app-update-install")
+                            .primary()
+                            .small()
+                            .icon(IconName::Download)
+                            .label(t("settings.about.update.install"))
+                            .loading(downloading)
+                            .disabled(downloading)
+                            .on_click(cx.listener(|this, _, _, cx| this.install(cx))),
+                    )
                 }
+                _ => actions,
             };
+            let download = Button::new("app-update-download")
+                .small()
+                .icon(IconName::ExternalLink)
+                .label(t("settings.about.update.download"))
+                .on_click(move |_, _, cx| cx.open_url(&url));
+            actions = actions.child(if installable {
+                download.outline()
+            } else {
+                download.primary()
+            });
         } else if matches!(status.install, SelfInstall::Ready { .. }) {
             actions = actions.child(
                 Button::new("app-update-restart")
                     .primary()
+                    .small()
                     .icon(IconName::RotateCw)
                     .label(t("settings.about.update.restart"))
                     .loading(restarting)
                     .disabled(restarting)
                     .on_click(cx.listener(|this, _, window, cx| this.restart(window, cx))),
             );
-        } else if let Some(command) = command
-            && matches!(
-                status.kind,
-                InstallKind::Flatpak | InstallKind::SystemPackage(_)
-            )
-        {
-            actions = actions.child(
-                Button::new("app-update-copy")
-                    .outline()
-                    .icon(if self.copied {
-                        IconName::Check
-                    } else {
-                        IconName::Copy
-                    })
-                    .label(if self.copied {
-                        t("settings.common.copied")
-                    } else {
-                        t("settings.about.update.copy_command")
-                    })
-                    .on_click(
-                        cx.listener(move |this, _, window, cx| this.copy(command, window, cx)),
-                    ),
+        }
+        if let Some(cmd) = command.filter(|_| show_command_strip && status.available.is_none()) {
+            actions = actions.child(self.command_pill(cmd, false, cx));
+        }
+        let prominent_bar = command
+            .filter(|_| show_command_strip && status.available.is_some())
+            .map(|cmd| self.command_pill(cmd, true, cx));
+
+        let mut header_actions = h_flex().flex_wrap().items_center().gap_2().flex_shrink_0();
+        if let Some(url) = notes_url {
+            header_actions = header_actions.child(
+                Button::new("app-update-notes")
+                    .ghost()
+                    .small()
+                    .icon(IconName::ExternalLink)
+                    .label(t("settings.about.update.release_notes"))
+                    .on_click(move |_, _, cx| cx.open_url(&url)),
             );
         }
-
         if status.kind.can_check_manually() {
-            actions = actions.child(
+            header_actions = header_actions.child(
                 Button::new("app-update-check")
                     .outline()
+                    .small()
                     .icon(IconName::RefreshCw)
                     .label(t("settings.about.update.check_now"))
                     .loading(status.checking)
-                    .disabled(status.checking)
+                    .disabled(status.checking || downloading_percent.is_some())
                     .on_click(cx.listener(|this, _, window, cx| this.check(window, cx))),
             );
         }
+
+        let channel = channel_label(&status);
+        let ver_text = format!("Irori {} ({channel})", env!("CARGO_PKG_VERSION"));
+        let copy_v =
+            cx.listener(move |this, _, w, cx| this.copy_text(ver_text.clone(), true, w, cx));
+        let (v_icon, v_tip) = if self.copied_version {
+            (IconName::Check, "settings.common.copied")
+        } else {
+            (IconName::Copy, "settings.about.copy_version")
+        };
+        let version_btn = Button::new("about-copy-version")
+            .outline()
+            .xsmall()
+            .icon(v_icon)
+            .label(format!("v{}", env!("CARGO_PKG_VERSION")))
+            .tooltip(t(v_tip))
+            .on_click(copy_v);
 
         let theme = cx.theme();
         let text_color = match tone {
@@ -376,49 +435,97 @@ impl Render for AppUpdatePanel {
                 })
             });
 
-        let metadata = h_flex()
+        let is_ready = matches!(status.install, SelfInstall::Ready { .. });
+        let is_avail = status.available.is_some() && !is_ready && tone == StatusTone::Normal;
+        let up_to_date =
+            status.available.is_none() && status.checked_at.is_some() && tone == StatusTone::Normal;
+        let dot_color = match tone {
+            StatusTone::Danger => theme.danger,
+            StatusTone::Warning => theme.warning,
+            StatusTone::Normal if is_ready || up_to_date => theme.success,
+            StatusTone::Normal if is_avail || downloading_percent.is_some() => theme.primary,
+            StatusTone::Normal => muted,
+        };
+        let (strip_bg, strip_bdr) = if is_ready {
+            (theme.success.opacity(0.10), theme.success.opacity(0.32))
+        } else if is_avail || downloading_percent.is_some() {
+            (theme.primary.opacity(0.10), theme.primary.opacity(0.32))
+        } else {
+            (theme.muted, theme.border)
+        };
+        let ch = h_flex()
+            .items_center()
+            .gap_1()
+            .child(Icon::new(IconName::Package).xsmall())
+            .child(channel);
+        let title_row = h_flex()
             .flex_wrap()
             .items_center()
             .gap_2()
-            .text_xs()
-            .text_color(muted)
+            .child(div().text_xl().font_bold().child("Irori"))
+            .child(version_btn)
+            .child(Tag::secondary().xsmall().outline().child(ch));
+        let identity = v_flex().flex_1().min_w_0().gap_1().child(title_row).child(
+            div()
+                .text_xs()
+                .text_color(muted)
+                .child(t("settings.about.tagline")),
+        );
+        let hero_top = h_flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_4()
+            .px_4()
+            .py_3p5()
             .child(
-                Tag::secondary()
-                    .xsmall()
-                    .outline()
-                    .child(channel_label(&status)),
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .items_center()
+                    .gap_3p5()
+                    .child(BrandMark::new(rems(3.75)))
+                    .child(identity),
             )
-            .when_some(last_checked, |row, checked| row.child(div().child(checked)))
-            .when_some(notes_url, |row, url| {
+            .child(header_actions);
+        let status_row = h_flex()
+            .flex_1()
+            .min_w_0()
+            .flex_wrap()
+            .items_center()
+            .gap_2()
+            .child(div().flex_none().size_2().rounded_full().bg(dot_color))
+            .child(
+                div()
+                    .text_sm()
+                    .font_medium()
+                    .text_color(text_color)
+                    .child(text),
+            )
+            .when_some(last_checked, |row, checked| {
                 row.child(
-                    Button::new("app-update-notes")
-                        .ghost()
-                        .xsmall()
-                        .icon(IconName::ExternalLink)
-                        .label(t("settings.about.update.release_notes"))
-                        .on_click(move |_, _, cx| cx.open_url(&url)),
+                    div()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(format!("· {checked}")),
                 )
             });
 
-        panel(cx).child(
+        panel(cx).overflow_hidden().child(hero_top).child(
             v_flex()
-                .gap_3()
+                .gap_2p5()
                 .px_4()
-                .py_3()
+                .py_2p5()
+                .border_t_1()
+                .border_color(strip_bdr)
+                .bg(strip_bg)
                 .child(
                     h_flex()
                         .flex_wrap()
                         .items_center()
                         .justify_between()
                         .gap_3()
-                        .child(
-                            v_flex()
-                                .flex_1()
-                                .min_w_0()
-                                .gap_1p5()
-                                .child(div().text_sm().text_color(text_color).child(text))
-                                .child(metadata),
-                        )
+                        .child(status_row)
                         .child(actions),
                 )
                 .when_some(downloading_percent, |col, percent| {
@@ -427,21 +534,7 @@ impl Render for AppUpdatePanel {
                         percent.map(f32::from),
                     ))
                 })
-                .when_some(command.filter(|_| show_command_strip), |col, command| {
-                    col.child(
-                        div()
-                            .w_full()
-                            .px_3()
-                            .py_1p5()
-                            .rounded(theme.radius)
-                            .bg(theme.muted)
-                            .font_family(theme.mono_font_family.clone())
-                            .text_xs()
-                            .text_color(theme.foreground)
-                            .truncate()
-                            .child(command),
-                    )
-                }),
+                .children(prominent_bar),
         )
     }
 }
