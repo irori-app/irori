@@ -1,8 +1,5 @@
 //! The application settings page (`Route::Settings`).
 
-use std::sync::Arc;
-use std::time::Duration;
-
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -10,26 +7,22 @@ use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::{
-    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
-    v_flex,
+    ActiveTheme as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AnyView, AppContext as _, ClipboardItem, Context, ElementId, Entity,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Styled as _,
-    Subscription, Window, div, rems,
+    AnyElement, AnyView, AppContext as _, Context, ElementId, Entity, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div,
+    rems,
 };
 use irori_core::Paths;
-use irori_runtime::sysinfo::{self, SystemInfo};
-use irori_services::displays::DisplayReport;
 use irori_ui::components::{EmptyState, PageHeader};
 use irori_ui::i18n::{t, t_args};
-use irori_ui::{backend, models, nav};
+use irori_ui::{models, nav};
 
-use crate::app_update::AppUpdatePanel;
+use crate::about_system::AboutSystemPanel;
 use crate::appearance::AppearancePreview;
 use crate::backup::BackupPanel;
-use crate::feedback::{self, Feedback};
 use crate::form::{FormTarget, SettingsForm};
 use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::{LanguageStamp, english};
@@ -37,7 +30,7 @@ use crate::logs::LogViewer;
 use crate::registry::FieldSection;
 use crate::storage::StoragePanel;
 use crate::widgets::{
-    group_header, group_heading, muted, nav_button_with_dot, panel, sidebar_section_label,
+    group_header, group_heading, nav_button_with_dot, panel, sidebar_section_label,
 };
 
 /// Sections of the settings page.
@@ -56,12 +49,11 @@ pub enum SettingsSection {
     Saves,
     Backup,
     Logs,
-    SystemInfo,
     About,
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 15] = [
+    pub const ALL: [SettingsSection; 14] = [
         SettingsSection::Accounts,
         SettingsSection::WineManager,
         SettingsSection::Emulators,
@@ -75,7 +67,6 @@ impl SettingsSection {
         SettingsSection::Saves,
         SettingsSection::Backup,
         SettingsSection::Logs,
-        SettingsSection::SystemInfo,
         SettingsSection::About,
     ];
 
@@ -113,7 +104,6 @@ impl SettingsSection {
             SettingsSection::Saves => "saves",
             SettingsSection::Backup => "backup",
             SettingsSection::Logs => "logs",
-            SettingsSection::SystemInfo => "system",
             SettingsSection::About => "about",
         }
     }
@@ -136,8 +126,7 @@ impl SettingsSection {
             "saves" | "ludusavi" | "save-backups" => SettingsSection::Saves,
             "backup" | "restore" | "export" | "sync" => SettingsSection::Backup,
             "logs" | "log" => SettingsSection::Logs,
-            "system" | "systeminfo" | "system-info" => SettingsSection::SystemInfo,
-            "about" => SettingsSection::About,
+            "about" | "system" | "systeminfo" | "system-info" => SettingsSection::About,
             _ => SettingsSection::General,
         };
         if parsed.supported_on_host() {
@@ -168,7 +157,6 @@ impl SettingsSection {
             SettingsSection::Saves => "settings.page.saves",
             SettingsSection::Backup => "settings.page.backup",
             SettingsSection::Logs => "settings.page.logs",
-            SettingsSection::SystemInfo => "settings.page.system_info",
             SettingsSection::About => "settings.page.about",
         }
     }
@@ -182,8 +170,7 @@ impl SettingsSection {
         let key = match self {
             SettingsSection::Accounts
             | SettingsSection::WineManager
-            | SettingsSection::Emulators
-            | SettingsSection::About => return SharedString::default(),
+            | SettingsSection::Emulators => return SharedString::default(),
             SettingsSection::General => "settings.page.general_description",
             SettingsSection::Controller => "settings.page.controller_description",
             SettingsSection::GameDefaults => "settings.page.game_defaults_description",
@@ -199,7 +186,7 @@ impl SettingsSection {
             SettingsSection::Saves => "settings.page.saves_description",
             SettingsSection::Backup => "settings.page.backup_description",
             SettingsSection::Logs => "settings.page.logs_description",
-            SettingsSection::SystemInfo => "settings.page.system_info_description",
+            SettingsSection::About => "settings.page.about_description",
         };
         t(key)
     }
@@ -219,7 +206,6 @@ impl SettingsSection {
             SettingsSection::Saves => IconName::DatabaseBackup,
             SettingsSection::Backup => IconName::ArchiveRestore,
             SettingsSection::Logs => IconName::ScrollText,
-            SettingsSection::SystemInfo => IconName::Cpu,
             SettingsSection::About => IconName::Info,
         }
     }
@@ -240,10 +226,9 @@ impl SettingsSection {
                 "performance hud mangohud metal overlay fps frametime gpu cpu vram temperature"
             }
             SettingsSection::Logs => "logs log launcher debug report problem crash panic backtrace",
-            SettingsSection::SystemInfo => {
-                "system information hardware cpu gpu memory driver os report"
+            SettingsSection::About => {
+                "about system information hardware cpu gpu memory driver vulkan os kernel display monitor hdr vrr version license credits update feedback bug issue tour"
             }
-            SettingsSection::About => "about version license credits",
             SettingsSection::Storage => {
                 "storage disk drive space size free clean cleanup delete prefix cache"
             }
@@ -263,15 +248,6 @@ impl SettingsSection {
     }
 }
 
-#[derive(Default)]
-struct SysInfoState {
-    info: Option<Arc<SystemInfo>>,
-    /// Read with the rest; the displays' modes and HDR.
-    displays: Option<Arc<DisplayReport>>,
-    loading: bool,
-    copied: bool,
-}
-
 /// The settings page: section navigation, a search field filtering every
 /// field, and the selected section.
 pub struct SettingsView {
@@ -287,15 +263,12 @@ pub struct SettingsView {
     log: Entity<LogViewer>,
     crash_reports: Vec<irori_core::crash::CrashReportMeta>,
     backup: Entity<BackupPanel>,
-    app_update: Entity<AppUpdatePanel>,
+    about_system: Entity<AboutSystemPanel>,
     preview: Entity<AppearancePreview>,
     storage: Entity<StoragePanel>,
     accounts_view: Option<AnyView>,
     wine_view: Option<AnyView>,
     emulators_view: Option<AnyView>,
-    sysinfo: SysInfoState,
-    /// A problem report is reading this computer's facts.
-    reporting: bool,
     language: LanguageStamp,
     _subscriptions: Vec<Subscription>,
 }
@@ -352,14 +325,12 @@ impl SettingsView {
             log,
             crash_reports: Vec::new(),
             backup: cx.new(|cx| BackupPanel::new(window, cx)),
-            app_update: cx.new(AppUpdatePanel::new),
+            about_system: cx.new(AboutSystemPanel::new),
             preview: cx.new(AppearancePreview::new),
             storage: storage.clone(),
             accounts_view: None,
             wine_view: None,
             emulators_view: None,
-            sysinfo: SysInfoState::default(),
-            reporting: false,
             language: LanguageStamp::new(),
             // The header's Rescan button shows the measuring; accounts updates
             // the expired-login indicator on the Accounts section row.
@@ -507,8 +478,9 @@ impl SettingsView {
                 self.log.update(cx, |l, cx| l.start(window, cx));
                 self.load_crash_reports(window, cx);
             }
-            SettingsSection::SystemInfo if self.sysinfo.info.is_none() => {
-                self.load_sysinfo(window, cx)
+            SettingsSection::About => {
+                self.about_system
+                    .update(cx, |panel, cx| panel.ensure_loaded(window, cx));
             }
             SettingsSection::Storage => {
                 self.storage.update(cx, |s, cx| s.ensure_loaded(window, cx))
@@ -550,64 +522,23 @@ impl SettingsView {
         cx.notify();
     }
 
-    fn load_sysinfo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.sysinfo.loading {
-            return;
-        }
-        self.sysinfo.loading = true;
-        let b = backend(cx);
-        let task = irori_ui::run(cx, async move {
-            Ok(tokio::join!(sysinfo::get(true), b.displays(true)))
-        });
-        cx.spawn_in(window, async move |this, cx| {
-            let (info, displays) = task.await.ok().unzip();
-            this.update(cx, |this, cx| {
-                this.sysinfo.loading = false;
-                this.sysinfo.info = info;
-                this.sysinfo.displays = displays;
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
-        cx.notify();
-    }
-
     /// Show this information instead of reading the computer's.
     #[cfg(test)]
     pub(crate) fn show_sysinfo_for_test(
         &mut self,
-        info: Arc<SystemInfo>,
-        displays: Arc<DisplayReport>,
+        info: std::sync::Arc<irori_runtime::sysinfo::SystemInfo>,
+        displays: std::sync::Arc<irori_services::displays::DisplayReport>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.sysinfo.info = Some(info);
-        self.sysinfo.displays = Some(displays);
-        self.open(SettingsSection::SystemInfo, false, window, cx);
+        self.about_system
+            .update(cx, |p, cx| p.show_sysinfo_for_test(info, displays, cx));
+        self.open(SettingsSection::About, false, window, cx);
     }
 
-    fn copy_sysinfo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(info) = &self.sysinfo.info else {
-            return;
-        };
-        let mut text = sysinfo::format(info);
-        if let Some(displays) = &self.sysinfo.displays {
-            text.push('\n');
-            text.push_str(&irori_services::displays::format(displays));
-        }
-        cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.sysinfo.copied = true;
-        cx.notify();
-        cx.spawn_in(window, async move |this, cx| {
-            cx.background_executor().timer(Duration::from_secs(2)).await;
-            this.update(cx, |this, cx| {
-                this.sysinfo.copied = false;
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
+    #[cfg(test)]
+    pub(crate) fn about_system_panel(&self) -> &Entity<AboutSystemPanel> {
+        &self.about_system
     }
 
     fn render_nav(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -752,310 +683,6 @@ impl SettingsView {
             })
             .child(self.app_form.clone())
             .child(self.defaults_form.clone())
-            .into_any_element()
-    }
-
-    fn render_sysinfo(&self, cx: &mut Context<Self>) -> AnyElement {
-        let Some(info) = &self.sysinfo.info else {
-            return muted(
-                if self.sysinfo.loading {
-                    t("settings.sysinfo.loading")
-                } else {
-                    t("settings.sysinfo.unavailable")
-                },
-                cx,
-            )
-            .into_any_element();
-        };
-        let border = cx.theme().border;
-        let muted_fg = cx.theme().muted_foreground;
-        let opt = |v: &Option<String>| -> SharedString {
-            v.clone()
-                .map(SharedString::from)
-                .unwrap_or_else(|| t("settings.sysinfo.not_installed"))
-        };
-        let mut hardware_rows: Vec<(SharedString, SharedString)> = vec![
-            (
-                t("settings.sysinfo.cpu"),
-                format!("{} × {}", info.cpu.cores, info.cpu.model).into(),
-            ),
-            (
-                t("settings.sysinfo.memory"),
-                t_args(
-                    "settings.sysinfo.memory_value",
-                    &[
-                        ("used", &irori_core::util::format_bytes(info.memory.used)),
-                        ("total", &irori_core::util::format_bytes(info.memory.total)),
-                    ],
-                ),
-            ),
-        ];
-        for (i, gpu) in info.gpus.iter().enumerate() {
-            let label = if info.gpus.len() > 1 {
-                t_args(
-                    "settings.sysinfo.gpu_numbered",
-                    &[("number", &(i + 1).to_string())],
-                )
-            } else {
-                t("settings.sysinfo.gpu")
-            };
-            let name = match (&gpu.vendor_name, &gpu.device_name) {
-                (Some(v), Some(d)) => format!("{v} {d}"),
-                (None, Some(d)) => d.clone(),
-                _ => format!("PCI {}:{}", gpu.vendor_id, gpu.device_id),
-            };
-            let driver: SharedString = match (&gpu.driver, &gpu.driver_version) {
-                (Some(d), Some(v)) => format!("{d} {v}").into(),
-                (Some(d), None) => d.clone().into(),
-                _ => t("settings.sysinfo.no_driver"),
-            };
-            hardware_rows.push((label, format!("{name} · {driver}").into()));
-        }
-        if let Some(displays) = &self.sysinfo.displays {
-            hardware_rows.extend(crate::displays::rows(displays));
-        }
-        let os = format!(
-            "{} {}",
-            info.os.name,
-            info.os.version.as_deref().unwrap_or("")
-        );
-        let mut software_rows: Vec<(SharedString, SharedString)> = vec![(
-            t("settings.sysinfo.os"),
-            t_args(
-                "settings.sysinfo.os_value",
-                &[("os", os.trim()), ("kernel", &info.os.kernel)],
-            ),
-        )];
-        if cfg!(target_os = "linux") {
-            let desktop = info
-                .desktop
-                .clone()
-                .map(SharedString::from)
-                .unwrap_or_else(|| t("settings.sysinfo.unknown_desktop"));
-            let session = info
-                .session_type
-                .clone()
-                .map(SharedString::from)
-                .unwrap_or_else(|| t("settings.sysinfo.unknown_session"));
-            software_rows.push((
-                t("settings.sysinfo.session"),
-                format!(
-                    "{desktop} · {session}{}",
-                    if info.is_flatpak { " · Flatpak" } else { "" }
-                )
-                .into(),
-            ));
-            software_rows.push((
-                "Vulkan".into(),
-                if info.vulkan.available() {
-                    info.vulkan
-                        .instance_version
-                        .clone()
-                        .map(SharedString::from)
-                        .unwrap_or_else(|| t("settings.sysinfo.available"))
-                } else {
-                    t("settings.sysinfo.not_available")
-                },
-            ));
-        }
-        let software = &info.software;
-        software_rows.push(("Irori".into(), software.irori.clone().into()));
-        for (name, v) in [
-            ("Wine", &software.wine),
-            ("gamescope", &software.gamescope),
-            ("GameMode", &software.gamemode),
-            ("MangoHud", &software.mangohud),
-            ("umu-launcher", &software.umu),
-        ] {
-            if cfg!(target_os = "linux") || (name == "Wine" && !cfg!(windows)) {
-                software_rows.push((name.into(), opt(v)));
-            }
-        }
-        let render_table = |rows: Vec<(SharedString, SharedString)>| {
-            rows.into_iter()
-                .enumerate()
-                .fold(panel(cx), |p, (i, (k, v))| {
-                    p.child(
-                        h_flex()
-                            .gap_4()
-                            .px_4()
-                            .py_1p5()
-                            .when(i > 0, |r| r.border_t_1().border_color(border))
-                            .child(
-                                div()
-                                    .w_40()
-                                    .flex_shrink_0()
-                                    .min_w_0()
-                                    .text_sm()
-                                    .text_color(muted_fg)
-                                    .child(k),
-                            )
-                            .child(div().flex_1().min_w_0().text_sm().child(v)),
-                    )
-                })
-        };
-        v_flex()
-            .gap_2()
-            .child(group_header(t("settings.sysinfo.hardware"), None, true, cx))
-            .child(render_table(hardware_rows))
-            .child(group_header(
-                t("settings.sysinfo.software"),
-                None,
-                false,
-                cx,
-            ))
-            .child(render_table(software_rows))
-            .into_any_element()
-    }
-
-    fn open_feedback(&mut self, way: Feedback, window: &mut Window, cx: &mut Context<Self>) {
-        if way == Feedback::Report {
-            if self.reporting {
-                return;
-            }
-            self.reporting = true;
-            cx.notify();
-        }
-        let task = feedback::open(way, window, cx);
-        cx.spawn(async move |this, cx| {
-            task.await;
-            this.update(cx, |this, cx| {
-                this.reporting = false;
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
-    }
-
-    /// Help and feedback: one row per way to reach the project.
-    fn render_feedback(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let border = cx.theme().border;
-        let tour = h_flex()
-            .gap_3()
-            .px_4()
-            .py_3()
-            .child(Icon::new(IconName::Compass).text_color(cx.theme().muted_foreground))
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_medium()
-                            .child(t("settings.about.tour")),
-                    )
-                    .child(muted(t("settings.about.tour_help"), cx)),
-            )
-            .child(
-                Button::new("about-tour")
-                    .outline()
-                    .small()
-                    .label(t("settings.about.tour"))
-                    .on_click(|_, window, cx| irori_ui::tour::start(window, cx)),
-            );
-        Feedback::ALL
-            .into_iter()
-            .enumerate()
-            .fold(panel(cx).child(tour), |list, (_, way)| {
-                let button = if way == Feedback::Report {
-                    "settings.about.feedback.report_open"
-                } else {
-                    "settings.about.feedback.open"
-                };
-                list.child(
-                    h_flex()
-                        .gap_3()
-                        .px_4()
-                        .py_3()
-                        .border_t_1()
-                        .border_color(border)
-                        .child(Icon::new(way.icon()).text_color(cx.theme().muted_foreground))
-                        .child(
-                            v_flex()
-                                .flex_1()
-                                .min_w_0()
-                                .child(div().text_sm().font_medium().child(t(way.label_key())))
-                                .child(muted(t(way.help_key()), cx)),
-                        )
-                        .child(
-                            Button::new(ElementId::Name(
-                                format!("feedback-{}", way.label_key()).into(),
-                            ))
-                            .outline()
-                            .small()
-                            .icon(IconName::ExternalLink)
-                            .label(t(button))
-                            .loading(way == Feedback::Report && self.reporting)
-                            .on_click(cx.listener(
-                                move |this, _, window, cx| this.open_feedback(way, window, cx),
-                            )),
-                        ),
-                )
-            })
-    }
-
-    fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {
-        let credits: [(SharedString, SharedString); 6] = [
-            (t("settings.about.credit_gpui"), "Apache-2.0".into()),
-            (t("settings.about.credit_lucide"), "ISC".into()),
-            (t("settings.about.credit_themes"), "Apache-2.0".into()),
-            ("legendary, gogdl, nile".into(), "GPL-3.0".into()),
-            ("comet".into(), "Apache-2.0".into()),
-            ("umu-launcher".into(), "GPL-3.0".into()),
-        ];
-        let border = cx.theme().border;
-        v_flex()
-            .gap_3()
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_semibold()
-                            .child(format!("Irori {}", env!("CARGO_PKG_VERSION"))),
-                    )
-                    .child(muted(t("settings.about.tagline"), cx)),
-            )
-            .child(self.app_update.clone())
-            .child(group_header(
-                t("settings.about.feedback.title"),
-                None,
-                false,
-                cx,
-            ))
-            .child(self.render_feedback(cx))
-            .child(group_header(
-                t("settings.about.third_party"),
-                None,
-                false,
-                cx,
-            ))
-            .child(
-                credits
-                    .into_iter()
-                    .enumerate()
-                    .fold(panel(cx), |p, (ix, (name, license))| {
-                        p.child(
-                            h_flex()
-                                .justify_between()
-                                .gap_4()
-                                .px_4()
-                                .py_1p5()
-                                .text_sm()
-                                .when(ix > 0, |r| r.border_t_1().border_color(border))
-                                .child(div().flex_1().min_w_0().child(name))
-                                .child(
-                                    div()
-                                        .flex_shrink_0()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(license),
-                                ),
-                        )
-                    }),
-            )
             .into_any_element()
     }
 
@@ -1215,38 +842,6 @@ impl SettingsView {
                     }))
                     .into_any_element(),
             ),
-            SettingsSection::SystemInfo => Some(
-                h_flex()
-                    .gap_2()
-                    .child(
-                        Button::new("sysinfo-refresh")
-                            .outline()
-                            .icon(IconName::RefreshCw)
-                            .label(t("settings.common.refresh"))
-                            .loading(self.sysinfo.loading)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.load_sysinfo(window, cx)),
-                            ),
-                    )
-                    .child(
-                        Button::new("sysinfo-copy")
-                            .icon(if self.sysinfo.copied {
-                                IconName::Check
-                            } else {
-                                IconName::Copy
-                            })
-                            .label(if self.sysinfo.copied {
-                                t("settings.common.copied")
-                            } else {
-                                t("settings.common.copy")
-                            })
-                            .disabled(self.sysinfo.info.is_none())
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.copy_sysinfo(window, cx)),
-                            ),
-                    )
-                    .into_any_element(),
-            ),
             _ => None,
         }
     }
@@ -1338,8 +933,7 @@ impl Render for SettingsView {
                     SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
                     SettingsSection::PerformanceHud => self.hud.clone().into_any_element(),
                     SettingsSection::Backup => self.backup.clone().into_any_element(),
-                    SettingsSection::SystemInfo => self.render_sysinfo(cx),
-                    SettingsSection::About => self.render_about(cx),
+                    SettingsSection::About => self.about_system.clone().into_any_element(),
                     SettingsSection::Accounts
                     | SettingsSection::WineManager
                     | SettingsSection::Emulators
@@ -1417,10 +1011,9 @@ mod tests {
         for alias in ["hud", "mangohud", "metal-hud", "performance-hud"] {
             assert_eq!(SettingsSection::from_id(alias), expected_hud);
         }
-        assert_eq!(
-            SettingsSection::from_id("systeminfo"),
-            SettingsSection::SystemInfo
-        );
+        for alias in ["about", "system", "systeminfo", "system-info"] {
+            assert_eq!(SettingsSection::from_id(alias), SettingsSection::About);
+        }
         assert_eq!(SettingsSection::from_id("log"), SettingsSection::Logs);
         assert_eq!(
             SettingsSection::from_id("nonsense"),

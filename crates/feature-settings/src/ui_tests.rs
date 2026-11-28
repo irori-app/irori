@@ -597,23 +597,48 @@ fn hdr_and_gamescope_fields_mention_the_displays(cx: &mut TestAppContext) {
 fn system_info_lists_the_displays(cx: &mut TestAppContext) {
     use std::sync::Arc;
 
-    let (handle, view) = open(cx, |window, cx| {
-        SettingsView::new("general".into(), window, cx)
-    });
+    use irori_runtime::sysinfo::{GpuInfo, SystemInfo};
+
+    let (handle, view) = open(cx, |w, cx| SettingsView::new("general".into(), w, cx));
+    let mut info = SystemInfo::default();
+    (info.cpu.model, info.cpu.cores) = ("Intel(R) Core(TM) i5-14600K".into(), 20);
+    (info.memory.total, info.memory.used) = (32 << 30, 8 << 30);
+    (info.os.name, info.os.kernel) = ("CachyOS Linux".into(), "7.3.6".into());
+    (info.desktop, info.session_type) = (Some("KDE".into()), Some("wayland".into()));
+    (info.vulkan.loader, info.vulkan.instance_version) = (true, Some("1.4.363".into()));
+    (info.software.wine, info.software.umu) = (Some("wine-11.22".into()), Some("1.4.3".into()));
+    info.gpus = vec![
+        GpuInfo {
+            slot: "0000:03:00.0".into(),
+            vendor_id: "1002".into(),
+            device_id: "7550".into(),
+            vendor_name: Some("Advanced Micro Devices, Inc. [AMD/ATI]".into()),
+            device_name: Some("Navi 48 [Radeon RX 9070]".into()),
+            driver: Some("amdgpu".into()),
+            boot_vga: true,
+            ..Default::default()
+        },
+        GpuInfo {
+            vendor_name: Some("Intel".into()),
+            device_name: Some("UHD 770".into()),
+            ..Default::default()
+        },
+    ];
+    let sample_info = Arc::new(info);
     cx.update_window(handle, |_, window, cx| {
         view.update(cx, |v, cx| {
-            v.show_sysinfo_for_test(
-                Arc::new(irori_runtime::sysinfo::SystemInfo::default()),
-                Arc::new(sample_displays()),
-                window,
-                cx,
-            )
+            v.show_sysinfo_for_test(sample_info, Arc::new(sample_displays()), window, cx)
         });
+        window.refresh();
+        let _ = window.draw(cx);
+        // Exercise expanded PCI details, display modes, and third-party credits.
+        let about_panel = view.read(cx).about_system_panel().clone();
+        about_panel.update(cx, |panel, cx| panel.expand_disclosures_for_test(cx));
         window.refresh();
         let _ = window.draw(cx);
     })
     .unwrap();
-    cx.update(|cx| assert_eq!(view.read(cx).section(), SettingsSection::SystemInfo));
+    cx.update(|cx| assert_eq!(view.read(cx).section(), SettingsSection::About));
     let rows = crate::displays::rows(&sample_displays());
     let text: Vec<String> = rows.iter().map(|(k, v)| format!("{k}: {v}")).collect();
     assert_eq!(rows.len(), 3, "{text:?}");
@@ -626,6 +651,9 @@ fn system_info_lists_the_displays(cx: &mut TestAppContext) {
         text[2].starts_with("Display 2") && !text[2].contains("HDR"),
         "{text:?}"
     );
+    let entries = crate::displays::mode_size_entries(&sample_displays().displays[0]);
+    assert_eq!(entries.len(), 2);
+    assert!(entries[0].2, "active resolution should be flagged current");
 }
 
 #[gpui_kit::test]

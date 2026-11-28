@@ -52,7 +52,6 @@ pub(crate) const SIDEBAR_GROUPS: &[SidebarGroup] = &[
         sections: &[
             SettingsSection::Advanced,
             SettingsSection::Logs,
-            SettingsSection::SystemInfo,
             SettingsSection::About,
         ],
     },

@@ -5,8 +5,17 @@ use gpui_kit::SharedString;
 use irori_services::displays::{Display, DisplayMode, DisplayReport, HdrSummary, refresh_texts};
 use irori_ui::i18n::{t, t_args};
 
-/// Sizes listed per display before "and N more".
+/// Sizes listed per display before "and N more" in plain-row summaries.
+#[cfg(test)]
 const SIZES_SHOWN: usize = 6;
+
+/// Visual emphasis of a display capability badge (HDR or VRR).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CapabilityTone {
+    Active,
+    Capable,
+    Muted,
+}
 
 /// `2560 × 1440 at 165 Hz`, or `2560 × 1440` without a rate.
 pub(crate) fn mode_text(mode: &DisplayMode) -> SharedString {
@@ -23,8 +32,62 @@ pub(crate) fn mode_text(mode: &DisplayMode) -> SharedString {
     }
 }
 
+/// Compact badge form: `3440 × 1440 · 180 Hz`, or `3440 × 1440` without a rate.
+pub(crate) fn mode_compact(mode: &DisplayMode) -> SharedString {
+    match mode.refresh_text() {
+        Some(hz) => format!("{} × {} · {hz} Hz", mode.width, mode.height).into(),
+        None => format!("{} × {}", mode.width, mode.height).into(),
+    }
+}
+
+/// HDR badge label and semantic tone for an enabled display.
+pub(crate) fn hdr_badge(d: &Display) -> Option<(SharedString, CapabilityTone)> {
+    let (key, tone) = match (d.enabled, d.hdr_on, d.hdr_capable) {
+        (true, Some(true), _) => ("settings.display.hdr_on", CapabilityTone::Active),
+        (true, _, Some(false)) => ("settings.display.hdr_unsupported", CapabilityTone::Muted),
+        (true, Some(false), _) => ("settings.display.hdr_off", CapabilityTone::Muted),
+        (true, None, Some(true)) => ("settings.display.hdr_supported", CapabilityTone::Capable),
+        _ => return None,
+    };
+    Some((t(key), tone))
+}
+
+/// VRR badge label and semantic tone for an enabled display.
+pub(crate) fn vrr_badge(d: &Display) -> Option<(SharedString, CapabilityTone)> {
+    let (key, args) = vrr(d).filter(|_| d.enabled)?;
+    let tone = match (d.vrr_on, d.vrr_capable) {
+        (Some(true), ..) => CapabilityTone::Active,
+        (None, Some(true)) => CapabilityTone::Capable,
+        _ => CapabilityTone::Muted,
+    };
+    let arg_refs: Vec<(&str, &str)> = args.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    Some((t_args(key, &arg_refs), tone))
+}
+
+/// Every resolution group offered by a display: `(size_label, hz_list, is_current)`.
+pub(crate) fn mode_size_entries(d: &Display) -> Vec<(SharedString, SharedString, bool)> {
+    let active = d.current.map(|m| (m.width, m.height));
+    d.sizes()
+        .into_iter()
+        .map(|((w, h), rates)| {
+            let hz = refresh_texts(&rates);
+            let rates_text = if hz.is_empty() {
+                SharedString::default()
+            } else {
+                format!("{} Hz", hz.join(", ")).into()
+            };
+            (
+                format!("{w} × {h}").into(),
+                rates_text,
+                active == Some((w, h)),
+            )
+        })
+        .collect()
+}
+
 /// The System info rows of every display: what it is and runs at, then the
 /// modes it offers.
+#[cfg(test)]
 pub(crate) fn rows(report: &DisplayReport) -> Vec<(SharedString, SharedString)> {
     if report.displays.is_empty() {
         return vec![(t("settings.display.label"), t("settings.display.none"))];
@@ -57,6 +120,7 @@ pub(crate) fn rows(report: &DisplayReport) -> Vec<(SharedString, SharedString)> 
 }
 
 /// `M32QC (HDMI-A-2) · main · 2560 × 1440 at 144 Hz · HDR on · VRR on`.
+#[cfg(test)]
 fn summary(d: &Display) -> SharedString {
     let mut parts: Vec<SharedString> = Vec::new();
     let mut title = d.label();
@@ -112,6 +176,7 @@ fn vrr(d: &Display) -> Option<(&'static str, Vec<(&'static str, String)>)> {
 }
 
 /// The sizes a display offers with their refresh rates, the largest first.
+#[cfg(test)]
 fn sizes(d: &Display) -> SharedString {
     let all = d.sizes();
     let mut shown: Vec<String> = all

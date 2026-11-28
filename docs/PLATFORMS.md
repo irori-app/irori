@@ -1002,10 +1002,11 @@ Cleanups delete only what the rebuilt report offers at that moment, each item th
 
 ### Displays
 
-Settings › System info (`irori://settings/system`) lists every display: its name, the
-mode it runs in, the modes it offers and whether HDR is on, and "Copy" adds the same as
-text. Nothing is asked with privileges, and tools run with a 5-second timeout on the
-backend, never the interface thread; the answer is kept until Refresh.
+Settings › About & System (`irori://settings/about`, with `irori://settings/system` as an
+alias) lists every display: its name, the mode it runs in, the modes it offers and whether
+HDR is on, and "Copy system info" adds the same as text. Nothing is asked with privileges,
+and tools run with a 5-second timeout on the backend, never the interface thread; the
+answer is kept until Refresh.
 
 | System | Where it comes from | What stays unknown |
 | --- | --- | --- |
