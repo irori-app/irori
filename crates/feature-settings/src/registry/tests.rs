@@ -138,6 +138,10 @@ fn mac_options_show_on_macos_only() {
 #[test]
 fn gpu_options_live_in_the_graphics_section() {
     for path in [
+        "enableWineWayland",
+        "enableHDR",
+        "enableFSR",
+        "maxSharpness",
         "iroriGpu",
         "nvidiaPrime",
         "iroriSmoothMotion",
@@ -156,6 +160,12 @@ fn gpu_options_live_in_the_graphics_section() {
         assert_eq!(f.section, FieldSection::Gpu, "{path}");
         assert_eq!(f.scope, Scope::Shared, "{path}");
     }
+    assert!(
+        find("nvidiaPrime")
+            .unwrap()
+            .needs
+            .contains(&Need::SeveralGpus)
+    );
     assert_eq!(find("panel.artwork").unwrap().scope, Scope::GameOnly);
     assert_eq!(
         find("panel.artwork").unwrap().section,
@@ -420,7 +430,7 @@ fn performance_hud_and_legacy_overlay_visibility() {
 
     let optiscaler = find("panel.optiscaler").expect("panel.optiscaler");
     assert_eq!(optiscaler.section, FieldSection::Performance);
-    assert_eq!(optiscaler.scope, Scope::Shared);
+    assert_eq!(optiscaler.scope, Scope::GameOnly);
     assert!(optiscaler.applies_to_steam());
     assert!(optiscaler.supported_on_host());
 }

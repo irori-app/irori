@@ -11,6 +11,7 @@ use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::notification::Notification;
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex, v_virtual_list,
@@ -69,6 +70,27 @@ fn preset_description(preset: &LaunchPreset) -> SharedString {
     t_args("settings.presets.sets", &[("settings", &names.join(", "))])
 }
 
+/// Whether applying this built-in preset to global game defaults is risky
+/// because it throttles hardware or limits compatibility for modern games.
+pub(crate) fn is_per_game_oriented(preset: &LaunchPreset) -> bool {
+    preset.id == "builtin:older-32-bit-game"
+}
+
+/// Short setting labels shown as tags under a preset row.
+fn preset_tags(preset: &LaunchPreset) -> Vec<SharedString> {
+    const MAX_TAGS: usize = 4;
+    let keys = preset.keys();
+    let mut tags: Vec<SharedString> = keys
+        .iter()
+        .take(MAX_TAGS)
+        .map(|k| t(setting_label_key(k)))
+        .collect();
+    if keys.len() > MAX_TAGS {
+        tags.push(format!("+{}", keys.len() - MAX_TAGS).into());
+    }
+    tags
+}
+
 pub(crate) struct LaunchPresetsPanel {
     target: FormTarget,
     presets: Vec<LaunchPreset>,
@@ -105,6 +127,34 @@ impl LaunchPresetsPanel {
     }
 
     fn apply(&mut self, preset: LaunchPreset, window: &mut Window, cx: &mut Context<Self>) {
+        if self.game().is_none() && is_per_game_oriented(&preset) {
+            let name = preset_name(&preset);
+            let this = cx.entity().downgrade();
+            window.open_alert_dialog(cx, move |alert, _, _| {
+                let this = this.clone();
+                let preset = preset.clone();
+                alert
+                    .title(t_args(
+                        "settings.presets.confirm_defaults.title",
+                        &[("preset", &name)],
+                    ))
+                    .description(t("settings.presets.confirm_defaults.description"))
+                    .show_cancel(true)
+                    .cancel_text(t("settings.common.cancel"))
+                    .ok_text(t("settings.presets.apply_defaults"))
+                    .ok_variant(ButtonVariant::Danger)
+                    .on_ok(move |_, window, cx| {
+                        this.update(cx, |this, cx| this.apply_now(preset.clone(), window, cx))
+                            .ok();
+                        true
+                    })
+            });
+            return;
+        }
+        self.apply_now(preset, window, cx);
+    }
+
+    fn apply_now(&mut self, preset: LaunchPreset, window: &mut Window, cx: &mut Context<Self>) {
         let b = backend(cx);
         let name = preset_name(&preset);
         let message = match self.game() {
@@ -222,12 +272,58 @@ impl LaunchPresetsPanel {
         let theme = cx.theme();
         let (border, muted_fg) = (theme.border, theme.muted_foreground);
         let name = preset_name(preset);
-        let apply_label = if self.game().is_some() {
+        let tags = preset_tags(preset);
+        let is_defaults = self.game().is_none();
+        let prefer_games = is_defaults && is_per_game_oriented(preset);
+        let apply_label = if !is_defaults {
             t("settings.presets.apply")
         } else {
             t("settings.presets.apply_defaults")
         };
         let (apply, to_games, remove) = (preset.clone(), preset.clone(), preset.clone());
+        let apply_btn = {
+            let btn = Button::new(ElementId::Name(format!("preset-apply-{ix}").into()))
+                .xsmall()
+                .label(apply_label)
+                .accessibility_label(t_args("settings.presets.apply_named", &[("preset", &name)]))
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.apply(apply.clone(), window, cx)),
+                );
+            if prefer_games {
+                btn.ghost()
+            } else {
+                btn.outline()
+            }
+        };
+        let games_btn = {
+            let btn = Button::new(ElementId::Name(format!("preset-games-{ix}").into()))
+                .xsmall()
+                .icon(IconName::Layers)
+                .label(t("settings.presets.apply_to_games"))
+                .accessibility_label(t_args(
+                    "settings.presets.apply_to_games_named",
+                    &[("preset", &name)],
+                ))
+                .on_click(move |_, window, cx| open_apply_dialog(to_games.clone(), window, cx));
+            if prefer_games {
+                btn.outline()
+            } else {
+                btn.ghost()
+            }
+        };
+        let actions = if prefer_games {
+            h_flex()
+                .gap_1p5()
+                .flex_shrink_0()
+                .child(games_btn)
+                .child(apply_btn)
+        } else {
+            h_flex()
+                .gap_1p5()
+                .flex_shrink_0()
+                .child(apply_btn)
+                .child(games_btn)
+        };
         h_flex()
             .id(ElementId::Name(format!("preset-row-{ix}").into()))
             .w_full()
@@ -263,33 +359,17 @@ impl LaunchPresetsPanel {
                             .text_xs()
                             .text_color(muted_fg)
                             .child(preset_description(preset)),
-                    ),
+                    )
+                    .when(!tags.is_empty(), |col| {
+                        col.child(
+                            h_flex().flex_wrap().gap_1().pt_0p5().children(
+                                tags.into_iter()
+                                    .map(|tag| Tag::secondary().xsmall().outline().child(tag)),
+                            ),
+                        )
+                    }),
             )
-            .child(
-                Button::new(ElementId::Name(format!("preset-apply-{ix}").into()))
-                    .outline()
-                    .xsmall()
-                    .label(apply_label)
-                    .accessibility_label(t_args(
-                        "settings.presets.apply_named",
-                        &[("preset", &name)],
-                    ))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.apply(apply.clone(), window, cx)
-                    })),
-            )
-            .child(
-                Button::new(ElementId::Name(format!("preset-games-{ix}").into()))
-                    .ghost()
-                    .xsmall()
-                    .icon(IconName::Layers)
-                    .tooltip(t("settings.presets.apply_to_games"))
-                    .accessibility_label(t_args(
-                        "settings.presets.apply_to_games_named",
-                        &[("preset", &name)],
-                    ))
-                    .on_click(move |_, window, cx| open_apply_dialog(to_games.clone(), window, cx)),
-            )
+            .child(actions)
             .when(!preset.is_builtin(), |row| {
                 row.child(
                     Button::new(ElementId::Name(format!("preset-remove-{ix}").into()))
@@ -707,6 +787,16 @@ mod tests {
         assert_eq!(filter_games(&games, ""), vec![0, 1, 2]);
         assert_eq!(filter_games(&games, " hades "), vec![0, 1]);
         assert!(filter_games(&games, "zelda").is_empty());
+    }
+
+    #[test]
+    fn older_32_bit_preset_is_flagged_per_game_and_produces_tags() {
+        crate::i18n::register();
+        let presets = irori_core::launch_extras::builtin_presets(irori_core::HostPlatform::Linux);
+        for p in &presets {
+            assert_eq!(is_per_game_oriented(p), p.id == "builtin:older-32-bit-game");
+            assert!(!preset_tags(p).is_empty(), "{}", p.id);
+        }
     }
 
     #[test]

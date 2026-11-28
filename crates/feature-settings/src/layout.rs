@@ -96,10 +96,6 @@ pub(crate) const DEFAULTS_TABS: &[SubTab] = &[
         label_key: "settings.subtab.defaults.performance",
     },
     SubTab {
-        id: "replay",
-        label_key: "settings.subtab.defaults.replay",
-    },
-    SubTab {
         id: "gpu",
         label_key: "settings.subtab.defaults.gpu",
     },
@@ -108,8 +104,8 @@ pub(crate) const DEFAULTS_TABS: &[SubTab] = &[
         label_key: "settings.subtab.defaults.launch",
     },
     SubTab {
-        id: "saves",
-        label_key: "settings.subtab.defaults.saves",
+        id: "replay",
+        label_key: "settings.subtab.defaults.replay",
     },
 ];
 
@@ -164,7 +160,6 @@ pub(crate) fn defaults_section_for_tab(tab: &str) -> FieldSection {
         "performance" | "replay" => FieldSection::Performance,
         "gpu" => FieldSection::Gpu,
         "launch" => FieldSection::Launch,
-        "saves" => FieldSection::CloudSaves,
         _ => FieldSection::Wine,
     }
 }
@@ -217,11 +212,11 @@ pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
         }
         FieldSection::Gpu => Some("gpu"),
         FieldSection::Launch => Some("launch"),
-        FieldSection::CloudSaves => Some("saves"),
         FieldSection::General => general_subtab(spec.path),
         FieldSection::Appearance => appearance_subtab(spec.path),
-        // The Controller page is short enough to stay one page.
-        FieldSection::Advanced
+        // CloudSaves defaults live on Settings -> Saves; the remaining pages stay flat.
+        FieldSection::CloudSaves
+        | FieldSection::Advanced
         | FieldSection::Saves
         | FieldSection::Artwork
         | FieldSection::Controller => None,
@@ -400,6 +395,7 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "iroriUi.libraryOpenDetailsOnSelect"
             | "iroriUi.libraryAutoLayout"
             // Game defaults -> Wine & Proton
+            | "winePrefix"
             | "disableUMU"
             | "iroriProtonPreferSdl"
             | "iroriDllOverrides"
@@ -408,10 +404,6 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "iroriNtsync"
             | "enableMsync"
             | "iroriRetinaMode"
-            | "enableWineWayland"
-            | "enableHDR"
-            | "enableFSR"
-            | "maxSharpness"
             | "enableWoW64"
             | "autoInstallDxvk"
             | "autoInstallVkd3d"
@@ -421,12 +413,19 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "iroriDescriptorHeap"
             | "preferSystemLibs"
             // Game defaults -> Performance
+            | "showFps"
+            | "gamescope.enableLimiter"
+            | "gamescope.fpsLimiter"
+            | "gamescope.fpsLimiterNoFocus"
             | "gamescope.additionalOptions"
             // Game defaults -> Graphics
+            | "enableFSR"
+            | "maxSharpness"
             | "iroriDlssIndicator"
             | "iroriNvidiaReflex"
             | "iroriShaderCacheSize"
             // Game defaults -> Launch
+            | "launcherArgs"
             | "wrapperOptions"
             | "enviromentOptions"
             | "beforeLaunchScriptPath"
@@ -436,7 +435,18 @@ pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
             | "iroriSandbox.noNetwork"
             | "iroriSandbox.noHome"
             | "verboseLogs"
-    )
+            // Game defaults -> Replay
+            | "iroriReplay.capture"
+            | "iroriReplay.codec"
+            | "iroriReplay.resolution"
+            | "iroriReplay.monitor"
+            | "iroriReplay.restart"
+            | "iroriReplay.journal"
+    ) || (cfg!(target_os = "linux")
+        && matches!(
+            spec.path,
+            "enableDXVKFpsLimit" | "DXVKFpsCap" | "iroriFpsLimiter"
+        ))
 }
 
 /// Whether `spec` should stay hidden in compact App Settings mode because its
@@ -569,11 +579,18 @@ mod tests {
                 FieldSection::Wine
                 | FieldSection::Performance
                 | FieldSection::Gpu
-                | FieldSection::Launch
-                | FieldSection::CloudSaves => f.scope == Scope::Shared,
+                | FieldSection::Launch => f.scope == Scope::Shared,
                 _ => false,
             };
             if !needs_tab {
+                if f.section == FieldSection::CloudSaves {
+                    assert_eq!(
+                        subtab_of(f),
+                        None,
+                        "{} should live on Settings -> Saves",
+                        f.path
+                    );
+                }
                 continue;
             }
             let tab = subtab_of(f).unwrap_or_else(|| panic!("{} lacks a sub-tab", f.path));

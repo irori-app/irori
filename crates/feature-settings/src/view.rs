@@ -37,7 +37,8 @@ use crate::logs::LogViewer;
 use crate::registry::FieldSection;
 use crate::storage::StoragePanel;
 use crate::widgets::{
-    group_header, group_heading, muted, nav_button_with_dot, panel, sidebar_section_label,
+    group_header, group_heading, muted, nav_button_with_dot, panel, section_heading,
+    sidebar_section_label,
 };
 
 /// Sections of the settings page.
@@ -335,6 +336,7 @@ impl SettingsView {
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
         let storage = cx.new(StoragePanel::new);
         let accounts = models(cx).accounts.clone();
+        let settings_model = models(cx).settings.clone();
         let default_defaults_tab = crate::layout::supported_defaults_tabs()
             .first()
             .map(|tab| tab.id)
@@ -367,6 +369,7 @@ impl SettingsView {
                 sub,
                 cx.observe(&storage, |_, _, cx| cx.notify()),
                 cx.observe(&accounts, |_, _, cx| cx.notify()),
+                cx.observe(&settings_model, |_, _, cx| cx.notify()),
             ],
         };
         if section.as_ref() == "downloads" {
@@ -426,6 +429,34 @@ impl SettingsView {
     /// The game defaults form.
     pub fn defaults_form(&self) -> &Entity<SettingsForm> {
         &self.defaults_form
+    }
+
+    pub(crate) fn defaults_tab(&self) -> &'static str {
+        self.defaults_tab
+    }
+
+    pub(crate) fn set_defaults_tab(
+        &mut self,
+        tab: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.defaults_tab = tab;
+        self.open(SettingsSection::GameDefaults, false, window, cx);
+    }
+
+    pub(crate) fn open_section(
+        &mut self,
+        section: SettingsSection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open(section, true, window, cx);
+    }
+
+    pub(crate) fn open_general_basics(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.general_tab = "basics";
+        self.open(SettingsSection::General, true, window, cx);
     }
 
     #[cfg(test)]
@@ -501,6 +532,13 @@ impl SettingsView {
                     f.set_sections(vec![fs], cx);
                     f.set_subtab(Some(tab), cx);
                     f.load_wine_versions(window, cx);
+                });
+                self.probe_linux_hud_env(window, cx);
+            }
+            SettingsSection::Saves => {
+                self.defaults_form.update(cx, |f, cx| {
+                    f.set_sections(vec![FieldSection::CloudSaves], cx);
+                    f.set_subtab(None, cx);
                 });
             }
             SettingsSection::Logs => {
@@ -1204,6 +1242,7 @@ impl SettingsView {
 
     fn header_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         match self.section {
+            SettingsSection::GameDefaults => Some(self.render_game_defaults_header_action(cx)),
             SettingsSection::Storage => Some(
                 Button::new("storage-rescan")
                     .outline()
@@ -1319,6 +1358,9 @@ impl Render for SettingsView {
             if !searching && let Some(actions) = self.header_actions(cx) {
                 header = header.action(actions);
             }
+            let summary = (!searching && section == SettingsSection::GameDefaults)
+                .then(|| self.render_game_defaults_summary(cx))
+                .flatten();
             let subtabs = (!searching).then(|| self.render_subtabs(cx)).flatten();
             let body: AnyElement = if searching {
                 self.render_search(cx)
@@ -1332,10 +1374,15 @@ impl Render for SettingsView {
                         .into_any_element(),
                     SettingsSection::General
                     | SettingsSection::Controller
-                    | SettingsSection::Advanced
-                    | SettingsSection::Saves => self.app_form.clone().into_any_element(),
+                    | SettingsSection::Advanced => self.app_form.clone().into_any_element(),
+                    SettingsSection::Saves => v_flex()
+                        .w_full()
+                        .child(self.app_form.clone())
+                        .child(section_heading(t("settings.saves.defaults_heading")))
+                        .child(self.defaults_form.clone())
+                        .into_any_element(),
                     SettingsSection::Storage => self.storage.clone().into_any_element(),
-                    SettingsSection::GameDefaults => self.defaults_form.clone().into_any_element(),
+                    SettingsSection::GameDefaults => self.render_game_defaults_body(cx),
                     SettingsSection::PerformanceHud => self.hud.clone().into_any_element(),
                     SettingsSection::Backup => self.backup.clone().into_any_element(),
                     SettingsSection::SystemInfo => self.render_sysinfo(cx),
@@ -1360,6 +1407,7 @@ impl Render for SettingsView {
                         .pb_10()
                         .gap_2()
                         .child(header)
+                        .children(summary)
                         .children(subtabs)
                         .child(body),
                 )

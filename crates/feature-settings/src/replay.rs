@@ -10,7 +10,9 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, ClipboardItem, Context, IntoElement, ParentElement as _, Render, SharedString,
@@ -21,7 +23,7 @@ use irori_services::{Recorder, RecorderInfo, ShortcutState};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use crate::widgets::{muted, panel};
+use crate::widgets::muted;
 
 /// Where gpu-screen-recorder is published.
 const FLATHUB_URL: &str = "https://flathub.org/apps/com.dec05eba.gpu_screen_recorder";
@@ -235,7 +237,7 @@ impl ReplayPanel {
             .icon(IconName::RefreshCw)
             .label(t("settings.common.refresh"))
             .on_click(cx.listener(|this, _, _, cx| this.detect(cx)));
-        let row = h_flex().gap_3().px_3().py_2().items_start();
+        let row = h_flex().gap_3().items_start();
         match &self.recorder {
             None => row
                 .child(
@@ -346,11 +348,15 @@ impl ReplayPanel {
         };
         v_flex()
             .gap_2()
-            .px_3()
-            .py_2()
+            .pt_3()
             .border_t_1()
             .border_color(cx.theme().border)
-            .child(div().text_sm().child(t("settings.replay.ways")))
+            .child(
+                div()
+                    .text_sm()
+                    .font_medium()
+                    .child(t("settings.replay.ways")),
+            )
             .child(line(
                 IconName::Gamepad2,
                 muted(t("settings.replay.way_controller"), cx).into_any_element(),
@@ -383,31 +389,33 @@ impl Render for ReplayPanel {
                 ],
             )
         });
+        let recorder_ready = matches!(self.recorder, Some(Some(_)));
+        let show_details =
+            settings.enabled || recorder_ready || !matches!(self.shortcut, ShortcutState::Off);
         v_flex()
             .w_full()
-            .gap_2()
-            .child(
-                panel(cx)
-                    .child(self.render_recorder(cx))
-                    .child(self.render_ways(cx)),
-            )
-            .children(recording.map(|text| muted(text, cx)))
-            .child(muted(
-                t_args(
-                    "settings.replay.memory",
-                    &[("size", &memory), ("seconds", &seconds)],
-                ),
-                cx,
-            ))
-            .when(settings.enabled, |d| {
-                let folder = irori_services::replay::clips_root(&settings);
-                d.child(muted(
-                    t_args(
-                        "settings.replay.clips_in",
-                        &[("folder", &folder.display().to_string())],
-                    ),
-                    cx,
-                ))
+            .gap_3()
+            .child(self.render_recorder(cx))
+            .when(show_details, |d| {
+                d.child(self.render_ways(cx))
+                    .children(recording.map(|text| muted(text, cx)))
+                    .child(muted(
+                        t_args(
+                            "settings.replay.memory",
+                            &[("size", &memory), ("seconds", &seconds)],
+                        ),
+                        cx,
+                    ))
+                    .when(settings.enabled, |d| {
+                        let folder = irori_services::replay::clips_root(&settings);
+                        d.child(muted(
+                            t_args(
+                                "settings.replay.clips_in",
+                                &[("folder", &folder.display().to_string())],
+                            ),
+                            cx,
+                        ))
+                    })
             })
     }
 }
