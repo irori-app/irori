@@ -66,6 +66,11 @@ pub struct AppSettings {
     pub check_updates_interval: u32,
     pub custom_wine_paths: Vec<String>,
     pub dark_tray_icon: bool,
+    /// Use the desktop icon theme's generic games icon (`applications-games`
+    /// or `applications-games-symbolic`) in the Linux system tray instead of
+    /// Irori's logo. Irori-only.
+    #[serde(rename = "iroriGenericTrayIcon")]
+    pub generic_tray_icon: bool,
     pub default_install_path: String,
     /// Install each store's games in a folder of the store's own inside
     /// `defaultInstallPath` (`Games/Irori/GOG/<game>`). Irori-only.
@@ -383,6 +388,7 @@ impl Default for AppSettings {
             check_updates_interval: 10,
             custom_wine_paths: Vec::new(),
             dark_tray_icon: false,
+            generic_tray_icon: false,
             default_install_path: games.to_string_lossy().into_owned(),
             install_per_store: false,
             library_folders: Vec::new(),

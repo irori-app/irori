@@ -431,7 +431,7 @@ protontricks only knows Steam app IDs, so games Irori runs itself keep using win
 
 Each configuration root has one running Irori instance, protected by an OS file
 lock. Subsequent invocations forward arguments over authenticated loopback IPC.
-The tray uses the desktop's native integration. With "Minimize when a game starts" and
+The tray uses the desktop's native integration. On Linux, Irori shows its own logo in the tray by default, and Settings → General → Window & tray lets you switch to the desktop icon theme's generic games icon (`applications-games`, or `applications-games-symbolic` with Dark tray icon enabled). With "Minimize when a game starts" and
 "Close to tray" both on and a tray icon running (not in Steam's Game Mode), a game
 starting closes the window to the tray instead of minimizing it, and the window opens
 again where it was once the games it closed for have ended, unless the user opened it

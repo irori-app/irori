@@ -308,8 +308,20 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         Toggle,
     )
     .tooltip("settings.field.dark_tray_icon.tip")
-    .tag(Key("settings.tag.restart_required"))
     .keywords(&["tray", "icon", "dark"])
+    .requires(NEEDS_TRAY),
+    app(
+        "iroriGenericTrayIcon",
+        "settings.field.generic_tray_icon.label",
+        General,
+        "settings.group.tray_and_window",
+        Toggle,
+    )
+    .help("settings.field.generic_tray_icon.help")
+    .tooltip("settings.field.generic_tray_icon.tip")
+    .keywords(&[
+        "tray", "systray", "icon", "generic", "theme", "os", "system", "gamepad", "symbolic", "old",
+    ])
     .requires(NEEDS_TRAY),
     app(
         "hideWindowOnProtocolLaunch",

@@ -728,7 +728,9 @@ fn start_tray(
         return;
     }
     let dark = settings.dark_tray_icon;
-    let task = irori_ui::state::run_infallible(cx, async move { tray::start(tx, dark).await });
+    let generic = settings.generic_tray_icon;
+    let task =
+        irori_ui::state::run_infallible(cx, async move { tray::start(tx, dark, generic).await });
     cx.spawn(async move |cx| {
         let Some(Some(handle)) = task.await else {
             cx.update(|cx| open_main_window(&app, cx));
@@ -736,11 +738,34 @@ fn start_tray(
         };
         app.lock().tray = Some(handle.clone());
         cx.update(|cx| {
+            watch_icon_for_tray(handle.clone(), (dark, generic), cx);
             watch_replay_for_tray(handle.clone(), cx);
             watch_recent_for_tray(handle, cx);
         });
     })
     .detach();
+}
+
+/// Keep the tray icon in step with `darkTrayIcon` and `iroriGenericTrayIcon`.
+#[cfg(target_os = "linux")]
+fn watch_icon_for_tray(handle: tray::TrayHandle, initial: (bool, bool), cx: &mut App) {
+    let settings = models(cx).settings.clone();
+    let last = std::rc::Rc::new(std::cell::Cell::new(initial));
+    let rev = std::rc::Rc::new(std::cell::Cell::new(0u64));
+    let apply = move |cx: &mut App| {
+        let app = &settings.read(cx).app;
+        let next = (app.dark_tray_icon, app.generic_tray_icon);
+        if last.replace(next) != next {
+            let next_rev = rev.get().wrapping_add(1);
+            rev.set(next_rev);
+            let h = handle.clone();
+            let b = irori_ui::backend(cx);
+            b.spawn(async move { tray::set_icon(&h, next.0, next.1, next_rev).await });
+        }
+    };
+    apply(cx);
+    let observed = models(cx).settings.clone();
+    cx.observe(&observed, move |_, cx| apply(cx)).detach();
 }
 
 /// Offer "Save clip" in the tray while the replay buffer records. It starts

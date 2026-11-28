@@ -639,3 +639,13 @@ fn greeting_and_hover_caption_defaults_and_round_trip() {
     assert!(!back.library_greeting);
     assert_eq!(back.greeting_name.as_deref(), Some("Alex"));
 }
+
+#[test]
+fn generic_tray_icon_defaults_off_and_round_trips() {
+    let app: AppSettings = serde_json::from_str("{}").unwrap();
+    assert!(!app.generic_tray_icon);
+    let app: AppSettings = serde_json::from_str(r#"{"iroriGenericTrayIcon":true}"#).unwrap();
+    assert!(app.generic_tray_icon);
+    let json = serde_json::to_value(&app).unwrap();
+    assert_eq!(json["iroriGenericTrayIcon"], Value::Bool(true));
+}

@@ -597,8 +597,8 @@ impl FieldSpec {
         if self.path == "panel.performance-hud" {
             return irori_core::HudBackend::current().is_supported();
         }
-        // DXVK_HUD=fps is Linux-only.
-        if self.path == "showFps" {
+        // DXVK_HUD=fps and StatusNotifier theme tray icons are Linux-only.
+        if matches!(self.path, "showFps" | "iroriGenericTrayIcon") {
             return host == HostPlatform::Linux;
         }
         // A portable Irori never adds itself to the Start menu.
