@@ -5,7 +5,8 @@
   "homepage": "https://www.dosbox-staging.org",
   "kind": "dosbox",
   "systems": [
-    "dos"
+    "dos",
+    "win3x"
   ],
   "sources": [
     {

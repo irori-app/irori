@@ -633,6 +633,33 @@
       ]
     },
     {
+      "id": "win3x",
+      "name": "Windows 3.x",
+      "short": "Win3x",
+      "maker": "Microsoft",
+      "year": 1990,
+      "libretro": "DOS",
+      "colors": [
+        "#008080",
+        "#c0c0c0"
+      ],
+      "extensions": [
+        "conf",
+        "bat",
+        "exe"
+      ],
+      "folders": [
+        "win3x",
+        "windows 3x",
+        "windows 3.x",
+        "exowin3x"
+      ],
+      "folderGames": true,
+      "engines": [
+        "dosbox-staging"
+      ]
+    },
+    {
       "id": "scummvm",
       "name": "ScummVM adventures",
       "short": "SCUMM",

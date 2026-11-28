@@ -60,6 +60,7 @@ pub const PLATFORMS: &[(&str, &str)] = &[
     ("Sony Playstation Vita", "psvita"),
     ("Microsoft Xbox", "xbox"),
     ("MS-DOS", "dos"),
+    ("Windows 3.X", "win3x"),
     ("ScummVM", "scummvm"),
     ("Arcade", "arcade"),
     ("Windows", "doom"),

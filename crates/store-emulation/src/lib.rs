@@ -16,6 +16,7 @@
 //! RetroArch core on the way, checks the system's BIOS files and hands back
 //! the emulator's command for the services layer to run like any game.
 
+pub mod exo;
 pub mod launchbox;
 mod names;
 pub mod retro;
@@ -240,6 +241,7 @@ impl EmulationStore {
             size: if meta.is_file() { meta.len() } else { 0 },
             stem,
             root: path.parent().map(Path::to_path_buf).unwrap_or_default(),
+            exo: None,
         };
         let id = irori_core::GameId::new(Runner::Emulation, entry.app_name.as_str());
         let (entries, mut added, mut removed) = {
@@ -489,7 +491,13 @@ impl EmulationStore {
                 }
             };
         for folder in &folders {
-            if let Err(e) = watcher.watch(folder, RecursiveMode::Recursive) {
+            if exo::is_exo_root(folder) {
+                for dir in exo::watch_dirs(folder) {
+                    if let Err(e) = watcher.watch(&dir, RecursiveMode::NonRecursive) {
+                        tracing::warn!("watching {}: {e}", dir.display());
+                    }
+                }
+            } else if let Err(e) = watcher.watch(folder, RecursiveMode::Recursive) {
                 tracing::warn!("watching {}: {e}", folder.display());
             }
         }
@@ -547,8 +555,12 @@ fn ranked(game: &launchbox::LaunchBoxGame, tags: &[String]) -> launchbox::Launch
 /// its database has the game.
 fn game_info(e: &RomEntry, cover: Option<String>) -> GameInfo {
     let native = HostPlatform::current().native();
-    // ScummVM games are their folder; everything else is a file in one.
-    let install_dir = if e.system == "scummvm" {
+    let exo = e.exo.as_ref();
+    // ScummVM games are their folder; eXo games live in `exo.game_dir`;
+    // everything else is a file in one.
+    let install_dir = if let Some(exo) = exo {
+        exo.game_dir.clone()
+    } else if e.system == "scummvm" {
         e.path.clone()
     } else {
         e.discs
@@ -559,17 +571,33 @@ fn game_info(e: &RomEntry, cover: Option<String>) -> GameInfo {
             .unwrap_or_default()
     };
     let system = systems::get(&e.system);
+    let local_cover = exo
+        .and_then(|x| x.local_cover.as_deref())
+        .map(exo::media::path_to_file_url);
+    let is_installed = exo.is_none_or(|x| x.installed);
+    let installable = exo.is_some_and(|x| x.archive_path.is_some());
     GameInfo {
         runner: Some(Runner::Emulation),
         app_name: e.app_name.clone(),
         title: e.title.clone(),
-        art_cover: cover.or_else(|| {
+        developer: exo.and_then(|x| x.developer.clone()),
+        publisher: exo.and_then(|x| x.publisher.clone()),
+        description: exo.and_then(|x| x.notes.clone()),
+        genres: exo.map(|x| x.genres.clone()).unwrap_or_default(),
+        release_date: exo.and_then(|x| x.release_date.clone()),
+        art_cover: local_cover.or(cover).or_else(|| {
             system
                 .filter(|s| !s.libretro.is_empty())
                 .and_then(|s| thumbnail_url(&s.libretro, &e.stem))
         }),
-        is_installed: true,
-        install: Some(InstalledInfo {
+        art_logo: exo
+            .and_then(|x| x.local_logo.as_deref())
+            .map(exo::media::path_to_file_url),
+        art_background: exo
+            .and_then(|x| x.local_background.as_deref())
+            .map(exo::media::path_to_file_url),
+        is_installed,
+        install: is_installed.then(|| InstalledInfo {
             install_path: install_dir.display().to_string(),
             executable: e.path.display().to_string(),
             install_size: String::new(),
@@ -577,7 +605,7 @@ fn game_info(e: &RomEntry, cover: Option<String>) -> GameInfo {
             platform: native,
             ..Default::default()
         }),
-        installable: false,
+        installable,
         can_run_offline: true,
         is_linux_native: native == InstallPlatform::Linux,
         is_mac_native: native == InstallPlatform::Mac,
@@ -713,8 +741,21 @@ impl Store for EmulationStore {
         let entry = self
             .entry(app_name)
             .context("This game is not in the library")?;
-        // The page shows the system; ROM files carry nothing more.
-        let _ = entry;
+        if let Some(exo) = entry.exo {
+            return Ok(ExtraInfo {
+                description: exo.notes,
+                release_date: exo.release_date,
+                genres: exo.genres,
+                developers: exo.developer.into_iter().collect(),
+                screenshots: exo
+                    .local_screenshots
+                    .iter()
+                    .map(|p| exo::media::path_to_file_url(p))
+                    .collect(),
+                details_from: Some(exo.collection.id().to_string()),
+                ..Default::default()
+            });
+        }
         Ok(ExtraInfo::default())
     }
 
@@ -791,8 +832,13 @@ impl Store for EmulationStore {
         let Some(entry) = self.entry(app_name) else {
             return false;
         };
+        let target = match &entry.exo {
+            Some(exo) if !exo.installed => return false,
+            Some(exo) => &exo.game_dir,
+            None => &entry.path,
+        };
         matches!(
-            tokio::time::timeout(AVAILABILITY_TIMEOUT, tokio::fs::try_exists(&entry.path)).await,
+            tokio::time::timeout(AVAILABILITY_TIMEOUT, tokio::fs::try_exists(target)).await,
             Ok(Ok(true))
         )
     }

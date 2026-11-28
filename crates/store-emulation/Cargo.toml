@@ -26,6 +26,8 @@ url.workspace = true
 sha1.workspace = true
 hex.workspace = true
 notify.workspace = true
+# eXo game collections store LaunchBox platform catalogs as XML; already in Cargo.lock.
+quick-xml = "0.42"
 
 [dev-dependencies]
 irori-engines = { workspace = true, features = ["test-support"] }

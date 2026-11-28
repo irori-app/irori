@@ -47,14 +47,17 @@ pub struct RomEntry {
     pub stem: String,
     /// The ROM folder the game was found in.
     pub root: PathBuf,
+    /// Metadata for entries discovered inside a local eXo collection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exo: Option<crate::exo::ExoEntryMeta>,
 }
 
 /// The version of the detection rules. A file detected under older rules is
 /// looked at again, so a newer Irori recognises what an older one didn't
 /// (1: disc images by their marker files; 2: Dreamcast, PS Vita and Switch,
 /// and the tracks a `.gdi` lists; 3: DOOM's WADs aren't Wii games; 4: DOOM
-/// standalone IWADs).
-pub const DETECTION_RULES: u32 = 4;
+/// standalone IWADs; 5: local eXo collections).
+pub const DETECTION_RULES: u32 = 5;
 
 /// What a file was detected as last time.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,6 +101,11 @@ pub fn scan(
 ) -> Scanned {
     let mut out = Scanned::default();
     for root in roots {
+        if crate::exo::is_exo_root(root) {
+            out.entries.extend(crate::exo::scan_root(root, root));
+            progress(out.entries.len());
+            continue;
+        }
         let hint = root
             .file_name()
             .and_then(|n| systems::by_folder(&n.to_string_lossy()));
@@ -187,6 +195,7 @@ fn scan_dir(
                         size: *size,
                         stem,
                         root: root.to_path_buf(),
+                        exo: None,
                     });
                 }
             }
@@ -196,8 +205,14 @@ fn scan_dir(
 
     // A folder holding a disc's marker file (`PS3_DISC.SFB`) is a game of
     // that disc's system wherever it sits; its insides are not searched.
+    // Likewise, a local eXo collection root is scanned through its LaunchBox
+    // catalog instead of walking `Images/` and `!dos/` as loose ROMs.
     let mut rest = Vec::with_capacity(dirs.len());
     for sub in dirs {
+        if crate::exo::is_exo_root(&sub) {
+            out.entries.extend(crate::exo::scan_root(&sub, root));
+            continue;
+        }
         match marked_disc_folder(&sub) {
             Some(system) => {
                 if let Some(entry) = folder_game(system, &sub, dir, root) {
@@ -328,6 +343,7 @@ fn scan_files(
             size: discs.iter().map(|c| c.size).sum(),
             stem: first.stem.clone(),
             root: root.to_path_buf(),
+            exo: None,
         });
     }
 }
@@ -443,6 +459,7 @@ fn folder_games(
             size,
             stem,
             root: root.to_path_buf(),
+            exo: None,
         });
     }
     for sub in subs {
@@ -505,6 +522,7 @@ fn folder_game(system: &System, folder: &Path, top: &Path, root: &Path) -> Optio
         size: 0,
         stem,
         root: root.to_path_buf(),
+        exo: None,
     })
 }
 
