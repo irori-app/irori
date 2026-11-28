@@ -1291,10 +1291,11 @@ impl SaveBackupsPanel {
 }
 
 /// Ludusavi's status on the settings page: where it was found and its
-/// version, or how to get it; and the default for backing up after each
-/// session.
+/// version, or how to get it; and optionally the default for backing up after
+/// each session.
 pub struct LudusaviPanel {
     info: Option<Option<LudusaviInfo>>,
+    status_only: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -1315,10 +1316,24 @@ impl LudusaviPanel {
         ];
         let mut this = Self {
             info: None,
+            status_only: false,
             _subscriptions: subscriptions,
         };
         this.refresh(window, cx);
         this
+    }
+
+    /// Render only the detection status banner without the after-session
+    /// switch below it (for hosts that place the toggle in its own row).
+    pub fn status_only(mut self, only: bool) -> Self {
+        self.status_only = only;
+        self
+    }
+
+    /// Detected Ludusavi status: `None` while probing, `Some(None)` when not
+    /// installed, `Some(Some(info))` when ready.
+    pub fn info(&self) -> Option<Option<&LudusaviInfo>> {
+        self.info.as_ref().map(|inner| inner.as_ref())
     }
 
     fn refresh(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1395,6 +1410,9 @@ impl Render for LudusaviPanel {
                     .into_any_element()
             }
         };
+        if self.status_only {
+            return v_flex().w_full().child(status);
+        }
         let default_on = backend(cx).settings.app().game.ludusavi_auto_backup;
         v_flex().w_full().gap_4().child(status).child(
             v_flex()

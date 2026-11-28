@@ -835,16 +835,6 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
     .help("settings.field.action_clear_caches.help")
     .tooltip("settings.field.action_clear_caches.tip")
     .keywords(&["cache", "clear", "artwork", "refresh"]),
-    app(
-        "action.reset-settings",
-        "settings.field.action_reset_settings.label",
-        Advanced,
-        "settings.group.maintenance",
-        Action(ActionKind::ResetSettings),
-    )
-    .help("settings.field.action_reset_settings.help")
-    .tooltip("settings.field.action_reset_settings.tip")
-    .keywords(&["reset", "defaults", "factory"]),
 ];
 
 pub(super) const SAVES: &[FieldSpec] = &[
@@ -919,4 +909,14 @@ pub(super) const SAVES: &[FieldSpec] = &[
         "differential",
         "limit",
     ]),
+    app(
+        "action.reset-settings",
+        "settings.field.action_reset_settings.label",
+        Saves,
+        "settings.group.danger_zone",
+        Action(ActionKind::ResetSettings),
+    )
+    .help("settings.field.action_reset_settings.help")
+    .tooltip("settings.field.action_reset_settings.tip")
+    .keywords(&["reset", "defaults", "factory", "redefinir", "danger"]),
 ];
