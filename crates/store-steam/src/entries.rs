@@ -89,7 +89,8 @@ fn base(id: &str, title: &str, art: Art) -> GameInfo {
         title: title.to_string(),
         store_url: Some(format!("https://store.steampowered.com/app/{id}/")),
         art_cover: Some(art.cover),
-        art_square: Some(art.header),
+        art_square: Some(art.header.clone()),
+        art_wide: Some(art.header),
         art_background: Some(art.hero),
         art_logo: Some(art.logo),
         can_run_offline: true,
@@ -154,8 +155,19 @@ pub(crate) fn same(a: &GameInfo, b: &GameInfo) -> bool {
         && a.is_installed == b.is_installed
         && a.is_linux_native == b.is_linux_native
         && a.store_hidden == b.store_hidden
-        && (&a.art_cover, &a.art_background, &a.art_logo, &a.art_square)
-            == (&b.art_cover, &b.art_background, &b.art_logo, &b.art_square)
+        && (
+            &a.art_cover,
+            &a.art_background,
+            &a.art_logo,
+            &a.art_square,
+            &a.art_wide,
+        ) == (
+            &b.art_cover,
+            &b.art_background,
+            &b.art_logo,
+            &b.art_square,
+            &b.art_wide,
+        )
         && a.install
             .as_ref()
             .map(|i| (&i.install_path, &i.version, i.install_size_bytes))
@@ -493,6 +505,11 @@ mod tests {
         let info = owned(&game, None, None);
         assert!(!info.is_installed && info.installable);
         assert_eq!(info.runner(), Runner::Steam);
+        assert!(
+            info.art_wide
+                .as_deref()
+                .is_some_and(|u| u.ends_with("/70/header.jpg"))
+        );
     }
 
     #[test]

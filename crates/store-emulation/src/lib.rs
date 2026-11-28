@@ -543,6 +543,46 @@ fn ranked(game: &launchbox::LaunchBoxGame, tags: &[String]) -> launchbox::Launch
     }
 }
 
+/// Which art slot fits a ROM box's aspect ratio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoverSlot {
+    /// Tall portrait cover (`width / height < 0.85`).
+    Cover,
+    /// Square or near-square case (`0.85 <= width / height < 1.33`).
+    Square,
+    /// Landscape horizontal box (`width / height >= 1.33`, such as US SNES/N64).
+    Wide,
+}
+
+/// Classify a box image's dimensions into a library art slot.
+pub fn cover_slot_for_dimensions(width: u32, height: u32) -> CoverSlot {
+    if height == 0 {
+        return CoverSlot::Cover;
+    }
+    let ratio = width as f32 / height as f32;
+    if ratio < 0.85 {
+        CoverSlot::Cover
+    } else if ratio < 1.33 {
+        CoverSlot::Square
+    } else {
+        CoverSlot::Wide
+    }
+}
+
+/// Read the cached original file's header (without network traffic) to
+/// classify a ROM cover by its real dimensions.
+fn cached_cover_slot(url: &str) -> Option<CoverSlot> {
+    use std::io::Read as _;
+    let path = Paths::get().art_original(url);
+    let file = std::fs::File::open(path).ok()?;
+    let mut head = Vec::new();
+    file.take(irori_extras::image_size::HEADER_BYTES as u64)
+        .read_to_end(&mut head)
+        .ok()?;
+    let (w, h) = irori_extras::image_size::from_header(&head)?;
+    Some(cover_slot_for_dimensions(w, h))
+}
+
 /// What the library shows for an entry; `cover` is LaunchBox's box, when
 /// its database has the game.
 fn game_info(e: &RomEntry, cover: Option<String>) -> GameInfo {
@@ -559,15 +599,27 @@ fn game_info(e: &RomEntry, cover: Option<String>) -> GameInfo {
             .unwrap_or_default()
     };
     let system = systems::get(&e.system);
+    let box_art = cover.or_else(|| {
+        system
+            .filter(|s| !s.libretro.is_empty())
+            .and_then(|s| thumbnail_url(&s.libretro, &e.stem))
+    });
+    let slot = box_art
+        .as_deref()
+        .and_then(cached_cover_slot)
+        .unwrap_or(CoverSlot::Cover);
+    let (art_cover, art_square, art_wide) = match slot {
+        CoverSlot::Cover => (box_art, None, None),
+        CoverSlot::Square => (None, box_art, None),
+        CoverSlot::Wide => (None, None, box_art),
+    };
     GameInfo {
         runner: Some(Runner::Emulation),
         app_name: e.app_name.clone(),
         title: e.title.clone(),
-        art_cover: cover.or_else(|| {
-            system
-                .filter(|s| !s.libretro.is_empty())
-                .and_then(|s| thumbnail_url(&s.libretro, &e.stem))
-        }),
+        art_cover,
+        art_square,
+        art_wide,
         is_installed: true,
         install: Some(InstalledInfo {
             install_path: install_dir.display().to_string(),
@@ -1151,6 +1203,17 @@ mod flatpak_hud_tests {
         assert!(run_idx < cfg_idx && cfg_idx < app_idx);
         assert!(run_idx < presets_idx && presets_idx < app_idx);
         assert!(run_idx < unset_idx && unset_idx < app_idx);
+    }
+
+    #[test]
+    fn classifies_rom_cover_slots_by_aspect_ratio() {
+        assert_eq!(cover_slot_for_dimensions(600, 900), CoverSlot::Cover);
+        assert_eq!(cover_slot_for_dimensions(840, 1000), CoverSlot::Cover);
+        assert_eq!(cover_slot_for_dimensions(1000, 1000), CoverSlot::Square);
+        assert_eq!(cover_slot_for_dimensions(1200, 1000), CoverSlot::Square);
+        assert_eq!(cover_slot_for_dimensions(1330, 1000), CoverSlot::Wide);
+        assert_eq!(cover_slot_for_dimensions(2100, 1500), CoverSlot::Wide);
+        assert_eq!(cover_slot_for_dimensions(100, 0), CoverSlot::Cover);
     }
 }
 

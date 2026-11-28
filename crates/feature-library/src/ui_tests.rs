@@ -2614,6 +2614,132 @@ fn sideload_dialog_renders_quick_bar_and_two_detail_tabs(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn sideload_dialog_steam_art_miss_expands_artwork_and_flashes_find_online(cx: &mut TestAppContext) {
+    use crate::dialogs::sideload::DetailsTab;
+    use crate::dialogs::steamgrid::{ArtKind, ArtPicker, ArtSource};
+    use gpui_kit::component::WindowExt as _;
+
+    let _backend = start(cx);
+    let opts = || WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+            Default::default(),
+            size(px(900.), px(900.)),
+        ))),
+        ..Default::default()
+    };
+    let (window, dialog) = cx
+        .update(|cx| {
+            gpui_kit::open_window(opts(), cx, |w, cx| {
+                cx.new(|cx| SideloadDialog::with_app(None, None, w, cx))
+            })
+        })
+        .expect("window opens");
+    let draw = |w, cx: &mut TestAppContext| {
+        cx.update_window(w, |_, w, cx| {
+            w.refresh();
+            let _ = w.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    let flash =
+        |cx: &mut TestAppContext| cx.read(|cx| dialog.read(cx).find_online_flash_for_test());
+    draw(window, cx);
+    assert_eq!(flash(cx), None);
+    assert!(
+        gpui_kit::VisualTestContext::from_window(window, cx)
+            .debug_bounds("sideload-panel-artwork")
+            .is_none()
+    );
+
+    // Steam miss expands More details onto Artwork, flashes Find online, and notifies.
+    cx.update_window(window, |_, w, cx| {
+        dialog.update(cx, |d, cx| {
+            d.apply_fetch_art_result("Obscure Fan Game", Ok(None), w, cx);
+        });
+        assert_eq!(w.notifications(cx).len(), 1);
+    })
+    .unwrap();
+    draw(window, cx);
+    assert_eq!(flash(cx), Some(1));
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("sideload-panel-artwork").is_some());
+        assert!(vcx.debug_bounds("find-cover").is_some());
+        assert!(vcx.debug_bounds("find-background").is_some());
+    }
+
+    // Switching to Details and missing again returns to Artwork and replays the flash.
+    cx.update(|cx| {
+        dialog.update(cx, |d, cx| {
+            d.set_details_tab_for_test(DetailsTab::Details, cx)
+        })
+    });
+    draw(window, cx);
+    cx.update_window(window, |_, w, cx| {
+        dialog.update(cx, |d, cx| {
+            d.apply_fetch_art_result("Unlisted", Ok(None), w, cx);
+        });
+    })
+    .unwrap();
+    draw(window, cx);
+    assert_eq!(flash(cx), Some(2));
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        assert!(vcx.debug_bounds("sideload-panel-artwork").is_some());
+        let btn = vcx.debug_bounds("find-cover").expect("Find online button");
+        vcx.simulate_click(btn.center(), Default::default());
+    }
+    draw(window, cx);
+
+    // Clicking Find online clears the flash and opens Web-first with only Web + SteamGridDB.
+    assert_eq!(flash(cx), None);
+    let picker = cx
+        .read(|cx| dialog.read(cx).picker_for_test())
+        .expect("ArtPicker opened");
+    assert_eq!(
+        cx.read(|cx| picker.read(cx).source()),
+        (ArtSource::Web, false)
+    );
+    assert_eq!(
+        cx.read(|cx| picker.read(cx).offered_sources()),
+        vec![ArtSource::Web, ArtSource::SteamGridDb]
+    );
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let web = vcx.debug_bounds("art-source-web").expect("Web tab");
+        let sgdb = vcx
+            .debug_bounds("art-source-sgdb")
+            .expect("SteamGridDB tab");
+        assert!(vcx.debug_bounds("art-source-steam").is_none());
+        assert!(vcx.debug_bounds("art-source-all").is_none());
+        assert!(web.left() < sgdb.left());
+    }
+
+    // Manage -> Edit details keeps Steam first and Web last.
+    let (edit_w, edit_picker) = cx
+        .update(|cx| {
+            let id = GameId::new(Runner::Gog, "3");
+            gpui_kit::open_window(opts(), cx, |w, cx| {
+                cx.new(|cx| ArtPicker::for_game(ArtKind::Cover, Some(&id), "", w, cx))
+            })
+        })
+        .expect("edit picker opens");
+    draw(edit_w, cx);
+    assert_eq!(
+        cx.read(|cx| edit_picker.read(cx).source()),
+        (ArtSource::Steam, false)
+    );
+    let mut vcx = gpui_kit::VisualTestContext::from_window(edit_w, cx);
+    let steam = vcx.debug_bounds("art-source-steam").expect("Steam tab");
+    let sgdb = vcx
+        .debug_bounds("art-source-sgdb")
+        .expect("SteamGridDB tab");
+    let web = vcx.debug_bounds("art-source-web").expect("Web tab");
+    assert!(steam.left() < sgdb.left() && sgdb.left() < web.left());
+}
+
+#[gpui_kit::test]
 fn sort_popover_collapses_more_and_auto_expands_for_secondary(cx: &mut TestAppContext) {
     use irori_services::LibrarySort;
 

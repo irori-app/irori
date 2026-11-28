@@ -32,7 +32,12 @@ use crate::i18n::LanguageStamp;
 use crate::widgets::muted;
 
 /// The art this panel replaces, in display order.
-const SLOTS: [ArtSlot; 3] = [ArtSlot::Cover, ArtSlot::Background, ArtSlot::Logo];
+const SLOTS: [ArtSlot; 4] = [
+    ArtSlot::Cover,
+    ArtSlot::Wide,
+    ArtSlot::Background,
+    ArtSlot::Logo,
+];
 /// Screenshots offered at once, newest first. Older ones are rarely the
 /// picture someone wants as art, and each costs a thumbnail.
 const MAX_SCREENSHOTS: usize = 24;
@@ -54,6 +59,7 @@ pub(crate) enum Source {
 fn override_of(o: &GameOverrides, slot: ArtSlot) -> Option<&str> {
     match slot {
         ArtSlot::Cover => o.art_cover.as_deref(),
+        ArtSlot::Wide => o.art_wide.as_deref(),
         ArtSlot::Background => o.art_background.as_deref(),
         ArtSlot::Logo => o.art_logo.as_deref(),
     }
@@ -63,6 +69,7 @@ fn override_of(o: &GameOverrides, slot: ArtSlot) -> Option<&str> {
 fn store_art(game: &GameInfo, slot: ArtSlot) -> Option<&str> {
     match slot {
         ArtSlot::Cover => game.cover_art(),
+        ArtSlot::Wide => game.art_wide.as_deref(),
         ArtSlot::Background => game.art_background.as_deref(),
         ArtSlot::Logo => game.art_logo.as_deref(),
     }
@@ -84,6 +91,7 @@ pub(crate) fn with_art(
     let mut next = overrides.clone();
     match slot {
         ArtSlot::Cover => next.art_cover = value,
+        ArtSlot::Wide => next.art_wide = value,
         ArtSlot::Background => next.art_background = value,
         ArtSlot::Logo => next.art_logo = value,
     }
@@ -110,6 +118,7 @@ pub(crate) fn is_image(path: &std::path::Path) -> bool {
 fn slot_id(slot: ArtSlot) -> &'static str {
     match slot {
         ArtSlot::Cover => "cover",
+        ArtSlot::Wide => "wide",
         ArtSlot::Background => "background",
         ArtSlot::Logo => "logo",
     }
@@ -118,15 +127,17 @@ fn slot_id(slot: ArtSlot) -> &'static str {
 fn slot_label(slot: ArtSlot) -> SharedString {
     t(match slot {
         ArtSlot::Cover => "settings.art.cover",
+        ArtSlot::Wide => "settings.art.wide",
         ArtSlot::Background => "settings.art.background",
         ArtSlot::Logo => "settings.art.logo",
     })
 }
 
-/// Preview size in rem: a 2:3 cover, a wide background, a logo strip.
+/// Preview size in rem: a 2:3 cover, a wide cover, a wide background, a logo strip.
 fn preview_size(slot: ArtSlot) -> (f32, f32) {
     match slot {
         ArtSlot::Cover => (5.0, 7.5),
+        ArtSlot::Wide => (10.0, 4.67),
         ArtSlot::Background => (13.33, 7.5),
         ArtSlot::Logo => (13.33, 7.5),
     }
@@ -307,6 +318,7 @@ impl ArtworkPanel {
                 [
                     &game.art_cover,
                     &game.art_square,
+                    &game.art_wide,
                     &game.art_background,
                     &game.art_logo,
                     &game.art_icon,

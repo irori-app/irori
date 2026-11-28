@@ -496,6 +496,9 @@ impl Backend {
                     if let Some(s) = &o.art_square {
                         g.art_square = Some(s.clone());
                     }
+                    if let Some(w) = &o.art_wide {
+                        g.art_wide = Some(w.clone());
+                    }
                     if let Some(b) = &o.art_background {
                         g.art_background = Some(b.clone());
                     }
