@@ -5949,6 +5949,7 @@ dependencies = [
  "open",
  "parking_lot",
  "raw-window-handle",
+ "regex",
  "ron",
  "serde",
  "serde_json",

@@ -35,6 +35,7 @@ pub mod motion;
 pub mod nav;
 mod omarchy;
 pub mod play_status;
+pub mod rich_text;
 mod rosetta_problem;
 mod sandbox_problem;
 pub mod save_backups;

@@ -373,7 +373,7 @@ impl GamePage {
                         .max_h(rems(16.))
                         .overflow_hidden()
                         .text_sm()
-                        .child(super::rich_text::rich_text(
+                        .child(irori_ui::rich_text::rich_text(
                             "drawer-description",
                             &self.id,
                             &text,

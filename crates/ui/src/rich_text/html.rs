@@ -18,7 +18,7 @@ use irori_core::GameId;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::load::{looks_like_html, skip_code_span_or_fence};
+use super::detect::{looks_like_html, skip_code_span_or_fence};
 
 /// Small UI-thread cache for prepared Markdown strings so re-renders of the
 /// same description or changelog avoid repeating regex and HTML conversion.
@@ -30,8 +30,13 @@ thread_local! {
 }
 
 /// Render store description or changelog text scoped to `game_id`.
-pub(super) fn rich_text(kind: &str, game_id: &GameId, text: &str) -> AnyElement {
-    let id = ElementId::Name(format!("{kind}:{}", game_id.key()).into());
+pub fn rich_text(kind: &str, game_id: &GameId, text: &str) -> AnyElement {
+    rich_text_keyed(format!("{kind}:{}", game_id.key()), text)
+}
+
+/// Render Markdown or HTML text scoped to an arbitrary stable `ElementId` key.
+pub fn rich_text_keyed(key: impl Into<SharedString>, text: &str) -> AnyElement {
+    let id = ElementId::Name(key.into());
     let markdown = cached_markdown(text);
     TextView::markdown(id, markdown).into_any_element()
 }
@@ -59,7 +64,7 @@ fn cached_markdown(text: &str) -> SharedString {
 
 /// Sanitize links and convert HTML store text into Markdown so every rendered
 /// block carries a unique source span in `TextView::markdown`.
-pub(super) fn prepare_markdown(text: &str) -> String {
+pub fn prepare_markdown(text: &str) -> String {
     let safe = web_links_only(text);
     if looks_like_html(&safe) {
         let converted = html_to_markdown(&safe);
@@ -109,8 +114,7 @@ fn sanitize_markdown_raw_html(text: &str) -> Cow<'_, str> {
             // Keep <http://...> / <https://...> autolinks untouched.
             if let Some(end) = rest.find('>') {
                 let inner = &rest[1..end];
-                if !inner.contains([' ', '\t', '\n', '\r', '<'])
-                    && irori_ui::web_url(inner).is_some()
+                if !inner.contains([' ', '\t', '\n', '\r', '<']) && crate::web_url(inner).is_some()
                 {
                     out.push_str(&rest[..=end]);
                     i += end + 1;
@@ -187,7 +191,7 @@ pub(super) fn web_links_only(text: &str) -> String {
         let url = &c["url"];
         let before = &c["before"];
         let bare_tag = before == "<" && !url.contains(':');
-        if bare_tag || irori_ui::web_url(url).is_some() {
+        if bare_tag || crate::web_url(url).is_some() {
             c[0].to_string()
         } else {
             format!("{before}#")
@@ -448,7 +452,7 @@ impl Converter {
                     }
                     return;
                 }
-                let formatted = match href.and_then(|u| irori_ui::web_url(&u)) {
+                let formatted = match href.and_then(|u| crate::web_url(&u)) {
                     Some(url) => format!("[{core}]({})", format_markdown_url(&url)),
                     None => core.to_string(),
                 };
@@ -681,7 +685,7 @@ impl Converter {
                     .iter()
                     .find(|(k, _)| k == "src")
                     .map(|(_, v)| decode_entities(v).into_owned())
-                    .and_then(|u| irori_ui::web_url(&u));
+                    .and_then(|u| crate::web_url(&u));
                 if let Some(url) = src {
                     let alt = attrs
                         .iter()
