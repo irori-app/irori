@@ -350,6 +350,7 @@ impl EmulatorsView {
         let ops = engine_ops(cx);
         let settings = models(cx).settings.clone();
         let openable = open::openable(cx);
+        let retro = cx.new(|cx| retro::RetroView::new(window, cx));
         let subscriptions = vec![
             cx.subscribe(&search, |_, _, event, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -375,10 +376,11 @@ impl EmulatorsView {
                 cx.notify();
             }),
             cx.observe(&openable, |_, _, cx| cx.notify()),
+            cx.observe(&retro, |_, _, cx| cx.notify()),
         ];
         let seen_revision = ops.read(cx).revision;
         let mut this = Self {
-            retro: cx.new(|cx| retro::RetroView::new(window, cx)),
+            retro,
             tab_ix: 0,
             statuses: None,
             health: HashMap::new(),
@@ -427,6 +429,7 @@ impl EmulatorsView {
             };
             let _ = this.update_in(cx, |this, window, cx| {
                 open::remember(&statuses, cx);
+                this.retro.update(cx, |r, cx| r.set_engines(&statuses, cx));
                 this.statuses = Some(statuses);
                 this.health = health;
                 this.bios = bios.into_iter().map(|b| (b.system.clone(), b)).collect();
@@ -2733,13 +2736,14 @@ impl Render for EmulatorsView {
                 .update(cx, |s, cx| s.set_placeholder(placeholder, window, cx));
         }
 
-        let (fg, muted, border, primary) = {
+        let (fg, muted, border, primary, success) = {
             let theme = cx.theme();
             (
                 theme.foreground,
                 theme.muted_foreground,
                 theme.border,
                 theme.primary,
+                theme.success,
             )
         };
         let host = Host::current();
@@ -2768,6 +2772,7 @@ impl Render for EmulatorsView {
         });
         let needs_setup =
             installed_engines == 0 || models(cx).settings.read(cx).app.rom_folders.is_empty();
+        let retro_account = self.retro.read(cx).account().map(str::to_string);
 
         let content = match self.tab_ix {
             0 => self.render_engines(window, cx),
@@ -2803,19 +2808,25 @@ impl Render for EmulatorsView {
                 2usize,
                 "achievements",
                 t("manage.emulators.tab.achievements"),
-                None,
+                retro_account.as_ref().map(|_| {
+                    div()
+                        .size(rems(0.5))
+                        .rounded_full()
+                        .bg(success)
+                        .into_any_element()
+                }),
             ),
         ];
         let total_games: usize = self.counts.values().sum();
-        let tab_status: Option<SharedString> = match self.tab_ix {
-            0 => Some(t_args(
+        let tab_status: SharedString = match self.tab_ix {
+            0 => t_args(
                 "manage.emulators.status_summary",
                 &[
                     ("installed", &installed_engines.to_string()),
                     ("available", &downloadable_engines.to_string()),
                 ],
-            )),
-            1 => Some(match (total_games, self.counts.len()) {
+            ),
+            1 => match (total_games, self.counts.len()) {
                 (0, _) => t("manage.emulators.folders.none_found"),
                 (1, _) => t("manage.emulators.folders.found_one"),
                 (games, systems) => t_args(
@@ -2825,8 +2836,11 @@ impl Render for EmulatorsView {
                         ("systems", &systems.to_string()),
                     ],
                 ),
-            }),
-            _ => None,
+            },
+            _ => match &retro_account {
+                Some(name) => t_args("manage.retro.signed_in_as", &[("name", name)]),
+                None => t("manage.retro.optional_label"),
+            },
         };
 
         v_flex()
@@ -2900,7 +2914,22 @@ impl Render for EmulatorsView {
                                                 )
                                             },
                                         )
-                                    }),
+                                    })
+                                    .when_some(
+                                        (self.tab_ix == 2).then_some(retro_account).flatten(),
+                                        |row, name| {
+                                            let url = format!(
+                                                "https://retroachievements.org/user/{name}"
+                                            );
+                                            row.child(
+                                                Button::new("retro-profile")
+                                                    .outline()
+                                                    .icon(IconName::ExternalLink)
+                                                    .label(t("manage.retro.view_profile"))
+                                                    .on_click(move |_, _, cx| cx.open_url(&url)),
+                                            )
+                                        },
+                                    ),
                             ),
                     )
                     .child(
@@ -2949,16 +2978,14 @@ impl Render for EmulatorsView {
                                         )
                                 }),
                             ))
-                            .when_some(tab_status, |bar, status| {
-                                bar.child(
-                                    div()
-                                        .pb_2p5()
-                                        .text_xs()
-                                        .text_color(muted)
-                                        .truncate()
-                                        .child(status),
-                                )
-                            }),
+                            .child(
+                                div()
+                                    .pb_2p5()
+                                    .text_xs()
+                                    .text_color(muted)
+                                    .truncate()
+                                    .child(tab_status),
+                            ),
                     )
                     .child(if empty && self.tab_ix < 2 {
                         EmptyState::new(IconName::Joystick, t("manage.emulators.title"))
