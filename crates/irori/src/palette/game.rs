@@ -5,14 +5,15 @@
 //! stopping, going back to it, its page, its store page, favourite, its
 //! links and Steam link, hiding and its folder.
 
+use super::PaletteTarget;
 use super::entry::Entry;
+use super::score::EntryKind;
+use crate::strings::english;
 use gpui_kit::SharedString;
 use gpui_kit::assets::IconName;
 use irori_core::{GameInfo, Runner, StatusKind, UserAction};
 use irori_services::PlayStatus;
 use irori_ui::i18n::{t, t_args};
-
-use super::PaletteTarget;
 
 /// The rows for `game`, whose play status is `current` and whose own
 /// actions are `actions` (with their place), in the order the palette lists
@@ -23,7 +24,23 @@ pub(super) fn rows(
     actions: &[(usize, UserAction)],
 ) -> Vec<(Entry, PaletteTarget)> {
     let mut rows = Vec::new();
-    let mut push = |item: Entry, target: PaletteTarget| rows.push((item, target));
+    let mut push = |item: Entry, target: PaletteTarget| {
+        rows.push((item.kind(EntryKind::CurrentGame).finish(), target));
+    };
+    push(
+        Entry::new()
+            .label(t_args(
+                "shell.palette.game_settings",
+                &[("title", &game.title)],
+            ))
+            .keywords([
+                t("shell.palette.game_settings_keywords"),
+                english("shell.palette.game_settings_keywords").into(),
+            ])
+            .icon(IconName::Settings)
+            .show_when_empty(true),
+        PaletteTarget::OpenGameSettings(game.id()),
+    );
     if game.is_installed {
         for (index, action) in actions {
             push(
@@ -32,7 +49,10 @@ pub(super) fn rows(
                         "shell.palette.user_action",
                         &[("action", &action.label()), ("title", &game.title)],
                     ))
-                    .keywords([t("shell.palette.user_action_keywords")])
+                    .keywords([
+                        t("shell.palette.user_action_keywords"),
+                        english("shell.palette.user_action_keywords").into(),
+                    ])
                     .icon(irori_ui::user_actions::icon(action)),
                 PaletteTarget::UserAction(game.id(), *index),
             );
@@ -43,12 +63,18 @@ pub(super) fn rows(
                     "shell.palette.edit_actions",
                     &[("title", &game.title)],
                 ))
-                .keywords([t("shell.palette.user_action_keywords")])
+                .keywords([
+                    t("shell.palette.user_action_keywords"),
+                    english("shell.palette.user_action_keywords").into(),
+                ])
                 .icon(IconName::Pencil),
             PaletteTarget::EditActions(game.id()),
         );
     }
-    let keywords = [irori_ui::play_status::title()];
+    let keywords = [
+        irori_ui::play_status::title(),
+        SharedString::new_static("play status"),
+    ];
     for status in PlayStatus::ALL.into_iter().filter(|s| current != Some(*s)) {
         let label = t_args(
             "shell.palette.play_status",
@@ -84,7 +110,10 @@ pub(super) fn rows(
                     "shell.palette.troubleshoot",
                     &[("title", &game.title)],
                 ))
-                .keywords([t("shell.palette.troubleshoot_keywords")])
+                .keywords([
+                    t("shell.palette.troubleshoot_keywords"),
+                    english("shell.palette.troubleshoot_keywords").into(),
+                ])
                 .icon(IconName::Stethoscope),
             PaletteTarget::Troubleshoot(game.id()),
         );
@@ -96,7 +125,10 @@ pub(super) fn rows(
                     "shell.palette.steam_play",
                     &[("title", &game.title)],
                 ))
-                .keywords([t("shell.palette.steam_play_keywords")])
+                .keywords([
+                    t("shell.palette.steam_play_keywords"),
+                    english("shell.palette.steam_play_keywords").into(),
+                ])
                 .icon(IconName::Wine),
             PaletteTarget::SteamPlay(game.id()),
         );
@@ -108,7 +140,10 @@ pub(super) fn rows(
                     "shell.palette.play_as_pc_game",
                     &[("title", &game.title)],
                 ))
-                .keywords([t("shell.palette.play_as_pc_game_keywords")])
+                .keywords([
+                    t("shell.palette.play_as_pc_game_keywords"),
+                    english("shell.palette.play_as_pc_game_keywords").into(),
+                ])
                 .icon(IconName::Monitor),
             PaletteTarget::PlayAsPcGame(game.id()),
         );
@@ -120,7 +155,10 @@ pub(super) fn rows(
                     "shell.palette.graphics_mods",
                     &[("title", &game.title)],
                 ))
-                .keywords([t("shell.palette.graphics_mods_keywords")])
+                .keywords([
+                    t("shell.palette.graphics_mods_keywords"),
+                    english("shell.palette.graphics_mods_keywords").into(),
+                ])
                 .icon(IconName::Sparkles),
             PaletteTarget::GraphicsMods(game.id()),
         );
@@ -130,13 +168,19 @@ pub(super) fn rows(
                     "shell.palette.optiscaler",
                     &[("title", &game.title)],
                 ))
-                .keywords([t("shell.palette.optiscaler_keywords")])
+                .keywords([
+                    t("shell.palette.optiscaler_keywords"),
+                    english("shell.palette.optiscaler_keywords").into(),
+                ])
                 .icon(IconName::Gauge),
             PaletteTarget::Optiscaler(game.id()),
         );
     }
     if game.runner() != Runner::Steam && (game.is_installed || game.installable) {
-        let keywords = [t("shell.palette.steam_shortcut_keywords")];
+        let keywords = [
+            t("shell.palette.steam_shortcut_keywords"),
+            english("shell.palette.steam_shortcut_keywords").into(),
+        ];
         push(
             Entry::new()
                 .label(t_args(
@@ -309,8 +353,13 @@ pub(super) fn level_rows(game: &GameInfo, facts: &GameFacts) -> Vec<(Entry, Pale
     push(
         Entry::new()
             .label(t("shell.palette.detail_rows"))
-            .keywords([t("shell.palette.detail_rows_keywords")])
-            .icon(IconName::Settings2),
+            .english_label(english("shell.palette.detail_rows"))
+            .keywords([
+                t("shell.palette.detail_rows_keywords"),
+                english("shell.palette.detail_rows_keywords").into(),
+            ])
+            .icon(IconName::Settings2)
+            .window_only(),
         PaletteTarget::DetailRows,
     );
     if !matches!(game.runner(), Runner::Steam | Runner::Emulation) {

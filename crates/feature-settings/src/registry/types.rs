@@ -705,21 +705,23 @@ impl FieldSpec {
 
     /// Whether every whitespace-separated token of `query` occurs in the
     /// label, help, group, section or tag (in the interface language or in
-    /// English), the keywords or the path (case-insensitive).
+    /// English), the keywords or the path (case- and accent-insensitive).
     pub fn matches(&self, query: &str) -> bool {
-        let mut tokens = query.split_whitespace().peekable();
-        if tokens.peek().is_none() {
+        let folded = irori_services::search::fold(query);
+        if folded.is_empty() {
             return false;
         }
         let haystack = self.haystack();
-        tokens.all(|t| haystack.contains(&t.to_lowercase()))
+        folded.split(' ').all(|t| haystack.contains(t))
     }
 
     fn haystack(&self) -> String {
         let mut s = String::with_capacity(256);
         let mut push = |part: &str| {
-            s.push_str(part);
-            s.push('\n');
+            if !part.is_empty() {
+                s.push_str(part);
+                s.push(' ');
+            }
         };
         let tag = self.tag.map(Label::text).unwrap_or_default();
         for part in [
@@ -750,7 +752,7 @@ impl FieldSpec {
         for k in self.keywords {
             push(k);
         }
-        s.to_lowercase()
+        irori_services::search::fold(&s)
     }
 }
 

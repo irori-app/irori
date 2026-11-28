@@ -26,8 +26,16 @@ use irori_ui::theme::SizeStep;
 use irori_ui::{Route, models};
 
 use entry::Entry;
+use score::EntryKind;
 use view::Row;
 pub(crate) use view::{Host, PaletteView};
+
+use crate::strings::english;
+
+/// Bilingual keyword pair for a `shell.` translation key.
+fn kw(key: &'static str) -> [SharedString; 2] {
+    [t(key), english(key).into()]
+}
 
 /// The game whose page is open: the game, its play status and its own
 /// actions with their place.
@@ -62,6 +70,20 @@ pub(crate) enum PaletteTarget {
     OpenFolder(GameId),
     /// Open the folder of a game's screenshots and clips.
     CapturesFolder(GameId),
+    /// Open a game's settings page directly.
+    OpenGameSettings(GameId),
+    /// Open Settings directly to one editable field (section, sub-tab, and highlight).
+    OpenSetting(&'static str),
+    /// Show or hide the main sidebar (`Ctrl+B`).
+    ToggleSidebar,
+    /// Toggle window fullscreen (`F11`).
+    ToggleFullscreen,
+    /// Add a single game or web app manually.
+    AddGame,
+    /// Open the manual and smart categories manager.
+    ManageCategories,
+    /// Open the saved library views manager.
+    ManageViews,
     Route(Route),
     Refresh,
     /// Choose which games to pick a random one from (a palette level).
@@ -83,8 +105,6 @@ pub(crate) enum PaletteTarget {
     Duplicates,
     /// The Getting started checklist.
     GettingStarted,
-    /// Show (`true`) or hide the Stores page's deals.
-    Deals(bool),
     /// The guided tour of the main window.
     Tour,
     /// Save the categories of both kinds to a file.
@@ -114,8 +134,6 @@ pub(crate) enum PaletteTarget {
     Install(InstallFilter),
     /// Show only favourites (`true`) or every game, and show the library.
     FavouritesOnly(bool),
-    /// Show the library header's quick controls (`true`) or stop.
-    QuickControls(bool),
     /// Lock hidden games behind their PIN again.
     LockHidden,
     /// Set, change or remove the hidden games' PIN.
@@ -234,8 +252,6 @@ struct LibraryCommands<'a> {
     install: Option<InstallFilter>,
     /// Whether it shows only favourites, while a library view exists.
     favourites: Option<bool>,
-    /// Whether its header shows the quick controls.
-    quick_controls: bool,
     /// While hidden games aren't locked: whether a PIN guards them (it can
     /// be locked again). `None` while locked: nothing about them is offered.
     hidden_pin: Option<bool>,
@@ -276,20 +292,21 @@ impl Palette {
             layout,
             install,
             favourites,
-            quick_controls,
             hidden_pin,
         } = library;
         let mut items = Vec::with_capacity(64);
         let mut push = |item: Entry, target: PaletteTarget, targets: &mut Vec<PaletteTarget>| {
-            items.push(item);
+            items.push(item.finish());
             targets.push(target);
         };
         if let Some(title) = replay {
             push(
                 Entry::new()
                     .label(t_args("shell.palette.save_clip", &[("title", title)]))
-                    .keywords([t("shell.palette.save_clip_keywords")])
-                    .icon(IconName::Clapperboard),
+                    .keywords(kw("shell.palette.save_clip_keywords"))
+                    .icon(IconName::Clapperboard)
+                    .kind(EntryKind::Live)
+                    .show_when_empty(true),
                 PaletteTarget::SaveClip,
                 targets,
             );
@@ -301,8 +318,13 @@ impl Palette {
                         "shell.palette.game_actions",
                         &[("title", &game.title)],
                     ))
-                    .keywords([t("shell.palette.actions")])
-                    .icon(IconName::ChevronRight),
+                    .keywords([
+                        t("shell.palette.actions"),
+                        english("shell.palette.actions").into(),
+                    ])
+                    .icon(IconName::ChevronRight)
+                    .kind(EntryKind::CurrentGame)
+                    .show_when_empty(true),
                 PaletteTarget::GameActions(game.id()),
                 targets,
             );
@@ -310,22 +332,12 @@ impl Palette {
                 push(item, target, targets);
             }
         }
+        // Main sidebar destinations; Settings sections come from `settings::rows`.
         for (label, icon, route) in [
             ("shell.nav.library", IconName::LibraryBig, Route::Library),
             ("shell.nav.downloads", IconName::Download, Route::Downloads),
             ("shell.nav.stores", IconName::Store, Route::Stores),
             ("shell.nav.stats", IconName::ChartColumn, Route::Stats),
-            (
-                if cfg!(target_os = "macos") {
-                    "manage.wine.title"
-                } else {
-                    "shell.nav.wine"
-                },
-                IconName::Wine,
-                Route::WineManager,
-            ),
-            ("shell.nav.emulators", IconName::Joystick, Route::Emulators),
-            ("shell.nav.accounts", IconName::CircleUser, Route::Accounts),
             (
                 "shell.nav.settings",
                 IconName::Settings,
@@ -337,18 +349,19 @@ impl Palette {
                 Route::BigPicture,
             ),
         ] {
-            if cfg!(windows) && route == Route::WineManager {
-                continue;
-            }
-            let mut keywords = vec![t(label)];
+            let mut keywords = vec![t_args("shell.palette.go_to", &[("place", &t(label))])];
             if route == Route::Downloads {
                 keywords.push(t("shell.nav.updates"));
+                keywords.push(english("shell.nav.updates").into());
             }
             push(
                 Entry::new()
-                    .label(t_args("shell.palette.go_to", &[("place", &t(label))]))
+                    .label(t(label))
+                    .english_label(english(label))
                     .keywords(keywords)
-                    .icon(icon),
+                    .icon(icon)
+                    .kind(EntryKind::Page)
+                    .show_when_empty(true),
                 PaletteTarget::Route(route),
                 targets,
             );
@@ -356,12 +369,32 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.year_in_review"))
-                .keywords([
-                    t("shell.palette.year_in_review_keywords"),
-                    t("shell.nav.stats"),
-                ])
-                .icon(IconName::Sparkles),
+                .english_label(english("shell.palette.year_in_review"))
+                .keywords(kw("shell.palette.year_in_review_keywords"))
+                .keywords([t("shell.nav.stats"), english("shell.nav.stats").into()])
+                .icon(IconName::Sparkles)
+                .kind(EntryKind::Page),
             PaletteTarget::Route(Route::YearInReview(None)),
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.toggle_sidebar"))
+                .english_label(english("shell.palette.toggle_sidebar"))
+                .keywords(kw("shell.palette.toggle_sidebar_keywords"))
+                .icon(IconName::PanelLeftClose)
+                .window_only(),
+            PaletteTarget::ToggleSidebar,
+            targets,
+        );
+        push(
+            Entry::new()
+                .label(t("shell.palette.toggle_fullscreen"))
+                .english_label(english("shell.palette.toggle_fullscreen"))
+                .keywords(kw("shell.palette.toggle_fullscreen_keywords"))
+                .icon(IconName::Maximize)
+                .window_only(),
+            PaletteTarget::ToggleFullscreen,
             targets,
         );
         for (step, label, icon) in [
@@ -384,8 +417,10 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(label))
-                    .keywords([t("shell.palette.interface_size_keywords")])
-                    .icon(icon),
+                    .english_label(english(label))
+                    .keywords(kw("shell.palette.interface_size_keywords"))
+                    .icon(icon)
+                    .window_only(),
                 PaletteTarget::InterfaceSize(step),
                 targets,
             );
@@ -394,27 +429,10 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(way.label_key()))
-                    .keywords([t("shell.palette.feedback_keywords")])
-                    .icon(way.icon()),
+                    .keywords(kw("shell.palette.feedback_keywords"))
+                    .icon(way.icon())
+                    .window_only(),
                 PaletteTarget::Feedback(way),
-                targets,
-            );
-        }
-        push(
-            Entry::new()
-                .label(t("shell.palette.storage"))
-                .keywords([t("shell.palette.storage_keywords")])
-                .icon(IconName::HardDrive),
-            PaletteTarget::Route(Route::Settings("storage".into())),
-            targets,
-        );
-        if irori_core::HudBackend::current().is_supported() {
-            push(
-                Entry::new()
-                    .label(t("shell.palette.performance_hud"))
-                    .keywords([t("shell.palette.performance_hud_keywords")])
-                    .icon(IconName::Gauge),
-                PaletteTarget::Route(Route::Settings("hud".into())),
                 targets,
             );
         }
@@ -425,7 +443,7 @@ impl Palette {
                         "shell.palette.open_store",
                         &[("store", runner.store_name())],
                     ))
-                    .keywords([t("shell.nav.stores")])
+                    .keywords([t("shell.nav.stores"), english("shell.nav.stores").into()])
                     .icon(IconName::Store),
                 PaletteTarget::OpenStore(runner),
                 targets,
@@ -436,7 +454,8 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t("shell.palette.steam_friends"))
-                    .keywords([t("shell.palette.steam_friends_keywords")])
+                    .english_label(english("shell.palette.steam_friends"))
+                    .keywords(kw("shell.palette.steam_friends_keywords"))
                     .icon(IconName::Users),
                 PaletteTarget::SteamFriends,
                 targets,
@@ -446,7 +465,8 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t("shell.palette.xbox_friends"))
-                    .keywords([t("shell.palette.xbox_friends_keywords")])
+                    .english_label(english("shell.palette.xbox_friends"))
+                    .keywords(kw("shell.palette.xbox_friends_keywords"))
                     .icon(IconName::Users),
                 PaletteTarget::XboxFriends,
                 targets,
@@ -455,23 +475,38 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.getting_started"))
-                .keywords([t("shell.palette.getting_started_keywords")])
-                .icon(IconName::Sparkles),
+                .english_label(english("shell.palette.getting_started"))
+                .keywords(kw("shell.palette.getting_started_keywords"))
+                .icon(IconName::Sparkles)
+                .window_only(),
             PaletteTarget::GettingStarted,
             targets,
         );
         push(
             Entry::new()
                 .label(t("shell.palette.tour"))
-                .keywords([t("shell.palette.getting_started_keywords")])
-                .icon(IconName::Compass),
+                .english_label(english("shell.palette.tour"))
+                .keywords(kw("shell.palette.getting_started_keywords"))
+                .icon(IconName::Compass)
+                .window_only(),
             PaletteTarget::Tour,
             targets,
         );
         push(
             Entry::new()
+                .label(t("shell.palette.add_game"))
+                .english_label(english("shell.palette.add_game"))
+                .keywords(kw("shell.palette.add_game_keywords"))
+                .icon(IconName::Plus)
+                .show_when_empty(true),
+            PaletteTarget::AddGame,
+            targets,
+        );
+        push(
+            Entry::new()
                 .label(t("shell.palette.find_roms"))
-                .keywords([t("shell.palette.find_roms_keywords")])
+                .english_label(english("shell.palette.find_roms"))
+                .keywords(kw("shell.palette.find_roms_keywords"))
                 .icon(IconName::Search),
             PaletteTarget::FindRoms,
             targets,
@@ -479,7 +514,8 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.set_up_emulation"))
-                .keywords([t("shell.palette.set_up_emulation_keywords")])
+                .english_label(english("shell.palette.set_up_emulation"))
+                .keywords(kw("shell.palette.set_up_emulation_keywords"))
                 .icon(IconName::Joystick),
             PaletteTarget::SetUpEmulation,
             targets,
@@ -487,7 +523,8 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.add_emulator"))
-                .keywords([t("shell.palette.add_emulator_keywords")])
+                .english_label(english("shell.palette.add_emulator"))
+                .keywords(kw("shell.palette.add_emulator_keywords"))
                 .icon(IconName::Plus),
             PaletteTarget::AddEmulator,
             targets,
@@ -495,7 +532,8 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.add_folder"))
-                .keywords([t("shell.palette.add_folder_keywords")])
+                .english_label(english("shell.palette.add_folder"))
+                .keywords(kw("shell.palette.add_folder_keywords"))
                 .icon(IconName::FolderPlus),
             PaletteTarget::AddFolder,
             targets,
@@ -503,15 +541,18 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.manage_fields"))
-                .keywords([t("shell.palette.manage_fields_keywords")])
-                .icon(IconName::ListFilter),
+                .english_label(english("shell.palette.manage_fields"))
+                .keywords(kw("shell.palette.manage_fields_keywords"))
+                .icon(IconName::ListFilter)
+                .window_only(),
             PaletteTarget::ManageFields,
             targets,
         );
         push(
             Entry::new()
                 .label(t("shell.palette.lutris_script"))
-                .keywords([t("shell.palette.lutris_script_keywords")])
+                .english_label(english("shell.palette.lutris_script"))
+                .keywords(kw("shell.palette.lutris_script_keywords"))
                 .icon(IconName::ScrollText),
             PaletteTarget::LutrisScript,
             targets,
@@ -525,8 +566,13 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(label))
-                    .keywords([irori_ui::play_status::title()])
-                    .icon(IconName::Rows3),
+                    .english_label(english(label))
+                    .keywords([
+                        irori_ui::play_status::title(),
+                        SharedString::new_static("play status"),
+                    ])
+                    .icon(IconName::Rows3)
+                    .window_only(),
                 PaletteTarget::GroupByStatus(!grouped),
                 targets,
             );
@@ -542,8 +588,10 @@ impl Palette {
                 push(
                     Entry::new()
                         .label(t(label))
-                        .keywords([t("shell.palette.filter_keywords")])
-                        .icon(IconName::HardDrive),
+                        .english_label(english(label))
+                        .keywords(kw("shell.palette.filter_keywords"))
+                        .icon(IconName::HardDrive)
+                        .window_only(),
                     PaletteTarget::Install(value),
                     targets,
                 );
@@ -558,30 +606,21 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(label))
-                    .keywords([t("shell.palette.filter_keywords")])
-                    .icon(IconName::Star),
+                    .english_label(english(label))
+                    .keywords(kw("shell.palette.filter_keywords"))
+                    .icon(IconName::Star)
+                    .window_only(),
                 PaletteTarget::FavouritesOnly(!favourites),
                 targets,
             );
         }
-        push(
-            Entry::new()
-                .label(t(if quick_controls {
-                    "shell.palette.hide_quick_controls"
-                } else {
-                    "shell.palette.show_quick_controls"
-                }))
-                .keywords([t("shell.palette.quick_controls_keywords")])
-                .icon(IconName::SlidersHorizontal),
-            PaletteTarget::QuickControls(!quick_controls),
-            targets,
-        );
         if let Some(pin_set) = hidden_pin {
             if pin_set {
                 push(
                     Entry::new()
                         .label(t("shell.palette.lock_hidden"))
-                        .keywords([t("shell.palette.hidden_keywords")])
+                        .english_label(english("shell.palette.lock_hidden"))
+                        .keywords(kw("shell.palette.hidden_keywords"))
                         .icon(IconName::Lock),
                     PaletteTarget::LockHidden,
                     targets,
@@ -590,7 +629,8 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t("shell.palette.hidden_pin"))
-                    .keywords([t("shell.palette.hidden_keywords")])
+                    .english_label(english("shell.palette.hidden_pin"))
+                    .keywords(kw("shell.palette.hidden_keywords"))
                     .icon(IconName::Lock),
                 PaletteTarget::HiddenPin,
                 targets,
@@ -605,11 +645,11 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(label))
-                    .keywords([
-                        irori_ui::game_mode::title(),
-                        t("shell.palette.game_mode_keywords"),
-                    ])
-                    .icon(IconName::Users),
+                    .english_label(english(label))
+                    .keywords([irori_ui::game_mode::title()])
+                    .keywords(kw("shell.palette.game_mode_keywords"))
+                    .icon(IconName::Users)
+                    .window_only(),
                 PaletteTarget::GroupByMode(!grouped),
                 targets,
             );
@@ -623,8 +663,10 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(label))
-                    .keywords([t("shell.palette.genre_keywords")])
-                    .icon(IconName::Tag),
+                    .english_label(english(label))
+                    .keywords(kw("shell.palette.genre_keywords"))
+                    .icon(IconName::Tag)
+                    .window_only(),
                 PaletteTarget::GroupByGenre(!grouped),
                 targets,
             );
@@ -638,8 +680,10 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(label))
-                    .keywords([t("shell.palette.category_keywords")])
-                    .icon(IconName::Tags),
+                    .english_label(english(label))
+                    .keywords(kw("shell.palette.category_keywords"))
+                    .icon(IconName::Tags)
+                    .window_only(),
                 PaletteTarget::GroupByCategory(!grouped),
                 targets,
             );
@@ -658,18 +702,31 @@ impl Palette {
                     Entry::new()
                         .label(label)
                         .keywords([group.label()])
-                        .icon(IconName::Rows3),
+                        .icon(IconName::Rows3)
+                        .window_only(),
                     PaletteTarget::GroupBy(target),
                     targets,
                 );
             }
         }
+        push(
+            Entry::new()
+                .label(t("shell.palette.manage_categories"))
+                .english_label(english("shell.palette.manage_categories"))
+                .keywords(kw("shell.palette.category_keywords"))
+                .icon(IconName::Tags)
+                .window_only(),
+            PaletteTarget::ManageCategories,
+            targets,
+        );
         if grouped_by_category.is_some() {
             push(
                 Entry::new()
                     .label(t("shell.palette.new_smart_category"))
-                    .keywords([t("shell.palette.category_keywords")])
-                    .icon(IconName::Sparkles),
+                    .english_label(english("shell.palette.new_smart_category"))
+                    .keywords(kw("shell.palette.category_keywords"))
+                    .icon(IconName::Sparkles)
+                    .window_only(),
                 PaletteTarget::NewSmartCategory,
                 targets,
             );
@@ -678,8 +735,10 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t("shell.palette.export_categories"))
-                    .keywords([t("shell.palette.category_keywords")])
-                    .icon(IconName::Upload),
+                    .english_label(english("shell.palette.export_categories"))
+                    .keywords(kw("shell.palette.category_keywords"))
+                    .icon(IconName::Upload)
+                    .window_only(),
                 PaletteTarget::ExportCategories,
                 targets,
             );
@@ -687,8 +746,10 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.import_categories"))
-                .keywords([t("shell.palette.category_keywords")])
-                .icon(IconName::Download),
+                .english_label(english("shell.palette.import_categories"))
+                .keywords(kw("shell.palette.category_keywords"))
+                .icon(IconName::Download)
+                .window_only(),
             PaletteTarget::ImportCategories,
             targets,
         );
@@ -699,7 +760,8 @@ impl Palette {
                         "shell.palette.show_category",
                         &[("name", &entry.name)],
                     ))
-                    .keywords([t("shell.palette.category_keywords")])
+                    .keywords(kw("shell.palette.category_keywords"))
+                    .keywords([entry.name.clone()])
                     .icon(irori_ui::categories::icon_for(
                         &entry.category,
                         entry.icon.as_deref(),
@@ -712,18 +774,31 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t_args("shell.palette.show_view", &[("name", name)]))
-                    .keywords([t("shell.palette.views_keywords")])
+                    .keywords(kw("shell.palette.views_keywords"))
+                    .keywords([name.clone()])
                     .icon(IconName::Bookmark),
                 PaletteTarget::View(*id),
                 targets,
             );
         }
+        push(
+            Entry::new()
+                .label(t("shell.palette.manage_views"))
+                .english_label(english("shell.palette.manage_views"))
+                .keywords(kw("shell.palette.views_keywords"))
+                .icon(IconName::Bookmark)
+                .window_only(),
+            PaletteTarget::ManageViews,
+            targets,
+        );
         if grouped.is_some() {
             push(
                 Entry::new()
                     .label(t("shell.palette.save_view"))
-                    .keywords([t("shell.palette.views_keywords")])
-                    .icon(IconName::BookmarkPlus),
+                    .english_label(english("shell.palette.save_view"))
+                    .keywords(kw("shell.palette.views_keywords"))
+                    .icon(IconName::BookmarkPlus)
+                    .window_only(),
                 PaletteTarget::SaveView,
                 targets,
             );
@@ -751,8 +826,10 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t(label))
-                    .keywords([t("shell.palette.layout_keywords")])
-                    .icon(icon),
+                    .english_label(english(label))
+                    .keywords(kw("shell.palette.layout_keywords"))
+                    .icon(icon)
+                    .window_only(),
                 PaletteTarget::LibraryView(view),
                 targets,
             );
@@ -760,15 +837,19 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.refresh"))
-                .icon(IconName::RefreshCw),
+                .english_label(english("shell.palette.refresh"))
+                .icon(IconName::RefreshCw)
+                .show_when_empty(true),
             PaletteTarget::Refresh,
             targets,
         );
         push(
             Entry::new()
                 .label(t("shell.palette.back_up"))
-                .keywords([t("shell.palette.back_up_keywords")])
-                .icon(IconName::Save),
+                .english_label(english("shell.palette.back_up"))
+                .keywords(kw("shell.palette.back_up_keywords"))
+                .icon(IconName::Save)
+                .show_when_empty(true),
             PaletteTarget::BackUp,
             targets,
         );
@@ -776,8 +857,10 @@ impl Palette {
             push(
                 Entry::new()
                     .label(t("shell.palette.sync"))
-                    .keywords([t("shell.palette.sync_keywords")])
-                    .icon(IconName::RefreshCw),
+                    .english_label(english("shell.palette.sync"))
+                    .keywords(kw("shell.palette.sync_keywords"))
+                    .icon(IconName::RefreshCw)
+                    .show_when_empty(true),
                 PaletteTarget::Sync,
                 targets,
             );
@@ -785,8 +868,10 @@ impl Palette {
         push(
             Entry::new()
                 .label(t("shell.palette.random"))
-                .keywords([t("shell.palette.random_keywords")])
-                .icon(IconName::Dices),
+                .english_label(english("shell.palette.random"))
+                .keywords(kw("shell.palette.random_keywords"))
+                .icon(IconName::Dices)
+                .show_when_empty(true),
             PaletteTarget::Random,
             targets,
         );
@@ -853,7 +938,6 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         layout: irori_library::library_layout(cx),
         install: irori_library::install_filter(cx),
         favourites: irori_library::favourites_only(cx),
-        quick_controls: irori_library::quick_controls(cx),
         hidden_pin: (!irori_ui::hidden_lock::locked(cx))
             .then(|| irori_ui::hidden_lock::pin_set(cx)),
     };
@@ -882,30 +966,35 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         ),
         &mut targets,
     );
+    let mut push_extra = |entry: Entry, target: PaletteTarget| {
+        items.push(entry.finish());
+        targets.push(target);
+    };
     if let Some(game) = syncable {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args(
                     "shell.palette.sync_saves",
                     &[("title", &game.title)],
                 ))
-                .keywords([t("shell.palette.sync_saves_keywords")])
-                .icon(IconName::RefreshCw),
+                .keywords(kw("shell.palette.sync_saves_keywords"))
+                .icon(IconName::RefreshCw)
+                .kind(EntryKind::CurrentGame),
+            PaletteTarget::SyncSaves(game.id()),
         );
-        targets.push(PaletteTarget::SyncSaves(game.id()));
     }
     let update = models(cx).app_update.read(cx).status.clone();
     if let irori_services::SelfInstall::Ready { version } = &update.install {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args(
                     "shell.palette.restart_update",
                     &[("version", version)],
                 ))
-                .keywords([t("shell.palette.install_update_keywords")])
+                .keywords(kw("shell.palette.install_update_keywords"))
                 .icon(IconName::RotateCw),
+            PaletteTarget::AppUpdate { ready: true },
         );
-        targets.push(PaletteTarget::AppUpdate { ready: true });
     } else if irori_ui::app_update::can_install(&update)
         && !matches!(
             update.install,
@@ -913,213 +1002,232 @@ fn command_rows(_window: &mut Window, cx: &mut App) -> Vec<Row> {
         )
         && let Some(release) = &update.available
     {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args(
                     "shell.palette.install_update",
                     &[("version", &release.version)],
                 ))
-                .keywords([t("shell.palette.install_update_keywords")])
+                .keywords(kw("shell.palette.install_update_keywords"))
                 .icon(IconName::Download),
+            PaletteTarget::AppUpdate { ready: false },
         );
-        targets.push(PaletteTarget::AppUpdate { ready: false });
     }
     if let Some(game) = with_trailer {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args("shell.palette.trailer", &[("title", &game.title)]))
-                .keywords([t("shell.palette.trailer_keywords")])
-                .icon(IconName::Clapperboard),
+                .keywords(kw("shell.palette.trailer_keywords"))
+                .icon(IconName::Clapperboard)
+                .kind(EntryKind::CurrentGame),
+            PaletteTarget::Trailer(game.id()),
         );
-        targets.push(PaletteTarget::Trailer(game.id()));
     }
-    let deals = models(cx).settings.read(cx).app.deals;
-    items.push(
-        Entry::new()
-            .label(t(if deals {
-                "shell.palette.hide_deals"
-            } else {
-                "shell.palette.show_deals"
-            }))
-            .keywords([t("shell.palette.deals_keywords"), t("shell.nav.stores")])
-            .icon(if deals {
-                IconName::EyeOff
-            } else {
-                IconName::Eye
-            }),
-    );
-    targets.push(PaletteTarget::Deals(!deals));
     if let Some(count) = irori_library::removable_picks(cx) {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args(
                     "shell.palette.remove_picked",
                     &[("count", &count.to_string())],
                 ))
-                .keywords([t("shell.palette.remove_picked_keywords")])
-                .icon(IconName::ListX),
+                .keywords(kw("shell.palette.remove_picked_keywords"))
+                .icon(IconName::ListX)
+                .window_only(),
+            PaletteTarget::RemovePicked,
         );
-        targets.push(PaletteTarget::RemovePicked);
     }
     if let Some(count) = irori_library::picked_count(cx) {
         let count = count.to_string();
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args("shell.palette.refresh_picked", &[("count", &count)]))
-                .keywords([t("shell.palette.refresh_picked_keywords")])
-                .icon(IconName::RefreshCw),
+                .keywords(kw("shell.palette.refresh_picked_keywords"))
+                .icon(IconName::RefreshCw)
+                .window_only(),
+            PaletteTarget::RefreshPicked,
         );
-        targets.push(PaletteTarget::RefreshPicked);
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args(
                     "shell.palette.edit_picked_metadata",
                     &[("count", &count)],
                 ))
-                .keywords([t("shell.palette.edit_metadata_keywords")])
-                .icon(IconName::Tags),
+                .keywords(kw("shell.palette.edit_metadata_keywords"))
+                .icon(IconName::Tags)
+                .window_only(),
+            PaletteTarget::EditPickedMetadata,
         );
-        targets.push(PaletteTarget::EditPickedMetadata);
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args("shell.palette.link_picked", &[("count", &count)]))
-                .keywords([t("shell.palette.steam_link_keywords")])
-                .icon(IconName::Link),
+                .keywords(kw("shell.palette.steam_link_keywords"))
+                .icon(IconName::Link)
+                .window_only(),
+            PaletteTarget::LinkPickedToSteam,
         );
-        targets.push(PaletteTarget::LinkPickedToSteam);
     }
     for engine in irori_manage::openable_engines(cx) {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args(
                     "shell.palette.open_engine",
                     &[("engine", &engine.name)],
                 ))
+                .keywords(kw("shell.palette.open_engine_keywords"))
                 .keywords([
-                    t("shell.palette.open_engine_keywords"),
                     t("shell.nav.emulators"),
+                    english("shell.nav.emulators").into(),
                 ])
                 .icon(IconName::Joystick),
+            PaletteTarget::OpenEngine(engine.id, engine.name),
         );
-        targets.push(PaletteTarget::OpenEngine(engine.id, engine.name));
     }
     for launcher in irori_manage::known_launchers(cx) {
         let name = launcher.display_name();
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args("shell.palette.open_launcher", &[("launcher", name)]))
-                .keywords([t("shell.nav.stores")])
+                .keywords([t("shell.nav.stores"), english("shell.nav.stores").into()])
                 .icon(IconName::ExternalLink),
+            PaletteTarget::OpenLauncher(launcher),
         );
-        targets.push(PaletteTarget::OpenLauncher(launcher));
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t_args(
                     "shell.palette.launcher_shortcut",
                     &[("launcher", name)],
                 ))
-                .keywords([t("shell.palette.launcher_shortcut_keywords")])
-                .icon(IconName::Link),
+                .keywords(kw("shell.palette.launcher_shortcut_keywords"))
+                .icon(IconName::Link)
+                .window_only(),
+            PaletteTarget::LauncherShortcut(launcher),
         );
-        targets.push(PaletteTarget::LauncherShortcut(launcher));
     }
-    items.push(
+    push_extra(
         Entry::new()
             .label(t("shell.palette.duplicates"))
-            .keywords([t("shell.palette.duplicates_keywords")])
-            .icon(IconName::Copy),
+            .english_label(english("shell.palette.duplicates"))
+            .keywords(kw("shell.palette.duplicates_keywords"))
+            .icon(IconName::Copy)
+            .window_only(),
+        PaletteTarget::Duplicates,
     );
-    targets.push(PaletteTarget::Duplicates);
     if !cfg!(windows) {
         for launcher in irori_manage::wine_launchers(cx) {
-            items.push(
+            push_extra(
                 Entry::new()
                     .label(t_args(
                         "shell.palette.launcher_wine",
                         &[("launcher", launcher.display_name())],
                     ))
-                    .keywords([t("shell.palette.launcher_wine_keywords")])
-                    .icon(IconName::Wine),
+                    .keywords(kw("shell.palette.launcher_wine_keywords"))
+                    .icon(IconName::Wine)
+                    .window_only(),
+                PaletteTarget::LauncherWine(launcher),
             );
-            targets.push(PaletteTarget::LauncherWine(launcher));
         }
     }
     if irori_manage::steam_client_library_state(cx).is_some_and(|s| s.steam_found && !s.signed_in) {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t("shell.palette.steam_client_library"))
-                .keywords([t("shell.palette.steam_client_library_keywords")])
+                .english_label(english("shell.palette.steam_client_library"))
+                .keywords(kw("shell.palette.steam_client_library_keywords"))
                 .icon(IconName::LibraryBig),
+            PaletteTarget::SteamClientLibrary,
         );
-        targets.push(PaletteTarget::SteamClientLibrary);
     }
     if irori_library::offers_launchbox(cx) {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t("shell.palette.launchbox"))
-                .keywords([t("shell.palette.launchbox_keywords")])
+                .english_label(english("shell.palette.launchbox"))
+                .keywords(kw("shell.palette.launchbox_keywords"))
                 .icon(IconName::ArrowDown),
+            PaletteTarget::LaunchBox,
         );
-        targets.push(PaletteTarget::LaunchBox);
     }
     if irori_manage::xbox_offline_available(cx) {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t("shell.palette.xbox_offline_play"))
-                .keywords([t("shell.palette.xbox_offline_play_keywords")])
+                .english_label(english("shell.palette.xbox_offline_play"))
+                .keywords(kw("shell.palette.xbox_offline_play_keywords"))
                 .icon(IconName::HardDrive),
+            PaletteTarget::XboxOfflinePlay,
         );
-        targets.push(PaletteTarget::XboxOfflinePlay);
     }
     {
         let offline = irori_ui::models::working_offline(cx);
-        items.push(
+        let key = if offline {
+            "shell.palette.work_online"
+        } else {
+            "shell.palette.work_offline"
+        };
+        push_extra(
             Entry::new()
-                .label(t(if offline {
-                    "shell.palette.work_online"
-                } else {
-                    "shell.palette.work_offline"
-                }))
-                .keywords([t("shell.palette.work_offline_keywords")])
+                .label(t(key))
+                .english_label(english(key))
+                .keywords(kw("shell.palette.work_offline_keywords"))
                 .icon(if offline {
                     IconName::Wifi
                 } else {
                     IconName::WifiOff
-                }),
+                })
+                .show_when_empty(true),
+            PaletteTarget::WorkOffline(!offline),
         );
-        targets.push(PaletteTarget::WorkOffline(!offline));
     }
     for (label, icon, command) in irori_manage::download_commands(cx) {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(label)
                 .keywords([irori_manage::download_command_keywords()])
                 .icon(icon),
+            PaletteTarget::Downloads(command),
         );
-        targets.push(PaletteTarget::Downloads(command));
     }
     if let Some(latest) = irori_core::crash::list_reports(&irori_core::Paths::get().logs_dir())
         .into_iter()
         .next()
     {
-        items.push(
+        push_extra(
             Entry::new()
                 .label(t("shell.palette.latest_crash_report"))
-                .keywords([t("shell.palette.latest_crash_report_keywords")])
-                .icon(IconName::TriangleAlert),
+                .english_label(english("shell.palette.latest_crash_report"))
+                .keywords(kw("shell.palette.latest_crash_report_keywords"))
+                .icon(IconName::TriangleAlert)
+                .window_only(),
+            PaletteTarget::LatestCrashReport(latest.path),
         );
-        targets.push(PaletteTarget::LatestCrashReport(latest.path));
     }
-    items
+    let mut rows: Vec<Row> = items
         .into_iter()
         .zip(targets)
         .map(|(entry, target)| Row::command(entry, target))
-        .collect()
+        .collect();
+    rows.extend(settings::rows(cx));
+    rows
 }
 
 pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut App) {
     match target {
         PaletteTarget::Open(id) => irori_ui::navigate(Route::Game(id), cx),
+        PaletteTarget::OpenGameSettings(id) => {
+            irori_ui::navigate(Route::GameSettings(id, "".into()), cx)
+        }
+        PaletteTarget::OpenSetting(path) => {
+            irori_ui::navigate(Route::Settings(format!("field:{path}").into()), cx)
+        }
+        PaletteTarget::ToggleSidebar => window.defer(cx, |window, cx| {
+            window.dispatch_action(Box::new(crate::actions::ToggleSidebar), cx);
+        }),
+        PaletteTarget::ToggleFullscreen => window.toggle_fullscreen(),
+        PaletteTarget::AddGame => window.defer(cx, irori_library::open_add_game_dialog),
+        PaletteTarget::ManageCategories => window.defer(cx, |window, cx| {
+            irori_library::open_categories_dialog(None, window, cx)
+        }),
+        PaletteTarget::ManageViews => window.defer(cx, irori_library::open_manage_views_dialog),
         PaletteTarget::Route(r) => irori_ui::navigate(r, cx),
         PaletteTarget::Refresh => irori_ui::models::refresh_library(false, cx),
         PaletteTarget::Random => irori_library::open_random_game(window, cx),
@@ -1135,7 +1243,6 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
         }
         PaletteTarget::Duplicates => irori_library::open_duplicates_dialog(window, cx),
         PaletteTarget::GettingStarted => irori_manage::open_getting_started(window, cx),
-        PaletteTarget::Deals(shown) => irori_manage::set_deals_shown(shown, window, cx),
         PaletteTarget::Tour => irori_ui::tour::start(window, cx),
         PaletteTarget::ExportCategories => irori_library::export_categories(window, cx),
         PaletteTarget::ImportCategories => irori_library::import_categories(window, cx),
@@ -1249,10 +1356,6 @@ pub(crate) fn run_target(target: PaletteTarget, window: &mut Window, cx: &mut Ap
             irori_library::set_favourites_only(on, cx);
             irori_ui::navigate(Route::Library, cx);
         }
-        PaletteTarget::QuickControls(on) => {
-            irori_library::set_quick_controls(on, cx);
-            irori_ui::navigate(Route::Library, cx);
-        }
         PaletteTarget::LockHidden => irori_ui::hidden_lock::lock(cx),
         PaletteTarget::HiddenPin => irori_ui::hidden_lock::open_pin_dialog(window, cx),
         PaletteTarget::GroupByMode(on) => {
@@ -1333,7 +1436,9 @@ fn report(
 mod entry;
 mod game;
 mod preview;
+mod score;
 mod search;
+mod settings;
 #[cfg(test)]
 mod tests;
 mod view;

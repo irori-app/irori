@@ -103,7 +103,8 @@ impl SideloadStore {
         )
     }
 
-    fn with_config_dir(bus: EventBus, settings: SettingsFn, config_dir: PathBuf) -> Arc<Self> {
+    /// Construct a sideload store backed by a specific config directory.
+    pub fn with_config_dir(bus: EventBus, settings: SettingsFn, config_dir: PathBuf) -> Arc<Self> {
         Arc::new_cyclic(|me| Self {
             bus,
             settings,

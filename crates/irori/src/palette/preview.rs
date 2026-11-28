@@ -36,8 +36,12 @@ fn shortcut(target: &PaletteTarget) -> Option<Box<dyn Action>> {
         PaletteTarget::Route(Route::WineManager) => Box::new(actions::GoWine),
         PaletteTarget::Route(Route::Emulators) => Box::new(actions::GoEmulators),
         PaletteTarget::Route(Route::Accounts) => Box::new(actions::GoAccounts),
-        PaletteTarget::Route(Route::Settings(_)) => Box::new(actions::GoSettings),
+        PaletteTarget::Route(Route::Settings(sec)) if sec.as_ref() == "general" => {
+            Box::new(actions::GoSettings)
+        }
         PaletteTarget::Route(Route::BigPicture) => Box::new(actions::EnterBigPicture),
+        PaletteTarget::ToggleSidebar => Box::new(actions::ToggleSidebar),
+        PaletteTarget::ToggleFullscreen => Box::new(actions::ToggleFullscreen),
         PaletteTarget::Refresh => Box::new(actions::RefreshLibrary),
         PaletteTarget::Random => Box::new(actions::PickRandomGame),
         PaletteTarget::InterfaceSize(SizeStep::Larger) => Box::new(actions::ZoomIn),
@@ -48,8 +52,9 @@ fn shortcut(target: &PaletteTarget) -> Option<Box<dyn Action>> {
 }
 
 /// What the keys do on a game row.
-fn game_hint(host: Host) -> SharedString {
+fn game_hint(host: Host, installed: bool) -> SharedString {
     match host {
+        Host::Dialog if installed => t("shell.palette.preview_enter_open_installed"),
         Host::Dialog => t("shell.palette.preview_enter_open"),
         Host::Window => t("shell.palette.preview_enter_play"),
     }
@@ -159,7 +164,7 @@ impl PreviewPane {
                         .pt_2()
                         .text_xs()
                         .text_color(muted)
-                        .child(game_hint(self.host)),
+                        .child(game_hint(self.host, game.is_installed)),
                 )
                 .child(
                     Button::new("palette-game-actions")
@@ -177,12 +182,40 @@ impl PreviewPane {
         let muted = cx.theme().muted_foreground;
         let key =
             shortcut(&row.target).and_then(|a| Kbd::binding_for_action(a.as_ref(), None, window));
+        let current_value = row
+            .setting_path
+            .and_then(|path| irori_settings::search_catalog::current_value_preview(path, cx));
+        let run_hint = if row.setting_path.is_some() {
+            t("shell.palette.preview_open_setting")
+        } else {
+            t("shell.palette.preview_run")
+        };
         v_flex()
             .gap_2()
             .when_some(row.entry.icon, |pane, icon| {
                 pane.child(Icon::new(icon).large().text_color(muted))
             })
             .child(div().font_semibold().child(row.entry.label.clone()))
+            .when_some(row.detail.clone(), |pane, breadcrumb| {
+                pane.child(div().text_xs().text_color(muted).child(breadcrumb))
+            })
+            .when_some(row.help.clone(), |pane, help| {
+                pane.child(div().text_xs().text_color(muted).child(help))
+            })
+            .when_some(current_value, |pane, value| {
+                pane.child(
+                    div()
+                        .flex()
+                        .gap_1()
+                        .items_center()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(t_args(
+                            "shell.palette.preview_current_value",
+                            &[("value", value.as_ref())],
+                        )),
+                )
+            })
             .when_some(key, |pane, key| {
                 pane.child(
                     div()
@@ -195,13 +228,7 @@ impl PreviewPane {
                         .child(key),
                 )
             })
-            .child(
-                div()
-                    .pt_2()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(t("shell.palette.preview_run")),
-            )
+            .child(div().pt_2().text_xs().text_color(muted).child(run_hint))
             .into_any_element()
     }
 }

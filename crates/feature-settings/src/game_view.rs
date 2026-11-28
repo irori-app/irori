@@ -28,13 +28,13 @@ use irori_ui::{Route, backend, models};
 
 use crate::form::{FormTarget, SettingsForm, info_alert};
 use crate::graphics_mods::GraphicsModsChanged;
-use crate::i18n::LanguageStamp;
+use crate::i18n::{LanguageStamp, english};
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
 use crate::renodx::RenodxPanel;
 use crate::reshade::ReshadePanel;
 use crate::steam_compat::SteamCompatPanel;
-use crate::widgets::{RowState, field_row, muted, nav_button};
+use crate::widgets::{RowState, field_row, group_heading, muted, nav_button};
 use crate::winetricks::WinetricksPanel;
 
 /// Sections of a game's settings page.
@@ -96,9 +96,8 @@ impl GameSection {
         })
     }
 
-    /// Name of the section in the interface language.
-    pub fn label(self) -> SharedString {
-        t(match self {
+    fn label_key(self) -> &'static str {
+        match self {
             GameSection::Changed => "settings.game.section.changed",
             GameSection::Wine => "settings.game.section.wine",
             GameSection::Performance => "settings.game.section.performance",
@@ -108,7 +107,24 @@ impl GameSection {
             GameSection::CloudSaves => "settings.game.section.saves",
             GameSection::Tools => "settings.game.section.tools",
             GameSection::Log => "settings.game.section.log",
-        })
+        }
+    }
+
+    /// Name of the section in the interface language.
+    pub fn label(self) -> SharedString {
+        t(self.label_key())
+    }
+
+    fn search_keywords(self, steam_compat: bool) -> &'static str {
+        match self {
+            GameSection::Changed => "changed overrides modified custom reset default",
+            GameSection::Wine if steam_compat => "steam play proton compatibility tool runtime",
+            GameSection::Tools => {
+                "tools prefix winecfg winetricks run exe kill dxvk vkd3d reshade renodx hdr"
+            }
+            GameSection::Log => "log logs output launcher debug crash",
+            _ => "",
+        }
     }
 
     fn icon(self) -> IconName {
@@ -433,6 +449,43 @@ impl GameSettingsView {
         } else {
             section.label()
         }
+    }
+
+    fn english_label_of(&self, section: GameSection) -> &'static str {
+        if section == GameSection::Wine && self.steam_compat.is_some() {
+            english("settings.steam_compat.heading")
+        } else {
+            english(section.label_key())
+        }
+    }
+
+    fn matching_pages(&self, cx: &Context<Self>) -> Vec<GameSection> {
+        let q = irori_services::search::fold(&self.query);
+        if q.is_empty() {
+            return Vec::new();
+        }
+        let steam_compat = self.steam_compat.is_some();
+        self.sections(cx)
+            .into_iter()
+            .filter(|&s| {
+                let keywords = s.search_keywords(steam_compat);
+                if keywords.is_empty() {
+                    return false;
+                }
+                let hay = irori_services::search::fold(&format!(
+                    "{} {} {}",
+                    self.label_of(s),
+                    self.english_label_of(s),
+                    keywords
+                ));
+                q.split(' ').all(|tok| hay.contains(tok))
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn search_input(&self) -> Entity<InputState> {
+        self.search.clone()
     }
 
     fn default_section(&self, cx: &Context<Self>) -> GameSection {
@@ -909,23 +962,52 @@ impl Render for GameSettingsView {
             let performance_tabs = (!searching && self.section == GameSection::Performance)
                 .then(|| self.render_performance_tabs(cx))
                 .flatten();
-            let body: AnyElement = if let Some(panel) = steam_compat {
-                panel.into_any_element()
-            } else if !searching && self.section == GameSection::Tools {
-                self.render_tools(cx)
-            } else if !searching && self.section == GameSection::Changed && overridden == 0 {
-                EmptyState::new(IconName::CircleCheck, t("settings.game.changed.none_title"))
-                    .description(t("settings.game.changed.none"))
-                    .into_any_element()
-            } else if searching && self.form.read(cx).visible_count() == 0 {
-                EmptyState::new(
-                    IconName::Search,
-                    t_args("settings.common.no_match", &[("query", self.query.trim())]),
-                )
-                .into_any_element()
+            let pages = if searching {
+                self.matching_pages(cx)
             } else {
-                self.form.clone().into_any_element()
+                Vec::new()
             };
+            let body: AnyElement =
+                if let Some(panel) = steam_compat {
+                    panel.into_any_element()
+                } else if !searching && self.section == GameSection::Tools {
+                    self.render_tools(cx)
+                } else if !searching && self.section == GameSection::Changed && overridden == 0 {
+                    EmptyState::new(IconName::CircleCheck, t("settings.game.changed.none_title"))
+                        .description(t("settings.game.changed.none"))
+                        .into_any_element()
+                } else if searching && pages.is_empty() && self.form.read(cx).visible_count() == 0 {
+                    EmptyState::new(
+                        IconName::Search,
+                        t_args("settings.common.no_match", &[("query", self.query.trim())]),
+                    )
+                    .into_any_element()
+                } else if searching && !pages.is_empty() {
+                    v_flex()
+                        .w_full()
+                        .child(group_heading(t("settings.search.pages"), cx))
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .flex_wrap()
+                                .children(pages.into_iter().map(|s| {
+                                    Button::new(ElementId::Name(
+                                        format!("search-game-page-{}", s.id()).into(),
+                                    ))
+                                    .debug_selector(move || format!("search-game-page-{}", s.id()))
+                                    .outline()
+                                    .icon(s.icon())
+                                    .label(self.label_of(s))
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| this.open(s, window, cx),
+                                    ))
+                                })),
+                        )
+                        .child(self.form.clone())
+                        .into_any_element()
+                } else {
+                    self.form.clone().into_any_element()
+                };
             v_flex()
                 .flex_1()
                 .min_w_0()

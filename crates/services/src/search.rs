@@ -38,9 +38,10 @@ pub enum MatchTier {
     Exact,
 }
 
-/// One searchable text, folded.
+/// One searchable text, folded (lower case, accents dropped, Roman numerals
+/// also read as digits, and title initials computed).
 #[derive(Debug, Clone, Default)]
-struct Field {
+pub struct FoldedField {
     /// Folded text, words separated by one space.
     text: String,
     /// The text without a leading English article.
@@ -53,8 +54,9 @@ struct Field {
     initials: String,
 }
 
-impl Field {
-    fn new(raw: &str) -> Option<Self> {
+impl FoldedField {
+    /// Fold `raw`; `None` when nothing searchable is left.
+    pub fn new(raw: &str) -> Option<Self> {
         let text = fold(raw);
         if text.is_empty() {
             return None;
@@ -99,8 +101,13 @@ impl Field {
         })
     }
 
+    /// The folded text.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
     /// The best tier `query` reaches here, with the typos it took.
-    fn matches(&self, query: &Query) -> Option<(MatchTier, u32)> {
+    pub fn matches(&self, query: &Query) -> Option<(MatchTier, u32)> {
         if self.text == query.text || self.bare == query.text || self.digits == query.digits {
             return Some((MatchTier::Exact, 0));
         }
@@ -138,16 +145,26 @@ impl Field {
         }
         Some((MatchTier::Fuzzy, typos))
     }
+
+    /// Whether every folded word of `query` occurs anywhere in this field
+    /// (catches mid-word matches like "hud" in "mangohud" or "sync" in "fsync").
+    pub fn contains_all_words(&self, query: &Query) -> bool {
+        !query.words.is_empty()
+            && query
+                .words
+                .iter()
+                .all(|q| self.text.contains(q.as_str()) || self.digits.contains(q.as_str()))
+    }
 }
 
 /// One game's folded fields.
 #[derive(Debug, Clone, Default)]
 struct Entry {
-    title: Option<Field>,
+    title: Option<FoldedField>,
     /// The original title, alternative titles and folder name.
-    alt: Vec<Field>,
+    alt: Vec<FoldedField>,
     /// Developer and publisher.
-    people: Vec<Field>,
+    people: Vec<FoldedField>,
 }
 
 /// A folded query, ready to score many games.
@@ -181,6 +198,16 @@ impl Query {
             digits,
             words,
         })
+    }
+
+    /// The folded query string.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Individual folded words of the query.
+    pub fn words(&self) -> &[String] {
+        &self.words
     }
 }
 
@@ -376,18 +403,21 @@ impl SearchIndex {
         let entries = games
             .iter()
             .map(|g| {
-                let mut alt: Vec<Field> =
-                    g.alt_titles.iter().filter_map(|t| Field::new(t)).collect();
+                let mut alt: Vec<FoldedField> = g
+                    .alt_titles
+                    .iter()
+                    .filter_map(|t| FoldedField::new(t))
+                    .collect();
                 if let Some(folder) = &g.folder_name {
-                    alt.extend(Field::new(&split_camel(folder)));
+                    alt.extend(FoldedField::new(&split_camel(folder)));
                 }
                 Entry {
-                    title: Field::new(&g.title),
+                    title: FoldedField::new(&g.title),
                     alt,
                     people: [&g.developer, &g.publisher]
                         .into_iter()
                         .flatten()
-                        .filter_map(|p| Field::new(p))
+                        .filter_map(|p| FoldedField::new(p))
                         .collect(),
                 }
             })
@@ -845,5 +875,26 @@ mod tests {
         // milliseconds.
         assert!(elapsed.as_millis() < 1500, "search took {elapsed:?}");
         assert!(build_time.as_millis() < 3000, "index took {build_time:?}");
+    }
+
+    #[test]
+    fn folded_field_matches_accents_words_typos_and_substrings() {
+        let field = FoldedField::new("Aparência e acessibilidade").unwrap();
+        assert_eq!(
+            field.matches(&Query::new("aparencia").unwrap()),
+            Some((MatchTier::Prefix, 0))
+        );
+        assert_eq!(
+            field.matches(&Query::new("acessibilidade aparencia").unwrap()),
+            Some((MatchTier::Word, 0))
+        );
+        assert!(matches!(
+            field.matches(&Query::new("aparencai").unwrap()),
+            Some((MatchTier::Fuzzy, 1))
+        ));
+
+        let hud = FoldedField::new("MangoHud").unwrap();
+        assert_eq!(hud.matches(&Query::new("hud").unwrap()), None);
+        assert!(hud.contains_all_words(&Query::new("hud").unwrap()));
     }
 }

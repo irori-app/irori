@@ -1187,12 +1187,21 @@ pub(crate) mod title_bar_tests {
 
     /// A real backend over a shelf with one manually added (browser) app.
     pub(crate) fn start(cx: &mut TestAppContext) -> (Backend, Arc<SideloadStore>) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static NEXT_STORE: AtomicUsize = AtomicUsize::new(0);
         isolate_paths();
         cx.executor().allow_parking();
+        let store_dir = Paths::get()
+            .store_config_dir(irori_core::Runner::Sideload)
+            .join(format!(
+                "test-{}",
+                NEXT_STORE.fetch_add(1, Ordering::Relaxed)
+            ));
         let made: Arc<Mutex<Option<Arc<SideloadStore>>>> = Arc::default();
         let slot = made.clone();
         let backend = Backend::start_for_tests(move |bus, settings| {
-            let store = SideloadStore::new(bus, settings);
+            let store = SideloadStore::with_config_dir(bus, settings, store_dir);
             *slot.lock().expect("the store slot") = Some(store.clone());
             vec![store]
         })
@@ -1207,20 +1216,22 @@ pub(crate) mod title_bar_tests {
             irori_ui::init(backend.clone(), cx);
             // main.rs does this; without it the shell's keys render as keys.
             irori_ui::i18n::register(crate::strings::CATALOGS);
+            irori_settings::init(cx);
         });
         (backend, store)
     }
 
-    /// Add the game whose title the pill shows, and wait for the library model.
-    pub(crate) fn add_game(
+    /// Add a browser sideload game with `title` and wait for the library model.
+    pub(crate) fn add_titled_game(
         cx: &mut TestAppContext,
         backend: &Backend,
         store: &SideloadStore,
+        title: &str,
     ) -> GameId {
         let id = backend
             .runtime()
             .block_on(store.add_app(SideloadApp {
-                title: GAME_TITLE.into(),
+                title: title.into(),
                 platform: SideloadPlatform::Browser,
                 browser_url: Some("https://example.test/a-long-game".into()),
                 ..Default::default()
@@ -1238,6 +1249,15 @@ pub(crate) mod title_bar_tests {
             );
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    /// Add the game whose title the pill shows, and wait for the library model.
+    pub(crate) fn add_game(
+        cx: &mut TestAppContext,
+        backend: &Backend,
+        store: &SideloadStore,
+    ) -> GameId {
+        add_titled_game(cx, backend, store, GAME_TITLE)
     }
 
     /// Wait until the status model shows (or stops showing) `id` as playing.
