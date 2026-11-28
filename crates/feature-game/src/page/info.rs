@@ -21,8 +21,8 @@ use irori_core::{GameId, GameInfo};
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use super::rich_text::rich_text;
 use super::{GamePage, InfoTab};
+use irori_ui::rich_text::rich_text;
 
 use crate::dlc;
 use crate::i18n::status_label;
@@ -121,7 +121,7 @@ pub(super) fn changelog_excerpt(text: &str, budget: usize) -> (&str, bool) {
 }
 
 impl GamePage {
-    fn tabs(&self) -> Vec<(InfoTab, SharedString)> {
+    fn tabs(&self, cx: &App) -> Vec<(InfoTab, SharedString)> {
         let mut tabs = vec![(InfoTab::About, t("game.info.tab_about"))];
         if let Some(list) = self.achievements.ready().filter(|a| !a.is_empty()) {
             let unlocked = list.iter().filter(|a| a.is_unlocked()).count();
@@ -143,6 +143,9 @@ impl GamePage {
         if extra.is_some_and(|e| !e.requirements.is_empty()) {
             tabs.push((InfoTab::Requirements, t("game.info.tab_requirements")));
         }
+        if self.has_news_tab(cx) {
+            tabs.push((InfoTab::News, t("game.info.tab_news")));
+        }
         if extra.is_some_and(|e| e.changelog.as_ref().is_some_and(|c| !c.trim().is_empty())) {
             tabs.push((InfoTab::Changelog, t("game.info.tab_changelog")));
         }
@@ -162,7 +165,7 @@ impl GamePage {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let tabs = self.tabs();
+        let tabs = self.tabs(cx);
         if !tabs.iter().any(|(t, _)| *t == self.tab) {
             self.tab = InfoTab::About;
         }
@@ -177,6 +180,8 @@ impl GamePage {
                     this.tab = *t;
                     if *t == InfoTab::Extras {
                         this.load_extras(window, cx);
+                    } else if *t == InfoTab::News {
+                        this.load_news(false, window, cx);
                     }
                     cx.notify();
                 }
@@ -188,6 +193,7 @@ impl GamePage {
                 .render_compat(cx)
                 .unwrap_or_else(|| div().into_any_element()),
             InfoTab::Requirements => self.render_requirements(cx),
+            InfoTab::News => self.render_news(game, window, cx),
             InfoTab::Changelog => self.render_changelog(cx),
             InfoTab::Extras => self.render_extras(game, window, cx),
             InfoTab::Mods => self.render_mods(game, window, cx),

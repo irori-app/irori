@@ -22,11 +22,11 @@ mod info;
 mod journal;
 mod left_off;
 mod menu;
+mod news;
 mod overlay;
 mod pc_check;
 mod reception;
 mod related;
-mod rich_text;
 mod sandbox;
 mod screenshots;
 mod timeline;
@@ -125,6 +125,7 @@ pub enum InfoTab {
     Achievements,
     Compatibility,
     Requirements,
+    News,
     Changelog,
     Extras,
     Mods,
@@ -142,6 +143,10 @@ pub struct GamePage {
     achievements: Load<Arc<Vec<Achievement>>>,
     /// Offline installers and goodies, fetched when the Extras tab opens.
     extras: Load<Arc<Vec<irori_core::ExtraFile>>>,
+    /// Official Steam announcements, fetched lazily when the News tab opens.
+    news: Load<Option<irori_services::GameNewsResult>>,
+    news_filter: Option<irori_services::NewsKind>,
+    news_expanded: HashSet<String>,
     achievement_filter: AchievementFilter,
     achievement_sort: achievements::AchievementSort,
     /// The achievements list's search.
@@ -325,6 +330,9 @@ impl GamePage {
             extra: Load::Idle,
             achievements: Load::Idle,
             extras: Load::Idle,
+            news: Load::Idle,
+            news_filter: None,
+            news_expanded: HashSet::new(),
             achievement_filter: AchievementFilter::All,
             achievement_sort: achievements::AchievementSort::default(),
             achievement_query,
@@ -637,6 +645,11 @@ impl GamePage {
                 self.load_extra(window, cx);
                 self.reload_compat(window, cx);
                 self.load_reception(window, cx);
+                self.news = Load::Idle;
+                self.news_expanded.clear();
+                if self.tab == InfoTab::News {
+                    self.load_news(false, window, cx);
+                }
             }
         }
         let installed = self.game.as_ref().is_some_and(|g| g.is_installed);
