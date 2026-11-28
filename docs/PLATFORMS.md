@@ -997,7 +997,7 @@ Cleanups delete only what the rebuilt report offers at that moment, each item th
 | Download leftovers | `.irori-part` files in installed games with no download queued, folders in the games folder holding only an unfinished install (none while any download is queued), launcher installers in the Launchers cache | Folders without partial files, anything outside the games folder |
 | Unused Wine prefixes | Prefixes (`system.reg`, or `pfx/system.reg` for Proton) in the prefix folder that no installed game, no launcher setup and the defaults' prefix use | Custom prefixes elsewhere, the prefix folder itself; none is chosen until the user ticks it |
 | Old Wine and Proton builds | Builds Irori downloaded that no installed game, the defaults or a launcher uses, removed through the Wine manager's own removal; the newest of each kind stays | System Wine, Steam's Proton, Lutris and Bottles builds, CrossOver |
-| Art thumbnails | `<cache>/images/thumbs` | Downloaded originals |
+| Artwork and store caches | `<cache>/images/thumbs` (resized thumbnails), `<cache>/images/orig` (downloaded covers, backdrops, and logos), and `<cache>/stores` (store catalogs, sparing `launchers/installers`); clearing originals or store catalogs refreshes library metadata | Installed games, connected accounts, saves, settings, and launcher installers |
 | Logs | Everything under the logs folder except the current `irori.log` | On Windows a log a running game holds open is skipped and goes next time |
 
 ### Displays

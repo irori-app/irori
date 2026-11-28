@@ -179,7 +179,8 @@ pub enum CleanupKind {
     /// Shader caches DXVK and VKD3D-Proton write beside games, and the GPU
     /// driver's own (Linux), compiled again as games play.
     ShaderCaches,
-    /// Cover and backdrop thumbnails, made again when shown.
+    /// Cached covers, backdrops, thumbnails, and store catalogs, downloaded
+    /// again when needed.
     ArtCache,
     /// Game, install and older Irori logs.
     Logs,
@@ -221,6 +222,12 @@ pub enum ItemNote {
     ShadersOf(String),
     /// The GPU driver's shader cache, shared by every program.
     DriverShaders,
+    /// Resized cover and backdrop thumbnails (`<cache>/images/thumbs`).
+    ArtThumbnails,
+    /// Downloaded full covers, backdrops and logos (`<cache>/images/orig`).
+    ArtOriginals,
+    /// Cached store catalogs and storefront metadata (`<cache>/stores`).
+    StoreCatalogs,
 }
 
 /// One thing a cleanup deletes.
@@ -241,6 +248,13 @@ impl CleanupItem {
             CleanupKind::SteamLeftovers => matches!(self.note, ItemNote::SteamPrefix(..)),
             _ => false,
         }
+    }
+
+    /// Whether clearing this item should reload the library metadata from
+    /// online store sources once removal completes.
+    pub fn reloads_library(&self, kind: CleanupKind) -> bool {
+        kind == CleanupKind::ArtCache
+            && matches!(self.note, ItemNote::ArtOriginals | ItemNote::StoreCatalogs)
     }
 
     /// The folder or file name.
@@ -755,38 +769,56 @@ impl Backend {
     /// [`CleanupItem::goes_to_trash`]), saying how much went where. The
     /// report is rebuilt first, so only what is still safe to delete goes.
     pub async fn clean_up(&self, kind: CleanupKind, chosen: Vec<PathBuf>) -> Result<CleanedUp> {
+        self.clean_up_many(vec![(kind, chosen)]).await
+    }
+
+    /// Delete items across several cleanup categories in a single pass,
+    /// rebuilding the report first so only currently offered items go.
+    pub async fn clean_up_many(
+        &self,
+        batch: Vec<(CleanupKind, Vec<PathBuf>)>,
+    ) -> Result<CleanedUp> {
         let plan = self.storage_plan();
         let file = Paths::get().cache.join("storage.json");
-        let done = tokio::task::spawn_blocking(move || -> Result<CleanedUp> {
-            let mut measurer = Measurer::open(file, false);
-            let report = build(&plan, &mut measurer, read_drives());
-            let items = select(&report, kind, &chosen);
-            let mut done = CleanedUp::default();
-            let mut failed = Vec::new();
-            for item in &items {
-                match delete(kind, item, &plan.app) {
-                    Ok(Disposal::Deleted) => done.freed += item.bytes,
-                    Ok(Disposal::Trashed) => done.trashed += item.bytes,
-                    Err(e) => failed.push(format!("{e:#}")),
+        let (done, touched_wine_builds) =
+            tokio::task::spawn_blocking(move || -> Result<(CleanedUp, bool)> {
+                let mut measurer = Measurer::open(file, false);
+                let report = build(&plan, &mut measurer, read_drives());
+                let mut done = CleanedUp::default();
+                let mut failed = Vec::new();
+                let mut touched_wine = false;
+                for (kind, chosen) in &batch {
+                    let items = select(&report, *kind, chosen);
+                    for item in &items {
+                        match delete(*kind, item, &plan.app) {
+                            Ok(Disposal::Deleted) => {
+                                done.freed += item.bytes;
+                                if *kind == CleanupKind::UnusedWineBuilds {
+                                    touched_wine = true;
+                                }
+                            }
+                            Ok(Disposal::Trashed) => done.trashed += item.bytes,
+                            Err(e) => failed.push(format!("{e:#}")),
+                        }
+                        measurer.forget(&item.path);
+                        if let Some(parent) = item.path.parent() {
+                            measurer.forget(parent);
+                        }
+                    }
                 }
-                measurer.forget(&item.path);
-                if let Some(parent) = item.path.parent() {
-                    measurer.forget(parent);
+                measurer.save();
+                match failed.first() {
+                    Some(first) if done.freed + done.trashed == 0 => anyhow::bail!("{first}"),
+                    Some(first) => {
+                        tracing::warn!("{} items could not be deleted: {first}", failed.len());
+                        Ok((done, touched_wine))
+                    }
+                    None => Ok((done, touched_wine)),
                 }
-            }
-            measurer.save();
-            match failed.first() {
-                Some(first) if done.freed + done.trashed == 0 => anyhow::bail!("{first}"),
-                Some(first) => {
-                    tracing::warn!("{} items could not be deleted: {first}", failed.len());
-                    Ok(done)
-                }
-                None => Ok(done),
-            }
-        })
-        .await
-        .context("cleaning up")??;
-        if kind == CleanupKind::UnusedWineBuilds {
+            })
+            .await
+            .context("cleaning up")??;
+        if touched_wine_builds {
             self.bus.emit(Event::WineVersionsChanged);
         }
         Ok(done)
@@ -847,12 +879,63 @@ fn delete(kind: CleanupKind, item: &CleanupItem, app: &AppSettings) -> Result<Di
             }
             Ok(())
         }
+        CleanupKind::ArtCache if item.note == ItemNote::StoreCatalogs => {
+            let installers = Paths::get()
+                .store_cache_dir(Runner::Launchers)
+                .join("installers");
+            remove_dir_except(path, &installers)
+        }
+        CleanupKind::ArtCache
+            if matches!(item.note, ItemNote::ArtThumbnails | ItemNote::ArtOriginals) =>
+        {
+            let res = if path.is_dir() {
+                std::fs::remove_dir_all(path)
+            } else {
+                Ok(())
+            };
+            // Remove the now-empty `<cache>/images` folder once both `thumbs`
+            // and `orig` are cleared, matching the former `Clear caches` action.
+            if res.is_ok()
+                && let Some(parent) = path.parent()
+                && parent == Paths::get().images_dir()
+            {
+                let _ = std::fs::remove_dir(parent);
+            }
+            res
+        }
         _ if path.is_dir() => std::fs::remove_dir_all(path),
         _ => std::fs::remove_file(path),
     };
     removed
         .map(|()| Disposal::Deleted)
         .with_context(|| format!("deleting {}", path.display()))
+}
+
+/// Remove `dir` recursively while sparing `keep` (if it exists inside `dir`),
+/// so clearing store catalogs never clashes with `DownloadLeftovers` owning
+/// `stores/launchers/installers`.
+fn remove_dir_except(dir: &Path, keep: &Path) -> std::io::Result<()> {
+    if !dir.exists() {
+        return Ok(());
+    }
+    if !keep.exists() || !keep.starts_with(dir) {
+        return std::fs::remove_dir_all(dir);
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let p = entry.path();
+        if p == keep {
+            continue;
+        }
+        if keep.starts_with(&p) {
+            remove_dir_except(&p, keep)?;
+        } else if p.is_dir() {
+            std::fs::remove_dir_all(&p)?;
+        } else {
+            std::fs::remove_file(&p)?;
+        }
+    }
+    Ok(())
 }
 
 /// A path from the settings as it is on disk (`~` expanded, links followed).
@@ -1135,13 +1218,18 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
     shaders.sort_by_key(|item| std::cmp::Reverse(item.bytes));
 
     let installers = paths.store_cache_dir(Runner::Launchers).join("installers");
-    if let Some(size) = measurer.measure(&installers).filter(|s| s.bytes > 0) {
-        leftovers.push(CleanupItem {
-            path: installers,
-            bytes: size.bytes,
-            note: ItemNote::LauncherInstallers,
-        });
-    }
+    let installers_bytes = measurer
+        .measure(&installers)
+        .filter(|s| s.bytes > 0)
+        .map(|s| {
+            leftovers.push(CleanupItem {
+                path: installers.clone(),
+                bytes: s.bytes,
+                note: ItemNote::LauncherInstallers,
+            });
+            s.bytes
+        })
+        .unwrap_or(0);
 
     // Emulators, then Irori's own caches and logs.
     let engines = paths.data.join("engines");
@@ -1163,17 +1251,35 @@ fn build(plan: &Plan, measurer: &mut Measurer, drives: Vec<Drive>) -> StorageRep
             });
         }
     }
+    let mut art: Vec<CleanupItem> = Vec::new();
     let thumbs = paths.images_dir().join("thumbs");
-    let art: Vec<CleanupItem> = measurer
-        .measure(&thumbs)
-        .filter(|s| s.bytes > 0)
-        .map(|s| CleanupItem {
+    if let Some(s) = measurer.measure(&thumbs).filter(|s| s.bytes > 0) {
+        art.push(CleanupItem {
             path: thumbs,
             bytes: s.bytes,
-            note: ItemNote::None,
-        })
-        .into_iter()
-        .collect();
+            note: ItemNote::ArtThumbnails,
+        });
+    }
+    let orig = paths.images_dir().join("orig");
+    if let Some(s) = measurer.measure(&orig).filter(|s| s.bytes > 0) {
+        art.push(CleanupItem {
+            path: orig,
+            bytes: s.bytes,
+            note: ItemNote::ArtOriginals,
+        });
+    }
+    let stores_cache = paths.cache.join("stores");
+    if let Some(s) = measurer.measure(&stores_cache) {
+        let catalog_bytes = s.bytes.saturating_sub(installers_bytes);
+        if catalog_bytes > 0 {
+            art.push(CleanupItem {
+                path: stores_cache,
+                bytes: catalog_bytes,
+                note: ItemNote::StoreCatalogs,
+            });
+        }
+    }
+    art.sort_by_key(|item| std::cmp::Reverse(item.bytes));
     let logs: Vec<CleanupItem> = log_files(&paths.logs_dir(), &paths.launcher_log_file())
         .filter(|(count, _)| *count > 0)
         .map(|(count, bytes)| CleanupItem {
@@ -1496,9 +1602,37 @@ mod tests {
         );
         assert!(!item(ItemNote::DriverShaders).goes_to_trash(CleanupKind::ShaderCaches));
         assert!(!item(ItemNote::LogFiles(3)).goes_to_trash(CleanupKind::Logs));
+        assert!(!item(ItemNote::ArtThumbnails).goes_to_trash(CleanupKind::ArtCache));
+        assert!(!item(ItemNote::ArtOriginals).goes_to_trash(CleanupKind::ArtCache));
+        assert!(!item(ItemNote::StoreCatalogs).goes_to_trash(CleanupKind::ArtCache));
+        assert!(!item(ItemNote::ArtThumbnails).reloads_library(CleanupKind::ArtCache));
+        assert!(item(ItemNote::ArtOriginals).reloads_library(CleanupKind::ArtCache));
+        assert!(item(ItemNote::StoreCatalogs).reloads_library(CleanupKind::ArtCache));
         assert!(is_shader_cache("Game.dxvk-cache"));
         assert!(is_shader_cache("vkd3d-proton.cache.write"));
         assert!(!is_shader_cache("cache.bin"));
+    }
+
+    #[test]
+    fn remove_dir_except_preserves_launcher_installers_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stores = tmp.path().join("stores");
+        let installers = stores.join("launchers/installers");
+        std::fs::create_dir_all(&installers).unwrap();
+        std::fs::create_dir_all(stores.join("epic")).unwrap();
+        std::fs::write(stores.join("epic/catalog.json"), b"{}").unwrap();
+        std::fs::write(stores.join("launchers/state.json"), b"{}").unwrap();
+        std::fs::write(installers.join("setup.exe"), b"bin").unwrap();
+
+        remove_dir_except(&stores, &installers).unwrap();
+        assert!(!stores.join("epic").exists());
+        assert!(!stores.join("launchers/state.json").exists());
+        assert!(installers.join("setup.exe").is_file());
+
+        // When the spared folder no longer exists, the whole directory goes.
+        std::fs::remove_dir_all(&installers).unwrap();
+        remove_dir_except(&stores, &installers).unwrap();
+        assert!(!stores.exists());
     }
 
     #[test]

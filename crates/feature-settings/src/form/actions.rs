@@ -33,22 +33,8 @@ impl SettingsForm {
                 }
                 cx.open_with_system(&dir);
             }
-            ActionKind::ClearCaches => {
-                let weak = cx.entity().downgrade();
-                window.open_alert_dialog(cx, move |alert, _, _| {
-                    let weak = weak.clone();
-                    alert
-                        .title(t("settings.clear_caches.title"))
-                        .description(t("settings.clear_caches.description"))
-                        .show_cancel(true)
-                        .cancel_text(t("settings.common.cancel"))
-                        .ok_text(t("settings.clear_caches.confirm"))
-                        .on_ok(move |_, window, cx| {
-                            weak.update(cx, |this, cx| this.clear_caches(window, cx))
-                                .ok();
-                            true
-                        })
-                });
+            ActionKind::ManageCaches => {
+                irori_ui::navigate(irori_ui::Route::Settings("storage-caches".into()), cx);
             }
             ActionKind::ResetSettings => {
                 let weak = cx.entity().downgrade();
@@ -113,29 +99,6 @@ impl SettingsForm {
         })
         .detach();
         cx.notify();
-    }
-
-    fn clear_caches(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.busy.insert(ActionKind::ClearCaches);
-        let task = irori_ui::run(cx, async move {
-            let paths = Paths::get();
-            for dir in [paths.images_dir(), paths.cache.join("stores")] {
-                match tokio::fs::remove_dir_all(&dir).await {
-                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                        return Err(e).with_context(|| format!("removing {}", dir.display()));
-                    }
-                    _ => {}
-                }
-            }
-            Ok(())
-        });
-        self.finish_action(
-            ActionKind::ClearCaches,
-            task,
-            "settings.clear_caches.done",
-            window,
-            cx,
-        );
     }
 
     fn reset_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -279,9 +242,6 @@ impl SettingsForm {
                                 cx,
                             );
                             this.reload(window, cx);
-                        }
-                        if action == ActionKind::ClearCaches {
-                            models::refresh_library(true, cx);
                         }
                     }
                     Err(e) => window.push_notification(

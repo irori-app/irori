@@ -261,7 +261,7 @@ impl SettingsForm {
                     row.help = summary.clone();
                 }
                 let (key, danger) = match action {
-                    ActionKind::ClearCaches => ("settings.action.clear_caches", false),
+                    ActionKind::ManageCaches => ("settings.action.manage_caches", false),
                     ActionKind::ResetSettings => ("settings.action.reset_settings", true),
                     ActionKind::OpenLogsFolder => ("settings.action.open_folder", false),
                     ActionKind::ImportHeroic
