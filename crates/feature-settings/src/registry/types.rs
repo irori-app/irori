@@ -208,8 +208,6 @@ pub enum CustomKind {
     ToolVersion(DxTool),
     /// Base font size slider (interface zoom).
     FontSize,
-    /// Library cover size slider.
-    TileSize,
     /// Accent colour picker, with the theme's or system's accent as default.
     AccentColor,
     /// Interface typeface from the installed font families.
@@ -269,6 +267,8 @@ pub enum PanelKind {
     QuickLaunch,
     /// Named folders games install into, and moving their games.
     LibraryFolders,
+    /// Shortcut card opening the live Library -> Look popover.
+    LibraryLookShortcut,
 }
 
 /// One-shot maintenance commands listed alongside fields.

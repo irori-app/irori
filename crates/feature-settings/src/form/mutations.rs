@@ -1,8 +1,8 @@
 use std::time::Duration;
 
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{ActiveTheme as _, WindowExt as _};
 use gpui_kit::{AppContext as _, Context, Focusable as _, PathPromptOptions, Task, Window};
 use irori_ui::backend;
 use irori_ui::i18n::{t, t_args};
@@ -44,9 +44,17 @@ impl SettingsForm {
         let b = backend(cx);
         let result = match &self.target {
             FormTarget::App | FormTarget::Defaults => {
+                let clearing_motion = path == "iroriUi.reduceMotion" && value == Value::Bool(false);
                 let mut result = Ok(());
                 b.settings.update_app(|s| match with_path(s, path, value) {
-                    Ok(next) => *s = next,
+                    Ok(mut next) => {
+                        if clearing_motion {
+                            // Also clear the legacy Heroic animation flag so Reduce motion
+                            // cannot stay pinned on after being turned off.
+                            next.disable_animations = false;
+                        }
+                        *s = next;
+                    }
                     Err(e) => result = Err(e),
                 });
                 if result.is_ok() && path.starts_with("iroriUi.") {
@@ -239,26 +247,6 @@ impl SettingsForm {
         });
         self.slider_writes.insert(path, task);
         cx.notify();
-    }
-
-    /// Use the theme called `name`. A theme for the other colour mode than
-    /// the one showing switches the mode too, so picking it always shows it.
-    /// Going back to the desktop's theme lets go of the mode, which it decides.
-    pub(super) fn pick_theme(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if name.is_empty() && irori_ui::theme::followed_desktop(cx).is_some() {
-            self.write("iroriUi.theme", Value::from("system"), window, cx);
-        } else if let Some(dark) = irori_ui::theme::is_dark_theme(name, cx)
-            && dark != cx.theme().mode.is_dark()
-        {
-            let mode = if dark { "dark" } else { "light" };
-            self.write("iroriUi.theme", Value::from(mode), window, cx);
-        }
-        self.write(
-            "iroriUi.themeName",
-            Value::String(name.to_string()),
-            window,
-            cx,
-        );
     }
 
     pub(super) fn rows(&self, path: &str) -> Vec<(String, String)> {

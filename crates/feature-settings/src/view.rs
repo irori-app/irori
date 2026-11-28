@@ -130,7 +130,12 @@ impl SettingsSection {
             }
             "controller" | "controllers" | "gamepad" | "buttons" => SettingsSection::Controller,
             "hud" | "mangohud" | "metal-hud" | "performance-hud" => SettingsSection::PerformanceHud,
-            "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
+            "appearance"
+            | "appearance/theme"
+            | "appearance/library"
+            | "appearance/accessibility"
+            | "accessibility"
+            | "theme" => SettingsSection::Appearance,
             "storage" | "disks" | "cleanup" => SettingsSection::Storage,
             "advanced" => SettingsSection::Advanced,
             "saves" | "ludusavi" | "save-backups" => SettingsSection::Saves,
@@ -278,7 +283,6 @@ pub struct SettingsView {
     section: SettingsSection,
     general_tab: &'static str,
     defaults_tab: &'static str,
-    appearance_tab: &'static str,
     search: Entity<InputState>,
     query: String,
     app_form: Entity<SettingsForm>,
@@ -343,7 +347,6 @@ impl SettingsView {
             section: SettingsSection::General,
             general_tab: "basics",
             defaults_tab: default_defaults_tab,
-            appearance_tab: "theme",
             search,
             query: String::new(),
             app_form,
@@ -447,7 +450,6 @@ impl SettingsView {
         match self.section {
             SettingsSection::General => self.general_tab = tab,
             SettingsSection::GameDefaults => self.defaults_tab = tab,
-            SettingsSection::Appearance => self.appearance_tab = tab,
             _ => return,
         }
         self.open(self.section, false, window, cx);
@@ -476,7 +478,6 @@ impl SettingsView {
         if let Some(fs) = section.field_section() {
             let subtab = match section {
                 SettingsSection::General => Some(self.general_tab),
-                SettingsSection::Appearance => Some(self.appearance_tab),
                 _ => None,
             };
             self.app_form.update(cx, |f, cx| {
@@ -675,11 +676,6 @@ impl SettingsView {
                     "settings-defaults-tabs",
                     crate::layout::supported_defaults_tabs(),
                     self.defaults_tab,
-                ),
-                SettingsSection::Appearance => (
-                    "settings-appearance-tabs",
-                    crate::layout::APPEARANCE_TABS.to_vec(),
-                    self.appearance_tab,
                 ),
                 _ => return None,
             };
@@ -1306,6 +1302,51 @@ impl Render for SettingsView {
                 .child(PageHeader::new(section.label()).description(section.description()))
                 .child(div().flex_1().min_h_0().child(self.hud.clone()))
                 .into_any_element()
+        } else if !searching && section == SettingsSection::Appearance {
+            let border = cx.theme().border;
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .min_h_0()
+                .child(
+                    div()
+                        .w_full()
+                        .flex_shrink_0()
+                        .border_b_1()
+                        .border_color(border)
+                        .child(
+                            v_flex()
+                                .w_full()
+                                .max_w(rems(52.))
+                                .px_5()
+                                .pt_5()
+                                .pb_3()
+                                .gap_2()
+                                .child(
+                                    PageHeader::new(section.label())
+                                        .description(section.description()),
+                                )
+                                .child(self.preview.clone()),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("settings-content")
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .overflow_y_scrollbar()
+                        .child(
+                            v_flex()
+                                .w_full()
+                                .max_w(rems(52.))
+                                .px_5()
+                                .pt_2()
+                                .pb_10()
+                                .child(self.app_form.clone()),
+                        ),
+                )
+                .into_any_element()
         } else {
             let (title, description): (SharedString, SharedString) = if searching {
                 (t("settings.common.search_results"), SharedString::default())
@@ -1324,13 +1365,8 @@ impl Render for SettingsView {
                 self.render_search(cx)
             } else {
                 match section {
-                    SettingsSection::Appearance => v_flex()
-                        .when(self.appearance_tab != "accessibility", |v| {
-                            v.child(self.preview.clone())
-                        })
-                        .child(self.app_form.clone())
-                        .into_any_element(),
-                    SettingsSection::General
+                    SettingsSection::Appearance
+                    | SettingsSection::General
                     | SettingsSection::Controller
                     | SettingsSection::Advanced
                     | SettingsSection::Saves => self.app_form.clone().into_any_element(),

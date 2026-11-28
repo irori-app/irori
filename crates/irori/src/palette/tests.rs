@@ -577,4 +577,10 @@ fn performance_hud_palette_entry_follows_host_support() {
         .iter()
         .any(|t| matches!(t, PaletteTarget::Route(Route::Settings(sec)) if sec.as_ref() == "hud"));
     assert_eq!(has_hud, irori_core::HudBackend::current().is_supported());
+    assert!(
+        targets
+            .iter()
+            .any(|t| matches!(t, PaletteTarget::LibraryLook)),
+        "palette should offer Customize library look"
+    );
 }

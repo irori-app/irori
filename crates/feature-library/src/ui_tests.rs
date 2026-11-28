@@ -3620,3 +3620,71 @@ fn collection_pin_to_sidebar_toggles_and_preserves_look(cx: &mut TestAppContext)
         .unwrap();
     settle(cx);
 }
+
+#[gpui_kit::test]
+fn look_popover_categories_pill_and_open_look_helper(cx: &mut TestAppContext) {
+    let backend = start(cx);
+    let (window, _view) = cx
+        .update(|cx| {
+            gpui_kit::open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                        Default::default(),
+                        size(px(1280.), px(800.)),
+                    ))),
+                    ..Default::default()
+                },
+                cx,
+                |window, cx| cx.new(|cx| LibraryView::new(window, cx)),
+            )
+        })
+        .expect("window opens");
+    let settle = |cx: &mut TestAppContext| {
+        cx.update_window(window, |_, window, cx| {
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+    };
+    settle(cx);
+
+    // Calling open_look navigates to Library and opens the Look popover.
+    cx.update(crate::open_look);
+    settle(cx);
+
+    assert!(!backend.settings.app().ui.cover_categories);
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let pill = vcx
+            .debug_bounds("look-categories")
+            .expect("Categories pill rendered in Grid Look popover");
+        vcx.simulate_click(pill.center(), Default::default());
+    }
+    settle(cx);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !backend.settings.app().ui.cover_categories && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+        settle(cx);
+    }
+    assert!(
+        backend.settings.app().ui.cover_categories,
+        "clicking Categories pill in Look must enable coverCategories"
+    );
+
+    // Clicking again turns it back off.
+    {
+        let mut vcx = gpui_kit::VisualTestContext::from_window(window, cx);
+        let pill = vcx
+            .debug_bounds("look-categories")
+            .expect("Categories pill stays rendered");
+        vcx.simulate_click(pill.center(), Default::default());
+    }
+    settle(cx);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while backend.settings.app().ui.cover_categories && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+        settle(cx);
+    }
+    assert!(!backend.settings.app().ui.cover_categories);
+}

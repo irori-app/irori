@@ -437,3 +437,72 @@ fn search_matches_tooltip_copy() {
         !cfg!(windows)
     );
 }
+
+#[test]
+fn appearance_deduplication_and_relocations() {
+    crate::i18n::register();
+
+    // Relocated fields live on their logical sections and sub-tabs.
+    let middle = find("iroriUi.middleClickScroll").expect("middleClickScroll");
+    assert_eq!(middle.section, FieldSection::General);
+    assert_eq!(crate::layout::subtab_of(middle), Some("window"));
+
+    for path in [
+        "iroriUi.groupCopies",
+        "iroriUi.showAgeRatings",
+        "iroriUi.ageRatingBoard",
+        "iroriUi.trailerAutoplay",
+        "iroriUi.libraryOpenDetailsOnSelect",
+    ] {
+        let f = find(path).unwrap_or_else(|| panic!("missing {path}"));
+        assert_eq!(f.section, FieldSection::General, "{path}");
+        assert_eq!(crate::layout::subtab_of(f), Some("library"), "{path}");
+    }
+
+    let bp_scale = find("iroriUi.bigPictureScale").expect("bigPictureScale");
+    assert_eq!(bp_scale.section, FieldSection::Controller);
+
+    // Appearance stays flat (no sub-tabs) and points to Library Look.
+    let shortcut = find("panel.library-look-shortcut").expect("library-look-shortcut");
+    assert_eq!(shortcut.section, FieldSection::Appearance);
+    assert_eq!(crate::layout::subtab_of(shortcut), None);
+    for query in [
+        "cover size",
+        "store badges",
+        "cover corners",
+        "greeting",
+        "library layout",
+    ] {
+        assert!(
+            search(query).any(|f| f.path == "panel.library-look-shortcut"),
+            "expected search({query:?}) to surface Library Look shortcut"
+        );
+    }
+
+    // Merged and Look-owned duplicates are not repeated in Settings -> Appearance.
+    for removed in [
+        "iroriUi.tileSize",
+        "iroriUi.libraryLayout",
+        "iroriUi.coverShape",
+        "iroriUi.coverCorners",
+        "iroriUi.coverCaption",
+        "iroriUi.showStoreBadges",
+        "iroriUi.storeBadgesAlways",
+        "iroriUi.coverCompatBadges",
+        "iroriUi.coverFavourite",
+        "iroriUi.coverCategories",
+        "iroriUi.libraryGreeting",
+        "iroriUi.libraryFocusCoverSize",
+        "iroriUi.systemAccent",
+        "disableAnimations",
+    ] {
+        assert!(
+            find(removed).is_none(),
+            "{removed} should not be duplicated"
+        );
+    }
+
+    // Legacy search terms still land on the unified Appearance fields.
+    assert!(search("disable animations").any(|f| f.path == "iroriUi.reduceMotion"));
+    assert!(search("system accent").any(|f| f.path == "iroriUi.accentColor"));
+}

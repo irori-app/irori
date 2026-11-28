@@ -113,21 +113,6 @@ pub(super) const BIG_PICTURE_SCALE: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(200), Verbatim("200%")),
 ];
 
-pub(super) const LIBRARY_LAYOUT: &[ChoiceOption] = &[
-    opt(
-        ChoiceValue::Str("grid"),
-        Key("settings.option.library_layout.grid"),
-    ),
-    opt(
-        ChoiceValue::Str("list"),
-        Key("settings.option.library_layout.list"),
-    ),
-    opt(
-        ChoiceValue::Str("focus"),
-        Key("settings.option.library_layout.focus"),
-    ),
-];
-
 pub(super) const NAV_SOUNDS: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("off"),
@@ -186,21 +171,6 @@ pub(super) const AGE_RATING_BOARDS: &[ChoiceOption] = &[
     opt(ChoiceValue::Str("GOG"), Verbatim("GOG")),
 ];
 
-pub(super) const COVER_CORNERS: &[ChoiceOption] = &[
-    opt(
-        ChoiceValue::Str("square"),
-        Key("settings.option.cover_corners.square"),
-    ),
-    opt(
-        ChoiceValue::Str("rounded"),
-        Key("settings.option.cover_corners.rounded"),
-    ),
-    opt(
-        ChoiceValue::Str("round"),
-        Key("settings.option.cover_corners.round"),
-    ),
-];
-
 pub(super) const COVER_FIT: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("crop"),
@@ -209,40 +179,6 @@ pub(super) const COVER_FIT: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("whole"),
         Key("settings.option.cover_fit.whole"),
-    ),
-];
-
-pub(super) const COVER_SHAPE: &[ChoiceOption] = &[
-    opt(
-        ChoiceValue::Str("portrait"),
-        Key("settings.option.cover_shape.portrait"),
-    ),
-    opt(
-        ChoiceValue::Str("square"),
-        Key("settings.option.cover_shape.square"),
-    ),
-    opt(
-        ChoiceValue::Str("banner"),
-        Key("settings.option.cover_shape.banner"),
-    ),
-];
-
-pub(super) const COVER_CAPTION: &[ChoiceOption] = &[
-    opt(
-        ChoiceValue::Str("full"),
-        Key("settings.option.cover_caption.full"),
-    ),
-    opt(
-        ChoiceValue::Str("title"),
-        Key("settings.option.cover_caption.title"),
-    ),
-    opt(
-        ChoiceValue::Str("hover"),
-        Key("settings.option.cover_caption.hover"),
-    ),
-    opt(
-        ChoiceValue::Str("none"),
-        Key("settings.option.cover_caption.none"),
     ),
 ];
 
@@ -265,21 +201,6 @@ pub(super) const FOCUS_COLUMNS: &[ChoiceOption] = &[
     opt(ChoiceValue::Num(1), Verbatim("1")),
     opt(ChoiceValue::Num(2), Verbatim("2")),
     opt(ChoiceValue::Num(3), Verbatim("3")),
-];
-
-pub(super) const FOCUS_COVER_SIZE: &[ChoiceOption] = &[
-    opt(
-        ChoiceValue::Str("small"),
-        Key("settings.option.focus_cover_size.small"),
-    ),
-    opt(
-        ChoiceValue::Str("medium"),
-        Key("settings.option.focus_cover_size.medium"),
-    ),
-    opt(
-        ChoiceValue::Str("large"),
-        Key("settings.option.focus_cover_size.large"),
-    ),
 ];
 
 pub(super) const DENSITY: &[ChoiceOption] = &[

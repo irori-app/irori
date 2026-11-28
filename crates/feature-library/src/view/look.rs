@@ -443,6 +443,13 @@ fn on_covers_pills(ui: &UiPrefs, include_grid_only: bool, cx: &App) -> AnyElemen
             |cx| persist_ui(cx, |u| u.cover_compat_badges = !u.cover_compat_badges),
             cx,
         ));
+        pills.push(toggle_pill(
+            "look-categories",
+            t("library.look.categories"),
+            ui.cover_categories,
+            |cx| persist_ui(cx, |u| u.cover_categories = !u.cover_categories),
+            cx,
+        ));
     }
     h_flex()
         .w_full()
