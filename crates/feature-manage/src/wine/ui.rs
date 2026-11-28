@@ -3,15 +3,20 @@
 use std::fmt::Display;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Div, ElementId, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
-    Window, div, transparent_black,
+    AnyElement, App, ClickEvent, Context, Div, ElementId, Hsla, InteractiveElement as _,
+    IntoElement, ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _,
+    Styled as _, WeakEntity, Window, div, transparent_black,
 };
+use irori_ui::i18n::t;
+
+use super::WineManagerView;
 
 pub(super) const PAGE_MAX_WIDTH_REM: f32 = 78.;
 
@@ -221,4 +226,45 @@ pub(super) fn control_switch(
                 )
                 .child(muted_xs(subtitle, cx)),
         )
+}
+
+pub(super) fn ellipsis_menu(
+    id: ElementId,
+    build: impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static,
+) -> AnyElement {
+    Button::new(id)
+        .ghost()
+        .small()
+        .icon(IconName::Ellipsis)
+        .accessibility_label(t("manage.wine.action.more"))
+        .dropdown_menu(build)
+        .into_any_element()
+}
+
+pub(super) fn view_menu_item(
+    label: SharedString,
+    icon: IconName,
+    view: WeakEntity<WineManagerView>,
+    action: impl Fn(&mut WineManagerView, &mut Window, &mut Context<WineManagerView>) + 'static,
+) -> PopupMenuItem {
+    PopupMenuItem::new(label)
+        .icon(icon)
+        .on_click(move |_, win, cx| {
+            let _ = view.update(cx, |this, cx| action(this, win, cx));
+        })
+}
+
+pub(super) fn section_band(title: SharedString, count: usize, cx: &App) -> Div {
+    let t = cx.theme();
+    h_flex()
+        .w_full()
+        .px_4()
+        .py_2()
+        .bg(t.background)
+        .border_b_1()
+        .border_color(t.border)
+        .items_center()
+        .justify_between()
+        .child(muted_xs(title, cx).font_semibold())
+        .child(muted_xs(count.to_string(), cx))
 }
