@@ -1,10 +1,10 @@
 //! "Getting started": a checklist to come back to after onboarding, from
-//! the command palette, onboarding's last page and the empty library.
-//! Three steps count towards its progress, each ticking itself from what
-//! the library and settings already say:
+//! the sidebar badge, Settings -> About, the command palette, onboarding's
+//! last page, and the empty library. Three steps count towards its progress,
+//! each ticking itself from what the library and settings already say:
 //!
-//! - **Your games**: the library has a game. Store logins, the other
-//!   launchers found here and the usual ROM folders are offered in place.
+//! - **Your games**: the library has a game. Store logins, emulation setup,
+//!   other launchers found here, and the usual ROM folders are offered in place.
 //! - **Your look**: the layout, density, accent or theme differs from the
 //!   defaults, or the user said the defaults suit them.
 //! - **While you play**: one of the switches is on (in-game overlay, replay
@@ -12,8 +12,8 @@
 //!   said none is wanted.
 //!
 //! Tips follow and don't count. Every switch writes the setting at once,
-//! as Settings does. What the user said is kept in `getting-started.json`
-//! in the state folder.
+//! as Settings does. What the user said (and whether the sidebar shortcut was
+//! dismissed) is kept in `getting-started.json` in the state folder.
 
 use std::path::PathBuf;
 
@@ -22,17 +22,20 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{
     ActiveTheme as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, App, AppContext as _, Context, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, Styled as _, Subscription, Window, div, rems,
+    AnyElement, App, AppContext as _, Context, Entity, Global, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Subscription, Window, div, rems,
 };
 use irori_core::settings::{AppSettings, Density, LibraryLayout, UiPrefs};
 use irori_core::{Paths, json_store};
 use irori_ui::i18n::{t, t_args};
+use irori_ui::style::{KeyboardFocusable as _, SidebarPalette};
 use irori_ui::{Route, models, navigate};
 use serde::{Deserialize, Serialize};
 
@@ -49,10 +52,69 @@ pub(crate) struct HubState {
     /// No switch for playing is wanted.
     #[serde(default)]
     pub play: bool,
+    /// The user dismissed the sidebar Getting started shortcut.
+    #[serde(default)]
+    pub dismissed: bool,
 }
 
 fn state_file() -> PathBuf {
     Paths::get().state_dir().join("getting-started.json")
+}
+
+/// Shared reactive state loaded once off the UI thread so the sidebar badge
+/// and the Getting started dialog stay in sync with zero disk I/O in `render`.
+struct HubModel {
+    loaded: bool,
+    state: HubState,
+}
+
+struct HubModelHandle(Entity<HubModel>);
+impl Global for HubModelHandle {}
+
+fn hub_model(cx: &mut App) -> Entity<HubModel> {
+    if let Some(h) = cx.try_global::<HubModelHandle>() {
+        return h.0.clone();
+    }
+    let entity = cx.new(|_| HubModel {
+        loaded: false,
+        state: HubState::default(),
+    });
+    cx.set_global(HubModelHandle(entity.clone()));
+    let b = irori_ui::backend(cx);
+    let read = irori_ui::run(cx, async move {
+        Ok(
+            b.spawn_blocking(|| json_store::read_or_default::<HubState>(&state_file()))
+                .await?,
+        )
+    });
+    let weak = entity.downgrade();
+    cx.spawn(async move |cx| {
+        let state = read.await.unwrap_or_default();
+        let _ = weak.update(cx, |m, cx| {
+            if !m.loaded {
+                m.state = state;
+                m.loaded = true;
+                cx.notify();
+            }
+        });
+    })
+    .detach();
+    entity
+}
+
+fn update_hub_state(change: impl FnOnce(&mut HubState), cx: &mut App) {
+    let model = hub_model(cx);
+    let state = model.update(cx, |m, cx| {
+        m.loaded = true;
+        change(&mut m.state);
+        cx.notify();
+        m.state
+    });
+    backend_op(cx, move |_| {
+        if let Err(e) = json_store::write(&state_file(), &state) {
+            tracing::warn!("saving Getting started: {e:#}");
+        }
+    });
 }
 
 /// Whether the look differs from what a new Irori shows.
@@ -83,6 +145,20 @@ pub(crate) fn progress(has_games: bool, app: &AppSettings, state: HubState) -> (
     (done.iter().filter(|d| **d).count(), done.len())
 }
 
+/// Whether the discreet sidebar shortcut should show.
+pub(crate) fn sidebar_shortcut_visible(
+    loaded: bool,
+    has_games: bool,
+    app: &AppSettings,
+    state: HubState,
+) -> bool {
+    if !loaded || state.dismissed {
+        return false;
+    }
+    let (done, total) = progress(has_games, app, state);
+    done < total
+}
+
 /// Open the checklist.
 pub fn open_getting_started(window: &mut Window, cx: &mut App) {
     crate::i18n::register();
@@ -95,8 +171,134 @@ pub fn open_getting_started(window: &mut Window, cx: &mut App) {
     });
 }
 
+/// Discreet, dismissible sidebar shortcut for "Getting started" that shows
+/// live progress (`done/total`) until completed or dismissed.
+pub struct GettingStartedBadge {
+    hub: Entity<HubModel>,
+    collapsed: bool,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl GettingStartedBadge {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        crate::i18n::register();
+        let m = models(cx).clone();
+        let hub = hub_model(cx);
+        Self {
+            _subscriptions: vec![
+                cx.observe(&hub, |_, _, cx| cx.notify()),
+                cx.observe(&m.library, |_, _, cx| cx.notify()),
+                cx.observe(&m.settings, |_, _, cx| cx.notify()),
+            ],
+            hub,
+            collapsed: false,
+        }
+    }
+
+    pub fn set_collapsed(&mut self, collapsed: bool) {
+        self.collapsed = collapsed;
+    }
+}
+
+impl Render for GettingStartedBadge {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let hub = self.hub.read(cx);
+        let has_games = !models(cx).library.read(cx).snapshot.is_empty();
+        let app = models(cx).settings.read(cx).app.clone();
+        if !sidebar_shortcut_visible(hub.loaded, has_games, &app, hub.state) {
+            return div().into_any_element();
+        }
+        let (done, total) = progress(has_games, &app, hub.state);
+        let done_s = done.to_string();
+        let total_s = total.to_string();
+        let count_text = t_args(
+            "manage.hub.sidebar.progress",
+            &[("done", &done_s), ("total", &total_s)],
+        );
+        let tip = t_args(
+            "manage.hub.sidebar.tooltip",
+            &[("done", &done_s), ("total", &total_s)],
+        );
+        let theme = cx.theme();
+        let palette = SidebarPalette::new(cx);
+        let hover_bg = palette.highlight;
+        let hover_fg = palette.selected_text;
+        if self.collapsed {
+            return h_flex()
+                .id("sidebar-getting-started-collapsed")
+                .keyboard_focusable(cx)
+                .h(rems(2.5))
+                .justify_center()
+                .items_center()
+                .rounded(theme.radius)
+                .text_color(palette.icon)
+                .cursor_pointer()
+                .hover(move |s| s.bg(hover_bg).text_color(hover_fg))
+                .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                .on_click(|_, window, cx| open_getting_started(window, cx))
+                .child(Icon::new(IconName::Sparkles))
+                .into_any_element();
+        }
+        h_flex()
+            .id("sidebar-getting-started")
+            .h(rems(2.5))
+            .px_2p5()
+            .gap_2()
+            .items_center()
+            .rounded(theme.radius)
+            .border_1()
+            .border_color(theme.sidebar_border)
+            .bg(palette.highlight)
+            .child(
+                h_flex()
+                    .id("sidebar-getting-started-open")
+                    .keyboard_focusable(cx)
+                    .flex_1()
+                    .min_w_0()
+                    .gap_2()
+                    .items_center()
+                    .cursor_pointer()
+                    .text_color(palette.text)
+                    .hover(move |s| s.text_color(hover_fg))
+                    .on_click(|_, window, cx| open_getting_started(window, cx))
+                    .child(
+                        Icon::new(IconName::Sparkles)
+                            .small()
+                            .text_color(palette.selected_icon),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_sm()
+                            .font_medium()
+                            .truncate()
+                            .child(t("manage.hub.title")),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(palette.caption)
+                            .child(count_text),
+                    ),
+            )
+            .child(
+                Button::new("sidebar-getting-started-dismiss")
+                    .debug_selector(|| "sidebar-getting-started-dismiss".into())
+                    .ghost()
+                    .xsmall()
+                    .compact()
+                    .icon(IconName::X)
+                    .tooltip(t("manage.hub.sidebar.dismiss"))
+                    .on_click(|_, _, cx| update_hub_state(|s| s.dismissed = true, cx)),
+            )
+            .into_any_element()
+    }
+}
+
 struct GettingStarted {
-    state: HubState,
+    hub: Entity<HubModel>,
     launchers: Imports,
     _subscriptions: Vec<Subscription>,
 }
@@ -104,44 +306,30 @@ struct GettingStarted {
 impl GettingStarted {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let m = models(cx).clone();
-        let b = irori_ui::backend(cx);
-        let read = irori_ui::run(cx, async move {
-            Ok(
-                b.spawn_blocking(|| json_store::read_or_default::<HubState>(&state_file()))
-                    .await?,
-            )
-        });
+        let hub = hub_model(cx);
         let found = launchers::detect_in_background(cx);
         cx.spawn_in(window, async move |this, cx| {
-            let state = read.await.unwrap_or_default();
             let found = found.await.unwrap_or_default();
             let _ = this.update(cx, |this, cx| {
-                this.state = state;
                 this.launchers = Imports::new(&found);
                 cx.notify();
             });
         })
         .detach();
         Self {
-            state: HubState::default(),
-            launchers: Imports::default(),
             _subscriptions: vec![
+                cx.observe(&hub, |_, _, cx| cx.notify()),
                 cx.observe(&m.library, |_, _, cx| cx.notify()),
                 cx.observe(&m.settings, |_, _, cx| cx.notify()),
                 cx.observe(&m.accounts, |_, _, cx| cx.notify()),
             ],
+            hub,
+            launchers: Imports::default(),
         }
     }
 
     fn remember(&mut self, change: impl FnOnce(&mut HubState), cx: &mut Context<Self>) {
-        change(&mut self.state);
-        let state = self.state;
-        backend_op(cx, move |_| {
-            if let Err(e) = json_store::write(&state_file(), &state) {
-                tracing::warn!("saving Getting started: {e:#}");
-            }
-        });
-        cx.notify();
+        update_hub_state(change, cx);
     }
 
     fn run_import(&mut self, launcher: Launcher, window: &mut Window, cx: &mut Context<Self>) {
@@ -254,6 +442,17 @@ impl GettingStarted {
                             .label(t("manage.hub.games.roms"))
                             .on_click(|_, window, cx| {
                                 crate::emulators::open_rom_sources_dialog(window, cx)
+                            }),
+                    )
+                    .child(
+                        Button::new("hub-emulation")
+                            .small()
+                            .outline()
+                            .icon(IconName::Gamepad2)
+                            .label(t("manage.hub.games.emulation"))
+                            .on_click(|_, window, cx| {
+                                window.close_dialog(cx);
+                                crate::open_emulation_setup(window, cx);
                             }),
                     ),
             )
@@ -433,6 +632,11 @@ impl GettingStarted {
                         backend_op(cx, move |b| b.settings.update_app(|s| s.exit_to_tray = on))
                     }),
             );
+        let hud_label = if cfg!(target_os = "macos") {
+            t("manage.hub.play.hud_macos")
+        } else {
+            t("manage.hub.play.hud_linux")
+        };
         let body = v_flex()
             .gap_3()
             .child(switches)
@@ -440,6 +644,18 @@ impl GettingStarted {
                 h_flex()
                     .gap_2()
                     .flex_wrap()
+                    .when(!cfg!(target_os = "windows"), |row| {
+                        row.child(
+                            Button::new("hub-hud")
+                                .small()
+                                .icon(IconName::Gauge)
+                                .label(hud_label)
+                                .on_click(|_, window, cx| {
+                                    window.close_dialog(cx);
+                                    navigate(Route::Settings("hud".into()), cx);
+                                }),
+                        )
+                    })
                     .child(
                         Button::new("hub-saves")
                             .small()
@@ -486,6 +702,8 @@ impl GettingStarted {
                 t_args("manage.hub.tips.palette", &[("keys", palette)]),
             ),
             (IconName::Gamepad2, t("manage.hub.tips.big_picture")),
+            (IconName::Tag, t("manage.hub.tips.deals")),
+            (IconName::SlidersHorizontal, t("manage.hub.tips.mods")),
             (IconName::Flag, t("manage.hub.tips.status")),
             (IconName::NotebookPen, t("manage.hub.tips.journal")),
             (IconName::ChartColumn, t("manage.hub.tips.stats")),
@@ -524,9 +742,10 @@ impl Render for GettingStarted {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let has_games = !models(cx).library.read(cx).snapshot.is_empty();
         let app = models(cx).settings.read(cx).app.clone();
-        let (done, total) = progress(has_games, &app, self.state);
-        let look = self.state.look || look_changed(&app.ui);
-        let play = self.state.play || play_switched(&app);
+        let state = self.hub.read(cx).state;
+        let (done, total) = progress(has_games, &app, state);
+        let look = state.look || look_changed(&app.ui);
+        let play = state.play || play_switched(&app);
         v_flex()
             .gap_4()
             .child(
@@ -596,14 +815,50 @@ mod tests {
         let said = HubState {
             look: true,
             play: true,
+            dismissed: false,
         };
         assert_eq!(progress(false, &app, said), (2, 3));
-        // The file keeps what was said, and an older or empty one reads.
         let text = serde_json::to_string(&said).unwrap();
         assert_eq!(serde_json::from_str::<HubState>(&text).unwrap(), said);
         assert_eq!(
             serde_json::from_str::<HubState>("{}").unwrap(),
             HubState::default()
         );
+    }
+
+    #[test]
+    fn sidebar_shortcut_hides_when_unloaded_dismissed_or_complete() {
+        let app = AppSettings::default();
+        assert!(!sidebar_shortcut_visible(
+            false,
+            false,
+            &app,
+            HubState::default()
+        ));
+        assert!(sidebar_shortcut_visible(
+            true,
+            false,
+            &app,
+            HubState::default()
+        ));
+        assert!(!sidebar_shortcut_visible(
+            true,
+            false,
+            &app,
+            HubState {
+                dismissed: true,
+                ..Default::default()
+            }
+        ));
+        assert!(!sidebar_shortcut_visible(
+            true,
+            true,
+            &app,
+            HubState {
+                look: true,
+                play: true,
+                dismissed: false,
+            }
+        ));
     }
 }

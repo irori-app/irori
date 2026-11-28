@@ -21,7 +21,7 @@ const SHEET_W: f32 = 26.0;
 
 impl BigPictureView {
     #[allow(clippy::too_many_arguments)]
-    fn overlay_row(
+    pub(super) fn overlay_row(
         id: SharedString,
         icon: IconName,
         label: SharedString,

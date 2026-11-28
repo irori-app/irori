@@ -43,6 +43,8 @@ pub struct AppShell {
     /// each redrawn on its own as progress arrives.
     downloads_pill: Entity<irori_manage::DownloadsPill>,
     downloads_badge: Entity<irori_manage::DownloadsBadge>,
+    /// Discreet, dismissible "Getting started" shortcut in the sidebar.
+    getting_started_badge: Entity<irori_manage::GettingStartedBadge>,
     /// "Keep holding to open Big Picture" while a controller button is held.
     hold_hint: Entity<irori_bigpicture::gamepad::HoldHintView>,
     /// The start-with-system choice last written to the system.
@@ -180,6 +182,7 @@ impl AppShell {
             saved_views: cx.new(sidebar::SavedViewsNav::new),
             downloads_pill: cx.new(irori_manage::DownloadsPill::new),
             downloads_badge: cx.new(irori_manage::DownloadsBadge::new),
+            getting_started_badge: cx.new(irori_manage::GettingStartedBadge::new),
             hold_hint: irori_bigpicture::gamepad::HoldHintView::new(window, cx),
             autostart,
             minimized_for: None,
@@ -525,6 +528,8 @@ impl AppShell {
             + models(cx).components.read(cx).report.pending().count()
             + usize::from(models(cx).app_update.read(cx).status.has_update());
         let collapsed = self.sidebar_collapsed_now(window);
+        self.getting_started_badge
+            .update(cx, |b, _| b.set_collapsed(collapsed));
         let accounts_expired = models(cx).accounts.read(cx).any_expired();
         let theme = cx.theme();
         let item = |id, label: &'static str, icon, key: &str, route, suffix, cx: &App| {
@@ -635,6 +640,7 @@ impl AppShell {
                 )
             })
             .when(collapsed, |d| d.child(div().flex_1()))
+            .child(self.getting_started_badge.clone())
             .child(item(
                 "nav-settings",
                 "shell.nav.settings",
@@ -707,6 +713,7 @@ fn title_bar_content(
     downloads: AnyElement,
 ) -> AnyElement {
     let nav = navigator(cx).read(cx);
+    let onboarding = *nav.current() == Route::Onboarding;
     let (can_back, can_forward) = (nav.can_go_back(), nav.can_go_forward());
     let online = models(cx).accounts.read(cx).online;
     let working_offline = irori_ui::models::working_offline(cx);
@@ -717,49 +724,47 @@ fn title_bar_content(
         .w_full()
         .pr_2()
         .gap_1()
-        .child(
-            h_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_1()
-                .child(
-                    Button::new("nav-back")
-                        .ghost()
-                        .small()
-                        .icon(IconName::ChevronLeft)
-                        .tooltip(t("shell.nav.back"))
-                        .disabled(!can_back)
-                        .on_click(|_, _, cx| nav::go_back(cx)),
-                )
-                .child(
-                    Button::new("nav-forward")
-                        .ghost()
-                        .small()
-                        .icon(IconName::ChevronRight)
-                        .tooltip(t("shell.nav.forward"))
-                        .disabled(!can_forward)
-                        .on_click(|_, _, cx| nav::go_forward(cx)),
-                ),
-        )
+        .child(h_flex().flex_1().min_w_0().gap_1().when(!onboarding, |d| {
+            d.child(
+                Button::new("nav-back")
+                    .ghost()
+                    .small()
+                    .icon(IconName::ChevronLeft)
+                    .tooltip(t("shell.nav.back"))
+                    .disabled(!can_back)
+                    .on_click(|_, _, cx| nav::go_back(cx)),
+            )
+            .child(
+                Button::new("nav-forward")
+                    .ghost()
+                    .small()
+                    .icon(IconName::ChevronRight)
+                    .tooltip(t("shell.nav.forward"))
+                    .disabled(!can_forward)
+                    .on_click(|_, _, cx| nav::go_forward(cx)),
+            )
+        }))
         .child(
             h_flex()
                 .flex_1()
                 .min_w_0()
                 .justify_center()
-                .child(
-                    Button::new("open-palette")
-                        .debug_selector(|| "open-palette".into())
-                        .outline()
-                        .small()
-                        .w(rems(22.))
-                        .min_w_0()
-                        .flex_shrink(1.)
-                        .icon(IconName::Search)
-                        .label(t("shell.search.placeholder"))
-                        .tooltip("Ctrl+K")
-                        .on_click(open_palette),
-                )
-                .child(irori_ui::tour::mark(irori_ui::tour::anchors::PALETTE)),
+                .when(!onboarding, |d| {
+                    d.child(
+                        Button::new("open-palette")
+                            .debug_selector(|| "open-palette".into())
+                            .outline()
+                            .small()
+                            .w(rems(22.))
+                            .min_w_0()
+                            .flex_shrink(1.)
+                            .icon(IconName::Search)
+                            .label(t("shell.search.placeholder"))
+                            .tooltip("Ctrl+K")
+                            .on_click(open_palette),
+                    )
+                    .child(irori_ui::tour::mark(irori_ui::tour::anchors::PALETTE))
+                }),
         )
         .child(
             h_flex()
@@ -847,6 +852,7 @@ impl Render for AppShell {
             self.narrow_expanded = false;
         }
         let route = navigator(cx).read(cx).current().clone();
+        let onboarding = matches!(route, Route::Onboarding);
         let fullscreen_mode = matches!(route, Route::BigPicture);
         let show_sidebar = !matches!(
             route,
@@ -876,21 +882,61 @@ impl Render for AppShell {
                 this.bg(cx.theme().background)
             })
             .text_color(cx.theme().foreground)
-            .on_action(cx.listener(|_, _: &GoBack, _, cx| nav::go_back(cx)))
-            .on_action(cx.listener(|_, _: &GoForward, _, cx| nav::go_forward(cx)))
-            .map(|this| bind_mouse_navigation(this, !fullscreen_mode))
-            .on_action(cx.listener(|this, _: &OpenPalette, window, cx| {
-                this.palette.open(window, cx);
+            .on_action(cx.listener(|_, _: &GoBack, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::go_back(cx);
+                }
             }))
-            .on_action(cx.listener(|_, _: &GoLibrary, _, cx| nav::navigate(Route::Library, cx)))
-            .on_action(cx.listener(|_, _: &GoDownloads, _, cx| nav::navigate(Route::Downloads, cx)))
-            .on_action(cx.listener(|_, _: &GoStores, _, cx| nav::navigate(Route::Stores, cx)))
-            .on_action(cx.listener(|_, _: &GoStats, _, cx| nav::navigate(Route::Stats, cx)))
-            .on_action(cx.listener(|_, _: &GoWine, _, cx| nav::navigate(Route::WineManager, cx)))
-            .on_action(cx.listener(|_, _: &GoEmulators, _, cx| nav::navigate(Route::Emulators, cx)))
-            .on_action(cx.listener(|_, _: &GoAccounts, _, cx| nav::navigate(Route::Accounts, cx)))
+            .on_action(cx.listener(|_, _: &GoForward, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::go_forward(cx);
+                }
+            }))
+            .map(|this| bind_mouse_navigation(this, !fullscreen_mode && !onboarding))
+            .on_action(cx.listener(|this, _: &OpenPalette, window, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    this.palette.open(window, cx);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &GoLibrary, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::Library, cx);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &GoDownloads, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::Downloads, cx);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &GoStores, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::Stores, cx);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &GoStats, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::Stats, cx);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &GoWine, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::WineManager, cx);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &GoEmulators, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::Emulators, cx);
+                }
+            }))
+            .on_action(cx.listener(|_, _: &GoAccounts, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::Accounts, cx);
+                }
+            }))
             .on_action(cx.listener(|_, _: &GoSettings, _, cx| {
-                nav::navigate(Route::Settings("general".into()), cx)
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::Settings("general".into()), cx);
+                }
             }))
             .on_action(
                 cx.listener(|_, _: &RefreshLibrary, _, cx| models::refresh_library(false, cx)),
@@ -899,11 +945,15 @@ impl Render for AppShell {
                 cx.listener(|this, _: &ToggleSidebar, window, cx| this.toggle_sidebar(window, cx)),
             )
             .on_action(cx.listener(|_, _: &ToggleFullscreen, window, _| window.toggle_fullscreen()))
-            .on_action(
-                cx.listener(|_, _: &EnterBigPicture, _, cx| nav::navigate(Route::BigPicture, cx)),
-            )
+            .on_action(cx.listener(|_, _: &EnterBigPicture, _, cx| {
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    nav::navigate(Route::BigPicture, cx);
+                }
+            }))
             .on_action(cx.listener(|_, _: &PickRandomGame, window, cx| {
-                irori_library::open_random_game(window, cx)
+                if *navigator(cx).read(cx).current() != Route::Onboarding {
+                    irori_library::open_random_game(window, cx);
+                }
             }))
             .when(!fullscreen_mode, |this| {
                 this.child(self.render_title_bar(window, cx))

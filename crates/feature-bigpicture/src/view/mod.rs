@@ -38,6 +38,7 @@ mod spotlight;
 mod system;
 mod tile;
 mod wall;
+mod welcome;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -200,6 +201,14 @@ pub struct BigPictureView {
     _clock_task: Task<()>,
     /// The idle screen and its timer.
     idle: idle::Idle,
+    /// First-run controller welcome flow, shown until completed or skipped.
+    welcome: Option<welcome::WelcomeState>,
+    /// Focused action on the controller-navigable empty state.
+    empty_ix: usize,
+    /// Addable ROM folders discovered off the UI thread for Welcome / Empty.
+    found_roms: Vec<std::path::PathBuf>,
+    /// Whether adding discovered ROM folders is currently running.
+    adding_roms: bool,
     _editor_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
 }
@@ -213,6 +222,8 @@ type NavKey = (
     Option<(GameId, usize)>,
     (bool, bool, bool),
     Option<Overlay>,
+    Option<welcome::WelcomeState>,
+    usize,
     FocusGrid,
     LibraryFocus,
     usize,
@@ -367,9 +378,16 @@ impl BigPictureView {
             hero_task: None,
             _clock_task: clock_task,
             idle: idle::Idle::new(),
+            welcome: welcome::should_show_welcome().then(welcome::WelcomeState::default),
+            empty_ix: 0,
+            found_roms: Vec::new(),
+            adding_roms: false,
             _editor_subscription: None,
             _subscriptions: subscriptions,
         };
+        if this.welcome.is_some() || m.library.read(cx).snapshot.games.is_empty() {
+            this.probe_rom_folders(window, cx);
+        }
         this.load_user_themes(window, cx);
         this.refresh_power(cx);
         this.refresh_outputs(cx);
@@ -577,6 +595,8 @@ impl BigPictureView {
                 self.look.editor.is_some(),
             ),
             self.overlay.clone(),
+            self.welcome,
+            self.empty_ix,
             self.grid.clone(),
             self.library.focus,
             self.library.ix,
@@ -603,7 +623,9 @@ impl BigPictureView {
             crate::exit_big_picture(cx);
             return;
         }
-        if self.settings.is_some() {
+        if self.welcome.is_some() {
+            self.welcome_input(input, window, cx);
+        } else if self.settings.is_some() {
             // The settings have the keyboard; an input reaching the root
             // (after a click on the top bar) goes back to them.
             if input == GamepadInput::Back {
@@ -617,6 +639,8 @@ impl BigPictureView {
             self.editor_input(input, window, cx);
         } else if input == GamepadInput::Menu {
             self.open_menu(cx);
+        } else if models(cx).library.read(cx).snapshot.games.is_empty() {
+            self.empty_input(input, window, cx);
         } else if self.page.is_some() {
             self.page_input(input, window, cx);
         } else if matches!(input, GamepadInput::PrevPage | GamepadInput::NextPage) {
@@ -1129,33 +1153,6 @@ impl BigPictureView {
     }
 }
 
-impl BigPictureView {
-    fn render_empty(&self, c: Colors, cx: &mut Context<Self>) -> impl IntoElement {
-        use gpui_kit::assets::IconName;
-        use gpui_kit::component::Sizable as _;
-        use gpui_kit::component::button::Button;
-        use irori_ui::components::EmptyState;
-        let refreshing = models(cx).library.read(cx).refreshing;
-        div().size_full().text_color(c.foreground).child(
-            EmptyState::new(
-                IconName::Gamepad2,
-                if refreshing {
-                    t("bigpicture.empty.loading")
-                } else {
-                    t("bigpicture.empty.title")
-                },
-            )
-            .description(t("bigpicture.empty.description"))
-            .action(
-                Button::new("bp-empty-exit")
-                    .large()
-                    .label(t("bigpicture.exit"))
-                    .on_click(|_, _, cx| crate::exit_big_picture(cx)),
-            ),
-        )
-    }
-}
-
 impl Focusable for BigPictureView {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
@@ -1179,8 +1176,10 @@ impl Render for BigPictureView {
             // The page under them closed (its game went away).
             self.settings = None;
         }
-        let content = if empty {
-            self.render_empty(c, cx).into_any_element()
+        let content = if let Some(welcome) = self.render_welcome(c, metrics, cx) {
+            welcome
+        } else if empty {
+            self.render_empty_screen(c, metrics, cx)
         } else if self.page.is_some() {
             self.render_page(c, metrics, window, cx)
         } else {

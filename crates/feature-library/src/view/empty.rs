@@ -67,19 +67,25 @@ impl LibraryView {
                         }),
                 );
             return div()
-                .id("library-empty")
+                .relative()
                 .size_full()
-                .overflow_y_scrollbar()
                 .child(
-                    v_flex()
-                        .w_full()
-                        .items_center()
-                        .px_6()
-                        .py_10()
-                        .gap_4()
-                        .child(found)
-                        .child(actions),
+                    div()
+                        .id("library-empty")
+                        .size_full()
+                        .overflow_y_scrollbar()
+                        .child(
+                            v_flex()
+                                .w_full()
+                                .items_center()
+                                .px_6()
+                                .py_10()
+                                .gap_4()
+                                .child(found)
+                                .child(actions),
+                        ),
                 )
+                .child(irori_ui::tour::mark(irori_ui::tour::anchors::LIBRARY_GAMES))
                 .into_any_element();
         }
         let state = if models(cx).accounts.read(cx).any_logged_in() {
@@ -114,6 +120,11 @@ impl LibraryView {
                         .child(set_up_emulation()),
                 )
         };
-        state.into_any_element()
+        div()
+            .relative()
+            .size_full()
+            .child(state)
+            .child(irori_ui::tour::mark(irori_ui::tour::anchors::LIBRARY_GAMES))
+            .into_any_element()
     }
 }

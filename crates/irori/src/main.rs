@@ -179,6 +179,7 @@ fn main() -> Result<()> {
     application.run(move |cx| {
         gpui_kit::init(cx);
         crash::install_pending(last_crash, cx);
+        irori_ui::i18n::apply_system_language_on_first_run(&backend);
         irori_ui::init(backend.clone(), cx);
         irori_ui::i18n::register(strings::CATALOGS);
         irori_ui::hooks::install(stores::hooks(), cx);

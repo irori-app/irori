@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Temas incluídos",
   "settings.about.tagline": "Um launcher de jogos para Linux. Licenciado sob GPL-3.0-or-later.",
   "settings.about.third_party": "Software de terceiros",
+  "settings.about.getting_started": "Primeiros passos",
+  "settings.about.getting_started_help": "Uma lista rápida para conectar lojas, escolher o visual e ativar recursos de jogo.",
   "settings.about.tour_help": "Um tour rápido pela janela principal: onde fica cada coisa e o atalho para tudo.",
   "settings.about.tour": "Fazer um tour",
   "settings.about.feedback.title": "Ajuda e feedback",

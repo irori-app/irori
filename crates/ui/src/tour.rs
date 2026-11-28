@@ -137,9 +137,19 @@ pub fn card_origin(
     }
 }
 
+/// Maximum frames to re-probe when an anchor has not painted yet (such as
+/// immediately after switching routes). Capping prevents an unbounded repaint
+/// loop if a region is legitimately hidden in a narrow window.
+const MAX_PROBE_FRAMES: u8 = 3;
+
+fn should_retry_probe(found: bool, probe_frames: u8) -> bool {
+    !found && probe_frames < MAX_PROBE_FRAMES
+}
+
 /// The running tour.
 pub struct Tour {
     step: Option<usize>,
+    probe_frames: u8,
     focus: FocusHandle,
 }
 
@@ -153,6 +163,7 @@ pub fn tour(cx: &mut App) -> Entity<Tour> {
     }
     let entity = cx.new(|cx| Tour {
         step: None,
+        probe_frames: 0,
         focus: cx.focus_handle(),
     });
     cx.set_global(TourHandle(entity.clone()));
@@ -167,6 +178,7 @@ pub fn start(window: &mut Window, cx: &mut App) {
     let entity = tour(cx);
     entity.update(cx, |tour, cx| {
         tour.step = Some(0);
+        tour.probe_frames = 0;
         cx.notify();
     });
     let focus = entity.read(cx).focus.clone();
@@ -184,6 +196,7 @@ pub fn running(cx: &App) -> bool {
 impl Tour {
     fn go(&mut self, to: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
         self.step = to.filter(|s| *s < STEPS.len());
+        self.probe_frames = 0;
         if self.step.is_none() {
             ACTIVE.store(false, Ordering::Relaxed);
             PLACES.lock().clear();
@@ -343,8 +356,10 @@ impl Render for Tour {
                     ),
             );
 
-        // Until the part is drawn once, look again on the next frame.
-        if target.is_none() {
+        // Until the part is drawn once, look again for a few frames without
+        // spinning forever when a region is genuinely absent.
+        if should_retry_probe(target.is_some(), self.probe_frames) {
+            self.probe_frames += 1;
             window.request_animation_frame();
         }
         div()
@@ -414,5 +429,13 @@ mod tests {
         anchors.sort_unstable();
         anchors.dedup();
         assert_eq!(anchors.len(), STEPS.len());
+    }
+
+    #[test]
+    fn probe_retries_are_bounded() {
+        assert!(should_retry_probe(false, 0));
+        assert!(should_retry_probe(false, MAX_PROBE_FRAMES - 1));
+        assert!(!should_retry_probe(false, MAX_PROBE_FRAMES));
+        assert!(!should_retry_probe(true, 0));
     }
 }

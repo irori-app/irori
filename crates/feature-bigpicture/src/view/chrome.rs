@@ -272,6 +272,22 @@ impl BigPictureView {
                 }
             }
         };
+        if let Some(welcome) = self.welcome {
+            let mut out = vec![(vec![Up, Down], t("bigpicture.hint.choose"))];
+            if welcome.step == super::welcome::WelcomeStep::Intro && welcome.ix == 0 {
+                out.push((vec![Left, Right], t("bigpicture.hint.change")));
+            }
+            out.push(one(Confirm, "bigpicture.hint.select"));
+            out.push(one(
+                Back,
+                if welcome.step == super::welcome::WelcomeStep::Intro {
+                    "bigpicture.hint.skip"
+                } else {
+                    "bigpicture.hint.back"
+                },
+            ));
+            return out;
+        }
         if self.library.searching || self.log_filter.editing {
             return vec![one(Confirm, "bigpicture.hint.done")];
         }
@@ -324,6 +340,14 @@ impl BigPictureView {
             }
             out.push(one(Back, "bigpicture.hint.done"));
             return out;
+        }
+        if models(cx).library.read(cx).snapshot.games.is_empty() {
+            return vec![
+                (vec![Up, Down], t("bigpicture.hint.choose")),
+                one(Confirm, "bigpicture.hint.select"),
+                one(Menu, "bigpicture.hint.menu"),
+                one(Back, "bigpicture.hint.exit"),
+            ];
         }
         let mut out = Vec::new();
         if let Some(page) = &self.page {
@@ -421,7 +445,7 @@ impl BigPictureView {
 }
 
 /// The family of the controller in hand, `None` for the keyboard.
-fn active_kind(cx: &App) -> Option<ControllerKind> {
+pub(super) fn active_kind(cx: &App) -> Option<ControllerKind> {
     gamepad::model(cx).and_then(|m| m.read(cx).active_kind())
 }
 
@@ -544,6 +568,7 @@ fn keycap(input: GamepadInput, c: Colors) -> AnyElement {
         GamepadInput::Menu => "M",
         GamepadInput::PrevPage => "PgUp",
         GamepadInput::NextPage => "PgDn",
+        GamepadInput::Guide => "Guide",
         _ => return arrow(input, c),
     };
     div()

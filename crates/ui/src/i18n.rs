@@ -193,13 +193,7 @@ impl State {
     }
 
     fn set_language(&mut self, code: &str) {
-        let base = code.split(['_', '-']).next().unwrap_or(code);
-        let resolved = LANGUAGES
-            .iter()
-            .find(|l| l.code == code)
-            .or_else(|| LANGUAGES.iter().find(|l| l.code == base))
-            .map(|l| l.code)
-            .unwrap_or("en");
+        let resolved = resolve_locale(code);
         self.code = resolved.to_string();
         self.current = if resolved == "en" {
             Catalog::new()
@@ -251,6 +245,65 @@ fn fill(text: &str, args: &[(&str, &str)]) -> SharedString {
         text = text.replace(&format!("{{{name}}}"), value);
     }
     SharedString::from(text)
+}
+
+/// Resolve an OS locale or BCP-47 tag (such as `pt-BR`, `pt_BR.UTF-8`,
+/// `zh-TW`, `de-AT`) to the closest shipped language code in [`LANGUAGES`],
+/// falling back to `"en"`.
+pub fn resolve_locale(raw: &str) -> &'static str {
+    let stripped = raw.trim().split(['.', '@']).next().unwrap_or("");
+    if stripped.is_empty() {
+        return "en";
+    }
+    let norm = stripped.replace('-', "_");
+    if let Some(exact) = LANGUAGES
+        .iter()
+        .find(|l| l.code.eq_ignore_ascii_case(&norm))
+    {
+        return exact.code;
+    }
+    let lower = norm.to_ascii_lowercase();
+    let parts: Vec<&str> = lower.split('_').filter(|s| !s.is_empty()).collect();
+    match parts.first().copied() {
+        Some("zh") => {
+            if parts
+                .iter()
+                .any(|p| matches!(*p, "hant" | "tw" | "hk" | "mo"))
+            {
+                return "zh_Hant";
+            }
+            return "zh_Hans";
+        }
+        Some("pt") if parts.contains(&"br") => return "pt_BR",
+        Some(base) => {
+            if let Some(lang) = LANGUAGES.iter().find(|l| l.code.eq_ignore_ascii_case(base)) {
+                return lang.code;
+            }
+        }
+        None => {}
+    }
+    "en"
+}
+
+/// On a brand-new installation (before any settings file is saved), pick the
+/// interface language from the operating system locale so first-run screens
+/// open in the user's language immediately.
+pub fn apply_system_language_on_first_run(backend: &irori_services::Backend) {
+    if irori_core::Paths::get().settings_file().exists() {
+        return;
+    }
+    if backend.settings.app().ui_language != "en" {
+        return;
+    }
+    let Some(locale) = crate::age_rating::system_locale() else {
+        return;
+    };
+    let resolved = resolve_locale(locale);
+    if resolved != "en" {
+        backend
+            .settings
+            .update_app(|s| s.ui_language = resolved.to_string());
+    }
 }
 
 /// Add a crate's catalogs. Call once from the crate's `init`.
@@ -415,5 +468,23 @@ mod tests {
         assert!(validate_catalogs(ORPHAN, "ui.").is_err());
         assert!(validate_catalogs(BLANK, "ui.").is_err());
         assert!(validate_catalogs(BAD_PLACEHOLDER, "ui.").is_err());
+    }
+
+    #[test]
+    fn resolves_os_locales_to_shipped_languages() {
+        assert_eq!(resolve_locale("pt-BR"), "pt_BR");
+        assert_eq!(resolve_locale("pt_BR.UTF-8"), "pt_BR");
+        assert_eq!(resolve_locale("pt-Latn-BR"), "pt_BR");
+        assert_eq!(resolve_locale("pt-PT"), "pt");
+        assert_eq!(resolve_locale("zh-CN"), "zh_Hans");
+        assert_eq!(resolve_locale("zh-Hans-CN"), "zh_Hans");
+        assert_eq!(resolve_locale("zh-TW"), "zh_Hant");
+        assert_eq!(resolve_locale("zh-HK"), "zh_Hant");
+        assert_eq!(resolve_locale("zh"), "zh_Hans");
+        assert_eq!(resolve_locale("de_AT@euro"), "de");
+        assert_eq!(resolve_locale("es-419"), "es");
+        assert_eq!(resolve_locale("en-US"), "en");
+        assert_eq!(resolve_locale("xx"), "en");
+        assert_eq!(resolve_locale(""), "en");
     }
 }

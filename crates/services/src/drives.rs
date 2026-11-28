@@ -49,6 +49,9 @@ pub struct InstallDriveProbe {
     /// Formatted disk label for each configured folder passed to
     /// [`probe_install_drives`], in matching index order.
     pub configured_labels: Vec<Option<String>>,
+    /// Available and total space `(free, total)` in bytes for each configured
+    /// folder passed to [`probe_install_drives`], in matching index order.
+    pub configured_space: Vec<Option<(u64, u64)>>,
     /// Writable main drives not already represented by configured folders.
     pub extras: Vec<DetectedDrive>,
 }
@@ -356,6 +359,18 @@ pub(crate) fn resolve_disk_label(path: &Path, disks: &[SystemDisk]) -> Option<St
     resolve_disk_label_raw(&resolved, disks).or_else(|| resolve_disk_label_raw(path, disks))
 }
 
+fn resolve_disk_space_raw(path: &Path, disks: &[SystemDisk]) -> Option<(u64, u64)> {
+    let matched = matching_mount(path, disks)?;
+    let (topmost, _) = topmost_volume_info(matched, disks);
+    Some((topmost.free, topmost.total))
+}
+
+/// Resolve `(free, total)` bytes for `path` against a `SystemDisk` slice.
+pub(crate) fn resolve_disk_space(path: &Path, disks: &[SystemDisk]) -> Option<(u64, u64)> {
+    let resolved = canonical_existing_or_self(path);
+    resolve_disk_space_raw(&resolved, disks).or_else(|| resolve_disk_space_raw(path, disks))
+}
+
 fn suggested_base_for_mount(mount_str: &str) -> String {
     if mount_str.contains('\\') || mount_str.contains(':') {
         format!("{}\\Games\\Irori", mount_str.trim_end_matches(['\\', '/']))
@@ -539,9 +554,14 @@ pub fn probe_install_drives(configured_paths: &[PathBuf]) -> InstallDriveProbe {
         .iter()
         .map(|p| resolve_disk_label(p, &disks))
         .collect();
+    let configured_space = configured_paths
+        .iter()
+        .map(|p| resolve_disk_space(p, &disks))
+        .collect();
     let extras = extra_drives_for_snapshot(&disks, configured_paths);
     InstallDriveProbe {
         configured_labels,
+        configured_space,
         extras,
     }
 }
