@@ -169,14 +169,17 @@ impl SettingsForm {
         let path = spec.path;
         let label = spec.label_text();
         match spec.kind {
-            FieldKind::Toggle => Switch::new(id("field"))
-                .checked(self.bool_value(spec.path))
-                .disabled(disabled)
-                .accessibility_label(label)
-                .on_change(cx.listener(move |this, on: &bool, window, cx| {
-                    this.write(path, Value::Bool(*on), window, cx)
-                }))
-                .into_any_element(),
+            FieldKind::Toggle => {
+                let inverted = spec.inverted;
+                Switch::new(id("field"))
+                    .checked(self.bool_value(spec.path) ^ inverted)
+                    .disabled(disabled)
+                    .accessibility_label(label)
+                    .on_change(cx.listener(move |this, on: &bool, window, cx| {
+                        this.write(path, Value::Bool(*on ^ inverted), window, cx)
+                    }))
+                    .into_any_element()
+            }
             FieldKind::Text(kind) => {
                 let Some(state) = self.texts.get(spec.path) else {
                     return div().into_any_element();

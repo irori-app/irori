@@ -426,6 +426,9 @@ pub struct FieldSpec {
     /// system's own build (Linux on Linux, Mac on macOS); a field shared
     /// with the game defaults shows there too.
     pub native_only: bool,
+    /// Present a persisted `disable*` boolean as a positive "enabled" switch
+    /// without renaming the stored JSON key.
+    pub inverted: bool,
 }
 
 impl FieldSpec {
@@ -452,6 +455,7 @@ impl FieldSpec {
             requires: &[],
             needs: &[],
             native_only: false,
+            inverted: false,
         }
     }
 
@@ -492,6 +496,11 @@ impl FieldSpec {
 
     pub(super) const fn native_only(mut self) -> Self {
         self.native_only = true;
+        self
+    }
+
+    pub(super) const fn inverted(mut self) -> Self {
+        self.inverted = true;
         self
     }
 
