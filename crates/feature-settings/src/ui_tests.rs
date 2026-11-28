@@ -1342,3 +1342,103 @@ fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext)
         );
     }
 }
+
+#[gpui_kit::test]
+fn advanced_subtabs_order_igdb_and_render_imports_panel(cx: &mut TestAppContext) {
+    use gpui_kit::{App, VisualTestContext, Window};
+
+    use crate::imports::DetectedLaunchers;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("advanced".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    let redraw = |vcx: &mut VisualTestContext, f: &mut dyn FnMut(&mut Window, &mut App)| {
+        vcx.update_window(handle, |_, window, cx| {
+            f(window, cx);
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        vcx.run_until_parked();
+    };
+
+    // Default sub-tab is Artwork & metadata; IGDB and LaunchBox panels stay
+    // hidden while their toggles are off and nothing is stored.
+    redraw(&mut vcx, &mut |_, _| {});
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).section()),
+        SettingsSection::Advanced
+    );
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).advanced_tab_for_test()),
+        "artwork"
+    );
+    let paths_off = vcx.read(|cx| view.read(cx).app_form().read(cx).visible_paths());
+    assert!(paths_off.contains(&"steamGridDbApiKey"));
+    assert!(paths_off.contains(&"iroriIgdb"));
+    assert!(paths_off.contains(&"iroriArtCacheLimit"));
+    assert!(!paths_off.contains(&"panel.igdb"));
+    assert!(!paths_off.contains(&"panel.launchbox"));
+    assert!(!paths_off.contains(&"allowInstallationBrokenAnticheat"));
+
+    // Turning IGDB on reveals panel.igdb directly underneath iroriIgdb,
+    // ahead of Steam title matching.
+    redraw(&mut vcx, &mut |window, cx| {
+        let app_form = view.read(cx).app_form().clone();
+        app_form.update(cx, |f, cx| {
+            f.write_for_test("iroriIgdb", Value::Bool(true), window, cx)
+        });
+    });
+    let paths_on = vcx.read(|cx| view.read(cx).app_form().read(cx).visible_paths());
+    let pos = |p| paths_on.iter().position(|&x| x == p).unwrap();
+    assert_eq!(pos("panel.igdb"), pos("iroriIgdb") + 1);
+    assert!(pos("panel.igdb") < pos("iroriSteamTitleMatch"));
+
+    // Deep-linking "advanced/compat" switches directly to Epic & Wine.
+    redraw(&mut vcx, &mut |window, cx| {
+        view.update(cx, |v, cx| v.set_section("advanced/compat", window, cx));
+    });
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).advanced_tab_for_test()),
+        "compat"
+    );
+    let compat_paths = vcx.read(|cx| view.read(cx).app_form().read(cx).visible_paths());
+    assert!(compat_paths.contains(&"allowInstallationBrokenAnticheat"));
+    assert!(!compat_paths.contains(&"steamGridDbApiKey"));
+
+    // Imports tab renders cleanly for both empty and populated launcher states.
+    redraw(&mut vcx, &mut |window, cx| {
+        view.update(cx, |v, cx| {
+            v.imports_panel().update(cx, |p, cx| {
+                p.set_detected_for_test(DetectedLaunchers::default(), cx)
+            });
+            v.set_subtab_for_test("imports", window, cx);
+        });
+    });
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).advanced_tab_for_test()),
+        "imports"
+    );
+    assert!(vcx.debug_bounds("import-row-heroic").is_none());
+
+    redraw(&mut vcx, &mut |_, cx| {
+        view.update(cx, |v, cx| {
+            v.imports_panel().update(cx, |p, cx| {
+                p.set_detected_for_test(
+                    DetectedLaunchers {
+                        heroic: true,
+                        lutris: true,
+                        bottles: true,
+                        faugus: false,
+                        playnite: false,
+                    },
+                    cx,
+                );
+            });
+        });
+    });
+    assert!(vcx.debug_bounds("import-row-heroic").is_some());
+    assert!(vcx.debug_bounds("import-row-lutris").is_some());
+    assert!(vcx.debug_bounds("import-row-bottles").is_some());
+}

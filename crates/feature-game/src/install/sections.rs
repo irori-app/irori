@@ -145,7 +145,7 @@ impl InstallSheet {
                             .label(t("game.install.open_settings"))
                             .on_click(|_, window, cx| {
                                 window.close_dialog(cx);
-                                navigate(Route::Settings("advanced".into()), cx);
+                                navigate(Route::Settings("advanced/compat".into()), cx);
                             }),
                     );
             }

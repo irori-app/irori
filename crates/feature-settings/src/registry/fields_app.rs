@@ -514,12 +514,12 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
 ];
 
 pub(super) const ADVANCED: &[FieldSpec] = &[
-    // ---- Advanced ----
+    // ---- Advanced -> Artwork & metadata ----
     app(
         "steamGridDbApiKey",
         "settings.field.steam_grid_db_api_key.label",
         Advanced,
-        "settings.group.artwork",
+        "settings.group.artwork_sources",
         Text(TextKind::Secret),
     )
     .help("settings.field.steam_grid_db_api_key.help")
@@ -527,29 +527,10 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
     .placeholder(Key("settings.field.steam_grid_db_api_key.placeholder"))
     .keywords(&["steamgriddb", "artwork", "cover", "key"]),
     app(
-        "iroriArtCacheLimit",
-        "settings.field.art_cache_limit.label",
-        Advanced,
-        "settings.group.artwork",
-        Choice(ART_CACHE_LIMIT),
-    )
-    .help("settings.field.art_cache_limit.help")
-    .tooltip("settings.field.art_cache_limit.tip")
-    .keywords(&[
-        "art",
-        "image",
-        "cache",
-        "disk",
-        "space",
-        "size",
-        "limit",
-        "thumbnail",
-    ]),
-    app(
         "iroriIgdb",
         "settings.field.igdb.label",
         Advanced,
-        "settings.group.artwork",
+        "settings.group.artwork_sources",
         Toggle,
     )
     .help("settings.field.igdb.help")
@@ -565,13 +546,23 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "screenshots",
     ]),
     app(
+        "panel.igdb",
+        "settings.field.panel_igdb.label",
+        Advanced,
+        "settings.group.artwork_sources",
+        Panel(PanelKind::Igdb),
+    )
+    .tooltip("settings.field.panel_igdb.tip")
+    .keywords(&["igdb", "twitch", "client id", "client secret"]),
+    app(
         "iroriSteamTitleMatch",
         "settings.field.steam_title_match.label",
         Advanced,
-        "settings.group.artwork",
+        "settings.group.artwork_sources",
         Toggle,
     )
     .help("settings.field.steam_title_match.help")
+    .tooltip("settings.field.steam_title_match.tip")
     .keywords(&[
         "steam", "app id", "link", "match", "tags", "protondb", "metadata",
     ]),
@@ -579,28 +570,21 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "iroriSteamTagLimit",
         "settings.field.steam_tag_limit.label",
         Advanced,
-        "settings.group.artwork",
+        "settings.group.artwork_sources",
         Text(TextKind::Number { min: 5, max: 20 }),
     )
     .help("settings.field.steam_tag_limit.help")
+    .tooltip("settings.field.steam_tag_limit.tip")
     .keywords(&["steam", "tags", "limit", "metadata"]),
-    app(
-        "panel.igdb",
-        "settings.field.panel_igdb.label",
-        Advanced,
-        "settings.group.artwork",
-        Panel(PanelKind::Igdb),
-    )
-    .tooltip("settings.field.panel_igdb.tip")
-    .keywords(&["igdb", "twitch", "client id", "client secret"]),
     app(
         "iroriVndb",
         "settings.field.vndb.label",
         Advanced,
-        "settings.group.artwork",
+        "settings.group.artwork_sources",
         Toggle,
     )
     .help("settings.field.vndb.help")
+    .tooltip("settings.field.vndb.tip")
     .keywords(&[
         "vndb",
         "visual novel",
@@ -614,10 +598,11 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "iroriLaunchBox",
         "settings.field.launchbox.label",
         Advanced,
-        "settings.group.artwork",
+        "settings.group.artwork_sources",
         Toggle,
     )
     .help("settings.field.launchbox.help")
+    .tooltip("settings.field.launchbox.tip")
     .keywords(&[
         "launchbox",
         "box art",
@@ -631,10 +616,30 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "panel.launchbox",
         "settings.field.panel_launchbox.label",
         Advanced,
-        "settings.group.artwork",
+        "settings.group.artwork_sources",
         Panel(PanelKind::LaunchBox),
     )
     .keywords(&["launchbox", "game list", "remove", "disk", "space"]),
+    app(
+        "iroriArtCacheLimit",
+        "settings.field.art_cache_limit.label",
+        Advanced,
+        "settings.group.artwork_cache",
+        Choice(ART_CACHE_LIMIT),
+    )
+    .help("settings.field.art_cache_limit.help")
+    .tooltip("settings.field.art_cache_limit.tip")
+    .keywords(&[
+        "art",
+        "image",
+        "cache",
+        "disk",
+        "space",
+        "size",
+        "limit",
+        "thumbnail",
+    ]),
+    // ---- Advanced -> Epic & Wine ----
     app(
         "panel.eos-overlay",
         "settings.field.panel_eos_overlay.label",
@@ -672,16 +677,6 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "link",
     ]),
     app(
-        "showValveProton",
-        "settings.field.show_valve_proton.label",
-        Advanced,
-        "settings.group.wine",
-        Toggle,
-    )
-    .help("settings.field.show_valve_proton.help")
-    .tooltip("settings.field.show_valve_proton.tip")
-    .keywords(&["proton", "valve", "steam"]),
-    app(
         "iroriCompatToolsPath",
         "settings.field.compat_tools_path.label",
         Advanced,
@@ -690,6 +685,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
     )
     .help("settings.field.compat_tools_path.help")
     .tooltip("settings.field.compat_tools_path.tip")
+    .placeholder(Key("settings.field.compat_tools_path.placeholder"))
     .keywords(&["proton", "wine", "download", "folder", "path", "ge-proton"]),
     app(
         "downloadProtonToSteam",
@@ -709,6 +705,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         Choice(PROTON_CPU_LEVEL),
     )
     .help("settings.field.proton_cpu_level.help")
+    .tooltip("settings.field.proton_cpu_level.tip")
     .keywords(&[
         "proton",
         "cachyos",
@@ -720,39 +717,32 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "processor",
     ]),
     app(
+        "showValveProton",
+        "settings.field.show_valve_proton.label",
+        Advanced,
+        "settings.group.wine",
+        Toggle,
+    )
+    .help("settings.field.show_valve_proton.help")
+    .tooltip("settings.field.show_valve_proton.tip")
+    .keywords(&["proton", "valve", "steam"]),
+    app(
         "allowInstallationBrokenAnticheat",
         "settings.field.allow_installation_broken_anticheat.label",
         Advanced,
         "settings.group.installs",
         Toggle,
     )
+    .tag(Verbatim("Linux"))
     .help("settings.field.allow_installation_broken_anticheat.help")
     .tooltip("settings.field.allow_installation_broken_anticheat.tip")
     .keywords(&["anticheat", "eac", "battleye", "denied"]),
-    app(
-        "disableLogs",
-        "settings.field.disable_logs.label",
-        Advanced,
-        "settings.group.diagnostics",
-        Toggle,
-    )
-    .help("settings.field.disable_logs.help")
-    .tooltip("settings.field.disable_logs.tip")
-    .keywords(&["log", "debug"]),
-    app(
-        "action.open-logs",
-        "settings.field.action_open_logs.label",
-        Advanced,
-        "settings.group.diagnostics",
-        Action(ActionKind::OpenLogsFolder),
-    )
-    .tooltip("settings.field.action_open_logs.tip")
-    .keywords(&["log", "folder", "open"]),
+    // ---- Advanced -> Imports (rendered by ImportsPanel; indexed here for search) ----
     app(
         "action.import-heroic",
         "settings.field.action_import_heroic.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Action(ActionKind::ImportHeroic),
     )
     .help("settings.field.action_import_heroic.help")
@@ -762,7 +752,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "action.import-lutris",
         "settings.field.action_import_lutris.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Action(ActionKind::ImportLutris),
     )
     .help("settings.field.action_import_lutris.help")
@@ -772,7 +762,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "action.import-bottles",
         "settings.field.action_import_bottles.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Action(ActionKind::ImportBottles),
     )
     .help("settings.field.action_import_bottles.help")
@@ -782,7 +772,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "action.import-faugus",
         "settings.field.action_import_faugus.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Action(ActionKind::ImportFaugus),
     )
     .help("settings.field.action_import_faugus.help")
@@ -792,7 +782,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "iroriLauncherImports.lutris",
         "settings.field.launcher_sync_lutris.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Toggle,
     )
     .help("settings.field.launcher_sync.help")
@@ -801,7 +791,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "iroriLauncherImports.bottles",
         "settings.field.launcher_sync_bottles.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Toggle,
     )
     .help("settings.field.launcher_sync.help")
@@ -810,7 +800,7 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "iroriLauncherImports.faugus",
         "settings.field.launcher_sync_faugus.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Toggle,
     )
     .help("settings.field.launcher_sync.help")
@@ -819,32 +809,12 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "action.import-playnite",
         "settings.field.action_import_playnite.label",
         Advanced,
-        "settings.group.maintenance",
+        "settings.group.imports",
         Action(ActionKind::ImportPlaynite),
     )
     .help("settings.field.action_import_playnite.help")
     .tooltip("settings.field.action_import_playnite.tip")
     .keywords(&["playnite", "import", "migrate", "playtime", "windows"]),
-    app(
-        "action.clear-caches",
-        "settings.field.action_clear_caches.label",
-        Advanced,
-        "settings.group.maintenance",
-        Action(ActionKind::ClearCaches),
-    )
-    .help("settings.field.action_clear_caches.help")
-    .tooltip("settings.field.action_clear_caches.tip")
-    .keywords(&["cache", "clear", "artwork", "refresh"]),
-    app(
-        "action.reset-settings",
-        "settings.field.action_reset_settings.label",
-        Advanced,
-        "settings.group.maintenance",
-        Action(ActionKind::ResetSettings),
-    )
-    .help("settings.field.action_reset_settings.help")
-    .tooltip("settings.field.action_reset_settings.tip")
-    .keywords(&["reset", "defaults", "factory"]),
 ];
 
 pub(super) const SAVES: &[FieldSpec] = &[

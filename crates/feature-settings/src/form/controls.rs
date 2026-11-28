@@ -73,6 +73,12 @@ impl SettingsForm {
             {
                 return false;
             }
+            if matches!(f.kind, FieldKind::Panel(PanelKind::LaunchBox))
+                && self.compact
+                && !self.launchbox_visible
+            {
+                return false;
+            }
             if matches!(
                 f.kind,
                 FieldKind::Panel(PanelKind::EosOverlay | PanelKind::EglSync)
@@ -393,8 +399,17 @@ impl SettingsForm {
                     .into(),
             ),
             PanelKind::LaunchBox => crate::stores::emulation(cx).map(|store| {
-                cx.new(|cx| crate::launchbox::LaunchBoxPanel::new(store, cx))
-                    .into()
+                let entity = cx.new(|cx| crate::launchbox::LaunchBoxPanel::new(store, cx));
+                self.launchbox_visible = entity.read(cx).has_visible_content(cx);
+                self._subscriptions
+                    .push(cx.observe(&entity, |this, panel, cx| {
+                        let visible = panel.read(cx).has_visible_content(cx);
+                        if this.launchbox_visible != visible {
+                            this.launchbox_visible = visible;
+                            cx.notify();
+                        }
+                    }));
+                entity.into()
             }),
             PanelKind::SteamLaunchOptions => match &self.target {
                 FormTarget::Game(id) if id.runner == Runner::Steam => {

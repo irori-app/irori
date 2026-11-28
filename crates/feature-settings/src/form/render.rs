@@ -1,10 +1,15 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, Textarea, TextareaState};
+use gpui_kit::component::link::Link;
 use gpui_kit::component::select::Select;
 use gpui_kit::component::slider::Slider;
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{ActiveTheme as _, Disableable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::tag::Tag;
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Selectable as _, Sizable as _, StyledExt as _, h_flex,
+    v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, Context, ElementId, Entity, InteractiveElement as _, IntoElement,
@@ -88,8 +93,10 @@ impl SettingsForm {
         let mut row = RowState {
             label,
             help: self.field_help(spec),
+            help_link: None,
             tooltip: (!tooltip.is_empty()).then(|| (SharedString::new_static(path), tooltip)),
             tag: spec.tag.map(|tag| tag.text()),
+            status: None,
             reset,
             disabled_reason,
             error: self.errors.get(spec.path).cloned(),
@@ -178,9 +185,107 @@ impl SettingsForm {
                 }))
                 .into_any_element(),
             FieldKind::Text(kind) => {
+                if let TextKind::Number { min, max } = kind
+                    && path == "iroriSteamTagLimit"
+                {
+                    let current = self
+                        .value(path)
+                        .and_then(Value::as_u64)
+                        .map(|n| (n as u32).clamp(min, max))
+                        .unwrap_or(max);
+                    let dec = current.saturating_sub(1).max(min);
+                    let inc = current.saturating_add(1).min(max);
+                    return h_flex()
+                        .gap_1()
+                        .items_center()
+                        .child(
+                            Button::new(id("dec"))
+                                .outline()
+                                .small()
+                                .icon(IconName::Minus)
+                                .accessibility_label(t("settings.stepper.decrease"))
+                                .disabled(disabled || current <= min)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.write(path, Value::from(dec), window, cx);
+                                })),
+                        )
+                        .child(
+                            div()
+                                .w_10()
+                                .text_center()
+                                .text_sm()
+                                .font_medium()
+                                .child(current.to_string()),
+                        )
+                        .child(
+                            Button::new(id("inc"))
+                                .outline()
+                                .small()
+                                .icon(IconName::Plus)
+                                .accessibility_label(t("settings.stepper.increase"))
+                                .disabled(disabled || current >= max)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.write(path, Value::from(inc), window, cx);
+                                })),
+                        )
+                        .into_any_element();
+                }
                 let Some(state) = self.texts.get(spec.path) else {
                     return div().into_any_element();
                 };
+                if path == "steamGridDbApiKey" {
+                    let has_key = !self
+                        .value(path)
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .trim()
+                        .is_empty();
+                    if let Some(row) = row {
+                        row.status = Some(
+                            if has_key {
+                                Tag::success()
+                                    .xsmall()
+                                    .child(t("settings.steamgriddb.configured"))
+                            } else {
+                                Tag::secondary()
+                                    .xsmall()
+                                    .outline()
+                                    .child(t("settings.steamgriddb.not_set"))
+                            }
+                            .into_any_element(),
+                        );
+                        row.help_link = Some(
+                            Link::new("steamgriddb-api-key-link")
+                                .href("https://www.steamgriddb.com/profile/preferences/api")
+                                .text_xs()
+                                .child(t("settings.steamgriddb.get_key"))
+                                .into_any_element(),
+                        );
+                    }
+                    let input = Input::new(state)
+                        .id(id("field"))
+                        .aria_label(label)
+                        .disabled(disabled)
+                        .mask_toggle()
+                        .w_64();
+                    return h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(input)
+                        .when(has_key, |r| {
+                            r.child(
+                                Button::new("steamgriddb-clear")
+                                    .ghost()
+                                    .small()
+                                    .label(t("settings.steamgriddb.clear"))
+                                    .disabled(disabled)
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.write(path, Value::String(String::new()), window, cx);
+                                    })),
+                            )
+                        })
+                        .into_any_element();
+                }
                 let picker = matches!(kind, TextKind::Directory | TextKind::File).then(|| {
                     Button::new(id("pick"))
                         .ghost()
@@ -213,6 +318,7 @@ impl SettingsForm {
                     .id(id("field"))
                     .aria_label(label)
                     .disabled(disabled)
+                    .when(kind == TextKind::Secret, Input::mask_toggle)
                     .when(wide && !compact_pair, |i| i.w_80())
                     .when(wide && compact_pair, |i| i.w_48())
                     .when(!wide && !compact_pair, |i| i.w_24())
@@ -220,16 +326,39 @@ impl SettingsForm {
                     .when_some(picker, |i, p| i.suffix(p))
                     .into_any_element()
             }
-            FieldKind::Choice(_) => match self.choices.get(spec.path) {
-                Some(state) => Select::new(state)
-                    .id(id("field"))
-                    .accessibility_label(label)
-                    .disabled(disabled)
-                    .when(compact_pair, |s| s.w_40())
-                    .when(!compact_pair, |s| s.w_64())
-                    .into_any_element(),
-                None => div().into_any_element(),
-            },
+            FieldKind::Choice(options) => {
+                if path == "iroriArtCacheLimit" && !compact_pair {
+                    let current = self.value(path).cloned().unwrap_or(Value::Null);
+                    return h_flex()
+                        .gap_1()
+                        .flex_wrap()
+                        .items_center()
+                        .children(options.iter().enumerate().map(|(ix, opt)| {
+                            let selected = opt.value.matches(&current);
+                            let val = opt.value;
+                            Button::new(ElementId::Name(format!("art-cache-{ix}").into()))
+                                .outline()
+                                .small()
+                                .selected(selected)
+                                .disabled(disabled)
+                                .label(opt.label.text())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.write(path, val.to_json(), window, cx);
+                                }))
+                        }))
+                        .into_any_element();
+                }
+                match self.choices.get(spec.path) {
+                    Some(state) => Select::new(state)
+                        .id(id("field"))
+                        .accessibility_label(label)
+                        .disabled(disabled)
+                        .when(compact_pair, |s| s.w_40())
+                        .when(!compact_pair, |s| s.w_64())
+                        .into_any_element(),
+                    None => div().into_any_element(),
+                }
+            }
             FieldKind::Custom(kind) => {
                 let mut fallback = RowState::default();
                 let row = row.unwrap_or(&mut fallback);

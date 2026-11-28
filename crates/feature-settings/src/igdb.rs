@@ -8,7 +8,10 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::link::Link;
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::{Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::tag::Tag;
+use gpui_kit::component::{
+    ActiveTheme as _, Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
@@ -19,7 +22,7 @@ use irori_services::IgdbStatus;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
-use crate::widgets::{muted, panel};
+use crate::widgets::muted;
 
 pub(crate) struct IgdbPanel {
     client_id: Entity<InputState>,
@@ -133,6 +136,8 @@ impl IgdbPanel {
         match &status.client_id {
             Some(id) => h_flex()
                 .gap_2()
+                .items_center()
+                .child(Tag::success().xsmall().child(t("settings.igdb.connected")))
                 .child(
                     div()
                         .flex_1()
@@ -153,16 +158,17 @@ impl IgdbPanel {
             None => h_flex()
                 .gap_2()
                 .flex_wrap()
+                .items_center()
                 .child(div().flex_1().min_w_32().child(Input::new(&self.client_id)))
                 .child(
                     div()
                         .flex_1()
                         .min_w_32()
-                        .child(Input::new(&self.client_secret)),
+                        .child(Input::new(&self.client_secret).mask_toggle()),
                 )
                 .child(
                     Button::new("igdb-save")
-                        .outline()
+                        .primary()
                         .small()
                         .icon(IconName::Check)
                         .label(t("settings.igdb.save"))
@@ -177,22 +183,54 @@ impl IgdbPanel {
 
 impl Render for IgdbPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(status) = self.status.clone() else {
-            return panel(cx).p_4().child(muted(t("settings.igdb.looking"), cx));
+        let theme = cx.theme();
+        let subpanel = || {
+            v_flex()
+                .w_full()
+                .p_3()
+                .gap_2()
+                .rounded(theme.radius)
+                .bg(theme.background)
+                .border_1()
+                .border_color(theme.border)
         };
-        panel(cx)
-            .p_4()
-            .gap_3()
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(muted(t("settings.igdb.description"), cx))
-                    .child(
-                        Link::new("igdb-guide")
-                            .href(ACCOUNT_GUIDE)
-                            .child(t("settings.igdb.open_guide")),
-                    ),
-            )
+        let Some(status) = self.status.clone() else {
+            return subpanel().child(muted(t("settings.igdb.looking"), cx));
+        };
+        let needs_key = status.client_id.is_none();
+        subpanel()
+            .when(needs_key, |body| {
+                body.child(
+                    h_flex()
+                        .gap_2()
+                        .flex_wrap()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_2()
+                                .items_center()
+                                .flex_wrap()
+                                .child(Tag::warning().xsmall().child(t("settings.igdb.needs_key")))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(t("settings.igdb.description")),
+                                ),
+                        )
+                        .child(
+                            Link::new("igdb-guide")
+                                .href(ACCOUNT_GUIDE)
+                                .text_xs()
+                                .child(t("settings.igdb.open_guide")),
+                        ),
+                )
+            })
             .child(self.render_application(&status, cx))
             .when(!status.enabled, |body| {
                 body.child(muted(t("settings.igdb.off_hint"), cx))

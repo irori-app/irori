@@ -20,6 +20,7 @@
 //! (`update_app` / `set_game_value`). Text fields commit on blur or Enter,
 //! never per keystroke.
 
+mod advanced;
 pub mod app_update;
 mod appearance;
 mod artwork;
@@ -37,6 +38,7 @@ mod how_it_starts;
 pub mod hud;
 mod i18n;
 mod igdb;
+mod imports;
 mod launch_presets;
 mod launch_programs;
 mod launchbox;
