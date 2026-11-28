@@ -25,6 +25,7 @@ use crate::accounts::{ACCOUNT_STORES, StoreCard, store_cards, store_icon};
 use crate::common::{card, card_grid_capped};
 use crate::deals::DealsSection;
 use crate::login::open_login_dialog;
+use crate::news::NewsSection;
 use crate::store_window::open_store_window;
 
 /// A store's website.
@@ -81,6 +82,11 @@ fn deals_shown(cx: &gpui_kit::App) -> bool {
     models(cx).settings.read(cx).app.deals
 }
 
+/// Whether the user wants news on the Stores page (`iroriNews`).
+fn news_shown(cx: &gpui_kit::App) -> bool {
+    models(cx).settings.read(cx).app.news
+}
+
 /// Narrowest a store card gets before the grid drops a column, in rem.
 const MIN_CARD_REM: f32 = 22.;
 const MAX_STORE_COLUMNS: u16 = 4;
@@ -89,6 +95,7 @@ const MAX_STORE_COLUMNS: u16 = 4;
 enum StoresTab {
     Stores,
     Deals,
+    News,
 }
 
 impl StoresTab {
@@ -96,11 +103,12 @@ impl StoresTab {
         match self {
             StoresTab::Stores => "stores",
             StoresTab::Deals => "deals",
+            StoresTab::News => "news",
         }
     }
 }
 
-/// Store websites, launchers and deals under underlined tabs.
+/// Store websites, launchers, deals and news under underlined tabs.
 pub struct StoresView {
     tab: StoresTab,
     cards: Vec<StoreCard>,
@@ -109,6 +117,8 @@ pub struct StoresView {
     /// Built only while `iroriDeals` is on, so nothing is asked for while
     /// the user has turned deals off.
     deals: Option<Entity<DealsSection>>,
+    /// Built lazily when the user opens the News tab while `iroriNews` is on.
+    news: Option<Entity<NewsSection>>,
     launchers: Entity<crate::launchers::LaunchersSection>,
     _subscriptions: Vec<Subscription>,
 }
@@ -122,6 +132,7 @@ impl StoresView {
             cx.observe_in(&m.settings, window, |this, _, window, cx| {
                 this.rebuild(cx);
                 this.show_deals(window, cx);
+                this.show_news(cx);
             }),
         ];
         let deals = deals_shown(cx).then(|| cx.new(|cx| DealsSection::new(window, cx)));
@@ -131,6 +142,7 @@ impl StoresView {
             cards: store_cards(cx),
             grid_width: Rc::new(Cell::new(px(0.))),
             deals,
+            news: None,
             launchers,
             _subscriptions: subscriptions,
         }
@@ -154,6 +166,17 @@ impl StoresView {
         }
     }
 
+    /// Drops the News section when `iroriNews` turns off and updates tabs.
+    fn show_news(&mut self, cx: &mut Context<Self>) {
+        if !news_shown(cx) {
+            self.news = None;
+            if self.tab == StoresTab::News {
+                self.tab = StoresTab::Stores;
+            }
+        }
+        cx.notify();
+    }
+
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let cards = store_cards(cx);
         if cards != self.cards {
@@ -162,11 +185,14 @@ impl StoresView {
         }
     }
 
-    fn tabs(&self) -> Vec<StoresTab> {
-        let mut tabs = Vec::with_capacity(2);
+    fn tabs(&self, cx: &gpui_kit::App) -> Vec<StoresTab> {
+        let mut tabs = Vec::with_capacity(3);
         tabs.push(StoresTab::Stores);
         if self.deals.is_some() {
             tabs.push(StoresTab::Deals);
+        }
+        if news_shown(cx) {
+            tabs.push(StoresTab::News);
         }
         tabs
     }
@@ -257,7 +283,7 @@ impl StoresView {
 
 impl Render for StoresView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let tabs = self.tabs();
+        let tabs = self.tabs(cx);
         let (fg, muted, border, primary) = {
             let theme = cx.theme();
             (
@@ -297,10 +323,15 @@ impl Render for StoresView {
                 Some(deals) => deals.clone().into_any_element(),
                 None => div().into_any_element(),
             },
+            StoresTab::News => match &self.news {
+                Some(news) => news.clone().into_any_element(),
+                None => div().into_any_element(),
+            },
         };
         let description = match self.tab {
             StoresTab::Stores => t("manage.stores.description"),
             StoresTab::Deals => t("manage.stores.description.deals"),
+            StoresTab::News => t("manage.stores.description.news"),
         };
 
         v_flex()
@@ -325,12 +356,20 @@ impl Render for StoresView {
                                 let label = match tab {
                                     StoresTab::Stores => t("manage.stores.tab.stores"),
                                     StoresTab::Deals => t("manage.stores.tab.deals"),
+                                    StoresTab::News => t("manage.stores.tab.news"),
                                 };
                                 v_flex()
                                     .id(ElementId::Name(format!("stores-tab-{}", tab.id()).into()))
                                     .cursor_pointer()
                                     .gap_2p5()
-                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        if tab == StoresTab::News
+                                            && this.news.is_none()
+                                            && news_shown(cx)
+                                        {
+                                            this.news =
+                                                Some(cx.new(|cx| NewsSection::new(window, cx)));
+                                        }
                                         if this.tab != tab {
                                             this.tab = tab;
                                             cx.notify();

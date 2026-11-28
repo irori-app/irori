@@ -21,6 +21,7 @@ mod i18n;
 mod launcher_wine;
 mod launchers;
 mod login;
+mod news;
 mod onboarding;
 mod steam_library;
 mod store_window;
@@ -63,6 +64,7 @@ pub use launchers::{
     install_launchers_store, known_launchers, launcher_shortcut, open_launcher, wine_launchers,
 };
 pub use login::{open_account_login_dialog, open_login_dialog};
+pub use news::set_news_shown;
 pub use onboarding::found::{FoundSourcesView, found_sources_view};
 pub use onboarding::hub::open_getting_started;
 pub use onboarding::{
