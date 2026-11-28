@@ -538,9 +538,12 @@ pub(super) fn build_menu(
         );
     }
     // An added game whose program is gone can still leave the library.
+    // Emulated games are kept out of Uninstall unless backed by a local
+    // installable archive (such as eXo `.zip` packs), where Uninstall removes
+    // only the extracted folder and preserves the archive.
     if (game.is_installed || sideload)
         && id.runner.manages_installs()
-        && id.runner != Runner::Emulation
+        && (id.runner != Runner::Emulation || game.installable)
     {
         menu = menu.separator();
         let i = id.clone();

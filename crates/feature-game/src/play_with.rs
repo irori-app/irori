@@ -5,6 +5,7 @@
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
@@ -39,20 +40,33 @@ pub fn open_play_with_dialog(id: GameId, window: &mut Window, cx: &mut App) {
 struct PlayWith {
     id: GameId,
     system: String,
+    is_exo: bool,
     statuses: Option<Vec<EngineStatus>>,
     _subscriptions: Vec<Subscription>,
 }
 
+fn is_exo_game(game: &irori_core::GameInfo) -> bool {
+    game.tags.iter().any(|tag| {
+        matches!(
+            tag.as_str(),
+            "eXoDOS" | "eXoWin3x" | "eXoScummVM" | "eXoDemoscene"
+        )
+    })
+}
+
 impl PlayWith {
     fn new(id: GameId, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let system = backend(cx)
-            .game(&id)
+        let game = backend(cx).game(&id);
+        let system = game
+            .as_ref()
             .and_then(|g| g.system.clone())
             .unwrap_or_default();
+        let is_exo = game.as_deref().is_some_and(is_exo_game);
         let settings = models(cx).settings.clone();
         let mut this = Self {
             id,
             system,
+            is_exo,
             statuses: None,
             _subscriptions: vec![cx.observe(&settings, |_, _, cx| cx.notify())],
         };
@@ -78,6 +92,14 @@ impl PlayWith {
         drop(b.clone().spawn_blocking(move || {
             b.settings
                 .set_game_value(&id, key, value.map(Value::String));
+        }));
+    }
+
+    fn set_bool(&self, key: &'static str, value: bool, cx: &mut App) {
+        let (b, id) = (backend(cx), self.id.clone());
+        drop(b.clone().spawn_blocking(move || {
+            b.settings
+                .set_game_value(&id, key, value.then_some(Value::Bool(true)));
         }));
     }
 
@@ -239,6 +261,29 @@ impl Render for PlayWith {
             .and_then(|c| statuses.iter().find(|s| s.manifest.id == c.engine))
             .cloned()
             .and_then(|s| self.render_versions(&s, &settings.engine_version, cx));
+        let exo_script = self.is_exo.then(|| {
+            let enabled = settings.exo_use_native_script;
+            v_flex()
+                .gap_1()
+                .pt_2()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .child(
+                    Checkbox::new("exo-native-script")
+                        .label(t("game.play_with.exo_native_script"))
+                        .checked(enabled)
+                        .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.set_bool("iroriExoUseNativeScript", *checked, cx);
+                        })),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(t("game.play_with.exo_native_script_help")),
+                )
+                .into_any_element()
+        });
         v_flex()
             .gap_3()
             .child(
@@ -249,6 +294,7 @@ impl Render for PlayWith {
             )
             .child(v_flex().gap_1().children(items))
             .children(versions)
+            .children(exo_script)
             .child(
                 h_flex().justify_end().child(
                     Button::new("open-emulators")

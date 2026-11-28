@@ -56,6 +56,7 @@ pub(crate) fn source_name(kind: RomSourceKind) -> SharedString {
     match kind {
         RomSourceKind::EmuDeck => "EmuDeck".into(),
         RomSourceKind::RetroDeck => "RetroDECK".into(),
+        RomSourceKind::Exo => t("manage.rom_sources.exo"),
         RomSourceKind::Folder => t("manage.rom_sources.folder"),
     }
 }

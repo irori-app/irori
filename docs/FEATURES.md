@@ -95,6 +95,7 @@ This document holds the full feature reference alongside the concise overview in
 - Reorganized Emulators page with `Installed`, `Available`, and `Manual` sections, status filters, cards with system chips and overflow menus, a searchable modal for managing RetroArch cores, and custom user-defined emulators.
 - Managed downloads and side-by-side versions from official project releases for RetroArch, DuckStation, PCSX2, Dolphin, PPSSPP, melonDS, mGBA, Azahar, Flycast, Gopher64, Vita3K, Ryujinx, ScummVM, DOSBox Staging, and other engines, plus EmuDeck and RetroDECK folder discovery.
 - Built-in **DOOM** system with automatic recognition of standalone `IWAD` files (DOOM, DOOM II, Heretic, Hexen, Freedoom) kept separate from `PWAD` mods and Nintendo Wii `.wad` channels, backed by built-in **UZDoom** and **GZDoom** support and LaunchBox cover lookups.
+- Local **eXo game collections** (`eXoDOS`, `eXoWin3x`, `eXoScummVM`, and `eXoDemoscene`): auto-discovers collections already on disk, reads LaunchBox XML metadata and local artwork/screenshots, unpacks and removes locally archived `.zip` games without touching the archive, translates `dosbox.conf` cleanly into Irori's cache for DOSBox Staging, and offers an opt-in per-game toggle in `Play with…` to run eXo's own launch script.
 - Watched ROM folders with filename-based system, region, and revision detection, BIOS verification before launch, RetroAchievements tracking, and opt-in regional box art from the LaunchBox Games Database.
 
 <p align="center">

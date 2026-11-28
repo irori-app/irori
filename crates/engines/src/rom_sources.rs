@@ -24,6 +24,8 @@ const MAX_MOUNTS: usize = 32;
 pub enum SourceKind {
     EmuDeck,
     RetroDeck,
+    /// A local eXo game collection (`eXoDOS`, `eXoWin3x`, `eXoScummVM`, `eXoDemoscene`).
+    Exo,
     /// A `ROMs` folder of the user's own.
     Folder,
 }
@@ -41,10 +43,20 @@ pub struct RomSource {
 
 /// Where ROM folders are looked for under `base` (the home folder or the
 /// top of a disk), and who lays each out.
-fn layouts(base: &Path) -> [(PathBuf, SourceKind); 5] {
-    [
+fn layouts(base: &Path) -> Vec<(PathBuf, SourceKind)> {
+    vec![
         (base.join("Emulation").join("roms"), SourceKind::EmuDeck),
         (base.join("retrodeck").join("roms"), SourceKind::RetroDeck),
+        (base.join("eXoDOS"), SourceKind::Exo),
+        (base.join("eXoWin3x"), SourceKind::Exo),
+        (base.join("eXoScummVM"), SourceKind::Exo),
+        (base.join("eXoDemoscene"), SourceKind::Exo),
+        (base.join("eXo"), SourceKind::Exo),
+        (base.join("Games").join("eXoDOS"), SourceKind::Exo),
+        (base.join("Games").join("eXoWin3x"), SourceKind::Exo),
+        (base.join("Games").join("eXoScummVM"), SourceKind::Exo),
+        (base.join("Games").join("eXoDemoscene"), SourceKind::Exo),
+        (base.join("Games").join("eXo"), SourceKind::Exo),
         (base.join("ROMs"), SourceKind::Folder),
         (base.join("roms"), SourceKind::Folder),
         (base.join("Roms"), SourceKind::Folder),
@@ -138,6 +150,9 @@ fn identity(path: &Path) -> String {
 
 /// The systems in a ROM folder that hold games; `None` when none do.
 pub fn read_source(root: &Path, kind: SourceKind) -> Option<RomSource> {
+    if kind == SourceKind::Exo {
+        return read_exo_source(root);
+    }
     let mut folders = children_sorted(root);
     folders.retain(|f| !file_name(f).starts_with('.'));
     let mut systems = Vec::new();
@@ -162,6 +177,66 @@ pub fn read_source(root: &Path, kind: SourceKind) -> Option<RomSource> {
     (!systems.is_empty() || !unknown.is_empty()).then(|| RomSource {
         root: root.to_path_buf(),
         kind,
+        systems,
+        unknown,
+    })
+}
+
+/// Inspect a local eXo collection root (`eXo/` + `Data/Platforms/` or `xml/all/`)
+/// cheaply by XML file names without parsing full catalogs.
+fn read_exo_source(root: &Path) -> Option<RomSource> {
+    if !root.join("eXo").is_dir() {
+        return None;
+    }
+    let mut xml_dir = None;
+    for rel in ["Data/Platforms", "xml/all"] {
+        let candidate = root.join(rel);
+        if candidate.is_dir() {
+            xml_dir = Some(candidate);
+            break;
+        }
+    }
+    let xml_dir = xml_dir?;
+    let Ok(read) = std::fs::read_dir(&xml_dir) else {
+        return None;
+    };
+    let mut names: Vec<String> = read
+        .flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            let is_xml = e.file_type().is_ok_and(|t| t.is_file())
+                && p.extension()
+                    .and_then(|x| x.to_str())
+                    .is_some_and(|x| x.eq_ignore_ascii_case("xml"));
+            is_xml.then(|| {
+                p.file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+        })
+        .collect();
+    names.sort();
+
+    let mut systems = Vec::new();
+    let mut unknown = Vec::new();
+    for stem in names {
+        let sys_id = match stem.trim().to_ascii_lowercase().as_str() {
+            "ms-dos" | "msdos" | "dos" | "exodos" | "exodemoscene" | "demoscene" => Some("dos"),
+            "windows 3x" | "windows 3.x" | "win3x" | "exowin3x" => Some("win3x"),
+            "scummvm" | "scummvm svn" | "exoscummvm" => Some("scummvm"),
+            _ => None,
+        };
+        match sys_id {
+            Some(id) if !systems.iter().any(|(existing, _)| existing == id) => {
+                systems.push((id.to_string(), root.to_path_buf()));
+            }
+            None if !stem.is_empty() && !unknown.contains(&stem) => unknown.push(stem),
+            Some(_) | None => {}
+        }
+    }
+    (!systems.is_empty() || !unknown.is_empty()).then(|| RomSource {
+        root: root.to_path_buf(),
+        kind: SourceKind::Exo,
         systems,
         unknown,
     })
@@ -411,5 +486,34 @@ mod tests {
         let plan3 = plan(&sources, std::slice::from_ref(&roms), playable);
         assert!(plan3.add.is_empty());
         assert_eq!(plan3.already, 2);
+    }
+
+    #[test]
+    fn finds_local_exo_collections_and_deduplicates_multi_system_roots() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let disk = dir.path().join("media/GamesDrive");
+        let exo = disk.join("eXoDOS");
+        write(&exo.join("Data/Platforms/MS-DOS.xml"));
+        write(&exo.join("Data/Platforms/Windows 3x.xml"));
+        write(&exo.join("Data/Platforms/Windows 9x.xml"));
+        std::fs::create_dir_all(exo.join("eXo/eXoDOS")).unwrap();
+
+        // A folder named `eXo` without XML catalogs is ignored.
+        std::fs::create_dir_all(home.join("eXo/eXoDOS")).unwrap();
+
+        let found = find(&home, std::slice::from_ref(&disk));
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].kind, SourceKind::Exo);
+        assert_eq!(found[0].root, exo);
+        let ids: Vec<&str> = found[0].systems.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(ids, ["dos", "win3x"]);
+        assert_eq!(found[0].unknown, ["Windows 9x"]);
+
+        // Planning adds the unified eXo root once.
+        let p = plan(&found, &[], |_| true);
+        assert_eq!(p.add.len(), 1);
+        assert_eq!(p.add[0].1, exo);
+        assert_eq!(p.unplayable, ["Windows 9x"]);
     }
 }

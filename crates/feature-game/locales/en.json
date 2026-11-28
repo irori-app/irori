@@ -811,6 +811,8 @@
   "game.play_with.custom": "Chosen by you",
   "game.play_with.system": "Installed on this computer",
   "game.play_with.manage": "Manage emulators",
+  "game.play_with.exo_native_script": "Use eXo’s launch script",
+  "game.play_with.exo_native_script_help": "Run the collection’s own .command/.bsh or .bat wrapper instead of launching directly through Irori’s emulator. Useful for titles with interactive audio or edition menus.",
   "game.pc_check.title": "Can my PC run it?",
   "game.pc_check.verdict.recommended": "Meets the recommended",
   "game.pc_check.verdict.minimum": "Meets the minimum",
