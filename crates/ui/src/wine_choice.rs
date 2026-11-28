@@ -13,7 +13,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::IndexPath;
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::Button;
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{
@@ -189,21 +189,28 @@ impl WineChoice {
                 .placeholder(placeholder)
                 .default_value(prefix)
         });
-        let subscriptions = vec![cx.subscribe_in(
-            &select,
-            window,
-            |this, _, e: &SelectEvent<Vec<WineItem>>, _, cx| {
-                let SelectEvent::Confirm(value) = e;
-                this.chosen = value.as_ref().filter(|v| !v.is_empty()).and_then(|v| {
-                    this.wines
-                        .as_ref()?
-                        .iter()
-                        .find(|w| w.bin == v.as_ref())
-                        .cloned()
-                });
-                cx.notify();
-            },
-        )];
+        let subscriptions = vec![
+            cx.subscribe_in(
+                &select,
+                window,
+                |this, _, e: &SelectEvent<Vec<WineItem>>, _, cx| {
+                    let SelectEvent::Confirm(value) = e;
+                    this.chosen = value.as_ref().filter(|v| !v.is_empty()).and_then(|v| {
+                        this.wines
+                            .as_ref()?
+                            .iter()
+                            .find(|w| w.bin == v.as_ref())
+                            .cloned()
+                    });
+                    cx.notify();
+                },
+            ),
+            cx.subscribe(&prefix, |_, _, event: &InputEvent, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }),
+        ];
         let mut this = Self {
             wines: None,
             chosen: wine,
@@ -283,6 +290,32 @@ impl WineChoice {
             wine: self.chosen.clone(),
             prefix: self.prefix.read(cx).value().trim().to_string(),
         }
+    }
+
+    /// Short display name for the active Wine or Proton build, suitable for
+    /// a collapsed compatibility summary row.
+    pub fn build_summary(&self, cx: &App) -> SharedString {
+        if let Some(chosen) = &self.chosen {
+            return chosen.name.clone().into();
+        }
+        let default_name = backend(cx).settings.app().game.wine_version.name.clone();
+        if !default_name.is_empty() {
+            return default_name.into();
+        }
+        if self.wines.is_none() {
+            return t("ui.wine.looking");
+        }
+        t("ui.wine.default")
+    }
+
+    /// Whether the user picked a non-default build or custom prefix path.
+    pub fn is_customized(&self, cx: &App) -> bool {
+        self.chosen.is_some() || !self.prefix.read(cx).value().trim().is_empty()
+    }
+
+    /// Whether build discovery finished without finding any Wine or Proton build.
+    pub fn has_no_builds(&self) -> bool {
+        self.wines.as_ref().is_some_and(Vec::is_empty)
     }
 
     fn browse_prefix(&mut self, window: &mut Window, cx: &mut Context<Self>) {
