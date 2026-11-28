@@ -2,7 +2,8 @@ use super::options::{
     AGE_RATING_BOARDS, ART_CACHE_LIMIT, BIG_PICTURE_SCALE, COVER_CAPTION, COVER_CORNERS, COVER_FIT,
     COVER_HOVER, COVER_SHAPE, DENSITY, FOCUS_COLUMNS, FOCUS_COVER_SIZE, LIBRARY_BACKGROUND,
     LIBRARY_LAYOUT, LUDUSAVI_DIFFERENTIAL_LIMIT, LUDUSAVI_FULL_LIMIT, NEEDS_AGE_RATINGS,
-    NEEDS_STORE_BADGES, NEEDS_WALLPAPER_COLORS, PROTON_CPU_LEVEL, THEME_MODE, TRANSLUCENCY,
+    NEEDS_STORE_BADGES, NEEDS_WALLPAPER_COLORS, PROTON_CPU_LEVEL, THEME_MODE, TOP_SECTION,
+    TRANSLUCENCY,
 };
 use super::types::{
     ActionKind, CustomKind,
@@ -175,6 +176,15 @@ pub(super) const APPEARANCE: &[FieldSpec] = &[
     )
     .tooltip("settings.field.ui_library_layout.tip")
     .keywords(&["grid", "list", "focus", "view"]),
+    app(
+        "libraryTopSection",
+        "settings.field.library_top_section.label",
+        Appearance,
+        "settings.group.library",
+        Choice(TOP_SECTION),
+    )
+    .tooltip("settings.field.library_top_section.tip")
+    .keywords(&["recent", "favourites", "top"]),
     app(
         "iroriUi.showStoreBadges",
         "settings.field.ui_show_store_badges.label",
@@ -692,6 +702,38 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
     .tooltip("settings.field.compat_tools_path.tip")
     .keywords(&["proton", "wine", "download", "folder", "path", "ge-proton"]),
     app(
+        "defaultWinePrefixDir",
+        "settings.field.default_wine_prefix_dir.label",
+        Advanced,
+        "settings.group.wine",
+        Text(TextKind::Directory),
+    )
+    .help("settings.field.default_wine_prefix_dir.help")
+    .tooltip("settings.field.default_wine_prefix_dir.tip")
+    .keywords(&["prefix", "path", "wineprefix"]),
+    app(
+        "iroriCrossoverBottlesPath",
+        "settings.field.crossover_bottles_path.label",
+        Advanced,
+        "settings.group.wine",
+        Text(TextKind::Directory),
+    )
+    .tag(Verbatim("CrossOver"))
+    .help("settings.field.crossover_bottles_path.help")
+    .tooltip("settings.field.crossover_bottles_path.tip")
+    .placeholder(Verbatim("~/Library/Application Support/CrossOver/Bottles"))
+    .keywords(&["crossover", "bottle", "bottles", "path", "mac"]),
+    app(
+        "defaultSteamPath",
+        "settings.field.default_steam_path.label",
+        Advanced,
+        "settings.group.wine",
+        Text(TextKind::Directory),
+    )
+    .help("settings.field.default_steam_path.help")
+    .tooltip("settings.field.default_steam_path.tip")
+    .keywords(&["steam", "proton", "path"]),
+    app(
         "downloadProtonToSteam",
         "settings.field.download_proton_to_steam.label",
         Advanced,
@@ -718,6 +760,26 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "x86-64",
         "cpu",
         "processor",
+    ]),
+    app(
+        "action.open-windows-files",
+        "settings.field.action_open_windows_files.label",
+        Advanced,
+        "settings.group.wine",
+        Action(ActionKind::OpenWindowsFiles),
+    )
+    .help("settings.field.action_open_windows_files.help")
+    .tooltip("settings.field.action_open_windows_files.tip")
+    .keywords(&[
+        "exe",
+        "msi",
+        "bat",
+        "reg",
+        "double click",
+        "open with",
+        "file",
+        "wine",
+        "default",
     ]),
     app(
         "allowInstallationBrokenAnticheat",

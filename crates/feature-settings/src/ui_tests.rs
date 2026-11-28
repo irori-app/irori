@@ -55,7 +55,7 @@ fn typing_in_search_filters_fields_across_sections(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let v = view.read(cx);
         assert_eq!(v.section(), SettingsSection::General);
-        assert!(v.app_form().read(cx).visible_count() > 10);
+        assert!(v.app_form().read(cx).visible_count() >= 5);
     });
 
     // Focus the search field and type through the window's input path.
@@ -174,7 +174,7 @@ fn store_and_platform_specific_rows_follow_their_context(cx: &mut TestAppContext
         } else {
             7
         };
-        assert_eq!(app_form.read(cx).visible_count(), 14 + overlay_rows);
+        assert_eq!(app_form.read(cx).visible_count(), 17 + overlay_rows);
         assert!(general > 20);
     });
 }
@@ -716,7 +716,7 @@ fn settings_subtabs_switch_and_draw(cx: &mut TestAppContext) {
     let (handle, view) = open(cx, |window, cx| {
         SettingsView::new("general".into(), window, cx)
     });
-    for tab in ["basics", "window", "library", "integrations"] {
+    for tab in ["basics", "window", "downloads", "integrations"] {
         cx.update_window(handle, |_, window, cx| {
             view.update(cx, |v, cx| v.set_subtab_for_test(tab, window, cx));
             window.refresh();
@@ -824,7 +824,7 @@ fn the_quick_launcher_row_shows_each_way_to_open_it(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn dependent_fields_hide_when_parent_is_off_and_show_in_search(cx: &mut TestAppContext) {
     let (handle, view) = open(cx, |window, cx| {
-        SettingsView::new("general".into(), window, cx)
+        SettingsView::new("downloads".into(), window, cx)
     });
     cx.update(|cx| {
         let paths = view.read(cx).app_form().read(cx).visible_paths();
@@ -848,7 +848,7 @@ fn dependent_fields_hide_when_parent_is_off_and_show_in_search(cx: &mut TestAppC
 
     // Clear search and enable the parent toggle; dependent rows appear.
     cx.update_window(handle, |_, window, cx| {
-        view.update(cx, |v, cx| v.set_section("general", window, cx));
+        view.update(cx, |v, cx| v.set_section("downloads", window, cx));
         let form = view.read(cx).app_form().clone();
         form.update(cx, |f, cx| {
             f.write_for_test("autoUpdateGames", Value::Bool(true), window, cx);
@@ -921,7 +921,7 @@ fn more_options_collapses_advanced_fields_until_opened_or_searched(cx: &mut Test
     use gpui_kit::VisualTestContext;
 
     let (handle, view) = open(cx, |window, cx| {
-        SettingsView::new("general".into(), window, cx)
+        SettingsView::new("downloads".into(), window, cx)
     });
     let mut vcx = VisualTestContext::from_window(handle, cx);
     vcx.update_window(handle, |_, window, cx| {
@@ -935,7 +935,7 @@ fn more_options_collapses_advanced_fields_until_opened_or_searched(cx: &mut Test
     vcx.update_window(handle, |_, window, cx| {
         let form = view.read(cx).app_form().clone();
         form.update(cx, |f, cx| {
-            f.set_advanced_open_for_test("app-basics", true, cx)
+            f.set_advanced_open_for_test("app-downloads", true, cx)
         });
         window.refresh();
         let _ = window.draw(cx);
@@ -947,7 +947,7 @@ fn more_options_collapses_advanced_fields_until_opened_or_searched(cx: &mut Test
     vcx.update_window(handle, |_, window, cx| {
         let form = view.read(cx).app_form().clone();
         form.update(cx, |f, cx| {
-            f.set_advanced_open_for_test("app-basics", false, cx)
+            f.set_advanced_open_for_test("app-downloads", false, cx)
         });
         let search = view.read(cx).search_input();
         search.read(cx).focus_handle(cx).focus(window, cx);
@@ -1001,7 +1001,14 @@ fn tooltips_draw_on_settings_rows_pairs_and_per_game_view(cx: &mut TestAppContex
     })
     .unwrap();
     vcx.run_until_parked();
-    assert!(vcx.debug_bounds("row-defaultInstallPath").is_some());
+    assert!(vcx.debug_bounds("row-panel.libraryFolders").is_some());
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_subtab_for_test("downloads", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
     assert!(vcx.debug_bounds("pair-iroriAutoUpdateFrom").is_some());
 
     for section in ["defaults", "appearance", "advanced", "saves"] {
@@ -1029,7 +1036,7 @@ fn tooltips_draw_on_settings_rows_pairs_and_per_game_view(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
-fn downloads_settings_shortcut_opens_integrations_subtab(cx: &mut TestAppContext) {
+fn downloads_settings_shortcut_opens_downloads_subtab(cx: &mut TestAppContext) {
     use gpui_kit::VisualTestContext;
 
     let (handle, view) = open(cx, |window, cx| {
@@ -1053,8 +1060,90 @@ fn downloads_settings_shortcut_opens_integrations_subtab(cx: &mut TestAppContext
     );
     assert!(
         vcx.debug_bounds("row-maxDownloadSpeed").is_some(),
-        "download speed setting should be visible on the Integrations & downloads sub-tab"
+        "download speed setting should be visible on the Downloads sub-tab"
     );
+    assert!(
+        vcx.debug_bounds("row-autoUpdateGames").is_some(),
+        "auto-update settings should be visible on the Downloads sub-tab"
+    );
+}
+
+#[gpui_kit::test]
+fn general_redesign_controls_and_logs_toggle_render(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    // Basics: unified install folders show Change... on Default and hide Move when < 2 folders.
+    assert!(vcx.debug_bounds("library-folder-change-default").is_some());
+    assert!(vcx.debug_bounds("library-folder-move-0").is_none());
+    assert!(vcx.debug_bounds("general-footer").is_some());
+
+    // Window: quick launch panel hides while quickLaunchShortcut is off.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_subtab_for_test("window", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("row-panel.quick_launch").is_none());
+
+    // Downloads: speed presets and segmented network mode control render cleanly.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_subtab_for_test("downloads", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("speed-preset-15360").is_some());
+    assert!(vcx.debug_bounds("network-mode-offline").is_some());
+
+    // Integrations: achievement detail chips appear only when achievement notices are enabled.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| {
+            v.set_subtab_for_test("integrations", window, cx)
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("panel-achievement-details").is_none());
+    vcx.update_window(handle, |_, window, cx| {
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.write_for_test("iroriAchievementNotices", Value::Bool(true), window, cx);
+        });
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+    assert!(vcx.debug_bounds("panel-achievement-details").is_some());
+    assert!(vcx.debug_bounds("ach-chip-rarity").is_some());
+    vcx.update_window(handle, |_, window, cx| {
+        let form = view.read(cx).app_form().clone();
+        form.update(cx, |f, cx| {
+            f.write_for_test("iroriAchievementNotices", Value::Bool(false), window, cx);
+        });
+    })
+    .unwrap();
+
+    // Logs: relocated "Show the log when a game starts" toggle sits in the Logs header.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("logs", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("logs-show-on-launch").is_some());
 }
 
 #[gpui_kit::test]

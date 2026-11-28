@@ -32,6 +32,7 @@ mod epic;
 pub mod feedback;
 mod form;
 mod game_view;
+mod general_widgets;
 mod graphics_mods;
 mod how_it_starts;
 pub mod hud;

@@ -56,7 +56,7 @@ pub(super) const TOP_SECTION: &[ChoiceOption] = &[
     ),
 ];
 
-pub(super) const NETWORK_MODE: &[ChoiceOption] = &[
+pub(crate) const NETWORK_MODE: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("auto"),
         Key("settings.option.network_mode.auto"),
@@ -728,6 +728,8 @@ pub(super) const NEEDS_SUNSHINE: &[Condition] = &[when(
     true,
     "settings.requires.sunshine",
 )];
+pub(super) const NEEDS_DISCORD: &[Condition] =
+    &[when("discordRPC", true, "settings.requires.discord")];
 pub(super) const SUNSHINE_GAMES: &[ChoiceOption] = &[
     opt(
         ChoiceValue::Str("installed"),

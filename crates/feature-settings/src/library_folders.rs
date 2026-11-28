@@ -18,8 +18,8 @@ use gpui_kit::component::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AppContext as _, Context, ElementId, Entity, IntoElement, ParentElement as _,
-    PathPromptOptions, Render, Styled as _, Subscription, Window, div,
+    AnyElement, AppContext as _, Context, ElementId, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, PathPromptOptions, Render, Styled as _, Subscription, Window, div,
 };
 use irori_core::GameInfo;
 use irori_core::settings::{LibraryFolder, folder_name, library_folder_of, same_folder};
@@ -77,6 +77,10 @@ pub(crate) struct LibraryFoldersPanel {
     /// Installed games of each folder, worked out when the library or the
     /// settings change, never per frame.
     games: Vec<Vec<Arc<GameInfo>>>,
+    /// Free disk bytes for each folder, read off the UI thread and cached by
+    /// configured folder path list.
+    free_bytes: Vec<Option<u64>>,
+    free_paths_key: Vec<String>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -102,6 +106,8 @@ impl LibraryFoldersPanel {
             name,
             folders: Vec::new(),
             games: Vec::new(),
+            free_bytes: Vec::new(),
+            free_paths_key: Vec::new(),
             _subscriptions: subscriptions,
         };
         this.refresh(cx);
@@ -113,7 +119,70 @@ impl LibraryFoldersPanel {
         let snapshot = models(cx).library.read(cx).snapshot.clone();
         self.games = games_by_folder(&folders, snapshot.all_games().cloned());
         self.folders = folders;
+        self.sync_free_space(cx);
         cx.notify();
+    }
+
+    fn sync_free_space(&mut self, cx: &mut Context<Self>) {
+        let paths: Vec<String> = self.folders.iter().map(|f| f.path.clone()).collect();
+        if paths == self.free_paths_key {
+            return;
+        }
+        self.free_paths_key = paths.clone();
+        self.free_bytes = vec![None; paths.len()];
+        let query_paths = paths.clone();
+        let task = irori_ui::run(cx, async move {
+            Ok(tokio::task::spawn_blocking(move || {
+                query_paths
+                    .into_iter()
+                    .map(|p| {
+                        let trimmed = p.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            let expanded = irori_core::paths::expand_home(trimmed);
+                            irori_services::scripts::free_space(&expanded)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await?)
+        });
+        cx.spawn(async move |this, cx| {
+            if let Ok(spaces) = task.await {
+                let _ = this.update(cx, |this, cx| {
+                    if this.free_paths_key == paths {
+                        this.free_bytes = spaces;
+                        cx.notify();
+                    }
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn pick_default_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let rx = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(t("settings.picker.select_folder")),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = rx.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            let _ = this.update(cx, |_, cx| {
+                let next = path.to_string_lossy().to_string();
+                backend(cx)
+                    .settings
+                    .update_app(|a| a.default_install_path = next);
+            });
+        })
+        .detach();
     }
 
     fn pick_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -172,6 +241,16 @@ impl LibraryFoldersPanel {
             },
             &[("count", &count.to_string())],
         );
+        let meta = match self.free_bytes.get(ix).copied().flatten() {
+            Some(bytes) => {
+                let free = t_args(
+                    "settings.library_folders.free_space",
+                    &[("size", &irori_core::util::format_bytes(bytes))],
+                );
+                format!("{counted} · {free}").into()
+            }
+            None => counted,
+        };
         let targets: Vec<LibraryFolder> = self
             .folders
             .iter()
@@ -179,26 +258,38 @@ impl LibraryFoldersPanel {
             .filter(|(i, f)| *i != ix && !f.path.trim().is_empty())
             .map(|(_, f)| f.clone())
             .collect();
-        let move_to = Button::new(ElementId::Name(format!("library-folder-move-{ix}").into()))
-            .small()
-            .outline()
-            .icon(IconName::FolderInput)
-            .label(t("settings.library_folders.move_to"))
-            .disabled(count == 0 || targets.is_empty())
-            .dropdown_menu(move |mut menu, _, _| {
-                for target in &targets {
-                    let (games, target) = (games.clone(), target.clone());
-                    menu = menu.item(
-                        PopupMenuItem::new(library_folders::label(&target)).on_click(
-                            move |_, window, cx| {
-                                let ids = library_folders::movable(&games, &target, cx);
-                                library_folders::confirm_move(ids, target.clone(), window, cx);
-                            },
-                        ),
-                    );
-                }
-                menu
-            });
+        let move_to = (!targets.is_empty()).then(|| {
+            Button::new(ElementId::Name(format!("library-folder-move-{ix}").into()))
+                .debug_selector(move || format!("library-folder-move-{ix}"))
+                .small()
+                .outline()
+                .icon(IconName::FolderInput)
+                .label(t("settings.library_folders.move_to"))
+                .disabled(count == 0)
+                .dropdown_menu(move |mut menu, _, _| {
+                    for target in &targets {
+                        let (games, target) = (games.clone(), target.clone());
+                        menu = menu.item(
+                            PopupMenuItem::new(library_folders::label(&target)).on_click(
+                                move |_, window, cx| {
+                                    let ids = library_folders::movable(&games, &target, cx);
+                                    library_folders::confirm_move(ids, target.clone(), window, cx);
+                                },
+                            ),
+                        );
+                    }
+                    menu
+                })
+        });
+        let change_default = folder.is_default().then(|| {
+            Button::new("library-folder-change-default")
+                .debug_selector(|| "library-folder-change-default".into())
+                .small()
+                .outline()
+                .icon(IconName::FolderOpen)
+                .label(t("settings.library_folders.change"))
+                .on_click(cx.listener(|this, _, window, cx| this.pick_default_folder(window, cx)))
+        });
         let theme = cx.theme();
         h_flex()
             .px_4()
@@ -228,10 +319,11 @@ impl LibraryFoldersPanel {
                         div()
                             .text_xs()
                             .text_color(theme.muted_foreground)
-                            .child(counted),
+                            .child(meta),
                     ),
             )
-            .child(move_to)
+            .children(change_default)
+            .children(move_to)
             .when(!folder.is_default(), |row| {
                 row.child(
                     Button::new(ElementId::Name(

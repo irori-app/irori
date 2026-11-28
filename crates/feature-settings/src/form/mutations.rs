@@ -116,8 +116,13 @@ impl SettingsForm {
         let (Some(spec), Some(input)) = (registry::find(path), self.texts.get(path)) else {
             return;
         };
-        let FieldKind::Text(kind) = spec.kind else {
-            return;
+        let kind = match spec.kind {
+            FieldKind::Text(kind) => kind,
+            FieldKind::Custom(CustomKind::DownloadSpeed) => TextKind::Number {
+                min: 0,
+                max: 10_000_000,
+            },
+            _ => return,
         };
         let text = input.read(cx).value().to_string();
         if kind == TextKind::Secret && text.trim().is_empty() {

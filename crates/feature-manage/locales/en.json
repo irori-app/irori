@@ -946,5 +946,10 @@
   "manage.emulators.systems.section.other": "Other systems",
   "manage.emulators.systems.show_others": "Show all ({count})",
   "manage.emulators.systems.hide_others": "Hide",
-  "manage.retro.connected": "Connected"
+  "manage.retro.connected": "Connected",
+  "manage.accounts.turn_off": "Turn off",
+  "manage.accounts.turn_off_tooltip": "Turns off this store integration and removes its games from your library. You can turn it back on at any time.",
+  "manage.accounts.xbox_market_label": "Microsoft Store region",
+  "manage.accounts.xbox_market_help": "Two-letter country code (blank follows app language).",
+  "manage.accounts.xbox_market_tip": "Sets the two-letter regional store code (such as US, BR, DE, or GB) used for Microsoft Store lookups. Leave blank to follow your app language."
 }

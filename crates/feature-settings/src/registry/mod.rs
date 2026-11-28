@@ -25,6 +25,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use options::NETWORK_MODE;
 pub use types::{
     ActionKind, ChoiceOption, ChoiceValue, Condition, CustomKind, FieldKind, FieldSection,
     FieldSpec, Label, Need, NeedContext, PanelKind, Scope, TextKind,

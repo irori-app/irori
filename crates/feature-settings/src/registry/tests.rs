@@ -355,9 +355,66 @@ fn language_choice_lists_every_interface_language_by_native_name() {
 fn search_matches_english_text() {
     crate::i18n::register();
     let paths = |q: &str| search(q).map(|f| f.path).collect::<Vec<_>>();
-    assert!(paths("default install folder").contains(&"defaultInstallPath"));
+    assert!(paths("default install folder").contains(&"panel.libraryFolders"));
     assert!(paths("language").contains(&"uiLanguage"));
     assert!(paths("restart required").contains(&"noTrayIcon"));
+}
+
+#[test]
+fn general_redesign_relocations_and_inverted_toggles() {
+    for path in ["noTrayIcon", "disablePlaytimeSync", "disableGOGPresence"] {
+        let f = find(path).unwrap_or_else(|| panic!("{path}"));
+        assert!(f.inverted, "{path} should be inverted");
+        assert_eq!(f.section, FieldSection::General);
+    }
+    for path in [
+        "startInConsoleMode",
+        "iroriUi.bigPictureInGameMode",
+        "iroriUi.bigPictureOnController",
+        "iroriUi.bigPictureFullscreen",
+    ] {
+        assert_eq!(
+            find(path).unwrap().section,
+            FieldSection::Controller,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        find("libraryTopSection").unwrap().section,
+        FieldSection::Appearance
+    );
+    for path in [
+        "defaultWinePrefixDir",
+        "iroriCrossoverBottlesPath",
+        "defaultSteamPath",
+        "action.open-windows-files",
+    ] {
+        assert_eq!(
+            find(path).unwrap().section,
+            FieldSection::Advanced,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        find("defaultWinePrefixDir").unwrap().supported_on_host(),
+        !cfg!(windows)
+    );
+    for removed in [
+        "defaultInstallPath",
+        "iroriShowLogOnLaunch",
+        "iroriUi.stores.epic",
+        "iroriUi.stores.gog",
+        "iroriUi.stores.amazon",
+        "zoomPlatform",
+        "iroriItchIo",
+        "iroriXbox",
+        "iroriXboxMarket",
+    ] {
+        assert!(
+            find(removed).is_none(),
+            "{removed} should no longer be in General"
+        );
+    }
 }
 
 #[test]

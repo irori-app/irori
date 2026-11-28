@@ -216,6 +216,10 @@ pub enum CustomKind {
     FontFamily,
     /// A 0 to 100 percent slider.
     Percent,
+    /// Download speed cap in KB/s with quick speed preset chips.
+    DownloadSpeed,
+    /// Network connectivity mode as a 3-way segmented control with live mode hint.
+    NetworkMode,
 }
 
 /// Rows rendered by a self-contained panel (status plus actions) instead of
@@ -269,6 +273,8 @@ pub enum PanelKind {
     QuickLaunch,
     /// Named folders games install into, and moving their games.
     LibraryFolders,
+    /// Toggle chips controlling which extra details appear on achievement unlock cards.
+    AchievementDetails,
 }
 
 /// One-shot maintenance commands listed alongside fields.
@@ -426,6 +432,9 @@ pub struct FieldSpec {
     /// system's own build (Linux on Linux, Mac on macOS); a field shared
     /// with the game defaults shows there too.
     pub native_only: bool,
+    /// Flip the switch's visual state relative to the stored boolean
+    /// (for example a stored `disable*` or `no*` flag shown with a positive label).
+    pub inverted: bool,
 }
 
 impl FieldSpec {
@@ -452,6 +461,7 @@ impl FieldSpec {
             requires: &[],
             needs: &[],
             native_only: false,
+            inverted: false,
         }
     }
 
@@ -492,6 +502,11 @@ impl FieldSpec {
 
     pub(super) const fn native_only(mut self) -> Self {
         self.native_only = true;
+        self
+    }
+
+    pub(super) const fn inverted(mut self) -> Self {
+        self.inverted = true;
         self
     }
 
@@ -664,6 +679,7 @@ impl FieldSpec {
         host != HostPlatform::Windows
             || (self.section != FieldSection::Wine
                 && self.path != "iroriCompatToolsPath"
+                && self.path != "defaultWinePrefixDir"
                 && !matches!(self.path, "enableDXVKFpsLimit" | "DXVKFpsCap"))
     }
 

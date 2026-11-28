@@ -76,8 +76,8 @@ pub(crate) const GENERAL_TABS: &[SubTab] = &[
         label_key: "settings.subtab.general.window",
     },
     SubTab {
-        id: "library",
-        label_key: "settings.subtab.general.library",
+        id: "downloads",
+        label_key: "settings.subtab.general.downloads",
     },
     SubTab {
         id: "integrations",
@@ -231,64 +231,43 @@ pub(crate) fn subtab_of(spec: &FieldSpec) -> Option<&'static str> {
 fn general_subtab(path: &str) -> Option<&'static str> {
     match path {
         "uiLanguage"
-        | "defaultInstallPath"
-        | "iroriInstallPerStore"
         | "panel.libraryFolders"
-        | "defaultWinePrefixDir"
-        | "defaultSteamPath"
-        | "iroriCrossoverBottlesPath"
-        | "iroriCheckForAppUpdates"
+        | "iroriInstallPerStore"
+        | "addDesktopShortcuts"
+        | "addStartMenuShortcuts"
+        | "iroriShortcutIconFromExe"
+        | "addSteamShortcuts" => Some("basics"),
+        "iroriStartWithSystem"
+        | "iroriStartWithSystemMinimized"
+        | "startInTray"
+        | "iroriUi.startMaximized"
+        | "noTrayIcon"
+        | "exitToTray"
+        | "minimizeOnLaunch"
+        | "darkTrayIcon"
+        | "hideWindowOnProtocolLaunch"
+        | "iroriUi.quickLaunchShortcut"
+        | "panel.quick_launch" => Some("window"),
+        "maxDownloadSpeed"
+        | "maxWorkers"
+        | "downloadNoHttps"
         | "checkForUpdatesOnStartup"
-        | "checkUpdatesInterval"
-        | "iroriLaunchersRescan"
         | "autoUpdateGames"
         | "iroriAutoUpdateComponents"
         | "iroriAutoUpdateFrom"
         | "iroriAutoUpdateUntil"
-        | "iroriAutoUpdateUnmetered" => Some("basics"),
-        "noTrayIcon"
-        | "exitToTray"
-        | "startInTray"
-        | "iroriUi.startMaximized"
-        | "iroriStartWithSystem"
-        | "iroriStartWithSystemMinimized"
-        | "minimizeOnLaunch"
-        | "iroriShowLogOnLaunch"
-        | "darkTrayIcon"
-        | "hideWindowOnProtocolLaunch"
-        | "startInConsoleMode"
-        | "iroriUi.bigPictureInGameMode"
-        | "iroriUi.bigPictureOnController"
-        | "iroriUi.bigPictureFullscreen"
-        | "iroriUi.quickLaunchShortcut"
-        | "panel.quick_launch" => Some("window"),
-        "libraryTopSection"
-        | "maxRecentGames"
-        | "iroriAchievementNotices"
+        | "iroriAutoUpdateUnmetered"
+        | "iroriCheckForAppUpdates"
+        | "checkUpdatesInterval"
+        | "iroriLaunchersRescan"
+        | "iroriNetworkMode"
+        | "iroriNetworkTimeout" => Some("downloads"),
+        "iroriAchievementNotices"
         | "iroriAchievementToast.overGame"
-        | "iroriAchievementToast.showGame"
-        | "iroriAchievementToast.showDescription"
-        | "iroriAchievementToast.showRarity"
-        | "iroriAchievementToast.showProgress"
-        | "iroriAchievementToast.showPoints"
+        | "panel.achievement-details"
         | "iroriFileAchievements"
-        | "iroriUi.stores.epic"
-        | "iroriUi.stores.gog"
-        | "iroriUi.stores.amazon"
         | "iroriDeals"
-        | "zoomPlatform"
-        | "iroriItchIo"
-        | "iroriXbox"
-        | "iroriXboxMarket"
-        | "addDesktopShortcuts"
-        | "addStartMenuShortcuts"
-        | "addSteamShortcuts"
-        | "iroriShortcutIconFromExe" => Some("library"),
-        "iroriNetworkMode"
-        | "iroriNetworkTimeout"
-        | "maxWorkers"
-        | "maxDownloadSpeed"
-        | "downloadNoHttps"
+        | "maxRecentGames"
         | "discordRPC"
         | "discordClientId"
         | "iroriSunshine.enabled"
@@ -299,8 +278,7 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         | "panel.sunshine"
         | "cometSupport"
         | "disablePlaytimeSync"
-        | "disableGOGPresence"
-        | "action.open-windows-files" => Some("integrations"),
+        | "disableGOGPresence" => Some("integrations"),
         _ => None,
     }
 }
@@ -320,6 +298,7 @@ fn appearance_subtab(path: &str) -> Option<&'static str> {
         | "iroriUi.density"
         | "iroriUi.bigPictureScale"
         | "iroriUi.libraryLayout"
+        | "libraryTopSection"
         | "iroriUi.showStoreBadges"
         | "iroriUi.storeBadgesAlways"
         | "iroriUi.storeBadgesOneStore"
@@ -358,29 +337,16 @@ fn appearance_subtab(path: &str) -> Option<&'static str> {
 pub(crate) fn is_advanced(spec: &FieldSpec) -> bool {
     matches!(
         spec.path,
-        // General -> Basics
-        "checkUpdatesInterval"
-            | "iroriLaunchersRescan"
-            // General -> Window & tray
-            | "iroriShowLogOnLaunch"
-            | "hideWindowOnProtocolLaunch"
-            | "startInConsoleMode"
-            | "iroriUi.bigPictureInGameMode"
-            | "iroriUi.bigPictureOnController"
-            | "iroriUi.bigPictureFullscreen"
-            // General -> Library & stores
-            | "iroriAchievementToast.showGame"
-            | "iroriAchievementToast.showDescription"
-            | "iroriAchievementToast.showRarity"
-            | "iroriAchievementToast.showProgress"
-            | "iroriAchievementToast.showPoints"
-            | "iroriFileAchievements"
-            | "iroriShortcutIconFromExe"
-            // General -> Integrations & downloads
-            | "iroriNetworkTimeout"
+        // General -> Window
+        "hideWindowOnProtocolLaunch"
+            // General -> Downloads
             | "downloadNoHttps"
+            | "checkUpdatesInterval"
+            | "iroriLaunchersRescan"
+            | "iroriNetworkTimeout"
+            // General -> Integrations
+            | "iroriFileAchievements"
             | "discordClientId"
-            | "action.open-windows-files"
             // Controller
             | "gamepadInitialRepeatDelay"
             | "gamepadRepeatDelay"
@@ -453,6 +419,11 @@ pub(crate) fn is_hidden_by_parent(spec: &FieldSpec, snapshot: &Value) -> bool {
         "iroriAutoUpdateFrom" | "iroriAutoUpdateUntil" | "iroriAutoUpdateUnmetered" => {
             !bool_at(snapshot, "autoUpdateGames") && !bool_at(snapshot, "iroriAutoUpdateComponents")
         }
+        "iroriShortcutIconFromExe" => {
+            !bool_at(snapshot, "addDesktopShortcuts") && !bool_at(snapshot, "addStartMenuShortcuts")
+        }
+        "panel.quick_launch" => !bool_at(snapshot, "iroriUi.quickLaunchShortcut"),
+        "panel.achievement-details" => !bool_at(snapshot, "iroriAchievementNotices"),
         "panel.sunshine" => !bool_at(snapshot, "iroriSunshine.enabled"),
         "panel.igdb" => !bool_at(snapshot, "iroriIgdb"),
         "iroriUi.libraryBackgroundPicture" => {
@@ -471,7 +442,6 @@ pub(crate) fn is_hidden_by_parent(spec: &FieldSpec, snapshot: &Value) -> bool {
 /// sibling rows do not have to repeat the same explanation.
 pub(crate) fn group_description_key(group_key: &str) -> Option<&'static str> {
     match group_key {
-        "settings.group.stores" => Some("settings.group_desc.stores"),
         "settings.group.upscalers" => Some("settings.group_desc.upscalers"),
         "settings.group.wine_sync" => Some("settings.group_desc.wine_sync"),
         _ => None,
@@ -622,15 +592,32 @@ mod tests {
         let off = serde_json::json!({
             "autoUpdateGames": false,
             "iroriAutoUpdateComponents": false,
+            "addDesktopShortcuts": false,
+            "addStartMenuShortcuts": false,
+            "iroriAchievementNotices": false,
+            "discordRPC": false,
             "iroriSunshine": { "enabled": false },
             "iroriIgdb": false,
-            "iroriUi": { "libraryBackground": "none" },
+            "iroriUi": { "libraryBackground": "none", "quickLaunchShortcut": false },
             "gamescope": { "iroriEnabled": false }
         });
         assert!(is_hidden_by_parent(
             find("iroriAutoUpdateFrom").unwrap(),
             &off
         ));
+        assert!(is_hidden_by_parent(
+            find("iroriShortcutIconFromExe").unwrap(),
+            &off
+        ));
+        assert!(is_hidden_by_parent(
+            find("panel.quick_launch").unwrap(),
+            &off
+        ));
+        assert!(is_hidden_by_parent(
+            find("panel.achievement-details").unwrap(),
+            &off
+        ));
+        assert!(is_hidden_by_parent(find("discordClientId").unwrap(), &off));
         assert!(is_hidden_by_parent(find("panel.sunshine").unwrap(), &off));
         assert!(is_hidden_by_parent(find("panel.igdb").unwrap(), &off));
         assert!(is_hidden_by_parent(
@@ -659,8 +646,11 @@ mod tests {
         ));
 
         let picture = serde_json::json!({
-            "iroriUi": { "libraryBackground": "picture" },
+            "iroriUi": { "libraryBackground": "picture", "quickLaunchShortcut": true },
             "autoUpdateGames": true,
+            "addDesktopShortcuts": true,
+            "iroriAchievementNotices": true,
+            "discordRPC": true,
             "iroriSunshine": { "enabled": true },
             "iroriIgdb": true,
             "gamescope": { "iroriEnabled": true }
@@ -671,6 +661,22 @@ mod tests {
         ));
         assert!(!is_hidden_by_parent(
             find("iroriAutoUpdateFrom").unwrap(),
+            &picture
+        ));
+        assert!(!is_hidden_by_parent(
+            find("iroriShortcutIconFromExe").unwrap(),
+            &picture
+        ));
+        assert!(!is_hidden_by_parent(
+            find("panel.quick_launch").unwrap(),
+            &picture
+        ));
+        assert!(!is_hidden_by_parent(
+            find("panel.achievement-details").unwrap(),
+            &picture
+        ));
+        assert!(!is_hidden_by_parent(
+            find("discordClientId").unwrap(),
             &picture
         ));
         assert!(!is_hidden_by_parent(
