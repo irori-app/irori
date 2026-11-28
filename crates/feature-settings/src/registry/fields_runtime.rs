@@ -199,50 +199,10 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "mac",
     ]),
     game(
-        "enableWineWayland",
-        "settings.field.enable_wine_wayland.label",
-        Wine,
-        "settings.group.display",
-        Toggle,
-    )
-    .tag(Key("settings.tag.experimental"))
-    .help("settings.field.enable_wine_wayland.help")
-    .tooltip("settings.field.enable_wine_wayland.tip")
-    .keywords(&["wayland", "xwayland", "display"]),
-    game(
-        "enableHDR",
-        "settings.field.enable_hdr.label",
-        Wine,
-        "settings.group.display",
-        Toggle,
-    )
-    .tooltip("settings.field.enable_hdr.tip")
-    .keywords(&["hdr", "high dynamic range", "wayland"])
-    .requires(NEEDS_WAYLAND),
-    game(
-        "enableFSR",
-        "settings.field.enable_fsr.label",
-        Wine,
-        "settings.group.display",
-        Toggle,
-    )
-    .tooltip("settings.field.enable_fsr.tip")
-    .keywords(&["fsr", "upscale", "amd", "fidelityfx"]),
-    game(
-        "maxSharpness",
-        "settings.field.max_sharpness.label",
-        Wine,
-        "settings.group.display",
-        Choice(SHARPNESS),
-    )
-    .tooltip("settings.field.max_sharpness.tip")
-    .keywords(&["fsr", "sharpness", "strength"])
-    .requires(NEEDS_FSR),
-    game(
         "enableWoW64",
         "settings.field.enable_wow64.label",
         Wine,
-        "settings.group.display",
+        "settings.group.compatibility_layer",
         Toggle,
     )
     .tag(Key("settings.tag.experimental"))
@@ -368,7 +328,7 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "in-game stats",
         "stats",
     ]),
-    game(
+    game_only(
         "panel.optiscaler",
         "settings.field.panel_optiscaler.label",
         Performance,
@@ -427,6 +387,16 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     .tooltip("settings.field.show_fps.tip")
     .keywords(&["fps", "hud", "dxvk", "counter"]),
     game(
+        "iroriReplay.enabled",
+        "settings.field.replay_enabled.label",
+        Performance,
+        "settings.group.replay_buffer",
+        Toggle,
+    )
+    .help("settings.field.replay_enabled.help")
+    .tooltip("settings.field.replay_enabled.tip")
+    .keywords(&["replay", "clip", "record", "video", "instant replay"]),
+    game(
         "panel.replay",
         "settings.field.panel_replay.label",
         Performance,
@@ -443,16 +413,6 @@ pub(super) const FIELDS: &[FieldSpec] = &[
         "gpu-screen-recorder",
         "shadowplay",
     ]),
-    game(
-        "iroriReplay.enabled",
-        "settings.field.replay_enabled.label",
-        Performance,
-        "settings.group.replay_buffer",
-        Toggle,
-    )
-    .help("settings.field.replay_enabled.help")
-    .tooltip("settings.field.replay_enabled.tip")
-    .keywords(&["replay", "clip", "record", "video", "instant replay"]),
     game(
         "iroriReplay.seconds",
         "settings.field.replay_seconds.label",
@@ -753,6 +713,46 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     .requires(NEEDS_GAMESCOPE),
     // ---- GPU ----
     game(
+        "enableWineWayland",
+        "settings.field.enable_wine_wayland.label",
+        Gpu,
+        "settings.group.display",
+        Toggle,
+    )
+    .tag(Key("settings.tag.experimental"))
+    .help("settings.field.enable_wine_wayland.help")
+    .tooltip("settings.field.enable_wine_wayland.tip")
+    .keywords(&["wayland", "xwayland", "display"]),
+    game(
+        "enableHDR",
+        "settings.field.enable_hdr.label",
+        Gpu,
+        "settings.group.display",
+        Toggle,
+    )
+    .tooltip("settings.field.enable_hdr.tip")
+    .keywords(&["hdr", "high dynamic range", "wayland"])
+    .requires(NEEDS_WAYLAND),
+    game(
+        "enableFSR",
+        "settings.field.enable_fsr.label",
+        Gpu,
+        "settings.group.display",
+        Toggle,
+    )
+    .tooltip("settings.field.enable_fsr.tip")
+    .keywords(&["fsr", "upscale", "amd", "fidelityfx"]),
+    game(
+        "maxSharpness",
+        "settings.field.max_sharpness.label",
+        Gpu,
+        "settings.group.display",
+        Choice(SHARPNESS),
+    )
+    .tooltip("settings.field.max_sharpness.tip")
+    .keywords(&["fsr", "sharpness", "strength"])
+    .requires(NEEDS_FSR),
+    game(
         "iroriGpu",
         "settings.field.gpu.label",
         Gpu,
@@ -822,7 +822,7 @@ pub(super) const FIELDS: &[FieldSpec] = &[
     .help("settings.field.nvidia_prime.help")
     .tooltip("settings.field.nvidia_prime.tip")
     .keywords(&["prime", "optimus", "dgpu", "nvidia", "hybrid"])
-    .needs(&[Need::NoChosenGpu]),
+    .needs(&[Need::SeveralGpus, Need::NoChosenGpu]),
     game(
         "iroriSmoothMotion",
         "settings.field.smooth_motion.label",

@@ -248,7 +248,7 @@ pub enum PanelKind {
     Replay,
     /// Per-game Performance HUD overrides (MangoHud on Linux, Metal HUD on macOS).
     PerformanceHud,
-    /// OptiScaler upscaling bridge (global defaults in Game defaults, per-game panel in Performance).
+    /// Per-game OptiScaler upscaling bridge in a game's Performance section.
     Optiscaler,
     /// Sunshine: found or not, its login, syncing now, the last sync.
     Sunshine,
@@ -629,6 +629,7 @@ impl FieldSpec {
                     | "enableFsync"
                     | "iroriNtsync"
                     | "enableFSR"
+                    | "maxSharpness"
                     | "enableWineWayland"
                     | "enableHDR"
                     | "enableWoW64"

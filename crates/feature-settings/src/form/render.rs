@@ -323,7 +323,7 @@ impl SettingsForm {
                 {
                     row.help = bin.to_string().into();
                 }
-                Select::new(&wine.select)
+                let select = Select::new(&wine.select)
                     .id("field-wineVersion")
                     .accessibility_label(spec.label_text())
                     .placeholder(if wine.loading {
@@ -331,8 +331,25 @@ impl SettingsForm {
                     } else {
                         t("settings.wine.choose_build")
                     })
-                    .w_64()
-                    .into_any_element()
+                    .w_64();
+                if matches!(self.target, super::FormTarget::Defaults)
+                    && crate::view::SettingsSection::WineManager.supported_on_host()
+                {
+                    h_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(select)
+                        .child(
+                            Button::new("wine-version-manage")
+                                .outline()
+                                .small()
+                                .label(t("settings.game_defaults.wine.manage"))
+                                .on_click(|_, _, cx| irori_ui::navigate(Route::WineManager, cx)),
+                        )
+                        .into_any_element()
+                } else {
+                    select.into_any_element()
+                }
             }
             CustomKind::ToolVersion(_) => match self.choices.get(path) {
                 Some(state) => Select::new(state)
@@ -671,7 +688,18 @@ impl SettingsForm {
                 first_group = false;
             }
             let first = rows.is_none();
-            let row_content = if compact_rows
+            let row_content = if matches!(spec.kind, FieldKind::Panel(PanelKind::Replay)) {
+                let path = spec.path;
+                i += 1;
+                div()
+                    .id(ElementId::Name(format!("row-{path}").into()))
+                    .debug_selector(move || format!("row-{path}"))
+                    .w_full()
+                    .px_4()
+                    .py_3()
+                    .children(self.panels.get(path).cloned())
+                    .into_any_element()
+            } else if compact_rows
                 && i + 1 < fields.len()
                 && fields[i + 1].section == spec.section
                 && fields[i + 1].group == spec.group

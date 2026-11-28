@@ -23,7 +23,6 @@ use crate::igdb::IgdbPanel;
 use crate::launch_presets::LaunchPresetsPanel;
 use crate::launch_programs::LaunchProgramsPanel;
 use crate::optiscaler::OptiscalerPanel;
-use crate::optiscaler_defaults::OptiscalerDefaultsPanel;
 use crate::overlay::OverlayPanel;
 use crate::registry::{
     self, ActionKind, ChoiceOption, CustomKind, FieldKind, FieldSection, FieldSpec, NeedContext,
@@ -119,6 +118,18 @@ impl SettingsForm {
                     }
                     if let Some(tab) = self.subtab
                         && crate::layout::subtab_of(f) != Some(tab)
+                    {
+                        return false;
+                    }
+                    if self.compact
+                        && matches!(self.target, FormTarget::Defaults)
+                        && cfg!(target_os = "linux")
+                        && matches!(
+                            f.path,
+                            "enableDXVKFpsLimit" | "DXVKFpsCap" | "iroriFpsLimiter"
+                        )
+                        && crate::game_defaults::mangohud_installed() != Some(false)
+                        && !self.bool_value("enableDXVKFpsLimit")
                     {
                         return false;
                     }
@@ -372,16 +383,13 @@ impl SettingsForm {
                 _ => None,
             },
             PanelKind::Optiscaler => match &self.target {
-                FormTarget::Defaults => {
-                    Some(cx.new(|cx| OptiscalerDefaultsPanel::new(window, cx)).into())
-                }
                 FormTarget::Game(id) => {
                     let id = id.clone();
                     let entity = cx.new(|cx| OptiscalerPanel::new(id, window, cx));
                     self.optiscaler_panel = Some(entity.clone());
                     Some(entity.into())
                 }
-                FormTarget::App => None,
+                FormTarget::App | FormTarget::Defaults => None,
             },
             PanelKind::Sunshine => Some(cx.new(|cx| SunshinePanel::new(window, cx)).into()),
             PanelKind::QuickLaunch => {

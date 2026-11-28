@@ -17,21 +17,21 @@ use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::component::select::{SelectItem, SelectState};
 use gpui_kit::component::slider::SliderState;
 use gpui_kit::{
-    AnyView, Context, ElementId, Entity, IntoElement, ParentElement as _, Render, SharedString,
-    Subscription, Task, Window,
+    AnyView, Context, ElementId, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    Render, SharedString, Styled as _, Subscription, Task, Window, div,
 };
 use irori_core::GameId;
 use irori_core::settings::{GameSettings, WineInstallation};
 use irori_runtime::discovery::WineSource;
 use irori_runtime::graphics::HostGraphics;
-use irori_ui::i18n::t;
+use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 use serde_json::Value;
 
 use crate::i18n::LanguageStamp;
 use crate::optiscaler::OptiscalerPanel;
 use crate::registry::{self, ActionKind, CustomKind, FieldSection, FieldSpec, Scope};
-use crate::widgets::more_options_disclosure;
+use crate::widgets::{more_options_disclosure, muted};
 
 /// Whether `game` is installed as this system's own build: native Linux
 /// on Linux, a Mac build on macOS.
@@ -413,6 +413,20 @@ impl Render for SettingsForm {
         };
         let fields: Vec<&'static FieldSpec> = self.visible_fields().collect();
         if self.compact && !searching {
+            let (fields, blocked_count) = if matches!(self.target, FormTarget::Defaults) {
+                let mut available = Vec::with_capacity(fields.len());
+                let mut blocked = 0usize;
+                for spec in fields {
+                    if self.hardware_blocked(spec) {
+                        blocked += 1;
+                    } else {
+                        available.push(spec);
+                    }
+                }
+                (available, blocked)
+            } else {
+                (fields, 0)
+            };
             let (essential, advanced): (Vec<_>, Vec<_>) = fields
                 .into_iter()
                 .partition(|f| !crate::layout::is_advanced(f) && !self.hardware_blocked(f));
@@ -438,6 +452,23 @@ impl Render for SettingsForm {
                             .into_any_element()
                     },
                 ));
+            }
+            if blocked_count > 0 {
+                let note = if blocked_count == 1 {
+                    t("settings.form.hardware_hidden_one")
+                } else {
+                    t_args(
+                        "settings.form.hardware_hidden_other",
+                        &[("count", &blocked_count.to_string())],
+                    )
+                };
+                body = body.child(
+                    div()
+                        .id("defaults-hardware-hidden")
+                        .debug_selector(|| "defaults-hardware-hidden".into())
+                        .pt_3()
+                        .child(muted(note, cx).text_xs()),
+                );
             }
             return body;
         }

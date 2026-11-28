@@ -1,10 +1,11 @@
 //! OptiScaler for one game, in the game's Performance section below In-game
-//! stats: inherits global defaults from Settings -> Game defaults ->
-//! Performance, lets the user override release channel (Stable or Nightly), GPU
-//! driver mode (Mesa Auto with FakeNVAPI or NVIDIA), proxy file name,
-//! OptiPatcher, and menu shortcut key per game, inspect or choose the game
-//! executable and folder, install (asking first when the game has anticheat or
-//! when a proxy file already exists), toggle on or off, update, and remove.
+//! stats: auto-detects the host GPU driver mode (NVIDIA or Mesa Auto with
+//! FakeNVAPI) when no default is saved, lets the user configure release channel
+//! (Stable or Nightly), GPU driver mode, proxy file name, OptiPatcher, and
+//! menu shortcut key (with a one-click option to apply that shortcut across
+//! installed games), inspect or choose the game executable and folder, install
+//! (asking first when the game has anticheat or when a proxy file already
+//! exists), toggle on or off, update, and remove.
 
 use std::path::{Path, PathBuf};
 
@@ -94,6 +95,8 @@ struct Labels {
     open_folder: SharedString,
     shortcut_label: SharedString,
     shortcut_help: SharedString,
+    shortcut_apply_all: SharedString,
+    shortcut_apply_all_tip: SharedString,
 }
 
 impl Labels {
@@ -130,6 +133,8 @@ impl Labels {
             open_folder: t("settings.optiscaler.open_folder"),
             shortcut_label: t("settings.optiscaler.shortcut.label"),
             shortcut_help: t("settings.optiscaler.shortcut.help"),
+            shortcut_apply_all: t("settings.optiscaler.shortcut.apply_all"),
+            shortcut_apply_all_tip: t("settings.optiscaler.defaults.shortcut_help"),
         }
     }
 }
@@ -331,11 +336,26 @@ pub(crate) struct OptiscalerPanel {
 
 impl EventEmitter<GraphicsModsChanged> for OptiscalerPanel {}
 
+fn resolve_default_config(defaults: &irori_core::OptiscalerDefaults) -> OptiscalerConfig {
+    let mut cfg = OptiscalerConfig::from_defaults(defaults);
+    if defaults.gpu_driver.trim().is_empty()
+        && cfg!(target_os = "linux")
+        && irori_runtime::hud::hardware_linux::cached_linux_hud_env().is_some_and(|env| {
+            env.gpus
+                .iter()
+                .any(|g| g.vendor_id.eq_ignore_ascii_case("10de"))
+        })
+    {
+        cfg.gpu_driver = GpuDriverMode::Nvidia;
+    }
+    cfg
+}
+
 impl OptiscalerPanel {
     pub(crate) fn new(id: GameId, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let labels = Labels::load();
         let defaults = backend(cx).settings.app().game.optiscaler.clone();
-        let global_config = OptiscalerConfig::from_defaults(&defaults);
+        let global_config = resolve_default_config(&defaults);
         let global_shortcut = default_shortcut_from(&defaults);
         let config = global_config.clone();
 
@@ -461,7 +481,7 @@ impl OptiscalerPanel {
 
     fn sync_global_defaults(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let defaults = backend(cx).settings.app().game.optiscaler.clone();
-        let next_global = OptiscalerConfig::from_defaults(&defaults);
+        let next_global = resolve_default_config(&defaults);
         let next_shortcut = default_shortcut_from(&defaults);
         if self.global_config == next_global && self.global_shortcut == next_shortcut {
             return;
@@ -965,6 +985,39 @@ impl OptiscalerPanel {
         cx.notify();
     }
 
+    fn apply_shortcut_to_all_games(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let next_opt = self.config.shortcut_key.clone();
+        let next_str = next_opt.clone().unwrap_or_default();
+        let b = backend(cx);
+        b.settings
+            .update_app(|app| app.game.optiscaler.shortcut_key = next_str);
+        self.global_shortcut = next_opt.clone();
+        self.key_capture
+            .update(cx, |k, cx| k.set_inherited(next_opt.clone(), cx));
+        let key_name = vk_display_name(next_opt.as_deref().unwrap_or(""));
+        let task = irori_ui::run(cx, async move {
+            b.sync_global_optiscaler_shortcut(next_opt).await
+        });
+        cx.spawn_in(window, async move |_, cx| {
+            let result = task.await;
+            let _ = cx.update(|window, cx| match result {
+                Ok(_) => window.push_notification(
+                    Notification::success(t_args(
+                        "settings.optiscaler.shortcut.applied_all",
+                        &[("key", key_name.as_ref())],
+                    )),
+                    cx,
+                ),
+                Err(e) => window.push_notification(
+                    Notification::error(error_text(&e)).title(t("settings.optiscaler.failed")),
+                    cx,
+                ),
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn render_installing(&self, cx: &mut Context<Self>) -> AnyElement {
         let mut text = self
             .step
@@ -1245,13 +1298,31 @@ impl OptiscalerPanel {
         )
         .into_any_element();
 
+        let can_apply_all = self.config.shortcut_key != self.global_shortcut;
         let shortcut_row = field_row(
             RowState {
                 label: self.labels.shortcut_label.clone(),
                 help: self.labels.shortcut_help.clone(),
                 ..Default::default()
             },
-            self.key_capture.clone().into_any_element(),
+            h_flex()
+                .gap_2()
+                .items_center()
+                .when(can_apply_all, |row| {
+                    row.child(
+                        Button::new("optiscaler-shortcut-apply-all")
+                            .ghost()
+                            .small()
+                            .label(self.labels.shortcut_apply_all.clone())
+                            .tooltip(self.labels.shortcut_apply_all_tip.clone())
+                            .disabled(busy)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.apply_shortcut_to_all_games(window, cx)
+                            })),
+                    )
+                })
+                .child(self.key_capture.clone())
+                .into_any_element(),
             cx,
         )
         .into_any_element();

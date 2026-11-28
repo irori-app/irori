@@ -574,7 +574,14 @@ fn hdr_and_gamescope_fields_mention_the_displays(cx: &mut TestAppContext) {
     cx.update_window(handle, |_, window, cx| {
         form.update(cx, |f, cx| {
             f.set_displays_for_test(sample_displays(), cx);
-            f.set_sections(vec![FieldSection::Wine, FieldSection::Performance], cx);
+            f.set_sections(
+                vec![
+                    FieldSection::Wine,
+                    FieldSection::Gpu,
+                    FieldSection::Performance,
+                ],
+                cx,
+            );
         });
         window.refresh();
         let _ = window.draw(cx);
@@ -1190,14 +1197,75 @@ fn performance_optiscaler_and_replay_subtabs_render_cleanly(cx: &mut TestAppCont
     .unwrap();
     cx.update(|cx| assert_eq!(view.read(cx).section(), GameSection::Performance));
 
-    let (d_handle, _) = open(cx, |window, cx| {
-        crate::optiscaler_defaults::OptiscalerDefaultsPanel::new(window, cx)
+    let (d_handle, d_view) = open(cx, |window, cx| {
+        SettingsView::new("game-defaults".into(), window, cx)
     });
-    cx.update_window(d_handle, |_, window, cx| {
+    let mut vcx = gpui_kit::VisualTestContext::from_window(d_handle, cx);
+    for tab in crate::layout::supported_defaults_tabs() {
+        vcx.update_window(d_handle, |_, window, cx| {
+            d_view.update(cx, |v, cx| v.set_subtab_for_test(tab.id, window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        assert!(vcx.debug_bounds("game-defaults-related").is_some());
+    }
+    vcx.read(|cx| {
+        let paths = d_view.read(cx).defaults_form().read(cx).visible_paths();
+        assert!(!paths.contains(&"panel.optiscaler"));
+    });
+}
+
+#[gpui_kit::test]
+fn game_defaults_redesign_layout_and_saves_consolidation(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    let tabs: Vec<_> = crate::layout::DEFAULTS_TABS.iter().map(|t| t.id).collect();
+    assert_eq!(tabs, ["wine", "performance", "gpu", "launch", "replay"]);
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("game-defaults".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
         window.refresh();
         let _ = window.draw(cx);
     })
     .unwrap();
+    if !cfg!(windows) {
+        assert!(vcx.debug_bounds("game-defaults-summary").is_some());
+    }
+    assert!(vcx.debug_bounds("game-defaults-related").is_some());
+
+    // Replay tab keeps the master toggle ahead of the recorder status row.
+    if cfg!(target_os = "linux") {
+        vcx.update_window(handle, |_, window, cx| {
+            view.update(cx, |v, cx| v.set_subtab_for_test("replay", window, cx));
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        vcx.read(|cx| {
+            let paths = view.read(cx).defaults_form().read(cx).visible_paths();
+            assert_eq!(paths.first().copied(), Some("iroriReplay.enabled"));
+            assert_eq!(paths.get(1).copied(), Some("panel.replay"));
+        });
+    }
+
+    // Global save defaults now live on Settings -> Saves instead of a duplicate
+    // Game defaults sub-tab.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("saves", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.read(|cx| {
+        let paths = view.read(cx).defaults_form().read(cx).visible_paths();
+        assert!(paths.contains(&"autoSyncSaves"));
+        assert!(paths.contains(&"iroriLudusaviAutoBackup"));
+        assert!(paths.contains(&"iroriLudusaviInterval"));
+    });
 }
 
 #[gpui_kit::test]
