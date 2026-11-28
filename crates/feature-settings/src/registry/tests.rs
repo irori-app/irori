@@ -100,7 +100,7 @@ fn search_matches_labels_keywords_and_tags() {
 fn search_finds_actions() {
     crate::i18n::register();
     assert!(search("heroic").any(|f| f.path == "action.import-heroic"));
-    assert!(search("cache").any(|f| f.path == "action.clear-caches"));
+    assert!(search("cache").any(|f| f.path == "action.manage-caches"));
 }
 
 #[test]
@@ -431,7 +431,7 @@ fn search_matches_tooltip_copy() {
     let speed = find("maxDownloadSpeed").expect("maxDownloadSpeed");
     assert!(!speed.tooltip_text().is_empty());
     assert!(search("voice calls").any(|f| f.path == "maxDownloadSpeed"));
-    assert!(search("stale metadata").any(|f| f.path == "action.clear-caches"));
+    assert!(search("stale metadata").any(|f| f.path == "action.manage-caches"));
     assert_eq!(
         search("laptop fans").any(|f| f.path == "enableDXVKFpsLimit"),
         !cfg!(windows)

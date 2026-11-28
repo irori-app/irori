@@ -448,6 +448,19 @@ impl ArtStore {
             cx.notify();
         }
     }
+
+    /// Drop every cached entry in memory after the on-disk art cache is
+    /// cleared in Storage so subsequent renders re-download and cut art fresh.
+    pub fn clear_memory_cache(&mut self, cx: &mut Context<Self>) {
+        self.ready.clear();
+        self.failed.clear();
+        self.stood_in.clear();
+        self.arrived.clear();
+        self.ambient.clear();
+        self.aspects.clear();
+        self.shown.clear();
+        cx.notify();
+    }
 }
 
 /// Height over width of a `width` × `height` picture; `None` for an empty

@@ -35,7 +35,7 @@ use crate::hud::{HudPanel, HudPanelScope};
 use crate::i18n::{LanguageStamp, english};
 use crate::logs::LogViewer;
 use crate::registry::FieldSection;
-use crate::storage::StoragePanel;
+use crate::storage::{STORAGE_MAX_WIDTH_REM, StoragePanel};
 use crate::widgets::{
     group_header, group_heading, muted, nav_button_with_dot, panel, sidebar_section_label,
 };
@@ -131,7 +131,7 @@ impl SettingsSection {
             "controller" | "controllers" | "gamepad" | "buttons" => SettingsSection::Controller,
             "hud" | "mangohud" | "metal-hud" | "performance-hud" => SettingsSection::PerformanceHud,
             "appearance" | "accessibility" | "theme" => SettingsSection::Appearance,
-            "storage" | "disks" | "cleanup" => SettingsSection::Storage,
+            "storage" | "storage-caches" | "disks" | "cleanup" => SettingsSection::Storage,
             "advanced" => SettingsSection::Advanced,
             "saves" | "ludusavi" | "save-backups" => SettingsSection::Saves,
             "backup" | "restore" | "export" | "sync" => SettingsSection::Backup,
@@ -245,7 +245,7 @@ impl SettingsSection {
             }
             SettingsSection::About => "about version license credits",
             SettingsSection::Storage => {
-                "storage disk drive space size free clean cleanup delete prefix cache"
+                "storage disk drive space size free clean cleanup delete prefix cache artwork stores"
             }
             _ => "",
         }
@@ -333,7 +333,7 @@ impl SettingsView {
         // upload history, so it stays the same in every language.
         let log =
             cx.new(|cx| LogViewer::new(Paths::get().launcher_log_file(), "Irori log", window, cx));
-        let storage = cx.new(StoragePanel::new);
+        let storage = cx.new(|cx| StoragePanel::new(window, cx));
         let accounts = models(cx).accounts.clone();
         let default_defaults_tab = crate::layout::supported_defaults_tabs()
             .first()
@@ -373,6 +373,12 @@ impl SettingsView {
             this.general_tab = "integrations";
         }
         this.open(SettingsSection::from_id(&section), false, window, cx);
+        if matches!(section.as_ref(), "storage-caches" | "cleanup") {
+            let focus = (section.as_ref() == "storage-caches")
+                .then_some(irori_services::storage::CleanupKind::ArtCache);
+            this.storage
+                .update(cx, |s, cx| s.open_cleanup_focus(focus, window, cx));
+        }
         this
     }
 
@@ -393,6 +399,14 @@ impl SettingsView {
         if id == "downloads" {
             self.general_tab = "integrations";
             self.open(target, false, window, cx);
+            return;
+        }
+        if matches!(id, "storage-caches" | "cleanup") {
+            self.open(target, false, window, cx);
+            let focus =
+                (id == "storage-caches").then_some(irori_services::storage::CleanupKind::ArtCache);
+            self.storage
+                .update(cx, |s, cx| s.open_cleanup_focus(focus, window, cx));
             return;
         }
         if target == self.section
@@ -441,6 +455,11 @@ impl SettingsView {
     #[cfg(test)]
     pub(crate) fn backup_panel(&self) -> &Entity<BackupPanel> {
         &self.backup
+    }
+
+    #[cfg(test)]
+    pub(crate) fn storage_panel(&self) -> &Entity<StoragePanel> {
+        &self.storage
     }
 
     fn set_subtab(&mut self, tab: &'static str, window: &mut Window, cx: &mut Context<Self>) {
@@ -1204,17 +1223,45 @@ impl SettingsView {
 
     fn header_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         match self.section {
-            SettingsSection::Storage => Some(
-                Button::new("storage-rescan")
-                    .outline()
-                    .icon(IconName::RefreshCw)
-                    .label(t("settings.storage.rescan"))
-                    .loading(self.storage.read(cx).loading())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.storage.update(cx, |s, cx| s.load(true, window, cx))
-                    }))
-                    .into_any_element(),
-            ),
+            SettingsSection::Storage => {
+                let s = self.storage.read(cx);
+                let freeable = s.selected_cleanup_bytes();
+                let loading = s.loading();
+                let cleaning = s.cleaning();
+                Some(
+                    h_flex()
+                        .gap_2()
+                        .child(
+                            Button::new("storage-rescan")
+                                .outline()
+                                .icon(IconName::RefreshCw)
+                                .label(t("settings.storage.rescan"))
+                                .loading(loading)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.storage.update(cx, |s, cx| s.load(true, window, cx))
+                                })),
+                        )
+                        .when(freeable > 0, |row| {
+                            row.child(
+                                Button::new("storage-header-free-up")
+                                    .primary()
+                                    .icon(IconName::BrushCleaning)
+                                    .label(t_args(
+                                        "settings.storage.header_free_up",
+                                        &[("size", &irori_core::util::format_bytes(freeable))],
+                                    ))
+                                    .loading(cleaning)
+                                    .disabled(cleaning)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.storage.update(cx, |s, cx| {
+                                            s.confirm_selected_from_header(window, cx)
+                                        })
+                                    })),
+                            )
+                        })
+                        .into_any_element(),
+                )
+            }
             SettingsSection::SystemInfo => Some(
                 h_flex()
                     .gap_2()
@@ -1346,6 +1393,11 @@ impl Render for SettingsView {
                     | SettingsSection::Logs => div().into_any_element(),
                 }
             };
+            let max_width = if !searching && section == SettingsSection::Storage {
+                rems(STORAGE_MAX_WIDTH_REM)
+            } else {
+                rems(52.)
+            };
             div()
                 .id("settings-content")
                 .flex_1()
@@ -1355,7 +1407,7 @@ impl Render for SettingsView {
                 .child(
                     v_flex()
                         .w_full()
-                        .max_w(rems(52.))
+                        .max_w(max_width)
                         .p_5()
                         .pb_10()
                         .gap_2()

@@ -274,7 +274,7 @@ pub enum PanelKind {
 /// One-shot maintenance commands listed alongside fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActionKind {
-    ClearCaches,
+    ManageCaches,
     ResetSettings,
     OpenLogsFolder,
     ImportHeroic,

@@ -1342,3 +1342,139 @@ fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext)
         );
     }
 }
+
+#[gpui_kit::test]
+fn storage_option_a_tabs_and_advanced_cache_shortcut_render(cx: &mut TestAppContext) {
+    use std::collections::BTreeMap;
+
+    use gpui_kit::VisualTestContext;
+    use irori_services::storage::{
+        Cleanup, CleanupItem, CleanupKind, DiskUsage, Drive, GameSize, Holding, ItemNote,
+        StorageReport,
+    };
+
+    use crate::storage::StorageTab;
+
+    const GIB: u64 = 1024 * 1024 * 1024;
+    const MIB: u64 = 1024 * 1024;
+    let game = |runner, id, title: &str, gib, last: Option<&str>| GameSize {
+        id: GameId::new(runner, id),
+        title: title.into(),
+        bytes: gib * GIB,
+        last_played: last.map(str::to_owned),
+    };
+    let item = |path: &str, mib, note| CleanupItem {
+        path: path.into(),
+        bytes: mib * MIB,
+        note,
+    };
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("storage".into(), window, cx)
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    let report = StorageReport {
+        disks: vec![
+            DiskUsage {
+                drive: Drive {
+                    name: String::new(),
+                    mount: "/mnt/Asgard".into(),
+                    total: 938 * GIB,
+                    free: 249 * GIB,
+                },
+                games: vec![
+                    game(Runner::Steam, "100", "Crimson Desert Enhanced", 172, None),
+                    game(
+                        Runner::Gog,
+                        "200",
+                        "Resident Evil Requiem",
+                        76,
+                        Some("2026-11-26T12:00:00Z"),
+                    ),
+                ],
+                support: BTreeMap::new(),
+            },
+            DiskUsage {
+                drive: Drive {
+                    name: String::new(),
+                    mount: "/home".into(),
+                    total: 1_900 * GIB,
+                    free: 1_200 * GIB,
+                },
+                games: vec![],
+                support: BTreeMap::from([(Holding::IroriData, 1_300 * MIB)]),
+            },
+        ],
+        cleanups: vec![
+            Cleanup {
+                kind: CleanupKind::ArtCache,
+                items: vec![
+                    item(
+                        "/tmp/irori-test/images/thumbs",
+                        107,
+                        ItemNote::ArtThumbnails,
+                    ),
+                    item("/tmp/irori-test/images/orig", 518, ItemNote::ArtOriginals),
+                    item("/tmp/irori-test/stores", 142, ItemNote::StoreCatalogs),
+                ],
+            },
+            Cleanup {
+                kind: CleanupKind::Logs,
+                items: vec![],
+            },
+        ],
+    };
+
+    vcx.update_window(handle, |_, window, cx| {
+        let storage = view.read(cx).storage_panel().clone();
+        storage.update(cx, |s, cx| s.set_report_for_test(report, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).section()),
+        SettingsSection::Storage
+    );
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).storage_panel().read(cx).active_tab()),
+        StorageTab::Games
+    );
+    assert!(vcx.debug_bounds("storage-disk-0").is_some());
+    assert!(vcx.debug_bounds("storage-disk-1").is_some());
+    assert!(vcx.debug_bounds("storage-tab-games").is_some());
+    assert!(vcx.debug_bounds("storage-tab-cleanup").is_none());
+
+    // Settings -> Advanced -> Artwork & metadata shortcut opens Free Up Space
+    // with Artwork and store caches expanded.
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_section("storage-caches", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    assert_eq!(
+        vcx.read(|cx| view.read(cx).storage_panel().read(cx).active_tab()),
+        StorageTab::Cleanup
+    );
+    assert!(vcx.read(|cx| {
+        view.read(cx)
+            .storage_panel()
+            .read(cx)
+            .is_cleanup_expanded(CleanupKind::ArtCache)
+    }));
+    assert!(vcx.debug_bounds("storage-tab-cleanup").is_some());
+    assert!(vcx.debug_bounds("storage-row-art_cache").is_some());
+    assert!(vcx.debug_bounds("storage-tab-games").is_none());
+
+    vcx.update_window(handle, |_, window, cx| {
+        let storage = view.read(cx).storage_panel().clone();
+        storage.update(cx, |s, cx| s.set_tab_for_test(StorageTab::Games, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(vcx.debug_bounds("storage-tab-games").is_some());
+    assert!(vcx.debug_bounds("storage-tab-cleanup").is_none());
+}

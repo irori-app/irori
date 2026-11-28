@@ -546,6 +546,16 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
         "thumbnail",
     ]),
     app(
+        "action.manage-caches",
+        "settings.field.action_manage_caches.label",
+        Advanced,
+        "settings.group.artwork",
+        Action(ActionKind::ManageCaches),
+    )
+    .help("settings.field.action_manage_caches.help")
+    .tooltip("settings.field.action_manage_caches.tip")
+    .keywords(&["cache", "clear", "artwork", "store", "storage", "refresh"]),
+    app(
         "iroriIgdb",
         "settings.field.igdb.label",
         Advanced,
@@ -825,16 +835,6 @@ pub(super) const ADVANCED: &[FieldSpec] = &[
     .help("settings.field.action_import_playnite.help")
     .tooltip("settings.field.action_import_playnite.tip")
     .keywords(&["playnite", "import", "migrate", "playtime", "windows"]),
-    app(
-        "action.clear-caches",
-        "settings.field.action_clear_caches.label",
-        Advanced,
-        "settings.group.maintenance",
-        Action(ActionKind::ClearCaches),
-    )
-    .help("settings.field.action_clear_caches.help")
-    .tooltip("settings.field.action_clear_caches.tip")
-    .keywords(&["cache", "clear", "artwork", "refresh"]),
     app(
         "action.reset-settings",
         "settings.field.action_reset_settings.label",
