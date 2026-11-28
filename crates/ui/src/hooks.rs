@@ -97,6 +97,9 @@ pub struct Hooks {
     /// Open the "Set up emulation" guide (it lives in the management
     /// screens, which the library and Big Picture don't depend on).
     pub open_emulation_setup: Option<OpenFn>,
+    /// Open the "Getting started" checklist modal (lives in `irori-manage`,
+    /// which `irori-settings` does not depend on).
+    pub open_getting_started: Option<OpenFn>,
     pub import_from_lutris: Option<LutrisFn>,
     pub import_from_bottles: Option<LutrisFn>,
     pub import_from_faugus: Option<LutrisFn>,
@@ -167,6 +170,16 @@ pub fn open_emulation_setup(window: &mut Window, cx: &mut App) {
     {
         Some(open) => open(window, cx),
         None => crate::navigate(crate::Route::Emulators, cx),
+    }
+}
+
+/// Open the "Getting started" checklist modal when the hook is installed.
+pub fn open_getting_started(window: &mut Window, cx: &mut App) {
+    if let Some(open) = cx
+        .try_global::<Hooks>()
+        .and_then(|h| h.open_getting_started.clone())
+    {
+        open(window, cx);
     }
 }
 

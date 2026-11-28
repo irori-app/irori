@@ -931,10 +931,36 @@ impl SettingsView {
     /// Help and feedback: one row per way to reach the project.
     fn render_feedback(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let border = cx.theme().border;
+        let getting_started = h_flex()
+            .gap_3()
+            .px_4()
+            .py_3()
+            .child(Icon::new(IconName::Sparkles).text_color(cx.theme().muted_foreground))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_medium()
+                            .child(t("settings.about.getting_started")),
+                    )
+                    .child(muted(t("settings.about.getting_started_help"), cx)),
+            )
+            .child(
+                Button::new("about-getting-started")
+                    .outline()
+                    .small()
+                    .label(t("settings.about.getting_started"))
+                    .on_click(|_, window, cx| irori_ui::hooks::open_getting_started(window, cx)),
+            );
         let tour = h_flex()
             .gap_3()
             .px_4()
             .py_3()
+            .border_t_1()
+            .border_color(border)
             .child(Icon::new(IconName::Compass).text_color(cx.theme().muted_foreground))
             .child(
                 v_flex()
@@ -955,10 +981,9 @@ impl SettingsView {
                     .label(t("settings.about.tour"))
                     .on_click(|_, window, cx| irori_ui::tour::start(window, cx)),
             );
-        Feedback::ALL
-            .into_iter()
-            .enumerate()
-            .fold(panel(cx).child(tour), |list, (_, way)| {
+        Feedback::ALL.into_iter().enumerate().fold(
+            panel(cx).child(getting_started).child(tour),
+            |list, (_, way)| {
                 let button = if way == Feedback::Report {
                     "settings.about.feedback.report_open"
                 } else {
@@ -993,7 +1018,8 @@ impl SettingsView {
                             )),
                         ),
                 )
-            })
+            },
+        )
     }
 
     fn render_about(&self, cx: &mut Context<Self>) -> AnyElement {

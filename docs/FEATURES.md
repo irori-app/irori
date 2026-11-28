@@ -103,9 +103,10 @@ This document holds the full feature reference alongside the concise overview in
 
 ## Big Picture, Stats, and Customization
 
-- Full controller interface (`Ctrl+Shift+B` or holding Guide) with eight themes, six layouts, a theme editor with undo/redo, hotplug support, battery indicators, TV scaling up to 200%, automatic activation in Steam Deck Game Mode, reliable refocus on exit (including Linux KDE Wayland), and power/session controls.
+- Full controller interface (`Ctrl+Shift+B` or holding Guide) with a 2-step controller-first welcome flow (live D-pad language switching, controller glyph guide, and 1-click ROM folder import), controller-navigable empty state, eight themes, six layouts, a theme editor with undo/redo, hotplug support, battery indicators, TV scaling up to 200%, automatic activation in Steam Deck Game Mode, reliable refocus on exit (including Linux KDE Wayland), and power/session controls.
 - In-game overlay (opened with Guide or configurable chords, including `Back + Start` on Windows) with microphone, controller, volume, frame limiter, replay clip, and `Mark this moment` controls, plus live in-game achievement unlock toasts.
 - Play status tracking, age ratings (ESRB, PEGI, USK, CERO, ClassInd, GRAC, ACB), game modes (`mode:coop`, `mode:local`), Stats dashboards (`Overview`, `Journeys`, `Backlog`, `Discoveries`, `Album`, `Journal`, and `Year in review`), daily session charts, and play journals linked to screenshots.
+- First-run 4-step desktop onboarding with automatic OS language detection, OS-adapted feature overview, unified game sources (launcher imports, Steam local status, primary and opt-in stores, detected ROMs), auto-detected install drives with free space, a 5-step Guided Tour, and a dismissible sidebar Getting Started checklist.
 - Grouped Settings layout (`Preferences`, `Data`, `System`) with collapsible `More options` blocks, focusable `(i)` hover tooltips, searchable settings, 19 live-switchable interface languages, system theme and accent tracking (KDE Plasma, COSMIC, Omarchy, pywal, wallust, matugen, and `appearance.json` overrides), Sunshine/Apollo streaming sync, mouse Back/Forward navigation, and one-click UI scaling (`Ctrl++`, `Ctrl+-`, `Ctrl+0`).
 
 <p align="center">

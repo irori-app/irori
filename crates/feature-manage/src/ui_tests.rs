@@ -71,7 +71,7 @@ fn onboarding_walks_to_the_library(cx: &mut TestAppContext) {
 
     let expected = [
         OnboardingStep::Welcome,
-        OnboardingStep::Stores,
+        OnboardingStep::Sources,
         OnboardingStep::InstallFolder,
         OnboardingStep::Done,
     ];
@@ -81,6 +81,49 @@ fn onboarding_walks_to_the_library(cx: &mut TestAppContext) {
     }
     assert_eq!(*events.borrow(), vec![OnboardingEvent::Finished]);
     assert!(!vcx.update(|_, cx| should_show_onboarding(cx)));
+}
+
+#[gpui_kit::test]
+fn onboarding_selects_detected_drive(cx: &mut TestAppContext) {
+    setup(cx);
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            cx.new(|cx| {
+                let mut v = OnboardingView::with_heroic(false, window, cx);
+                v.set_drives(vec![
+                    crate::onboarding::DriveChoice {
+                        label: "/ · System".into(),
+                        path: "/home/test/Games/Irori".into(),
+                        free: Some(100 * 1024 * 1024 * 1024),
+                        total: Some(500 * 1024 * 1024 * 1024),
+                        is_default: true,
+                    },
+                    crate::onboarding::DriveChoice {
+                        label: "/mnt/Games".into(),
+                        path: "/mnt/Games/Games/Irori".into(),
+                        free: Some(400 * 1024 * 1024 * 1024),
+                        total: Some(1000 * 1024 * 1024 * 1024),
+                        is_default: false,
+                    },
+                ]);
+                v
+            })
+        })
+        .expect("window opens")
+    });
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.run_until_parked();
+    click(&mut vcx, "onboarding-next");
+    click(&mut vcx, "onboarding-next");
+    assert_eq!(
+        vcx.update(|_, cx| view.read(cx).step()),
+        OnboardingStep::InstallFolder
+    );
+    click(&mut vcx, "onboarding-drive-1");
+    assert_eq!(
+        vcx.update(|_, cx| view.read(cx).install_path.clone()),
+        "/mnt/Games/Games/Irori"
+    );
 }
 
 fn queued(runner: Runner, app: &str, state: DownloadState) -> DownloadItem {

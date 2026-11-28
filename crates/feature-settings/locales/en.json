@@ -4,6 +4,8 @@
   "settings.about.credit_themes": "Bundled themes",
   "settings.about.tagline": "A game launcher for Linux. Licensed under GPL-3.0-or-later.",
   "settings.about.third_party": "Third-party software",
+  "settings.about.getting_started": "Getting started",
+  "settings.about.getting_started_help": "A short checklist to connect stores, pick a layout, and turn on gameplay tools.",
   "settings.about.tour_help": "A short tour of the main window: where things are and the shortcut to everything.",
   "settings.about.tour": "Show me around",
   "settings.about.feedback.title": "Help and feedback",

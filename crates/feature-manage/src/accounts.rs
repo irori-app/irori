@@ -122,7 +122,7 @@ pub(crate) fn store_enabled(app: &irori_core::AppSettings, runner: Runner) -> bo
     }
 }
 
-fn set_store_enabled(app: &mut irori_core::AppSettings, runner: Runner, on: bool) {
+pub(crate) fn set_store_enabled(app: &mut irori_core::AppSettings, runner: Runner, on: bool) {
     match runner {
         Runner::Zoom => app.zoom_platform = on,
         Runner::Itch => app.itch_io = on,

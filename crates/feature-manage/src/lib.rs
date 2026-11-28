@@ -64,7 +64,7 @@ pub use launchers::{
 };
 pub use login::{open_account_login_dialog, open_login_dialog};
 pub use onboarding::found::{FoundSourcesView, found_sources_view};
-pub use onboarding::hub::open_getting_started;
+pub use onboarding::hub::{GettingStartedBadge, open_getting_started};
 pub use onboarding::{
     OnboardingEvent, OnboardingView, mark_onboarding_done, should_show_onboarding,
 };

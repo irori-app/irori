@@ -142,6 +142,8 @@ fn library() -> Vec<Arc<GameInfo>> {
 pub(crate) fn start_backend() -> Backend {
     let root = std::env::temp_dir().join(format!("irori-bigpicture-test-{}", std::process::id()));
     Paths::init(Paths::under(&root));
+    // Existing Home/Library tests open Big Picture directly into the shelves.
+    let _ = super::welcome::mark_welcome_done();
     let backend = Backend::start_for_tests(|_, _| {
         let games = library();
         let store = |runner: Runner| -> DynStore {
@@ -1070,4 +1072,91 @@ fn inputs_sound_only_when_they_do_something() {
     assert_eq!(super::nav_cue(I::Back, false, false), None);
     assert_eq!(super::nav_cue(I::NextPage, true, false), Some(Cue::Tab));
     assert_eq!(super::nav_cue(I::Menu, true, false), Some(Cue::Confirm));
+}
+
+#[gpui_kit::test]
+fn big_picture_welcome_walks_two_steps_with_controller(cx: &mut TestAppContext) {
+    let (handle, view) = open(cx);
+    // Re-open the first-run welcome state as on a fresh Game Mode boot.
+    cx.update(|cx| {
+        let marker = Paths::get().state_dir().join("bigpicture-welcome-done");
+        let _ = std::fs::remove_file(marker);
+        view.update(cx, |v, cx| {
+            v.welcome = Some(super::welcome::WelcomeState::default());
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+
+    // Intro starts focused on Continue (ix = 1); Up moves to Language (ix = 0).
+    cx.dispatch_action(handle, gamepad::Up);
+    cx.read(|cx| {
+        let w = view.read(cx).welcome.expect("welcome active");
+        assert_eq!(w.step, super::welcome::WelcomeStep::Intro);
+        assert_eq!(w.ix, 0);
+        assert!(
+            view.read(cx).hints(cx).iter().any(|(inputs, _)| {
+                inputs == &vec![gamepad::GamepadInput::Left, gamepad::GamepadInput::Right]
+            }),
+            "language row exposes Left/Right hint"
+        );
+    });
+
+    // Confirm on language moves to Continue; Confirm again advances to Sources.
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| {
+        let w = view.read(cx).welcome.expect("welcome on step 2");
+        assert_eq!(w.step, super::welcome::WelcomeStep::Sources);
+        assert_eq!(w.ix, 0);
+    });
+
+    // Library has 3 games, so action 0 is "Start playing". Confirm finishes welcome.
+    cx.dispatch_action(handle, gamepad::Confirm);
+    cx.read(|cx| {
+        assert!(view.read(cx).welcome.is_none());
+        assert!(!super::welcome::should_show_welcome());
+    });
+}
+
+#[gpui_kit::test]
+fn empty_big_picture_supports_controller_navigation(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let root = std::env::temp_dir().join(format!(
+        "irori-bigpicture-empty-test-{}",
+        std::process::id()
+    ));
+    Paths::init(Paths::under(&root));
+    let _ = super::welcome::mark_welcome_done();
+    let backend = Backend::start_for_tests(|_, _| Vec::new()).expect("empty backend starts");
+    backend.set_power_system(Arc::new(FakePower::default()));
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        irori_ui::init(backend, cx);
+        crate::register_catalogs();
+        crate::bind_keys(cx);
+    });
+    let (handle, view) = cx.update(|cx| {
+        gpui_kit::open_window(
+            WindowOptions {
+                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
+                    Default::default(),
+                    size(px(1280.), px(800.)),
+                ))),
+                ..Default::default()
+            },
+            cx,
+            |window, cx| cx.new(|cx| BigPictureView::new(window, cx)),
+        )
+        .expect("open empty big picture window")
+    });
+    cx.run_until_parked();
+
+    cx.read(|cx| assert_eq!(view.read(cx).empty_ix, 0));
+    cx.dispatch_action(handle, gamepad::Down);
+    cx.read(|cx| assert_eq!(view.read(cx).empty_ix, 1));
+    cx.dispatch_action(handle, gamepad::Down);
+    cx.read(|cx| assert_eq!(view.read(cx).empty_ix, 2));
+    cx.dispatch_action(handle, gamepad::Up);
+    cx.read(|cx| assert_eq!(view.read(cx).empty_ix, 1));
 }
