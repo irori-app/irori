@@ -47,6 +47,32 @@ impl WineOrigin {
     }
 }
 
+/// Quick origin filter chip for the Installed pane.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OriginFilter {
+    All,
+    Irori,
+    Steam,
+    Other,
+}
+
+impl OriginFilter {
+    /// Whether a discovered build with `origin` passes this filter.
+    pub(crate) fn matches_detected(self, origin: WineOrigin) -> bool {
+        match self {
+            Self::All => true,
+            Self::Irori => origin == WineOrigin::Irori,
+            Self::Steam => origin == WineOrigin::Steam,
+            Self::Other => !matches!(origin, WineOrigin::Irori | WineOrigin::Steam),
+        }
+    }
+
+    /// Whether Irori-managed releases pass this filter.
+    pub(crate) fn includes_managed(self) -> bool {
+        matches!(self, Self::All | Self::Irori)
+    }
+}
+
 /// Classify a build from its binary path. `custom` are the user's custom
 /// paths (settings), `own_dirs` Irori's download directories.
 pub(crate) fn classify(bin: &str, custom: &[String], own_dirs: &[PathBuf]) -> WineOrigin {
@@ -134,6 +160,19 @@ pub(crate) fn group(
     }
     groups.retain(|(_, list)| !list.is_empty());
     groups
+}
+
+/// Replace the user's home directory prefix with `~` for compact display.
+pub(crate) fn shorten_home(path: &str) -> String {
+    let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) else {
+        return path.to_string();
+    };
+    let home = PathBuf::from(home);
+    match Path::new(path).strip_prefix(&home) {
+        Ok(rel) if rel.as_os_str().is_empty() => "~".to_string(),
+        Ok(rel) => format!("~/{}", rel.display()),
+        Err(_) => path.to_string(),
+    }
 }
 
 /// Newest-looking names first: compare digit runs numerically.
@@ -249,5 +288,18 @@ mod tests {
         let remaining = exclude_managed(&installs, &managed);
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].name, "Proton 9.0");
+    }
+
+    #[test]
+    fn origin_filter_splits_managed_and_detected_groups() {
+        assert!(OriginFilter::All.includes_managed());
+        assert!(OriginFilter::Irori.includes_managed());
+        assert!(!OriginFilter::Steam.includes_managed());
+        assert!(!OriginFilter::Other.includes_managed());
+        assert!(OriginFilter::Steam.matches_detected(WineOrigin::Steam));
+        assert!(!OriginFilter::Steam.matches_detected(WineOrigin::Lutris));
+        assert!(OriginFilter::Other.matches_detected(WineOrigin::Lutris));
+        assert!(OriginFilter::Other.matches_detected(WineOrigin::Custom));
+        assert!(!OriginFilter::Other.matches_detected(WineOrigin::Steam));
     }
 }

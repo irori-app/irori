@@ -4,13 +4,13 @@
 //! sources) plus a dedicated virtualized `Prefixes` view.
 
 mod installed;
+mod installed_pane;
 mod prefixes;
 mod sources;
 mod ui;
 
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -26,14 +26,13 @@ use gpui_kit::component::progress::Progress;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::select::{Select, SelectEvent, SelectItem, SelectState};
 use gpui_kit::component::spinner::Spinner;
-use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
     ActiveTheme as _, Disableable as _, Icon, Sizable as _, StyledExt as _, WindowExt as _, h_flex,
     v_flex,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    Anchor, AnyElement, App, AppContext as _, Context, ElementId, Entity, InteractiveElement as _,
+    Anchor, AnyElement, App, AppContext as _, Context, Entity, InteractiveElement as _,
     IntoElement, ParentElement as _, PathPromptOptions, Pixels, Render, SharedString,
     StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, canvas, div, px,
     rems,
@@ -41,13 +40,13 @@ use gpui_kit::{
 use irori_core::{Event, Paths, WineInstallation};
 use irori_runtime::manager::{self, Release, ReleaseKind};
 use irori_runtime::release_checks;
-use irori_ui::components::{EmptyState, SectionTitle, StoreLogo};
+use irori_ui::components::EmptyState;
 use irori_ui::i18n::{t, t_args};
 use irori_ui::{backend, models};
 
 use crate::common::{backend_op, card, info_tip, notify_error, notify_success};
 use crate::format;
-use installed::{WineOrigin, exclude_managed, group, kind_label, natural_desc};
+use installed::{OriginFilter, WineOrigin, exclude_managed, group, natural_desc};
 use irori_ui::wine_installs::{
     OpLive, WineOps, cancel_install, release_key, start_install, wine_ops,
 };
@@ -91,12 +90,11 @@ enum ListState {
 }
 
 #[derive(Clone)]
-enum SystemState {
+pub(super) enum SystemState {
     Loading,
     Loaded {
         managed: Vec<Release>,
         detected: Vec<(WineOrigin, Vec<WineInstallation>)>,
-        groups: Vec<(WineOrigin, Vec<WineInstallation>)>,
         all_installs: Vec<WineInstallation>,
     },
 }
@@ -117,7 +115,7 @@ impl SelectItem for DefaultBuildChoice {
     }
 }
 
-fn release_is_default(release: &Release, default_bin: &str) -> bool {
+pub(super) fn release_is_default(release: &Release, default_bin: &str) -> bool {
     !default_bin.is_empty()
         && (release.installation().is_some_and(|w| w.bin == default_bin)
             || release
@@ -138,13 +136,16 @@ pub struct WineManagerView {
     /// GitHub's API budget is used up until this unix time.
     limited_until: Option<u64>,
     search: Entity<InputState>,
+    pub(super) installed_search: Entity<InputState>,
     prefix_search: Entity<InputState>,
+    pub(super) origin_filter: OriginFilter,
+    pub(super) collapsed_origins: HashSet<WineOrigin>,
     prefix_filter: prefixes::PrefixFilter,
     default_select: Entity<SelectState<Vec<DefaultBuildChoice>>>,
     viewport_width: Rc<Cell<Pixels>>,
-    system: Option<SystemState>,
+    pub(super) system: Option<SystemState>,
     prefixes: Option<prefixes::PrefixState>,
-    ops: Entity<WineOps>,
+    pub(super) ops: Entity<WineOps>,
     seen_revision: u64,
     ticking: bool,
     placeholder_language: String,
@@ -156,6 +157,8 @@ impl WineManagerView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         crate::i18n::register();
         let search = cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.wine.search")));
+        let installed_search =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.wine.installed.search")));
         let prefix_search =
             cx.new(|cx| InputState::new(window, cx).placeholder(t("manage.wine.prefixes.search")));
         let default_select =
@@ -164,6 +167,11 @@ impl WineManagerView {
         let settings = models(cx).settings.clone();
         let subscriptions = vec![
             cx.subscribe(&search, |_, _, event, cx| {
+                if matches!(event, InputEvent::Change) {
+                    cx.notify();
+                }
+            }),
+            cx.subscribe(&installed_search, |_, _, event, cx| {
                 if matches!(event, InputEvent::Change) {
                     cx.notify();
                 }
@@ -222,7 +230,10 @@ impl WineManagerView {
             refreshing: false,
             limited_until: None,
             search,
+            installed_search,
             prefix_search,
+            origin_filter: OriginFilter::All,
+            collapsed_origins: HashSet::new(),
             prefix_filter: prefixes::PrefixFilter::All,
             default_select,
             viewport_width: Rc::new(Cell::new(px(0.))),
@@ -304,7 +315,7 @@ impl WineManagerView {
             })
     }
 
-    fn set_default_wine(
+    pub(super) fn set_default_wine(
         &mut self,
         wine: WineInstallation,
         window: &mut Window,
@@ -483,18 +494,16 @@ impl WineManagerView {
             });
             let own = [Paths::get().tools_dir()];
             let detected = group(&exclude_managed(&installs, &managed), &custom, &own);
-            let groups = group(&installs, &custom, &own);
-            Ok((managed, detected, groups, installs))
+            Ok((managed, detected, installs))
         });
         cx.spawn_in(window, async move |this, cx| {
-            let Ok((managed, detected, groups, all_installs)) = task.await else {
+            let Ok((managed, detected, all_installs)) = task.await else {
                 return;
             };
             let _ = this.update_in(cx, |this, window, cx| {
                 this.system = Some(SystemState::Loaded {
                     managed,
                     detected,
-                    groups,
                     all_installs,
                 });
                 this.sync_default_select(window, cx);
@@ -540,7 +549,12 @@ impl WineManagerView {
         }));
     }
 
-    fn confirm_remove(&mut self, release: Release, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn confirm_remove(
+        &mut self,
+        release: Release,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let default_bin = models(cx)
             .settings
             .read(cx)
@@ -602,7 +616,12 @@ impl WineManagerView {
     }
 
     /// Ask, then restore the build replaced by the last in-place update of `version`.
-    fn confirm_go_back(&self, version: String, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn confirm_go_back(
+        &self,
+        version: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let view = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let version = version.clone();
@@ -655,60 +674,7 @@ impl WineManagerView {
         });
     }
 
-    /// Saved builds from previous in-place Wine/Proton updates, offered for rollback.
-    fn render_previous_builds(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let previous = models(cx).components.read(cx).report.previous.clone();
-        if previous.is_empty() {
-            return None;
-        }
-        let muted = cx.theme().muted_foreground;
-        let rows: Vec<AnyElement> = previous
-            .into_iter()
-            .map(|p| {
-                let version = p.version;
-                let target = version.clone();
-                let selector = version.clone();
-                h_flex()
-                    .debug_selector(move || format!("rollback-{selector}"))
-                    .w_full()
-                    .gap_3()
-                    .items_center()
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .gap_0p5()
-                            .child(div().font_medium().truncate().child(version.clone()))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .truncate()
-                                    .text_color(muted)
-                                    .child(t("manage.updates.previous_detail")),
-                            ),
-                    )
-                    .child(
-                        Button::new(ElementId::Name(format!("go-back-{version}").into()))
-                            .small()
-                            .outline()
-                            .label(t("manage.updates.go_back"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.confirm_go_back(target.clone(), window, cx)
-                            })),
-                    )
-                    .into_any_element()
-            })
-            .collect();
-        Some(
-            v_flex()
-                .gap_2()
-                .child(SectionTitle::new(t("manage.updates.section.previous")))
-                .child(card(cx).children(rows))
-                .into_any_element(),
-        )
-    }
-
-    fn add_custom_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn add_custom_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let paths = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -1358,224 +1324,6 @@ impl WineManagerView {
             .into_any_element()
     }
 
-    fn render_system(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = cx.theme();
-        let (muted, border, background, radius) = (
-            theme.muted_foreground,
-            theme.border,
-            theme.background,
-            theme.radius,
-        );
-        let custom_paths = models(cx).settings.read(cx).app.custom_wine_paths.clone();
-        let has_custom = !custom_paths.is_empty();
-        let origin_icon = |origin: WineOrigin| -> Icon {
-            match origin {
-                WineOrigin::Steam => StoreLogo::Steam.icon().text_color(muted),
-                WineOrigin::Lutris => StoreLogo::Lutris.icon().text_color(muted),
-                WineOrigin::Custom => Icon::new(IconName::Folder).small().text_color(muted),
-                WineOrigin::System => Icon::new(IconName::HardDrive).small().text_color(muted),
-                WineOrigin::Irori | WineOrigin::Bottles | WineOrigin::Other => {
-                    Icon::new(IconName::Wine).small().text_color(muted)
-                }
-            }
-        };
-        let builds: AnyElement = match &self.system {
-            None | Some(SystemState::Loading) => h_flex()
-                .gap_2()
-                .text_sm()
-                .text_color(muted)
-                .child(Spinner::new().small())
-                .child(t("manage.wine.system.loading"))
-                .into_any_element(),
-            Some(SystemState::Loaded { groups, .. }) if groups.is_empty() => {
-                EmptyState::new(IconName::Wine, t("manage.wine.system.empty.title"))
-                    .description(t("manage.wine.system.empty.description"))
-                    .into_any_element()
-            }
-            Some(SystemState::Loaded { groups, .. }) => v_flex()
-                .gap_4()
-                .children(groups.iter().map(|(origin, list)| {
-                    let origin = *origin;
-                    card(cx)
-                        .child(
-                            h_flex()
-                                .gap_2()
-                                .items_center()
-                                .child(origin_icon(origin))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .font_semibold()
-                                        .truncate()
-                                        .child(origin.label()),
-                                )
-                                .child(Tag::secondary().xsmall().child(list.len().to_string())),
-                        )
-                        .child(
-                            v_flex()
-                                .w_full()
-                                .rounded(radius)
-                                .bg(background)
-                                .border_1()
-                                .border_color(border)
-                                .overflow_hidden()
-                                .children(list.iter().enumerate().map(|(ix, w)| {
-                                    let reveal = Path::new(&w.bin)
-                                        .parent()
-                                        .map(Path::to_path_buf)
-                                        .unwrap_or_else(|| PathBuf::from(&w.bin));
-                                    h_flex()
-                                        .w_full()
-                                        .gap_3()
-                                        .px_3()
-                                        .py_2()
-                                        .items_center()
-                                        .when(ix > 0, |row| row.border_t_1().border_color(border))
-                                        .child(
-                                            v_flex()
-                                                .flex_1()
-                                                .min_w_0()
-                                                .gap_0p5()
-                                                .child(
-                                                    div()
-                                                        .font_medium()
-                                                        .truncate()
-                                                        .child(w.name.clone()),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(muted)
-                                                        .truncate()
-                                                        .child(w.bin.clone()),
-                                                ),
-                                        )
-                                        .child(
-                                            h_flex()
-                                                .gap_1p5()
-                                                .flex_shrink_0()
-                                                .items_center()
-                                                .child(
-                                                    Tag::secondary()
-                                                        .xsmall()
-                                                        .child(kind_label(w.kind)),
-                                                )
-                                                .child(
-                                                    Button::new(ElementId::Name(
-                                                        format!("system-open-{origin:?}-{ix}")
-                                                            .into(),
-                                                    ))
-                                                    .ghost()
-                                                    .small()
-                                                    .icon(IconName::FolderOpen)
-                                                    .tooltip(t("manage.wine.open_folder"))
-                                                    .accessibility_label(t(
-                                                        "manage.wine.open_folder",
-                                                    ))
-                                                    .on_click(move |_, _, cx| {
-                                                        cx.reveal_path(&reveal)
-                                                    }),
-                                                ),
-                                        )
-                                })),
-                        )
-                }))
-                .into_any_element(),
-        };
-        let paths_card = card(cx)
-            .child(
-                SectionTitle::new(t("manage.wine.custom.title")).trailing(
-                    Button::new("add-path")
-                        .small()
-                        .icon(IconName::FolderPlus)
-                        .label(t("manage.wine.custom.add"))
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.add_custom_path(window, cx)),
-                        ),
-                ),
-            )
-            .when(!has_custom, |this| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(muted)
-                        .child(t("manage.wine.custom.hint")),
-                )
-            })
-            .when(has_custom, |this| {
-                this.child(
-                    v_flex()
-                        .w_full()
-                        .rounded(radius)
-                        .bg(background)
-                        .border_1()
-                        .border_color(border)
-                        .overflow_hidden()
-                        .children(custom_paths.into_iter().enumerate().map(|(ix, p)| {
-                            let remove = p.clone();
-                            h_flex()
-                                .id(ElementId::Name(format!("custom-{p}").into()))
-                                .w_full()
-                                .gap_3()
-                                .px_3()
-                                .py_1p5()
-                                .items_center()
-                                .when(ix > 0, |row| row.border_t_1().border_color(border))
-                                .child(Icon::new(IconName::Folder).small().text_color(muted))
-                                .child(div().flex_1().min_w_0().text_sm().truncate().child(p))
-                                .child(
-                                    Button::new("remove-path")
-                                        .ghost()
-                                        .small()
-                                        .label(t("manage.wine.custom.remove"))
-                                        .on_click(move |_, _, cx| {
-                                            let remove = remove.clone();
-                                            backend_op(cx, move |b| {
-                                                b.settings.update_app(|s| {
-                                                    s.custom_wine_paths.retain(|x| x != &remove)
-                                                });
-                                                b.bus.emit(Event::WineVersionsChanged);
-                                            });
-                                        }),
-                                )
-                        })),
-                )
-            });
-        let previous = self.render_previous_builds(cx);
-        let body = if has_custom {
-            v_flex()
-                .p_4()
-                .gap_4()
-                .children(previous)
-                .child(paths_card)
-                .child(builds)
-                .into_any_element()
-        } else {
-            v_flex()
-                .p_4()
-                .gap_4()
-                .children(previous)
-                .child(builds)
-                .child(paths_card)
-                .into_any_element()
-        };
-        let header = v_flex().child(
-            div()
-                .text_sm()
-                .font_semibold()
-                .truncate()
-                .child(t("manage.wine.pane.installed")),
-        );
-        pane_shell(
-            "wine-installed-pane",
-            "wine-installed-scroll",
-            header,
-            body,
-            cx,
-        )
-    }
-
     fn render_builds(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let (total_installed, _, irori_protons) = self.build_counts();
         let measured = self.viewport_width.get();
@@ -1587,7 +1335,7 @@ impl WineManagerView {
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .child(self.render_system(cx))
+                .child(self.render_installed_pane(cx))
                 .into_any_element(),
             (Some(kind), false) => h_flex()
                 .flex_1()
@@ -1602,7 +1350,7 @@ impl WineManagerView {
                         .h_full()
                         .min_h_0()
                         .flex_shrink_0()
-                        .child(self.render_system(cx)),
+                        .child(self.render_installed_pane(cx)),
                 )
                 .child(
                     div()
@@ -1615,7 +1363,7 @@ impl WineManagerView {
                 .into_any_element(),
             (Some(kind), true) => {
                 let pane_el = match self.narrow_pane {
-                    NarrowPane::Installed => self.render_system(cx),
+                    NarrowPane::Installed => self.render_installed_pane(cx),
                     NarrowPane::Download => self.render_source(kind, cx),
                 };
                 let bar = seg_group(cx)
@@ -1680,7 +1428,7 @@ impl WineManagerView {
 }
 
 /// Inline progress of a running install.
-fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
+pub(super) fn render_op(live: &OpLive, cx: &App) -> impl IntoElement {
     let progress = live.progress.unwrap_or_default();
     let extracting = live.extracting();
     let detail = if extracting {
@@ -1737,6 +1485,9 @@ impl Render for WineManagerView {
             self.placeholder_language = language;
             self.search.update(cx, |s, cx| {
                 s.set_placeholder(t("manage.wine.search"), window, cx)
+            });
+            self.installed_search.update(cx, |s, cx| {
+                s.set_placeholder(t("manage.wine.installed.search"), window, cx)
             });
             self.prefix_search.update(cx, |s, cx| {
                 s.set_placeholder(t("manage.wine.prefixes.search"), window, cx)
