@@ -437,3 +437,16 @@ fn search_matches_tooltip_copy() {
         !cfg!(windows)
     );
 }
+
+#[test]
+fn generic_tray_icon_option_is_linux_only_and_searchable() {
+    crate::i18n::register();
+    let field = find("iroriGenericTrayIcon").expect("iroriGenericTrayIcon");
+    assert_eq!(field.section, FieldSection::General);
+    assert_eq!(field.scope, Scope::App);
+    assert_eq!(field.supported_on_host(), cfg!(target_os = "linux"));
+    assert_eq!(
+        search("generic tray").any(|f| f.path == "iroriGenericTrayIcon"),
+        cfg!(target_os = "linux")
+    );
+}

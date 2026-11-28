@@ -1342,3 +1342,69 @@ fn embedded_management_sections_mount_lazily_and_render(cx: &mut TestAppContext)
         );
     }
 }
+
+#[gpui_kit::test]
+fn generic_tray_icon_toggle_renders_in_window_subtab_and_persists(cx: &mut TestAppContext) {
+    use gpui_kit::VisualTestContext;
+
+    let (handle, view) = open(cx, |window, cx| {
+        SettingsView::new("general".into(), window, cx)
+    });
+    let backend = cx.update(|cx| irori_ui::backend(cx));
+    let mut vcx = VisualTestContext::from_window(handle, cx);
+    vcx.update_window(handle, |_, window, cx| {
+        view.update(cx, |v, cx| v.set_subtab_for_test("window", window, cx));
+        window.refresh();
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    vcx.run_until_parked();
+
+    let visible = vcx.read(|cx| view.read(cx).app_form().read(cx).visible_paths());
+    assert_eq!(
+        visible.contains(&"iroriGenericTrayIcon"),
+        cfg!(target_os = "linux")
+    );
+    assert_eq!(
+        vcx.debug_bounds("row-iroriGenericTrayIcon").is_some(),
+        cfg!(target_os = "linux")
+    );
+
+    if cfg!(target_os = "linux") {
+        vcx.update_window(handle, |_, window, cx| {
+            let form = view.read(cx).app_form().clone();
+            form.update(cx, |f, cx| {
+                f.write_for_test("iroriGenericTrayIcon", Value::Bool(true), window, cx);
+            });
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        vcx.run_until_parked();
+        assert!(backend.settings.app().generic_tray_icon);
+
+        // Hiding the tray icon hides the dependent generic tray icon toggle too.
+        vcx.update_window(handle, |_, window, cx| {
+            let form = view.read(cx).app_form().clone();
+            form.update(cx, |f, cx| {
+                f.write_for_test("noTrayIcon", Value::Bool(true), window, cx);
+            });
+            window.refresh();
+            let _ = window.draw(cx);
+        })
+        .unwrap();
+        vcx.run_until_parked();
+        assert!(vcx.debug_bounds("row-iroriGenericTrayIcon").is_none());
+
+        // Restore defaults so the shared test backend stays clean.
+        vcx.update_window(handle, |_, window, cx| {
+            let form = view.read(cx).app_form().clone();
+            form.update(cx, |f, cx| {
+                f.write_for_test("noTrayIcon", Value::Bool(false), window, cx);
+                f.write_for_test("iroriGenericTrayIcon", Value::Bool(false), window, cx);
+            });
+        })
+        .unwrap();
+        vcx.run_until_parked();
+    }
+}

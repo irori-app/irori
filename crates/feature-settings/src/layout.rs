@@ -255,6 +255,7 @@ fn general_subtab(path: &str) -> Option<&'static str> {
         | "minimizeOnLaunch"
         | "iroriShowLogOnLaunch"
         | "darkTrayIcon"
+        | "iroriGenericTrayIcon"
         | "hideWindowOnProtocolLaunch"
         | "startInConsoleMode"
         | "iroriUi.bigPictureInGameMode"

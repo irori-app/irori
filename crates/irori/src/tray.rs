@@ -62,12 +62,51 @@ fn render_tray_icons(monochrome: bool) -> Vec<ksni::Icon> {
         .collect()
 }
 
+struct TrayIcon {
+    name: String,
+    pixmap: Vec<ksni::Icon>,
+}
+
+fn build_tray_icon(dark_icon: bool, generic_icon: bool) -> TrayIcon {
+    if generic_icon {
+        let name = if dark_icon {
+            "applications-games-symbolic"
+        } else {
+            "applications-games"
+        };
+        return TrayIcon {
+            name: name.into(),
+            pixmap: Vec::new(),
+        };
+    }
+    let pixmap = render_tray_icons(dark_icon);
+    let name = if pixmap.is_empty() {
+        "irori".into()
+    } else {
+        // Leave `icon_name` empty when providing pixmaps so StatusNotifier
+        // hosts always show Irori's embedded mark even if a desktop icon
+        // theme has no `irori` entry (e.g. AppImage or `cargo run`).
+        String::new()
+    };
+    TrayIcon { name, pixmap }
+}
+
 pub struct IroriTray {
     tx: UnboundedSender<ShellCommand>,
     recent: Vec<(GameId, String)>,
-    icon_pixmap: Vec<ksni::Icon>,
+    icon: TrayIcon,
+    icon_rev: u64,
     /// The replay buffer records, so a clip can be saved.
     replay: bool,
+}
+
+impl IroriTray {
+    fn apply_icon(&mut self, icon: TrayIcon, rev: u64) {
+        if rev >= self.icon_rev {
+            self.icon_rev = rev;
+            self.icon = icon;
+        }
+    }
 }
 
 /// Handle to update the tray menu.
@@ -83,18 +122,11 @@ impl ksni::Tray for IroriTray {
     }
 
     fn icon_name(&self) -> String {
-        if self.icon_pixmap.is_empty() {
-            "irori".into()
-        } else {
-            // Leave `icon_name` empty when providing pixmaps so StatusNotifier
-            // hosts always show Irori's embedded mark even if a desktop icon
-            // theme has no `irori` entry (e.g. AppImage or `cargo run`).
-            String::new()
-        }
+        self.icon.name.clone()
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        self.icon_pixmap.clone()
+        self.icon.pixmap.clone()
     }
 
     fn activate(&mut self, _x: i32, _y: i32) {
@@ -175,11 +207,16 @@ impl ksni::Tray for IroriTray {
 
 /// Start the tray on the backend runtime. Returns `None` when no tray host is
 /// available (the app then quits on window close regardless of settings).
-pub async fn start(tx: UnboundedSender<ShellCommand>, dark_icon: bool) -> Option<TrayHandle> {
+pub async fn start(
+    tx: UnboundedSender<ShellCommand>,
+    dark_icon: bool,
+    generic_icon: bool,
+) -> Option<TrayHandle> {
     let tray = IroriTray {
         tx,
         recent: Vec::new(),
-        icon_pixmap: render_tray_icons(dark_icon),
+        icon: build_tray_icon(dark_icon, generic_icon),
+        icon_rev: 0,
         replay: false,
     };
     match tray.spawn().await {
@@ -189,6 +226,14 @@ pub async fn start(tx: UnboundedSender<ShellCommand>, dark_icon: bool) -> Option
             None
         }
     }
+}
+
+/// Switch the tray icon between Irori's embedded logo and the desktop theme's
+/// generic games icon (with monochrome/symbolic variants when `dark_icon` is on).
+/// Ignores stale updates with a lower `rev` so rapid toggles always converge.
+pub async fn set_icon(handle: &TrayHandle, dark_icon: bool, generic_icon: bool, rev: u64) {
+    let icon = build_tray_icon(dark_icon, generic_icon);
+    handle.update(move |t| t.apply_icon(icon, rev)).await;
 }
 
 /// Replace the recent games shown in the tray menu.
@@ -244,21 +289,45 @@ mod tests {
         }
 
         let (tx, _rx) = futures::channel::mpsc::unbounded();
-        let with_pixmap = IroriTray {
+        let mut with_pixmap = IroriTray {
             tx: tx.clone(),
             recent: Vec::new(),
-            icon_pixmap: color,
+            icon: build_tray_icon(false, false),
+            icon_rev: 0,
             replay: false,
         };
         assert_eq!(with_pixmap.icon_name(), "");
         assert_eq!(with_pixmap.icon_pixmap().len(), 2);
 
+        // Live updates switch cleanly and ignore stale out-of-order revisions.
+        with_pixmap.apply_icon(build_tray_icon(false, true), 2);
+        assert_eq!(with_pixmap.icon_name(), "applications-games");
+        assert!(with_pixmap.icon_pixmap().is_empty());
+        with_pixmap.apply_icon(build_tray_icon(false, false), 1);
+        assert_eq!(with_pixmap.icon_name(), "applications-games");
+        assert!(with_pixmap.icon_pixmap().is_empty());
+
+        let generic_dark = IroriTray {
+            tx: tx.clone(),
+            recent: Vec::new(),
+            icon: build_tray_icon(true, true),
+            icon_rev: 0,
+            replay: false,
+        };
+        assert_eq!(generic_dark.icon_name(), "applications-games-symbolic");
+        assert!(generic_dark.icon_pixmap().is_empty());
+
         let fallback = IroriTray {
             tx,
             recent: Vec::new(),
-            icon_pixmap: Vec::new(),
+            icon: TrayIcon {
+                name: "irori".into(),
+                pixmap: Vec::new(),
+            },
+            icon_rev: 0,
             replay: false,
         };
         assert_eq!(fallback.icon_name(), "irori");
+        assert!(fallback.icon_pixmap().is_empty());
     }
 }
